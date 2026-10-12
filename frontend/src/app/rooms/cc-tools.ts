@@ -242,10 +242,11 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
                 <button type="button" [class.on]="period() === sp.id" [attr.aria-pressed]="period() === sp.id" (click)="setSpan(sp.id)">{{ sp.label | t }}</button>
               }
             </div></div></div>
-          <div class="st-card-body ct-uses">
+          <div class="st-card-body ct-uses" [class.ct-loading]="usageLoading()">
+            @if (usageLoading()) { <div class="ct-loader" role="status"><span class="ct-spin" aria-hidden="true"></span>{{ 'Loading…' | t }}</div> }
             <div class="ct-bars tall">
-              @for (d of u.days; track d.day) {
-                <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)">
+              @for (d of u.days; track d.day; let i = $index) {
+                <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)" [style.--i]="i">
                   <span class="ct-stack" [style.height.%]="dayTotal(d) ? 6 + 94 * dayTotal(d) / peak14(u) : 0">
                     @for (s of stack(u, d); track s.name) {
                       @if (s.n) { <i [style.flex-grow]="s.n" [style.background]="s.color"></i> }
@@ -429,8 +430,14 @@ export class CcToolsView {
     try { localStorage.setItem('redline.tools.span', s); } catch { /* private window */ }
     this.loadUsage();
   }
+  /** While another period loads: the old chart faded under a "Loading…"; the new one rises in. */
+  usageLoading = signal(false);
   private loadUsage() {
-    this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: this.period() } }).subscribe({ next: u => this.usage.set(u), error: () => {} });
+    this.usageLoading.set(true);
+    this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: this.period() } }).subscribe({
+      next: u => { this.usage.set(u); this.usageLoading.set(false); },
+      error: () => this.usageLoading.set(false),
+    });
   }
   mid(u: ToolsUsage) { return Math.floor(u.days.length / 2); }
   /** A bucket's key as the axis says it: "14:00", "12 Oct", "Oct 2026". */

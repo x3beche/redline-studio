@@ -151,3 +151,18 @@
 .ct-over { align-items: stretch; }
 .ct-over > .st-card { height: 300px; display: flex; flex-direction: column; margin: 0; }
 .ct-over > .st-card > .st-card-body { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* Changing the period: the old chart greys out under a spinner; the new
+   bars rise from the axis with a small overshoot, one after another. */
+.ct-uses { position: relative; }
+.ct-uses > .ct-bars, .ct-uses > .ct-legend, .ct-uses > .ct-bars-axis { transition: opacity .2s, filter .2s; }
+.ct-uses.ct-loading > .ct-bars, .ct-uses.ct-loading > .ct-legend, .ct-uses.ct-loading > .ct-bars-axis { opacity: .3; filter: grayscale(1); }
+.ct-loader { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 12px; color: var(--ink); pointer-events: none; }
+.ct-spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: ct-spin .8s linear infinite; }
+@keyframes ct-spin { to { transform: rotate(360deg); } }
+.ct-uses .ct-stack { transform-origin: bottom; animation: ct-rise .55s cubic-bezier(.34, 1.56, .64, 1) both;
+  animation-delay: calc(var(--i, 0) * 18ms); }
+@keyframes ct-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .ct-uses .ct-stack, .ct-spin { animation: none; } }
