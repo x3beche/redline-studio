@@ -120,7 +120,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="board_read", level="read", order=60,
+    name="board_read", package="pcb", level="read", order=60,
     label="Read a board",
     about="Reads a board: BOM, nets, DRC and ERC, rules, layout and routing.",
     description="Read one of this workspace's circuit boards (the PCB room): its BOM, nets, DRC and ERC "

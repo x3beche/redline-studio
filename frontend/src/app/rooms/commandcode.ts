@@ -64,7 +64,11 @@ export interface CcStep {
 }
 export type ToolLevel = 'read' | 'change' | 'delete';
 /** A chat tool, and whether it is on for me (GET /api/cc/tools). */
-export interface CcTool { name: string; label: string; level: ToolLevel; description: string; default: boolean; on: boolean; uses?: number }
+export interface CcTool {
+  name: string; label: string; level: ToolLevel; description: string; default: boolean; on: boolean; uses?: number;
+  /** Its package (backend/chat_tools PACKAGES): the Tools panel's card it sits in. */
+  package?: string; package_label?: string; package_about?: string;
+}
 /** An answer's text with its steps where they happened. */
 type Chunk = { text: string; steps?: undefined } | { text?: undefined; steps: CcStep[] };
 /** An answer someone else is having written, as far as it got. */
@@ -957,7 +961,7 @@ type Ask = { text: string; label: string; go: () => void };
         <summary>
           @if (s.status === 'running') { <span class="tcv-cc-spin" aria-hidden="true"></span> }
           @else if (s.status === 'error' || s.status === 'denied') { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.alert }" /> }
-          @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: toolIcon(s.tool, s.args?.action) }" /> }
+          @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: toolIcon(s.tool) }" /> }
           <span class="tcv-cc-steptext">{{ stepLine(s) }}</span>
           @if (stepNote(s); as n) { <span class="tcv-cc-stepnote">{{ n | t }}</span> }
           @if (s.ms != null && s.ms >= 500 && s.status !== 'running') { <span class="tcv-cc-dim">{{ secs(s.ms) }}</span> }
@@ -2633,7 +2637,7 @@ export class RoomCommandCode implements OnDestroy {
       return n;
     });
   }
-  toolIcon(name: string, action?: unknown) { return toolIconOf(name, action); }
+  toolIcon(name: string) { return toolIconOf(name); }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   /** The step's sentence: translated, then its holes filled. */
   stepLine(s: CcStep): string {

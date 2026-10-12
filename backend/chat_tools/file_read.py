@@ -195,7 +195,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="file_read", level="read", order=70,
+    name="file_read", package="files", level="read", order=70,
     label="Read a file",
     about="Reads a file from Files: text and tables, a PDF's pages, an image; or lists the files.",
     description="Read a file from this workspace's Files room. Text, CSV, JSON, Markdown, code, BOMs: the "

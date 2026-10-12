@@ -49,7 +49,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="taste_read", level="read", order=68,
+    name="taste_read", package="taste", level="read", order=68,
     label="Read a taste palette",
     about="Lists the taste palettes, or reads one: its MUST, PREFER and AVOID rules by domain.",
     description="Read this workspace's taste palettes: the person's own design rules, each MUST, PREFER or "

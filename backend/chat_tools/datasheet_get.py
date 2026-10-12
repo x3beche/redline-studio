@@ -25,20 +25,19 @@ async def run(ctx: Ctx, args: dict) -> Result:
     v = {"lcsc": c, "mpn": mpn, "pages": pages or "?", "size": size(len(blob))}
     where = "kept with the drawer" if got.get("cached") else "fetched from LCSC just now and kept"
     text = (f"The datasheet of {c}{' (' + mpn + ')' if mpn else ''}: {pages or '?'} pages, {v['size']}, {where}. "
-            "Read it with the drawer's datasheet_read action.")
+            "Read it with datasheet_read.")
     summary = f"{mpn + ' · ' if mpn else ''}{pages or '?'} pages · {v['size']}" + (f"\n{got['url']}" if got.get("url") else "")
     if got.get("cached"):
         return Result(text=text, say="Datasheet: from the drawer · {pages} pages", vars=v, summary=summary)
     return Result(text=text, say="Fetched datasheet from LCSC · {size}", vars=v, summary=summary)
 
 
-# One action of the drawer tool (drawer.py), not a tool of its own.
-PART = Tool(
-    name="datasheet_get", level="change", order=40,
+TOOL = Tool(
+    name="datasheet_get", package="drawer", level="change", order=40,
     about="Takes a part's datasheet from the drawer, or fetches it from LCSC and keeps it.",
     label="Get a datasheet",
     description="Get a part's datasheet PDF by LCSC number: the copy already kept, or fetched from LCSC "
-                "and kept. Returns its page count and size; read it with the datasheet_read action.",
+                "and kept. Returns its page count and size; read it with datasheet_read.",
     schema={"type": "object", "properties": {
         "lcsc": {"type": "string", "description": "The LCSC part number, like C111607"}},
         "required": ["lcsc"]},

@@ -29,17 +29,10 @@ const SWATCH = 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z';
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
-  basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, drawer: DRAWER, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
+  basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
   room_note: NOTE,
 };
-/** A group's step shows its action's icon: the drawer's `lcsc` is LCSC's search. */
-const ACTION_ICON: Record<string, string> = {
-  'drawer.search': DRAWER, 'drawer.list': DRAWER, 'drawer.add': DRAWER, 'drawer.lcsc': SEARCH,
-  'drawer.datasheet_get': SHEET, 'drawer.datasheet_read': SHEET,
-};
-export function toolIcon(name: string, action?: unknown) {
-  return ACTION_ICON[`${name}.${action}`] ?? TOOL_ICON[name] ?? WRENCH;
-}
+export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
 /** How each level behaves, said once on its card: the tone of its badge. */
 const BEHAVES: Record<ToolLevel, { badge: string; tone: string; empty: string }> = {
@@ -255,11 +248,12 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
     @if (!ready()) {
       <section class="st-card"><div class="ct-empty">{{ 'Loading…' | t }}</div></section>
     } @else {
-      @for (g of groups(); track g.id) {
-        <section class="st-card" [attr.data-level]="g.id">
+      <div class="ct-packs">
+      @for (g of groups(); track g.id; let gi = $index) {
+        <section class="st-card" [attr.data-package]="g.id" [style.--pw]="g.span">
           <div class="st-card-head">
             <h3>{{ g.name | t }}</h3>
-            <span class="st-badge" [attr.data-tone]="g.tone">{{ g.badge | t }}</span>
+            <span class="st-sub">{{ g.about | t }}</span>
             @if (g.tools.length) {
               <span class="st-right">
                 <span class="st-sub mono">{{ g.on }} / {{ g.tools.length }}</span>
@@ -276,11 +270,12 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
             <div class="ct-tiles">
               @for (tl of g.tools; track tl.name; let i = $index) {
                 <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
-                     [style.--sw]="span(i, g.tools.length, 4)" [style.--sn]="span(i, g.tools.length, 2)"
+                     [style.--sw]="span(i, g.tools.length, 3)" [style.--sn]="span(i, g.tools.length, 2)"
                      (click)="show(tl.name)" (keydown.enter)="show(tl.name)" [title]="'Open its page' | t">
                   <span class="ct-top">
                     <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
                     <span class="ct-name">{{ tl.label | t }}</span>
+                    <span class="st-badge" [attr.data-tone]="behaves(tl.level).tone">{{ levelName(tl.level) | t }}</span>
                     <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
                             [disabled]="!canEdit()" [attr.aria-label]="tl.label | t" (click)="$event.stopPropagation(); flip(tl)"></button>
                   </span>
@@ -293,11 +288,10 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
                 </div>
               }
             </div>
-          } @else {
-            <div class="ct-empty">{{ g.empty | t }}</div>
           }
         </section>
       }
+      </div>
     }
     <p class="st-hint">{{ 'A model that cannot use tools answers without them. Turning a tool off takes effect from your next message.' | t }}</p>
   </div>
@@ -320,10 +314,24 @@ export class CcToolsView {
   icon = toolIcon;
   page = signal<ToolPage | null>(null);
   on = computed(() => this.tools().filter(x => x.on).length);
-  groups = computed(() => LEVELS.map(l => {
-    const tools = this.tools().filter(x => x.level === l.id);
-    return { ...l, ...BEHAVES[l.id], tools, on: tools.filter(x => x.on).length };
-  }));
+  /** The tools in their packages (the drawer's, a room's...), in the server's
+   *  order: one card each, a switch for the whole package and one per tool,
+   *  so reading can stay on while writing is off. */
+  groups = computed(() => {
+    const out: { id: string; name: string; about: string; tools: CcTool[]; on: number }[] = [];
+    for (const tl of this.tools()) {
+      const id = tl.package || 'other';
+      let g = out.find(x => x.id === id);
+      if (!g) out.push(g = { id, name: tl.package_label || id, about: tl.package_about || '', tools: [], on: 0 });
+      g.tools.push(tl);
+      g.on += tl.on ? 1 : 0;
+    }
+    // A package of a few tools shares its row with others (up to three to a
+    // row, the last row's sharing the whole width); a bigger one has a row.
+    const small = out.filter(g => g.tools.length < 3);
+    return out.map(g => ({ ...g, span: g.tools.length >= 3 ? 12 : this.span(small.indexOf(g), small.length, 3) }));
+  });
+  levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   flip(tl: CcTool) { this.set.emit({ [tl.name]: !tl.on }); }
   setAll(tools: CcTool[], on: boolean) {
     const change = tools.filter(x => x.on !== on);

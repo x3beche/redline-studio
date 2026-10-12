@@ -32,9 +32,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   summary="\n".join(lines))
 
 
-# One action of the drawer tool (drawer.py), not a tool of its own.
-PART = Tool(
-    name="lcsc_search", level="read", order=20,
+TOOL = Tool(
+    name="lcsc_search", package="drawer", level="read", order=20,
     about="Searches LCSC's catalogue: candidates with maker, package, stock and price.",
     label="Search LCSC",
     description="Search LCSC's catalogue for a part by MPN or words. Returns candidates with their LCSC "

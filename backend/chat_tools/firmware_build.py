@@ -97,7 +97,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="firmware_build", level="read", order=66,
+    name="firmware_build", package="firmware", level="read", order=66,
     label="Firmware builds",
     about="Reads a firmware's last builds: status, errors and warnings, flash and RAM.",
     description="How a firmware project (the Firmware room, PlatformIO) last built: ok / errors / failed, "
