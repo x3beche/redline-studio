@@ -152,6 +152,10 @@ class Coll:
     async def create_index(self, *a, **kw):
         return "ix"
 
+    async def insert_many(self, docs):
+        for d in docs:
+            await self.insert_one(d)
+
     async def insert_one(self, doc):
         if "_id" not in doc:
             self._n += 1

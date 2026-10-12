@@ -346,6 +346,40 @@ def test_a_run_explores_and_fills_the_catalog(web, monkeypatch):
     assert "pages" not in out and out["page_count"] == len(d["pages"]) and "worker" not in out
 
 
+def test_a_run_keeps_its_pages_and_the_model_step_runs_again_without_the_site(web, monkeypatch):
+    _fake_llm(monkeypatch)
+    real = llm.complete
+    calls = {"n": 0}
+
+    async def flaky(messages, **kw):                 # the first ask meets a gateway timeout once
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("Command Code answered HTTP 524: Upstream model provider is temporarily unavailable")
+        return await real(messages, **kw)
+    monkeypatch.setattr(llm, "complete", flaky)
+    monkeypatch.setattr(mf, "RETRY_PAUSE", 0)
+    fake = FakeDb()
+
+    async def go():
+        doc = await mf.create(fake, "https://www.dogus.com.tr/", by={"id": "a", "name": "A"})
+        jd, _ = await mf.start_job(fake, doc["_id"])
+        first = await _until_done(fake, jd["_id"])()
+        fetched = len(web["seen"])
+        again, started = await mf.start_job(fake, doc["_id"], reuse=jd["_id"])
+        second = await _until_done(fake, again["_id"])()
+        return first, second, fetched
+
+    first, second, fetched = run(go())
+    assert first["status"] == "done" and first["products_found"] == 3 and first["kept_pages"] > 0
+    ask1 = next(s for s in first["steps"] if s["id"] == "ask:1")
+    assert ask1["state"] == "done" and ask1["attempt"] == 2                       # retried once, then answered
+    assert len(web["seen"]) == fetched                                             # the second run fetched nothing
+    assert second["status"] == "done" and second["products_found"] == 3 and second["reused"] == first["_id"]
+    crawl = next(s for s in second["steps"] if s["kind"] == "crawl")
+    assert crawl["read"] == first["kept_pages"] and "not fetched" in crawl["note"]
+    assert not any(s["kind"] in ("robots", "sitemap") for s in second["steps"])
+
+
 def test_a_run_can_be_cancelled_and_a_restart_interrupts_it(web, monkeypatch):
     _fake_llm(monkeypatch)
 
@@ -420,7 +454,7 @@ def test_a_page_that_reloads_finds_the_run_where_it_is(db, web, monkeypatch):  #
 def test_a_manufacturer_from_start_to_finish(db, web, monkeypatch):  # noqa: F811
     started = []
 
-    async def work(dbx, jid, mid, choice):
+    async def work(dbx, jid, mid, choice, reuse=None):
         started.append((mid, choice))
     monkeypatch.setattr(mf, "_work", work)
     a, b = person(db, "a"), person(db, "b")

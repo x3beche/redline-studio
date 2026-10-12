@@ -27,7 +27,7 @@ export interface Product {
   id: string; name: string; category: string; description: string; specs: Record<string, string>;
   sku: string; url: string; image: string;
 }
-export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null }
+export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null; kept_pages?: number }
 export interface Maker {
   id: string; name: string; name_auto?: boolean; url: string; domain: string; notes: string; summary: string;
   categories: string[]; docs: { url: string; label: string }[]; proxy: ProxyChoice; product_count: number;
@@ -61,6 +61,8 @@ export interface MfrJob {
   limits?: { pages: number; depth: number; delay: number };
   steps: MfrStep[]; totals: MfrTotals; pages?: MfrPage[]; page_count: number; error?: string | null; products_found?: number | null;
   cancelled_by?: { name?: string };
+  /** Pages it kept, so its model step can run again without the site; and the run whose pages it read. */
+  kept_pages?: number; reused?: string | null;
 }
 export interface ProxyState {
   configured: boolean; enabled: boolean; mode: ProxyChoice; setting: string; default: ProxyChoice;
@@ -88,6 +90,7 @@ export class MfrApi {
   }
   remove(id: string) { return this.http.delete(`/api/manufacturers/${id}`); }
   explore(id: string, proxy: ProxyChoice) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/explore`, { proxy }); }
+  readAgain(id: string, run: string) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-again`, { run }); }
   proxy() { return this.http.get<ProxyState>('/api/manufacturers/proxy'); }
   jobs(limit = 30) { return this.http.get<MfrJob[]>(`/api/manufacturers/jobs?limit=${limit}`); }
   job(id: string) { return this.http.get<MfrJob>(`/api/manufacturers/jobs/${id}`); }
@@ -317,6 +320,11 @@ function fold(s: string): string {
             @if (runOf(m); as r) { @if (isActiveS(r.status)) {
               <button class="tcv-btn tcv-btn-accent" (click)="showRun(r.id)">{{ 'Watch the run' | t }}</button>
             } @else {
+              @if (r.kept_pages) {
+                <button class="tcv-btn" (click)="readAgain(m.id, r.id)" [disabled]="starting()"
+                        [title]="fmt('The model reads the {n} pages of the last run again - the site is not fetched', { n: r.kept_pages })">
+                  {{ 'Read the pages again' | t }}</button>
+              }
               <button class="tcv-btn tcv-btn-accent" (click)="exploreAgain(m.id, choice())" [disabled]="starting()">{{ 'Explore again' | t }}</button>
             } } @else {
               <button class="tcv-btn tcv-btn-accent" (click)="exploreAgain(m.id, choice())" [disabled]="starting()">{{ 'Explore' | t }}</button>
@@ -629,9 +637,10 @@ export class RoomMfr implements OnDestroy {
   exploredCount = computed(() => this.all().filter(m => m.explored_at).length);
   lastJob = computed(() => this.runs.jobs()[0] ?? null);
   /** A manufacturer's latest run: the live list first (it is the freshest). */
-  runOf(m: Maker): { id: string; status: MfrStatus; started_at: string; error?: string | null; pages: number } | null {
+  runOf(m: Maker): { id: string; status: MfrStatus; started_at: string; error?: string | null; pages: number; kept_pages?: number } | null {
     const live = this.runs.jobs().find(j => j.manufacturer.id === m.id);
-    if (live) return { id: live.id, status: live.status, started_at: live.started_at, error: live.error, pages: live.page_count };
+    if (live) return { id: live.id, status: live.status, started_at: live.started_at, error: live.error, pages: live.page_count,
+                       kept_pages: live.kept_pages };
     return m.last_run;
   }
   isActiveS(s: MfrStatus) { return ACTIVE.includes(s); }
@@ -745,6 +754,16 @@ export class RoomMfr implements OnDestroy {
     this.api.explore(id, proxy).subscribe({
       next: j => { this.starting.set(false); this.runs.put(j); this.showRun(j.id); },
       error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The exploration could not start.')); },
+    });
+  }
+
+  /** The model step again on a run's kept pages - after a model failed, or with another model set. */
+  readAgain(id: string, run: string) {
+    if (this.starting()) return;
+    this.starting.set(true);
+    this.api.readAgain(id, run).subscribe({
+      next: j => { this.starting.set(false); this.runs.put(j); this.showRun(j.id); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The pages could not be read again.')); },
     });
   }
 

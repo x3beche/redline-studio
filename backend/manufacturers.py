@@ -64,6 +64,7 @@ router = APIRouter(prefix="/api/manufacturers")
 
 COLL = "manufacturers"
 JOBS = "manufacturer_jobs"
+PAGES = "manufacturer_pages"         # a run's pages as read (their text), so the model step can be run again without fetching the site
 JOB = "manufacturer"                # the LLM job (llm.JOBS)
 USER_AGENT = "RedlineStudio-CatalogReader/1.0 (+https://redline.medipol.dev; reads product pages, obeys robots.txt)"
 
@@ -947,15 +948,28 @@ async def extract(db, site: dict, track: Tracker) -> dict:
         await track.step(sid, kind="ask", n=n, of=len(parts), provider=prov, model=model, provider_name=pname,
                          prompt_chars=chars, tokens_est=chars // CHARS_PER_TOKEN, max_tokens=EXTRACT_TOKENS,
                          timeout=EXTRACT_TIMEOUT, pages=chunk.count("=== PAGE "), sent_at=_now())
-        try:
-            d = await llm.complete([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": user}],
-                                   job=JOB, max_tokens=EXTRACT_TOKENS, temperature=0.1, timeout=EXTRACT_TIMEOUT)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:                        # noqa: BLE001 - one chunk lost is one chunk lost
-            why = _failed(prov, model, exc, EXTRACT_TIMEOUT)
-            failures.append(why)
-            await track.step(sid, state="failed", reason=why)
+        d = None
+        for attempt in (1, 2):
+            # The job's model as set now: a change in LLM settings reaches the chunks still to go.
+            prov, model = llm.route(JOB)
+            await track.step(sid, provider=prov, model=model, provider_name=llm.PROVIDERS.get(prov, {}).get("name", prov),
+                             attempt=attempt)
+            try:
+                d = await llm.complete([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": user}],
+                                       job=JOB, max_tokens=EXTRACT_TOKENS, temperature=0.1, timeout=EXTRACT_TIMEOUT)
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:                    # noqa: BLE001 - one chunk lost is one chunk lost
+                why = _failed(prov, model, exc, EXTRACT_TIMEOUT)
+                # A provider's passing trouble (a gateway timeout, a 5xx): once more, after a breath.
+                if attempt == 1 and re.search(r"HTTP 5\d\d|timed out|temporarily", why):
+                    await track.step(sid, note=f"{why} - trying once more")
+                    await asyncio.sleep(RETRY_PAUSE)
+                    continue
+                failures.append(why)
+                await track.step(sid, state="failed", reason=why)
+        if d is None:
             continue
         prov2, model2 = d.get("provider") or prov, d.get("model") or model
         used = d.get("usage") or {}
@@ -1154,6 +1168,7 @@ ACTIVE = ("queued", "crawling", "asking", "merging")
 JOB_BEAT = 5.0
 JOB_LOST = 45.0
 KEEP_JOBS = 60
+RETRY_PAUSE = 8.0                # seconds before a chunk is asked once more after a provider's passing failure
 GONE = "the exploration was interrupted (the server restarted) - run it again"
 WORKER = {"host": socket.gethostname(), "pid": os.getpid(), "boot": secrets.token_hex(6)}
 _TASKS: dict[str, asyncio.Task] = {}
@@ -1238,7 +1253,28 @@ async def _traffic(db, fetcher: Fetcher, track: Tracker) -> None:
     track.add(**t)
 
 
-async def _work(db, jid: str, mid: str, choice: str) -> None:
+async def keep_pages(db, jid: str, mid: str, site: dict) -> int:
+    """A run's pages as read, one row each, so its model step can be run again."""
+    rows = [{"_id": f"{jid}:{i}", "job": jid, "manufacturer": mid, "n": i, "domain": site.get("domain"),
+             "page": {k: p.get(k) for k in ("url", "title", "text", "links", "images", "depth")}}
+            for i, p in enumerate(site.get("pages") or [])]
+    if rows:
+        await db[PAGES].insert_many(rows)
+    await db[JOBS].update_one({"_id": jid}, {"$set": {"kept_pages": len(rows)}})
+    return len(rows)
+
+
+async def load_pages(db, jid: str) -> dict | None:
+    rows = [d async for d in db[PAGES].find({"job": jid})]
+    if not rows:
+        return None
+    rows.sort(key=lambda d: d.get("n", 0))
+    job = await db[JOBS].find_one({"_id": jid}) or {}
+    return {"pages": [d["page"] for d in rows], "domain": rows[0].get("domain"),
+            "docs": [], "from_job": jid, "from_at": job.get("started_at")}
+
+
+async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -> None:
     from . import netproxy
     track = JobTracker(db, jid)
 
@@ -1256,18 +1292,32 @@ async def _work(db, jid: str, mid: str, choice: str) -> None:
         doc = await get(db, mid)
         if not doc:
             raise ExploreError("the manufacturer was deleted")
-        await track.phase("crawling")
-        try:
-            fetcher = Fetcher(choice, netproxy.new_session() if choice != "off" else None)
-        except Refused as exc:
-            raise ExploreError(str(exc)) from exc
-        try:
-            site = await crawl(doc["url"], track, fetcher)
-        except Refused as exc:
-            await track.step("robots", kind="robots", state="failed", reason=str(exc))
-            raise ExploreError(str(exc)) from exc
-        finally:
-            await _traffic(db, fetcher, track)
+        if reuse:
+            # The model step again, on the pages an earlier run read: the site is not fetched.
+            site = await load_pages(db, reuse)
+            if not site:
+                raise ExploreError("that run's pages are no longer kept - explore the site again")
+            n = len(site["pages"])
+            site["docs"] = doc.get("docs") or []
+            await track.step("crawl", kind="crawl", state="done", pages=n, read=n, cap=n,
+                             note=f"the pages of the run of {str(site.get('from_at') or '')[:16].replace('T', ' ')}, read again - the site was not fetched")
+        else:
+            await track.phase("crawling")
+            try:
+                fetcher = Fetcher(choice, netproxy.new_session() if choice != "off" else None)
+            except Refused as exc:
+                raise ExploreError(str(exc)) from exc
+            try:
+                site = await crawl(doc["url"], track, fetcher)
+            except Refused as exc:
+                await track.step("robots", kind="robots", state="failed", reason=str(exc))
+                raise ExploreError(str(exc)) from exc
+            finally:
+                await _traffic(db, fetcher, track)
+            try:
+                await keep_pages(db, jid, mid, site)
+            except Exception:                           # noqa: BLE001 - not keeping them only costs a re-fetch later
+                log.exception("keeping the pages of run %s", jid)
         got = await extract(db, site, track)
         if not got["products"] and not got["company"]["description"]:
             raise ExploreError("the model found no products and no description on the pages read")
@@ -1275,7 +1325,8 @@ async def _work(db, jid: str, mid: str, choice: str) -> None:
         if not doc:
             raise ExploreError("the manufacturer was deleted while it was explored")
         sets = {"summary": got["company"]["description"] or doc.get("summary") or "",
-                "categories": got["company"]["categories"], "docs": site["docs"], "domain": site["domain"],
+                "categories": got["company"]["categories"] or doc.get("categories") or [],
+                "docs": site["docs"] or doc.get("docs") or [], "domain": site["domain"] or doc.get("domain"),
                 "explored_at": _now(), "updated_at": _now()}
         if got["products"] or not doc.get("products"):
             sets["products"] = got["products"]
@@ -1332,9 +1383,11 @@ async def _prune(db) -> None:
                   key=lambda d: d.get("started_at") or "", reverse=True)
     for d in done[KEEP_JOBS:]:
         await db[JOBS].delete_one({"_id": d["_id"]})
+        await db[PAGES].delete_many({"job": d["_id"]})
 
 
-async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = None) -> tuple[dict, bool]:
+async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = None,
+                    reuse: str | None = None) -> tuple[dict, bool]:
     """Explore a manufacturer's site (in the background): (job, started).
     One already running for it is that run."""
     doc = await get(db, mid)
@@ -1355,10 +1408,10 @@ async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = No
           "by": by or actors.current(), "started_at": now, "finished_at": None, "beat": now, "worker": WORKER,
           "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov),
           "proxy": choice, "limits": {"pages": MAX_PAGES, "depth": MAX_DEPTH, "delay": DELAY},
-          "steps": [], "totals": {}, "pages": [], "error": None, "products_found": None}
+          "steps": [], "totals": {}, "pages": [], "error": None, "products_found": None, "reused": reuse}
     await db[JOBS].insert_one(jd)
     await db[COLL].update_one({"_id": mid}, {"$set": {"last_job": jd["_id"]}})
-    _TASKS[jd["_id"]] = asyncio.create_task(_work(db, jd["_id"], mid, choice))
+    _TASKS[jd["_id"]] = asyncio.create_task(_work(db, jd["_id"], mid, choice, reuse))
     try:
         await _prune(db)
     except Exception:                                   # noqa: BLE001
@@ -1396,7 +1449,8 @@ def out(d: dict, last: dict | None = None, full: bool = True) -> dict:
          "categories": d.get("categories") or [], "docs": d.get("docs") or [],
          "last_run": ({"id": last["_id"], "status": last.get("status"), "started_at": last.get("started_at"),
                        "finished_at": last.get("finished_at"), "error": last.get("error"),
-                       "pages": len(last.get("pages") or []), "products": last.get("products_found")} if last else None)}
+                       "pages": len(last.get("pages") or []), "products": last.get("products_found"),
+                       "kept_pages": last.get("kept_pages") or 0} if last else None)}
     if full:
         o["products"] = d.get("products") or []
     return o
@@ -1455,9 +1509,9 @@ async def api_search(q: str = "", category: str = "", m: str = "", limit: int = 
     return [{"manufacturer": {"id": d["_id"], "name": d.get("name")}, "product": p} for d, p, _ in rows]
 
 
-async def _start(mid: str, proxy: str | None):
+async def _start(mid: str, proxy: str | None, reuse: str | None = None):
     try:
-        jd, started = await start_job(_db(), mid, proxy, actors.current())
+        jd, started = await start_job(_db(), mid, proxy, actors.current(), reuse)
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
@@ -1614,6 +1668,20 @@ async def api_delete(mid: str):
             await cancel_job(db, j["_id"])
     await remove(db, mid)
     return {"deleted": mid}
+
+
+class ReadAgainIn(BaseModel):
+    run: str = Field(pattern="^[0-9a-f]{6,32}$")
+
+
+@router.post("/{mid}/read-again")
+async def api_read_again(mid: str, body: ReadAgainIn):
+    """The model step again, on the pages a run kept - the site is not fetched."""
+    db = _db()
+    job = await db[JOBS].find_one({"_id": body.run, "manufacturer.id": mid})
+    if not job or not job.get("kept_pages"):
+        raise HTTPException(404, "that run kept no pages - explore the site again")
+    return await _start(mid, None, body.run)
 
 
 @router.post("/{mid}/explore")
