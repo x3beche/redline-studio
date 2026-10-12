@@ -107,7 +107,8 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
             # Nothing said: killed from outside - 137 is what running out of memory looks like.
             rc = proc.returncode
             return (f"the drawing was stopped (exit {rc}: out of memory - try again when the machine is less busy)"
-                    if rc == 137 else f"the drawing stopped with exit {rc} and said nothing")
+                    if rc == 137 else f"the drawing crashed (exit {rc})" if rc == 139
+                    else f"the drawing stopped with exit {rc} and said nothing")
         # The preview first: the PDF on disk is what says the drawing is made.
         for suffix in (".png", ".json") if preview else ():
             if (work / f"drawing{suffix}").exists():
@@ -165,9 +166,14 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
             live.update(pct=pct, stage=stage)
         try:
             step = await store.get_artifact(db, model_id, "step")
-            why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
-                                project=model_id.split("/")[0], tag=tag, ident=model_id,
-                                sha=doc.get("sha256") or "", preview=True, on_progress=heard)
+            # A crash in the projection (exit 139) now and then does not
+            # happen again on the next go: once more before giving up.
+            for _ in range(2):
+                why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
+                                    project=model_id.split("/")[0], tag=tag, ident=model_id,
+                                    sha=doc.get("sha256") or "", preview=True, on_progress=heard)
+                if not (why and "exit 139" in why):
+                    break
         except Exception as exc:                    # noqa: BLE001 - said on the tab, then raised
             why = str(exc) or type(exc).__name__
         if why:

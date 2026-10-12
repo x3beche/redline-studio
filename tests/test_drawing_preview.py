@@ -185,3 +185,21 @@ def test_the_sheet_preview_and_info(tmp_path):
     info = json.loads((tmp_path / "d.json").read_text())
     assert info["sheet"] == "A4 landscape" and info["scale"] == "2:1"
     assert info["views"] == ["Front", "Right", "Top", "Isometric"]
+
+
+def test_a_crash_is_tried_once_more(tmp_path, monkeypatch):
+    monkeypatch.setattr(release, "DRAWINGS", tmp_path)
+    monkeypatch.setattr(release, "_STATE", {})
+    tries = []
+
+    async def flaky(step, out, **kw):
+        tries.append(1)
+        if len(tries) == 1:
+            return "the drawing crashed (exit 139)"
+        out.write_bytes(b"%PDF")
+
+    async def step(db, mid, label):
+        return b"STEP"
+    monkeypatch.setattr(release, "drawing", flaky)
+    monkeypatch.setattr(release.store, "get_artifact", step)
+    assert asyncio.run(release.model_drawing(DB, "p/lid")) == b"%PDF" and len(tries) == 2
