@@ -66,9 +66,10 @@ def test_one_model_picker_for_the_chat_and_the_settings():
     # The list is drawn in one place only.
     assert "tcv-cc-modellist" in picker
     assert "tcv-cc-modellist" not in chat and "tcv-cc-modellist" not in page
-    # No native select for a job's model: the only one is its provider.
+    # No select for a job's model: the only drop-down is its provider, the app's own.
     jobs = page[page.index("'Which model does what' | t"):page.index("<app-llm-usage />")]
-    assert jobs.count("<select") == 1 and 'class="st-in st-prov"' in jobs
+    assert "<select" not in jobs
+    assert jobs.count("<wb-select") == 1 and 'class="st-prov"' in jobs
     # In a settings row the list is against the window (the card scrolls).
     assert re.search(r'<app-model-picker[^>]*\[fixed\]="true"', page)
 

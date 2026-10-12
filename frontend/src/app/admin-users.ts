@@ -148,8 +148,8 @@ const MIN_PASSWORD = 10;
                 <input class="st-in mono" type="text" autocomplete="off" spellcheck="false" [value]="pw()" (input)="pw.set($any($event.target).value); pwMsg.set('')"></label>
               <button type="button" class="tcv-btn tcv-files-btn um-gen" (click)="pw.set(generate())">{{ 'Generate' | t }}</button>
             </div>
-            <label class="um-check"><input type="checkbox" [checked]="pwForce()" (change)="pwForce.set($any($event.target).checked)">
-              {{ 'Must change the password at the next sign-in' | t }}</label>
+            <button type="button" class="um-check" role="switch" [attr.aria-checked]="pwForce()" (click)="pwForce.set(!pwForce())">
+              <span class="tcv-switch" [attr.data-on]="pwForce() ? 1 : null" aria-hidden="true"></span>{{ 'Must change the password at the next sign-in' | t }}</button>
             <div class="pf-foot">
               @if (pwMsg(); as m) { <span [class]="pwOk() ? 'st-msg' : 'st-err'">{{ m }}</span> }
               @else if (pw() && pw().length < 10) { <span class="st-hint">{{ 'At least 10 characters.' | t }}</span> }
@@ -165,8 +165,8 @@ const MIN_PASSWORD = 10;
             <div class="st-card-body">
               @if (holds(); as n) {
                 <p class="st-hint">{{ delErr() }}</p>
-                <label class="um-check"><input type="checkbox" [checked]="withData()" (change)="withData.set($any($event.target).checked)">
-                  {{ 'Delete their data too' | t }} ({{ n }})</label>
+                <button type="button" class="um-check" role="switch" [attr.aria-checked]="withData()" (click)="withData.set(!withData())">
+              <span class="tcv-switch" [attr.data-on]="withData() ? 1 : null" aria-hidden="true"></span>{{ 'Delete their data too' | t }} ({{ n }})</button>
               } @else if (delErr(); as e) { <p class="st-err">{{ e }}</p> }
               <div class="pf-foot">
                 <span class="st-hint">{{ 'Disabling keeps everything and can be undone.' | t }}</span>
@@ -195,8 +195,8 @@ const MIN_PASSWORD = 10;
                 <button type="button" class="tcv-btn tcv-files-btn" (click)="nPw.set(generate())">{{ 'Generate' | t }}</button>
               </span></label>
           </div>
-          <label class="um-check"><input type="checkbox" [checked]="nForce()" (change)="nForce.set($any($event.target).checked)">
-            {{ 'Must change the password at first sign-in' | t }}</label>
+          <button type="button" class="um-check" role="switch" [attr.aria-checked]="nForce()" (click)="nForce.set(!nForce())">
+              <span class="tcv-switch" [attr.data-on]="nForce() ? 1 : null" aria-hidden="true"></span>{{ 'Must change the password at first sign-in' | t }}</button>
           <p class="st-hint">{{ 'Workbench sends no email: pass the address and the password on yourself.' | t }}</p>
           <div class="pf-foot">
             @if (err(); as e) { <span class="st-err">{{ e }}</span> }

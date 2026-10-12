@@ -29,8 +29,9 @@
 .um-add { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .um-pw-in { display: flex; gap: 6px; }
 .um-pw-in .st-in { flex: 1; min-width: 0; }
-.um-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
-.um-check input { margin: 0; accent-color: var(--accent); }
+.um-check { display: flex; align-items: center; gap: 7px; padding: 2px 0; font: inherit; font-size: 11.5px; color: var(--ink);
+  background: none; border: 0; cursor: pointer; text-align: left; }
+.um-check:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .um-danger { color: var(--danger); border-color: var(--danger); }
 .um-danger:hover:not(:disabled) { background: var(--danger); color: var(--surface); }
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }

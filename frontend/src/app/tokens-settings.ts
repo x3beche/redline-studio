@@ -8,6 +8,7 @@ import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
 import { Agents, SeedOs, seedLine, seenAgo } from './agent-status';
 import { Confirm } from './confirm';
+import { SelectOption, UiSelect } from './ui-select';
 
 /** One agent's token as the server lists it - never the token, never its hash. */
 export interface AgentToken {
@@ -38,7 +39,7 @@ interface Detail {
  *  for (backend/main.py, /api/agent-tokens*). */
 @Component({
   selector: 'app-tokens-settings',
-  imports: [T, TimeChart, BarList, Spark],
+  imports: [T, TimeChart, BarList, Spark, UiSelect],
   styleUrls: ['./settings.css', './tokens-settings.css'],
   template: `
 <div class="st-page">
@@ -94,13 +95,9 @@ interface Detail {
             <input class="st-in" [placeholder]="'e.g. pcb-builder' | t" maxlength="60" [value]="name()"
                    (input)="name.set($any($event.target).value)"></label>
           <label class="st-f"><span>{{ 'Role' | t }}</span>
-            <select class="st-in" (change)="role.set($any($event.target).value)">
-              @for (r of roles; track r) { <option [value]="r" [selected]="r === role()">{{ r }}</option> }
-            </select></label>
+            <wb-select class="st-sel" label="Role" [options]="roleOpts" [value]="role()" (pick)="role.set($any($event))" /></label>
           <label class="st-f"><span>{{ 'Room' | t }}</span>
-            <select class="st-in" (change)="room.set($any($event.target).value)">
-              @for (r of rooms; track r.id) { <option [value]="r.id" [selected]="r.id === room()">{{ r.label | t }}</option> }
-            </select></label>
+            <wb-select class="st-sel" label="Room" [options]="roomOpts()" [value]="room()" (pick)="room.set($any($event))" /></label>
           <div class="st-f"><span>{{ 'Expires' | t }}</span>
             <div class="st-seg">
               @for (e of expiries; track e.days) {
@@ -278,6 +275,8 @@ export class TokensSettingsPanel implements OnDestroy {
     return (s?.token_roles ?? ['editor', 'reviewer', 'viewer']).filter(r => all.indexOf(r) >= mine);
   })();
   readonly rooms = [{ id: '', label: 'Any room' }, { id: 'cad', label: 'CAD' }, { id: 'pcb', label: 'PCB' }];
+  readonly roleOpts: SelectOption[] = this.roles.map(r => ({ value: r, label: r }));
+  roomOpts = computed<SelectOption[]>(() => this.rooms.map(r => ({ value: r.id, label: t(r.label) })));
   readonly expiries: { days: number | null; label: string }[] = [
     { days: null, label: 'Never' }, { days: 7, label: '7 days' }, { days: 30, label: '30 days' }, { days: 90, label: '90 days' }];
   readonly origin = location.origin;

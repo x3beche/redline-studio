@@ -9,6 +9,7 @@ import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
 import { Prefs } from './preferences';
 import { JinaSettingsPanel, foldKeep, foldLoad } from './jina-settings';
 import { RouteOrder } from './route-order';
+import { SelectOption, UiSelect } from './ui-select';
 
 /** Settings > Proxy & Data: the order of routes each outside lookup
  *  tries (backend/netroutes.py) - the Product Catalog's crawler and the
@@ -73,7 +74,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder],
+  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect],
   styleUrl: './settings.css',
   template: `
 <ng-template #period>
@@ -192,11 +193,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
             <button class="st-more" (click)="prefs.tab.set('costs')">{{ 'Edit in Settings > Costs' | t }} →</button>
           </span></div>
         <label class="st-f"><span>{{ 'Health check' | t }}</span>
-          <select class="st-in" [disabled]="!canEdit" (change)="save({ health_minutes: +$any($event.target).value })">
-            @for (m of health; track m) {
-              <option [value]="m" [selected]="m === (d.health_minutes ?? 30)">{{ m ? ('every' | t) + ' ' + (m >= 60 ? m / 60 + ' h' : m + ' min') : ('Off' | t) }}</option>
-            }
-          </select></label>
+          <wb-select class="st-sel" label="Health check" [options]="healthOpts()" [value]="'' + (d.health_minutes ?? 30)" [disabled]="!canEdit"
+                     (pick)="save({ health_minutes: +$event })" /></label>
       </div>
       <p class="st-hint">{{ 'A rotating residential proxy with no country in the username comes out somewhere new in the world on each lookup (2Captcha: the -zone-custom username, no region).' | t }}</p>
       @if (canEdit) {
@@ -426,6 +424,8 @@ export class ProxySettingsPanel {
   readonly when = when;
   readonly periods = PERIODS;
   readonly health = HEALTH;
+  healthOpts = computed<SelectOption[]>(() => this.health.map(m => ({ value: '' + m,
+    label: m ? t('every') + ' ' + (m >= 60 ? m / 60 + ' h' : m + ' min') : t('Off') })));
   readonly consumers = CONSUMERS;
   data = signal<ProxySettings | null>(null);
   /** The proxy card opened or closed by hand in this browser; otherwise open while a proxy is set up. */

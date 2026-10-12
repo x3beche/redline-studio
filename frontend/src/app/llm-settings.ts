@@ -10,6 +10,7 @@ import { CcCompact, CcPeriod, OrCompact, OrUsage, OwnCompact, OwnUsage } from '.
 import { SuggestConf } from './rooms/suggest';
 import { ModelPicker } from './model-picker';
 import { Confirm } from './confirm';
+import { SelectOption, UiSelect } from './ui-select';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -239,7 +240,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker],
+  imports: [T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -350,12 +351,8 @@ export class LlmUsagePanel {
         @if (d.jobs[j]; as job) {
           <div class="st-job">
             <div class="st-job-name"><b>{{ job.label | t }}@if (savedRow()[j]) { <span class="st-job-saved st-ok" role="status">✓ {{ 'Saved' | t }}</span> }</b><span [title]="job.about | t">{{ job.about | t }}</span></div>
-            <select class="st-in st-prov" [disabled]="!canEdit" [title]="('Provider' | t) + ': ' + d.providers[prov(j)].name"
-                    (change)="setProvider(j, $any($event.target).value)">
-              @for (p of providerIds; track p) {
-                <option [value]="p" [selected]="p === prov(j)">{{ d.providers[p].name }}{{ d.providers[p].set ? '' : ' · ' + ('no key' | t) }}</option>
-              }
-            </select>
+            <wb-select class="st-prov" label="Provider" [options]="providerOpts()" [value]="prov(j)" [disabled]="!canEdit"
+                       [tip]="('Provider' | t) + ': ' + d.providers[prov(j)].name" (pick)="setProvider(j, $event)" />
             <app-model-picker class="tcv-mp-row" [models]="models()[prov(j)] || []" [selected]="pending()[j] ? '' : job.model"
                               [placeholder]="pending()[j] ? ('choose a model' | t) : ''" [disabled]="!canEdit" [fixed]="true" [vision]="true"
                               [title]="('Model' | t) + ': ' + d.providers[prov(j)].name + ' · ' + (pending()[j] ? ('choose a model' | t) : job.model)"
@@ -448,6 +445,11 @@ export class LlmSettingsPanel {
   readonly canEdit = this.auth.can('settings');
   readonly providerIds = PROVIDERS;
   data = signal<LlmSettings | null>(null);
+  /** The providers for a job's drop-down; one with no key says so. */
+  providerOpts = computed<SelectOption[]>(() => {
+    const d = this.data();
+    return d ? this.providerIds.map(p => ({ value: p, label: d.providers[p].name + (d.providers[p].set ? '' : ' · ' + t('no key')) })) : [];
+  });
   models = signal<Record<string, LlmModel[]>>({});
   draft = signal<Record<string, string>>({});
   busy = signal(false);

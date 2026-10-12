@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { LANG, T, t } from './i18n';
 import { BudgetBars } from './budget-bars';
+import { SelectOption, UiSelect } from './ui-select';
 import {
   Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
   convert, currencies, currencyName, fromUsd, money, moneyIn, setOverride, toUsd,
@@ -54,7 +55,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
 
 @Component({
   selector: 'app-costs-settings',
-  imports: [BudgetBars, NgTemplateOutlet, T],
+  imports: [BudgetBars, NgTemplateOutlet, T, UiSelect],
   styleUrl: './settings.css',
   template: `
 <div class="st-page">
@@ -144,11 +145,8 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
       <div class="st-card-body">
         <div class="st-grid">
           <label class="st-f" style="grid-column: 1 / -1"><span>{{ 'Default for everyone' | t }}</span>
-            <select class="st-in" [disabled]="!canEdit() || busy() === 'currency'" (change)="setDefault($any($event.target).value)">
-              @for (c of list(); track c) {
-                <option [value]="c" [selected]="c === m.defaultCurrency()">{{ label(c) }}</option>
-              }
-            </select></label>
+            <wb-select class="st-sel" label="Default for everyone" [options]="namedOpts()" [value]="m.defaultCurrency()"
+                       [disabled]="!canEdit() || busy() === 'currency'" (pick)="setDefault($event)" /></label>
         </div>
         <div class="st-row">
           <span class="st-sec-title" [title]="'Each person can show another currency in their own browser - here, or with the currency menu in Analytics. Amounts stay in dollars on the server; only the showing changes.' | t">{{ 'This browser' | t }}</span>
@@ -231,13 +229,9 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
           </div>
           <div class="st-conv">
             <input class="st-in" type="number" min="0" step="any" [value]="convAmount()" (input)="convAmount.set(+$any($event.target).value || 0)">
-            <select class="st-in" (change)="convFrom.set($any($event.target).value)">
-              @for (c of list(); track c) { <option [value]="c" [selected]="c === convFrom()">{{ c }}</option> }
-            </select>
+            <wb-select class="st-sel" label="Currency" [options]="curOpts()" [value]="convFrom()" (pick)="convFrom.set($event)" />
             <button class="tcv-btn tcv-files-btn" (click)="swap()" [title]="'swap' | t">⇄</button>
-            <select class="st-in" (change)="convTo.set($any($event.target).value)">
-              @for (c of list(); track c) { <option [value]="c" [selected]="c === convTo()">{{ c }}</option> }
-            </select>
+            <wb-select class="st-sel" label="Currency" [options]="curOpts()" [value]="convTo()" (pick)="convTo.set($event)" />
             <span class="st-conv-out mono">= {{ inCur(convert(convAmount(), convFrom(), convTo()), convTo()) }}</span>
           </div>
           @if (trend().length) {
@@ -288,9 +282,8 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
             <div class="st-row">
               <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" [placeholder]="k.optional ? ('none' | t) : k.hint"
                      [value]="budget(k.id).amount ?? ''" (input)="editBudget(k.id, { amount: num($any($event.target).value) })">
-              <select class="st-in" [disabled]="!canEdit()" (change)="editBudget(k.id, { currency: $any($event.target).value })">
-                @for (c of listWith(budget(k.id).currency); track c) { <option [value]="c" [selected]="c === budget(k.id).currency">{{ c }}</option> }
-              </select>
+              <wb-select class="st-sel" label="Currency" [options]="curOptsWith(budget(k.id).currency)" [value]="budget(k.id).currency"
+                         [disabled]="!canEdit()" (pick)="editBudget(k.id, { currency: $event })" />
               <span class="st-dim">/ {{ 'month' | t }}</span>
               <label class="st-warn-at" [title]="'The bar and the top bar turn the warning colour from this share of the budget' | t">
                 <span class="st-dim">{{ 'warn at' | t }}</span>
@@ -353,9 +346,8 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
             <div class="st-row">
               <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" [placeholder]="p.hint"
                      [value]="priceDraft(p.id).amount ?? ''" (input)="editPrice(p.id, { amount: num($any($event.target).value) })">
-              <select class="st-in" [disabled]="!canEdit()" (change)="editPrice(p.id, { currency: $any($event.target).value })">
-                @for (c of listWith(priceDraft(p.id).currency); track c) { <option [value]="c" [selected]="c === priceDraft(p.id).currency">{{ c }}</option> }
-              </select>
+              <wb-select class="st-sel" label="Currency" [options]="curOptsWith(priceDraft(p.id).currency)" [value]="priceDraft(p.id).currency"
+                         [disabled]="!canEdit()" (pick)="editPrice(p.id, { currency: $event })" />
               <span class="st-dim">{{ p.unit | t }}</span>
               <span class="st-right mono">
                 @if (priceDraft(p.id).amount != null) {
@@ -407,9 +399,8 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
                (input)="edit(s, i, { name: $any($event.target).value })">
         <input class="st-in st-num" type="number" min="0" step="any" [value]="r.amount ?? ''" [disabled]="!canEdit()"
                [placeholder]="s === 'subscriptions' ? '200' : '10'" (input)="edit(s, i, { amount: num($any($event.target).value) })">
-        <select class="st-in" [disabled]="!canEdit()" (change)="edit(s, i, { currency: $any($event.target).value })">
-          @for (c of listWith(r.currency); track c) { <option [value]="c" [selected]="c === r.currency">{{ c }}</option> }
-        </select>
+        <wb-select class="st-sel" label="Currency" [options]="curOptsWith(r.currency)" [value]="r.currency"
+                   [disabled]="!canEdit()" (pick)="edit(s, i, { currency: $event })" />
         <div class="st-seg st-l-period">
           <button [class.on]="r.period === 'month'" [disabled]="!canEdit()" (click)="edit(s, i, { period: 'month' })">{{ 'month' | t }}</button>
           <button [class.on]="r.period === 'year'" [disabled]="!canEdit()" (click)="edit(s, i, { period: 'year' })">{{ 'year' | t }}</button>
@@ -538,6 +529,10 @@ export class CostsSettingsPanel implements OnDestroy {
   label(c: string) { const n = currencyName(c); return n && n !== c ? `${c} · ${n}` : c; }
   /** The currencies, with one a row holds even if there is no rate for it. */
   listWith(c: string) { const l = this.list(); return l.includes(c) ? l : [c, ...l]; }
+  /** The currencies for the drop-downs: by code, and by code and name for the default. */
+  curOpts = computed<SelectOption[]>(() => this.list().map(c => ({ value: c, label: c })));
+  namedOpts = computed<SelectOption[]>(() => { LANG(); return this.list().map(c => ({ value: c, label: this.label(c) })); });
+  curOptsWith(c: string): SelectOption[] { const o = this.curOpts(); return !c || o.some(x => x.value === c) ? o : [{ value: c, label: c }, ...o]; }
   num(v: string): number | null { return v === '' || isNaN(+v) ? null : +v; }
   rateOf(c: string) { return this.m.rates()[c] ?? null; }
   cross(a: string, b: string): string {

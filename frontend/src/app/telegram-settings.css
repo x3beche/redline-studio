@@ -153,7 +153,9 @@
 /* ---- removing the bot ------------------------------------------- */
 .tg-danger { border-color: var(--danger); }
 .tg-danger .st-card-head h3 { color: var(--danger); }
-.tg-check { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
+.tg-check { display: inline-flex; align-items: center; gap: 7px; padding: 2px 0; font: inherit; font-size: 11.5px; color: var(--ink);
+  background: none; border: 0; cursor: pointer; text-align: left; }
+.tg-check:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .tg-danger-btn { margin-left: auto; color: var(--danger); border-color: var(--danger); }
 
 /* ---- languages: chips, and the searchable picker (telegram-langs.ts) */

@@ -4,7 +4,7 @@
 .tk-new { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 10px; }
 .tk-new .tk-name { flex: 1 1 220px; }
 .tk-new .st-f { min-width: 0; }
-.tk-new select.st-in { min-width: 104px; }
+.tk-new .st-sel { min-width: 104px; --wb-sel-h: 26px; }
 .tk-new .st-seg button { padding: 4px 9px; }
 .tk-new .st-in, .tk-make { height: 26px; }
 .tk-make { flex: none; }

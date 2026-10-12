@@ -5,6 +5,7 @@ import {
   applyTheme, cachedCustom, isCustom, parseColour, setTheme, themeTokens, toHex, wearCustom,
 } from '../theme';
 import { T, t } from './i18n';
+import { SelectOption, UiSelect } from './ui-select';
 import { Prefs } from './preferences';
 
 /** Themes people make, under the built-in ones in Settings > Appearance.
@@ -102,7 +103,7 @@ function errText(e: HttpErrorResponse): string {
 
 @Component({
   selector: 'app-custom-themes',
-  imports: [T],
+  imports: [T, UiSelect],
   styleUrls: ['./settings.css', './custom-themes.css'],
   template: `
 <div class="st-card ct">
@@ -139,9 +140,7 @@ function errText(e: HttpErrorResponse): string {
           <label class="st-f ct-name"><span>{{ 'Name' | t }}</span>
             <input class="st-in" maxlength="40" [value]="d.name" (input)="patch({ name: $any($event.target).value })"></label>
           <label class="st-f"><span>{{ 'Based on' | t }}</span>
-            <select class="st-in" [value]="d.base" (change)="rebase($any($event.target).value)">
-              @for (b of themes; track b) { <option [value]="b" [selected]="b === d.base">{{ names[b] }}</option> }
-            </select></label>
+            <wb-select class="st-sel" label="Based on" [options]="baseOpts" [value]="d.base" (pick)="rebase($any($event))" /></label>
           <div class="st-f"><span>{{ 'Kind' | t }}</span>
             <div class="st-seg">
               <button [class.on]="!d.light" (click)="patch({ light: false })">{{ 'Dark' | t }}</button>
@@ -206,6 +205,7 @@ export class CustomThemesPanel implements OnDestroy {
   filter = input('All');
   readonly themes = THEMES;
   readonly names = THEME_NAMES;
+  readonly baseOpts: SelectOption[] = THEMES.map(b => ({ value: b, label: THEME_NAMES[b] }));
   readonly editable = EDITABLE;
   loaded = this.store.loaded;
   shown = computed(() => this.store.list().filter(c =>

@@ -373,8 +373,8 @@ const FATHER = [
         <p class="st-hint">{{ 'Every linked chat is told the bot was disconnected, then unlinked. The webhook is taken down and what waits there is dropped; the token, the secret, the codes and the unsent messages are forgotten.' | t }}</p>
         <p class="st-hint"><b>{{ 'The bot itself still exists on Telegram.' | t }}</b> {{ 'To delete it there, send /deletebot to @BotFather - Workbench cannot do that.' | t }}</p>
         <div class="st-row">
-          <label class="tg-check"><input type="checkbox" [checked]="forget()" (change)="forget.set($any($event.target).checked)">
-            {{ 'Forget everything: the message log and the counters too' | t }}</label>
+          <button type="button" class="tg-check" role="switch" [attr.aria-checked]="forget()" (click)="forget.set(!forget())">
+            <span class="tcv-switch" [attr.data-on]="forget() ? 1 : null" aria-hidden="true"></span>{{ 'Forget everything: the message log and the counters too' | t }}</button>
           <button class="tcv-btn tcv-files-btn tg-danger-btn" [disabled]="!!busy()" (click)="removeBot()">{{ busy() === 'remove' ? '…' : ('Remove the bot' | t) }}</button>
         </div>
       </div>
