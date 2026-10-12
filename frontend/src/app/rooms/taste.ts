@@ -1,4 +1,5 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Toast, ToastTone } from '../toast';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
@@ -243,7 +244,6 @@ function why(e: HttpErrorResponse, fallback: string): string {
 
   <!-- RIGHT: one palette, or proposals from a project -->
   <section class="tcv-notes-main tst">
-    @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
 
     @if (mode() === 'extract') {
       <header class="tst-head">
@@ -256,7 +256,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <button class="tcv-btn" (click)="openPicker('extract')" [disabled]="running()">
               {{ exProject() ? (kindName(exProject()!.kind) | t) + ': ' + exProject()!.label : ('Choose a project…' | t) }}</button>
             @if (picker() === 'extract') {
-              <div class="tst-pop" role="listbox">
+              <div class="tst-pop" animate.leave="tcv-leave" role="listbox">
                 <input #pickq class="tcv-notes-search" [placeholder]="'Find a folder, model, board or firmware' | t" [value]="pickQ()"
                        (input)="findProjects($any($event.target).value)" (keydown)="pickKey($event)">
                 <div class="tst-pop-list">
@@ -424,7 +424,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <span class="tst-pickwrap" (click)="$event.stopPropagation()">
               <button class="tcv-btn" (click)="openPicker('attach')">{{ 'Attach to…' | t }}</button>
               @if (picker() === 'attach') {
-                <div class="tst-pop" role="listbox">
+                <div class="tst-pop" animate.leave="tcv-leave" role="listbox">
                   <input #pickq class="tcv-notes-search" [placeholder]="'Find a model, board or firmware' | t" [value]="pickQ()"
                          (input)="findProjects($any($event.target).value)" (keydown)="pickKey($event)">
                   <div class="tst-pop-list">
@@ -773,7 +773,6 @@ export class RoomTaste implements OnDestroy {
   allPalettes = signal<Palette[]>([]);
   openId = signal<string | null>(null);
   mode = signal<'palette' | 'extract'>('palette');
-  flash = signal<string | null>(null);
 
   addText = signal('');
   addWhy = signal('');
@@ -880,7 +879,8 @@ export class RoomTaste implements OnDestroy {
     this.allPalettes.update(put);
   }
 
-  private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
+  /** A word in passing: the app's toast (toast.ts). */
+  private say(msg: string, tone: ToastTone = 'info') { Toast.show(msg, { tone }); }
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));
 
   when = when;

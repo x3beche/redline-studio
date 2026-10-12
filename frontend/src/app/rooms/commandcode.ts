@@ -23,6 +23,7 @@ import { Confirm } from '../confirm';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { ModelPicker } from '../model-picker';
 import { DmApi, DmStore } from '../dm';
+import { Toast, ToastTone } from '../toast';
 import { DmPeople, DmView, dmWhen } from './dm-view';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
@@ -384,7 +385,6 @@ const STARTERS: Starter[] = [
 ];
 
 type Group = { name: string; chats: CcChat[] };
-type Toast = { text: string; undo?: () => void; ms: number; label?: string };
 /** A question asked in the list before something cannot be undone. */
 type Ask = { text: string; label: string; go: () => void };
 
@@ -652,7 +652,7 @@ type Ask = { text: string; label: string; go: () => void };
             <button class="tcv-cc-ib tcv-cc-more" (click)="menu.set(!menu()); $event.stopPropagation()" [class.on]="menu()" [title]="'More' | t">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.more }" /></button>
             @if (menu()) {
-              <div class="tcv-cc-menu" (click)="menu.set(false)">
+              <div class="tcv-cc-menu" animate.leave="tcv-leave" (click)="menu.set(false)">
                 @if (auth.can('draw')) {
                   <button (click)="togglePin(c)"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.pin }" />
                     {{ (c.pinned ? 'Unpin' : 'Pin') | t }}</button>
@@ -914,13 +914,6 @@ type Ask = { text: string; label: string; go: () => void };
       }
       @if (auth.can('draw')) { <ng-container *ngTemplateOutlet="composerT" /> }
     }
-    @if (toast(); as tt) {
-      <div class="tcv-cc-toast" role="status">
-        <span>{{ tt.text }}</span>
-        @if (tt.undo) { <button class="tcv-cc-undo" (click)="tt.undo!()">{{ (tt.label || 'Undo') | t }}</button> }
-        <span class="tcv-cc-toastbar" [style.animation-duration.ms]="tt.ms"></span>
-      </div>
-    }
   </section>
 </div>
 
@@ -1020,7 +1013,7 @@ type Ask = { text: string; label: string; go: () => void };
       </div>
     }
     @if (mentionPop()) {
-      <div class="tcv-cc-mpop" role="listbox" (mousedown)="$event.preventDefault()">
+      <div class="tcv-cc-mpop" animate.leave="tcv-leave" role="listbox" (mousedown)="$event.preventDefault()">
         <div class="tcv-cc-mhead">
           <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" />
           <span>{{ mentionQ() || ('Mention a model, board, file, note, palette or part' | t) }}</span>
@@ -1192,11 +1185,10 @@ export class RoomCommandCode implements OnDestroy {
   drawer = signal(false);
   selecting = signal(false);
   selected = signal<Set<string>>(new Set());
-  toast = signal<Toast | null>(null);
   /** Conversations deleted on the page, not yet on the server: "Undo" may bring them back. */
   pending = signal<Set<string>>(new Set());
-  private pendingTimer: ReturnType<typeof setTimeout> | null = null;
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The toast (toast.ts) whose Undo can still stop the deletes waiting. */
+  private undoToast = 0;
   private armTimer: ReturnType<typeof setTimeout> | null = null;
   /** The requests streaming this page's own answers, by conversation. */
   private aborts = new Map<string, AbortController>();
@@ -1616,8 +1608,8 @@ export class RoomCommandCode implements OnDestroy {
     const lang = LANG();
     this.api.refreshIdeas(lang).subscribe({
       next: d => { this.ideasBusy.set(false); if (LANG() === lang) this.ideas.set(d);
-                   if (d.error && d.source !== 'llm') this.showToast(t('Could not write new examples - the last ones stay.')); },
-      error: e => { this.ideasBusy.set(false); this.showToast(this.msg(e)); },
+                   if (d.error && d.source !== 'llm') this.showToast(t('Could not write new examples - the last ones stay.'), undefined, undefined, undefined, 'warn'); },
+      error: e => { this.ideasBusy.set(false); this.showToast(this.msg(e), undefined, undefined, undefined, 'danger'); },
     });
   }
 
@@ -1808,23 +1800,26 @@ export class RoomCommandCode implements OnDestroy {
     }
     this.pending.set(ids);
     const text = rows.length === 1 ? `${t('Deleted')} “${t(rows[0].title)}”` : `${rows.length} ${t('conversations deleted')}`;
-    this.showToast(text, () => {
-      if (this.pendingTimer) clearTimeout(this.pendingTimer);
-      this.pendingTimer = null;
-      this.pending.set(new Set());
-      if (!this.openId() && open && ids.has(open)) this.open(open);
+    // Sent when the toast goes - its clock holds while the pointer is on it,
+    // so Undo stays possible for as long as it is shown.
+    const id = this.undoToast = Toast.show(text, {
+      ms: UNDO_MS,
+      action: { label: t('Undo'), run: () => {
+        this.pending.set(new Set());
+        if (!this.openId() && open && ids.has(open)) this.open(open);
+      } },
+      onClose: why => { if (why !== 'action' && this.undoToast === id) this.flushDeletes(); },
     });
-    this.pendingTimer = setTimeout(() => this.flushDeletes(), UNDO_MS);
   }
 
   /** Send the deletes that are waiting - now, or (leaving) so they outlive the page. */
   flushDeletes(leaving = false) {
     const ids = [...this.pending()];
-    if (this.pendingTimer) clearTimeout(this.pendingTimer);
-    this.pendingTimer = null;
     if (!ids.length) return;
-    if (leaving) { this.api.removeOnLeave(ids); this.pending.set(new Set()); return; }
-    if (this.toast()?.undo) this.toast.set(null);
+    if (leaving) { this.api.removeOnLeave(ids); this.pending.set(new Set()); Toast.dismiss(this.undoToast); return; }
+    const tid = this.undoToast;
+    this.undoToast = 0;
+    Toast.dismiss(tid);
     const done = () => {
       this.chats.update(l => l.filter(c => !ids.includes(c.id)));
       this.pending.update(s => { const n = new Set(s); ids.forEach(i => n.delete(i)); return n; });
@@ -1837,7 +1832,7 @@ export class RoomCommandCode implements OnDestroy {
         done();
         this.refresh();
         // Not gone: 30 days in the trash, one click away.
-        if (refused.length < ids.length) this.showToast(t('Moved to Trash.'), () => this.showTab('trash'), 4000, 'Show');
+        if (refused.length < ids.length) this.showToast(t('Moved to Trash.'), () => this.showTab('trash'), undefined, 'Show');
       },
       error: e => { this.error.set(this.msg(e)); this.pending.set(new Set()); this.refresh(); },
     });
@@ -1875,7 +1870,7 @@ export class RoomCommandCode implements OnDestroy {
       next: (r: unknown) => {
         const refused = (r as { refused?: string[] })?.refused ?? [];
         if (refused.length) this.error.set(`${refused.length} ${t('not restored - they are someone else\'s.')}`);
-        this.showToast(text, () => this.showTab(rows.every(c => c.archived) ? 'archived' : 'list'), 4000, 'Show');
+        this.showToast(text, () => this.showTab(rows.every(c => c.archived) ? 'archived' : 'list'), undefined, 'Show');
         this.refresh();
       },
       error: e => { this.error.set(this.msg(e)); this.refresh(); },
@@ -1940,11 +1935,9 @@ export class RoomCommandCode implements OnDestroy {
     });
   }
 
-  private showToast(text: string, undo?: () => void, ms = UNDO_MS, label?: string) {
-    if (this.toastTimer) clearTimeout(this.toastTimer);
-    const toast: Toast = { text, ms, label, undo: undo && (() => { this.toast.set(null); undo(); }) };
-    this.toast.set(toast);
-    this.toastTimer = setTimeout(() => { if (this.toast() === toast) this.toast.set(null); }, ms);
+  /** A line in the app's toast stack (toast.ts), with Undo (or `label`) when there is something to undo. */
+  private showToast(text: string, undo?: () => void, ms?: number, label?: string, tone?: ToastTone) {
+    Toast.show(text, { ms: ms ?? (undo ? UNDO_MS : undefined), tone, action: undo && { label: t(label || 'Undo'), run: undo } });
   }
 
   // ---- lines -------------------------------------------------------------

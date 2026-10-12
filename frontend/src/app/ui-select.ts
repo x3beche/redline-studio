@@ -86,7 +86,7 @@ export function plainOptions(list: readonly string[]): SelectOption[] {
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
 </button>
 @if (open()) {
-  <div #pop class="wb-sel-pop" role="listbox" [attr.aria-label]="label() | t" [style.left.px]="at().x" [style.top.px]="at().y"
+  <div #pop class="wb-sel-pop" animate.leave="tcv-leave" [style.--tcv-origin]="at().up ? 'bottom left' : 'top left'" role="listbox" [attr.aria-label]="label() | t" [style.left.px]="at().x" [style.top.px]="at().y"
        [style.width.px]="at().w" [style.max-height.px]="at().h" (click)="$event.stopPropagation()">
     @if (searchable()) {
       <input #find class="wb-sel-find" type="search" [placeholder]="'Filter' | t" [value]="q()" (input)="q.set($any($event.target).value); hot.set(0)"
@@ -122,7 +122,7 @@ export class UiSelect {
   open = signal(false);
   q = signal('');
   hot = signal(0);
-  at = signal({ x: 0, y: 0, w: 200, h: 300 });
+  at = signal({ x: 0, y: 0, w: 200, h: 300, up: false });
   private box = viewChild.required<ElementRef<HTMLButtonElement>>('box');
   private find = viewChild<ElementRef<HTMLInputElement>>('find');
   private list = viewChild<ElementRef<HTMLDivElement>>('list');
@@ -172,7 +172,7 @@ export class UiSelect {
     const below = innerHeight - r.bottom - 12, above = r.top - 12;
     const h = Math.min(340, Math.max(below, above));
     const y = below >= Math.min(220, h) ? r.bottom + 4 : Math.max(8, r.top - 4 - h);
-    const next = { x: Math.max(8, Math.min(r.left, innerWidth - w - 8)), y, w, h };
+    const next = { x: Math.max(8, Math.min(r.left, innerWidth - w - 8)), y, w, h, up: y < r.top };
     const a = this.at();
     if (a.x !== next.x || a.y !== next.y || a.w !== next.w || a.h !== next.h) this.at.set(next);
   }

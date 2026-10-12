@@ -1,5 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Toast, ToastTone } from '../toast';
 import { HttpEventType } from '@angular/common/http';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
@@ -325,7 +326,6 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
     @if (dropAt() === 'main' && dragFiles()) {
       <div class="tcv-fm-dropzone"><i [fmIcon]="'upload'"></i>{{ 'Drop to upload to' | t }} {{ hereName() }}</div>
     }
-    @if (flash(); as m) { <div class="tcv-fm-toast" role="status">{{ m }}</div> }
   </section>
 
   <!-- a name, or the box that renames it -->
@@ -395,7 +395,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
   <!-- dialogs -->
   @if (dialog(); as d) {
-    <div class="tcv-fm-scrim" (click)="dialog.set(null)" (keydown.escape)="dialog.set(null)">
+    <div class="tcv-fm-scrim" animate.leave="tcv-leave" (click)="dialog.set(null)" (keydown.escape)="dialog.set(null)">
       <div class="tcv-fm-dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
         @switch (d.type) {
           @case ('new-folder') {
@@ -445,7 +445,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
   <!-- the preview -->
   @if (previewFile(); as f) {
-    <div class="tcv-fm-preview" role="dialog" aria-modal="true" [attr.aria-label]="f.name">
+    <div class="tcv-fm-preview" animate.leave="tcv-leave" role="dialog" aria-modal="true" [attr.aria-label]="f.name">
       <header class="tcv-fm-pv-head">
         <button class="tcv-fm-icon-btn" (click)="closePreview()" [title]="'Close (Esc)' | t" [attr.aria-label]="'Close' | t"><i [fmIcon]="'close'"></i></button>
         <i class="tcv-fm-kind-ico" [attr.data-ico]="iconOf(f)" [fmIcon]="iconOf(f)"></i>
@@ -536,7 +536,6 @@ export class RoomFiles implements OnDestroy {
   progress = signal<number | null>(null);
   uploading = signal('');
   error = signal<string | null>(null);
-  flash = signal<string | null>(null);
   dropAt = signal<string | null>(null);
   dragFiles = signal(false);
   /** Thumbnails worked out here: a PDF's first page, a text's first lines. */
@@ -1206,7 +1205,7 @@ export class RoomFiles implements OnDestroy {
     if (raw) {
       const got = JSON.parse(raw) as { files: string[]; folders: string[] };
       const folders = got.folders.filter(id => !this.subtree(id).has(folder));
-      if (got.folders.length !== folders.length) this.error.set(t('A folder cannot go into itself.'));
+      if (got.folders.length !== folders.length) this.say(t('A folder cannot go into itself.'), 'warn');
       const moveFiles = got.files.filter(id => this.placeOf(this.fileById(id)!) !== folder);
       const moveDirs = folders.filter(id => (this.byId().get(id)?.parent ?? '') !== folder);
       if (!moveFiles.length && !moveDirs.length) return;
@@ -1227,7 +1226,7 @@ export class RoomFiles implements OnDestroy {
     if (files.length) this.upload(files, this.here());
   }
   upload(files: File[], folder: string) {
-    if (this.progress() !== null) { this.error.set(t('An upload is still going - wait for it to finish.')); return; }
+    if (this.progress() !== null) { this.say(t('An upload is still going - wait for it to finish.'), 'warn'); return; }
     this.error.set(null);
     this.progress.set(0);
     this.uploading.set(files.length === 1 ? files[0].name : `${files.length} ${t('files')}`);
@@ -1294,11 +1293,9 @@ export class RoomFiles implements OnDestroy {
     this.picked.ask('model', id);
   }
 
-  private fail(err: unknown, fallback: string) { this.error.set(detail(err, t(fallback))); }
-  private say(m: string) {
-    this.flash.set(m);
-    setTimeout(() => { if (this.flash() === m) this.flash.set(null); }, 4000);
-  }
+  private fail(err: unknown, fallback: string) { this.say(detail(err, t(fallback)), 'danger'); }
+  /** Done, or could not: a word in the app's toast stack (toast.ts). */
+  private say(m: string, tone: ToastTone = 'ok') { Toast.show(m, { tone }); }
 }
 
 function detail(err: unknown, fallback: string): string {

@@ -37,7 +37,7 @@ export class Langs {
           [attr.title]="hint() || null" [attr.aria-label]="hint() || null" aria-haspopup="listbox" [attr.aria-expanded]="open()"
           >{{ (label() || 'Add language') | t }} ▾</button>
   @if (open()) {
-    <div class="tg-lp-pop" [class.tg-lp-fixed]="!!pos()" [style.top]="pos()?.top" [style.bottom]="pos()?.bottom"
+    <div class="tg-lp-pop" animate.leave="tcv-leave" [class.tg-lp-fixed]="!!pos()" [style.top]="pos()?.top" [style.bottom]="pos()?.bottom"
          [style.left]="pos()?.left">
       <input class="st-in" #q [placeholder]="'Search: Deutsch, ja, Arabic…' | t" [value]="query()" (input)="query.set($any($event.target).value)"
              (keydown.enter)="first() && pick(first()!.code)" (keydown.escape)="open.set(false)">

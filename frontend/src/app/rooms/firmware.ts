@@ -824,8 +824,8 @@ export class FwCode implements AfterViewInit, OnDestroy {
   </app-room-frame>
 @if (flashOpen()) {
   <!-- FLASHING: Connect -> Flashing -> Verifying -> Done, in this browser. -->
-  <div class="fl-scrim" (click)="closeFlash()"></div>
-  <section class="fl-box" role="dialog" aria-modal="true" [attr.aria-label]="'Flash the board' | t">
+  <div class="fl-scrim" animate.leave="tcv-leave" (click)="closeFlash()"></div>
+  <section class="fl-box" animate.leave="tcv-leave" role="dialog" aria-modal="true" [attr.aria-label]="'Flash the board' | t">
     <header class="fl-head">
       <div class="min-w-0">
         <b>{{ 'Flash' | t }} {{ fw()?.title }}</b>

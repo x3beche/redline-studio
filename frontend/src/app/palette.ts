@@ -80,7 +80,7 @@ function subsequence(w: string, text: string): boolean {
   imports: [T],
   template: `
 @if (open()) {
-  <div class="tcv-pal-back" (click)="close()">
+  <div class="tcv-pal-back" animate.leave="tcv-leave" (click)="close()">
     <div class="tcv-pal" (click)="$event.stopPropagation()" role="dialog" aria-label="Command palette">
       <div class="tcv-pal-inrow">
         @if (asking(); as a) {

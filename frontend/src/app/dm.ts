@@ -1,4 +1,5 @@
 import { Component, Injectable, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Toast, ToastTone } from './toast';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Auth } from './auth';
@@ -132,13 +133,12 @@ export class DmStore {
   open = signal<string | null>(new URLSearchParams(location.search).get('dm'));
   /** "Send to...": the thing waiting for its people (the dialog, DmSend). */
   sendTo = signal<{ kind: DmKind; id: string; label?: string } | null>(null);
-  /** A short word after something was sent, saved or taken back. */
-  toast = signal<string | null>(null);
   /** What was sent, open in the viewer (DmViewer), by its snapshot. */
   viewing = signal<string | null>(null);
   /** Snapshots being added right now (their buttons wait). */
   adding = signal<Set<string>>(new Set());
-  say(m: string) { this.toast.set(m); setTimeout(() => { if (this.toast() === m) this.toast.set(null); }, 3500); }
+  /** A short word after something was sent, saved or taken back: the app's toast (toast.ts). */
+  say(m: string, tone: ToastTone = 'ok') { Toast.show(m, { tone }); }
 
   /** What was sent, made a thing of my own space - and there I go: the
    *  Taste tab with the palette open, the 3D tab with the model, the
@@ -148,19 +148,19 @@ export class DmStore {
     this.adding.update(x => new Set(x).add(sid));
     try {
       const got = await firstValueFrom(this.api.add(sid));
-      this.say(got.already ? t('Already in your catalog') : t(DM_ADDED[got.kind] ?? 'Added to your space'));
+      this.say(got.already ? t('Already in your catalog') : t(DM_ADDED[got.kind] ?? 'Added to your space'), got.already ? 'info' : 'ok');
       this.viewing.set(null);
       this.openItem({ kind: got.kind, id: got.id, label: got.label, own: true,
                       open: got.kind === 'product' ? { maker: got.maker, name: got.label } : undefined });
     } catch (e: unknown) {
-      this.say((e as { error?: { detail?: string } })?.error?.detail || t('could not add it'));
+      this.say((e as { error?: { detail?: string } })?.error?.detail || t('could not add it'), 'danger');
     } finally {
       this.adding.update(x => { const n = new Set(x); n.delete(sid); return n; });
     }
   }
   async unshare(sid: string) {
     try { await firstValueFrom(this.api.unshare(sid)); this.say(t('No longer shared')); }
-    catch { this.say(t('could not save that')); }
+    catch { this.say(t('could not save that'), 'danger'); }
   }
 
   enabled = computed(() => !!this.state()?.enabled);
@@ -386,7 +386,7 @@ export class DmCard {
   host: { '(window:keydown.escape)': 'close()' },
   template: `
 @if (store.sendTo(); as what) {
-  <div class="tcv-dm-scrim" (mousedown)="scrimDown($event)" (click)="scrimClick()">
+  <div class="tcv-dm-scrim" animate.leave="tcv-leave" (mousedown)="scrimDown($event)" (click)="scrimClick()">
     <div class="tcv-dm-dialog tcv-dm-send" role="dialog" aria-modal="true" aria-labelledby="dm-send-title">
       <h2 id="dm-send-title" class="tcv-dm-dtitle">{{ 'Send to…' | t }}</h2>
       @if (card(); as c) { <rl-dm-card [item]="c" /> }
@@ -414,7 +414,7 @@ export class DmCard {
     </div>
   </div>
 }
-@if (store.toast(); as m) { <div class="tcv-dm-toast" role="status">{{ m }}</div> }`,
+`,
 })
 export class DmSend {
   store = inject(DmStore);
@@ -466,8 +466,7 @@ export class DmSend {
         names.push(p?.name ?? pid);
       }
       this.close();
-      this.store.toast.set(t('Sent to') + ' ' + names.join(', '));
-      setTimeout(() => this.store.toast.set(null), 3500);
+      this.store.say(t('Sent to') + ' ' + names.join(', '));
       this.store.refresh();
     } catch (e: unknown) {
       this.err.set((e as { error?: { detail?: string } })?.error?.detail || t('could not send that'));

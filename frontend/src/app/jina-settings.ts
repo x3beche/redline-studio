@@ -1,4 +1,5 @@
 import { Component, Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
@@ -112,7 +113,6 @@ export class TrafficPeriod {
           <button class="tcv-btn tcv-files-btn" [disabled]="busy() || !keyIn().trim()" (click)="saveKey()">{{ (st.set ? 'Replace' : 'Save') | t }}</button>
           <button class="tcv-btn tcv-files-btn" [disabled]="busy() || !st.set" (click)="check()">{{ checking() ? '…' : ('Check' | t) }}</button>
           <button class="tcv-btn tcv-files-btn" [disabled]="busy() || !st.set" (click)="forget()">{{ 'Forget' | t }}</button>
-          @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
           @if (err(); as e) { <p class="st-err">{{ e }}</p> }
         </div>
       }
@@ -197,7 +197,6 @@ export class JinaSettingsPanel {
   busy = signal(false);
   checking = signal(false);
   more = signal(false);
-  msg = signal<string | null>(null);
   err = signal<string | null>(null);
   usageErr = signal<string | null>(null);
 
@@ -289,7 +288,7 @@ export class JinaSettingsPanel {
       error: e => { this.checking.set(false); this.err.set(this.text(e)); },
     });
   }
-  private say(m: string) { this.msg.set(m); setTimeout(() => this.msg.set(null), 3000); }
+  private say(m: string) { Toast.show(m, { tone: 'ok' }); }
   private text(e: unknown): string {
     const err = e as { error?: { detail?: unknown }; message?: string };
     return typeof err?.error?.detail === 'string' ? err.error.detail : (err?.message ?? t('Something went wrong.'));

@@ -33,7 +33,7 @@
 .ct-tile { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px;
   padding: 10px 12px 10px; text-align: left; background: var(--surface-2); border: 1px solid var(--line);
   border-radius: 5px; cursor: pointer; transition: border-color .12s, background .12s; }
-.ct-tile:hover:not(:disabled) { border-color: var(--ink-dim); }
+.ct-tile:hover:not(:disabled), .ct-tile:focus-visible { border-color: var(--accent); }
 .ct-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ct-tile:disabled { cursor: default; }
 .ct-tile:disabled .tcv-switch { opacity: .55; }

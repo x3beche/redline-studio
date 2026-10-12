@@ -56,7 +56,7 @@ export class Confirm {
   imports: [T],
   template: `
 @if (cur(); as r) {
-<div class="cf-scrim" (mousedown)="downOnScrim = $event.target === $event.currentTarget"
+<div class="cf-scrim" animate.leave="tcv-leave" (mousedown)="downOnScrim = $event.target === $event.currentTarget"
      (click)="$event.target === $event.currentTarget && downOnScrim && answer(false)">
   <div #card class="cf-card" role="alertdialog" aria-modal="true" aria-labelledby="cf-title"
        [attr.aria-describedby]="r.o.text ? 'cf-text' : null">

@@ -1,4 +1,5 @@
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Toast } from './toast';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
@@ -382,7 +383,6 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
     }
   </div>
 
-  @if (msg(); as x) { <p class="st-msg">{{ x }}</p> }
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
 </div>
 <!-- The rows of a list of costs: a grid that folds onto two lines when the stage is narrow. -->
@@ -467,7 +467,6 @@ export class CostsSettingsPanel implements OnDestroy {
       budgets: budgetsOf(undefined, 'USD') });
 
   busy = signal<Section | 'currency' | 'fx' | null>(null);
-  msg = signal<string | null>(null);
   err = signal<string | null>(null);
   convAmount = signal(100);
   convFrom = signal('USD');
@@ -696,7 +695,7 @@ export class CostsSettingsPanel implements OnDestroy {
       error: e => { this.busy.set(null); this.err.set(this.text(e)); },
     });
   }
-  private flash(s: string) { this.msg.set(s); setTimeout(() => this.msg.set(null), 3000); }
+  private flash(s: string) { Toast.show(s, { tone: 'ok' }); }
   private text(e: unknown): string {
     const err = e as { error?: { detail?: unknown }; message?: string };
     return typeof err?.error?.detail === 'string' ? err.error.detail : (err?.message ?? t('Something went wrong.'));

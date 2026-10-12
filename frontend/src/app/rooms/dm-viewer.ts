@@ -55,7 +55,7 @@ const LAST_TAB: Record<string, string> = {};
   host: { '(window:keydown.escape)': 'close()' },
   template: `
 @if (store.viewing(); as sid) {
-  <div class="tcv-dm-scrim" (mousedown)="down = $event.target === $event.currentTarget ? 1 : 0" (click)="scrimClick()">
+  <div class="tcv-dm-scrim" animate.leave="tcv-leave" (mousedown)="down = $event.target === $event.currentTarget ? 1 : 0" (click)="scrimClick()">
     <div class="tcv-dm-dialog tcv-dm-view dmv" role="dialog" aria-modal="true" aria-labelledby="dm-view-title"
          [attr.data-kind]="data()?.kind">
       @if (data(); as d) {

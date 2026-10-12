@@ -24,13 +24,14 @@ import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 import { ConfirmHost } from './confirm';
+import { Toasts } from './toast';
 import { DmSend, DmStore } from './dm';
 import { DmViewer } from './rooms/dm-viewer';
 import { Avatar } from './avatar';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomInventory, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, DmSend, DmViewer, Avatar],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomInventory, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -156,7 +157,9 @@ import { Avatar } from './avatar';
 }
 <!-- The one question box (confirm.ts): every "Delete …?" and name-asking
      in the app awaits it, signed in or not. -->
-<app-confirm />`,
+<app-confirm />
+<!-- The one toast stack (toast.ts): every "Saved.", "Could not..." and "Undo". -->
+<app-toasts />`,
 })
 export class App {
   private picked = inject(Selection);

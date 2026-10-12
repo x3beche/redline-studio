@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Toast } from './toast';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
@@ -176,7 +177,6 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         <div class="st-row">
           <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="saveConnection()">{{ 'Save' | t }}</button>
           <button class="tcv-btn tcv-files-btn" [disabled]="testing() || !d.host" (click)="test()">{{ testing() ? '…' : ('Test' | t) }}</button>
-          @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
           @if (err(); as e) { <p class="st-err">{{ e }}</p> }
         </div>
       }
@@ -385,7 +385,6 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
   <!-- Jina AI's and the proxy's traffic together, always in sight -->
   <app-traffic-overview />
   @if (!canEdit) {
-    @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
     @if (err(); as e) { <p class="st-err">{{ e }}</p> }
   }
 </div>
@@ -426,7 +425,6 @@ export class ProxySettingsPanel {
   testing = signal(false);
   exits = signal<{ exits: Exit[]; rotates: boolean } | null>(null);
   lastTest = signal<LastTest | null>(this.readLast());
-  msg = signal<string | null>(null);
   err = signal<string | null>(null);
   /** The period of every figure on the page, one for all (jina-settings.ts). */
   readonly period = inject(TrafficPeriod);
@@ -557,8 +555,7 @@ export class ProxySettingsPanel {
       next: d => {
         this.take(d);
         this.busy.set(false);
-        this.msg.set(t('Saved.'));
-        setTimeout(() => this.msg.set(null), 3000);
+        Toast.show(t('Saved.'), { tone: 'ok' });
       },
       error: e => { this.busy.set(false); this.err.set(this.text(e)); },
     });

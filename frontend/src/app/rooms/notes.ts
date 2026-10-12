@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
+import { Toast, ToastTone } from '../toast';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
@@ -200,7 +201,7 @@ export class NoteCompose {
   imports: [NoteCompose, T],
   template: `
 @if (api.quick()) {
-  <div class="tcv-quick-back" (click)="api.quick.set(false)">
+  <div class="tcv-quick-back" animate.leave="tcv-leave" (click)="api.quick.set(false)">
     <div class="tcv-quick" (click)="$event.stopPropagation()" role="dialog" aria-label="Quick note">
       <div class="tcv-quick-head"><b>{{ 'Quick note' | t }}</b><span>{{ 'Esc to close · it is kept in Notes' | t }}</span></div>
       <app-note-compose #c />
@@ -317,7 +318,7 @@ const NOTE_ICONS = {
                           [title]="'Send to an agent' | t">
                     <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.send" /></svg></button>
                   @if (sendFor() === n.id) {
-                    <div class="tcv-cc-menu tcv-notes-sendmenu" (click)="$event.stopPropagation()">
+                    <div class="tcv-cc-menu tcv-notes-sendmenu" animate.leave="tcv-leave" (click)="$event.stopPropagation()">
                       @for (r of agentRooms; track r) { <button (click)="sendFor.set(null); send(n, r)">{{ roomName(r) }}</button> }
                     </div>
                   }
@@ -342,7 +343,6 @@ const NOTE_ICONS = {
   <section class="tcv-notes-main">
     @if (creating() || open()) {
       <article class="tcv-note">
-        @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
         <!-- One page for reading and writing: starting to edit does not move a word. -->
         <app-note-doc [text]="editing() ? draft() : (open()?.text ?? '')" [editable]="editing()"
                       [placeholder]="'First line is the title - #tags, @controller, - [ ] to-dos…'"
@@ -413,7 +413,6 @@ export class RoomNotes implements OnDestroy {
   draft = signal('');
   saving = signal(false);
   copied = signal(false);
-  flash = signal<string | null>(null);
   private saveTimer?: ReturnType<typeof setTimeout>;
   /** The note the editor holds - not always the one now open. */
   private editingId: string | null = null;
@@ -584,8 +583,8 @@ export class RoomNotes implements OnDestroy {
   send(n: Note, room: string) {
     if (!room) return;
     this.api.send(n.id, room).subscribe({
-      next: () => { this.say(`Sent to the ${this.roomName(room)} agent - it is in that room's thread.`); this.read(); },
-      error: (e: HttpErrorResponse) => this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not send it'),
+      next: () => { this.say(`Sent to the ${this.roomName(room)} agent - it is in that room's thread.`, 'ok'); this.read(); },
+      error: (e: HttpErrorResponse) => this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not send it', 'danger'),
     });
   }
 
@@ -598,7 +597,7 @@ export class RoomNotes implements OnDestroy {
       text: t('The note is deleted for good.'), ok: t('Delete'), danger: true })) return;
     this.api.remove(n.id).subscribe({
       next: () => { this.openId.set(null); this.read(); },
-      error: (e: HttpErrorResponse) => this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not delete it'),
+      error: (e: HttpErrorResponse) => this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not delete it', 'danger'),
     });
   }
 
@@ -610,7 +609,8 @@ export class RoomNotes implements OnDestroy {
     else this.picked.room.set(r);
   }
 
-  private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
+  /** A word in passing: the app's toast (toast.ts). */
+  private say(msg: string, tone: ToastTone = 'info') { Toast.show(msg, { tone }); }
 
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable;

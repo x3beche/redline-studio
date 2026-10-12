@@ -317,8 +317,8 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
         </div>
       </section>
       @if (packOpen(); as g) {
-        <div class="ct-scrim" (click)="pack.set(null)"></div>
-        <section class="st-card ct-modal" role="dialog" aria-modal="true" [attr.aria-label]="g.name | t" (keydown.escape)="pack.set(null)">
+        <div class="ct-scrim" animate.leave="tcv-leave" (click)="pack.set(null)"></div>
+        <section class="st-card ct-modal" animate.leave="tcv-leave" role="dialog" aria-modal="true" [attr.aria-label]="g.name | t" (keydown.escape)="pack.set(null)">
           <div class="st-card-head">
             <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(g.tools[0].name)" /></svg>
             <h3>{{ g.name | t }}</h3>

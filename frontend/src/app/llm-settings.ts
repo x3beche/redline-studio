@@ -1,4 +1,5 @@
 import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
@@ -430,7 +431,6 @@ export class LlmUsagePanel {
       }
     </div>
   </div>
-  @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
 
   <app-llm-usage />
@@ -455,7 +455,6 @@ export class LlmSettingsPanel {
   busy = signal(false);
   testing = signal<string | null>(null);
   tests = signal<Record<string, { ok: boolean; answer?: string; error?: string; ms: number }>>({});
-  msg = signal<string | null>(null);
   err = signal<string | null>(null);
 
   jobIds = () => Object.keys(this.data()?.jobs ?? {});
@@ -646,8 +645,7 @@ export class LlmSettingsPanel {
           // The composers follow a change of the suggestion's switch or wait at once.
           const sg = d.jobs['suggest'];
           if (sg?.switch) this.suggestConf.set({ on: sg.on, delay: sg.delay });
-          this.msg.set(ok);
-          setTimeout(() => this.msg.set(null), 3000);
+          Toast.show(ok, { tone: 'ok' });
           if (row) {
             this.savedRow.update(x => ({ ...x, [row]: true }));
             setTimeout(() => this.savedRow.update(({ [row]: _, ...rest }) => rest), 2500);

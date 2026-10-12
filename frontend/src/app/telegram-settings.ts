@@ -1,4 +1,5 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
@@ -380,7 +381,6 @@ const FATHER = [
       </div>
     </div>
   }
-  @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
 </div>
 } @else {
@@ -404,7 +404,6 @@ export class TelegramSettingsPanel implements OnDestroy {
   now = signal(Date.now());
   testPhoto = signal(true);
   testResult = signal<{ ok: boolean; ms: number; error?: string | null } | null>(null);
-  msg = signal<string | null>(null);
   err = signal<string | null>(null);
   private timer: ReturnType<typeof setInterval> | null = null;
   private poll = 0;
@@ -567,7 +566,7 @@ export class TelegramSettingsPanel implements OnDestroy {
       error: e => { this.busy.set(null); this.err.set(this.text(e)); },
     });
   }
-  private flash(m: string) { this.msg.set(m); setTimeout(() => this.msg.set(null), 3000); }
+  private flash(m: string) { Toast.show(m, { tone: 'ok' }); }
   private text(e: unknown): string {
     const err = e as { error?: { detail?: unknown }; message?: string };
     return typeof err?.error?.detail === 'string' ? err.error.detail : (err?.message ?? t('Something went wrong.'));

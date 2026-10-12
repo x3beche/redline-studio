@@ -45,7 +45,7 @@ export function fileIdOf(href: string | null | undefined): string | null {
   imports: [T, Icon, PdfReader, FileView],
   template: `
 @if (cur(); as f) {
-<div class="fm-scrim" (mousedown)="downOnScrim = $event.target === $event.currentTarget"
+<div class="fm-scrim" animate.leave="tcv-leave" (mousedown)="downOnScrim = $event.target === $event.currentTarget"
      (click)="$event.target === $event.currentTarget && downOnScrim && close()">
   <div #card class="fm-card" role="dialog" aria-modal="true" aria-labelledby="fm-title" (keydown)="$event.stopPropagation()">
     <header class="fm-head">

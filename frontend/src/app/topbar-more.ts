@@ -29,7 +29,7 @@ import { CcTabUsage } from './cc-usage';
           (click)="toggle()">{{ 'More' | t }} <span class="tb-more-dots" aria-hidden="true">⋯</span>@if (chatUnread(); as n) {<span class="tcv-tab-unread">{{ n }}</span>}</button>
 }
 @if (open()) {
-  <div class="tb-menu" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">
+  <div class="tb-menu" animate.leave="tcv-leave" [style.--tcv-origin]="at().right != null ? 'top right' : 'top left'" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">
     @for (w of bar.overflow(); track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
     @if (bar.hiddenTabs().length) {
       <div class="tb-menu-head">{{ 'Hidden' | t }}</div>

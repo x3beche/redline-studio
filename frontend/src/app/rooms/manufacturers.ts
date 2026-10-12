@@ -1,4 +1,5 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Toast, ToastTone } from '../toast';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
@@ -295,7 +296,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
   <section class="tcv-notes-main tst mf" wbMarquee [marqueeOn]="layout() === 'grid' && (view() === 'maker' || (view() === 'home' && sub() === 'products'))"
            [marqueeBase]="gsel()" (wbMarquee)="gsel.set($event)">
-    @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
 
     @if (view() === 'run') {
       <!-- ================= the run dashboard ================= -->
@@ -785,7 +785,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     }
     <!-- ================= one product, in full ================= -->
     @if (detail(); as d) {
-      <div class="mf-modal" (click)="closeDetail()">
+      <div class="mf-modal" animate.leave="tcv-leave" (click)="closeDetail()">
         <div class="mf-detail" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()">
           <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
             <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
@@ -988,7 +988,6 @@ export class RoomMfr implements OnDestroy {
   proxy = signal<ProxyState | null>(null);
   /** How the next run goes out: null for the default order, else its own. */
   choice = signal<RouteChoice>(null);
-  flash = signal<string | null>(null);
 
   addUrl = signal('');
   addName = signal('');
@@ -1136,13 +1135,13 @@ export class RoomMfr implements OnDestroy {
     if (ids.length === 1) {
       this.inv.fromCatalog({ ...body, product: ids[0] }).subscribe({
         next: r => done(r.merged ? 0 : 1, r.merged ? 1 : 0, []),
-        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add it.')); },
+        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add it.'), 'danger'); },
       });
     } else {
       this.inv.fromCatalogMany({ ...body, products: ids }).subscribe({
         next: r => { this.picked_.set(new Set()); done(r.results.filter(x => x.item && !x.merged).length, r.results.filter(x => x.merged).length,
                                                      r.results.filter(x => x.error).map(x => x.error!)); },
-        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add them.')); },
+        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add them.'), 'danger'); },
       });
     }
   }
@@ -1204,7 +1203,7 @@ export class RoomMfr implements OnDestroy {
     this.readStock(id);
     this.api.get(id).subscribe({
       next: m => { if (this.mid() === id) this.maker.set(m); },
-      error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not open it.')); this.goHome(); },
+      error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not open it.'), 'danger'); this.goHome(); },
     });
   }
   goHome() {
@@ -1435,7 +1434,7 @@ export class RoomMfr implements OnDestroy {
     this.starting.set(true);
     this.api.explore(id, route).subscribe({
       next: j => { this.starting.set(false); this.runs.put(j); this.showRun(j.id); },
-      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The exploration could not start.')); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The exploration could not start.'), 'danger'); },
     });
   }
 
@@ -1445,7 +1444,7 @@ export class RoomMfr implements OnDestroy {
     this.starting.set(true);
     this.api.readAgain(id, run).subscribe({
       next: j => { this.starting.set(false); this.runs.put(j); this.showRun(j.id); },
-      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The pages could not be read again.')); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The pages could not be read again.'), 'danger'); },
     });
   }
 
@@ -1456,7 +1455,7 @@ export class RoomMfr implements OnDestroy {
     this.starting.set(true);
     this.api.readPage(m.id, [url], this.pageFollow(), this.choice()).subscribe({
       next: j => { this.starting.set(false); this.pageUrl.set(''); this.runs.put(j); this.showRun(j.id); },
-      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.')); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.'), 'danger'); },
     });
   }
 
@@ -1468,7 +1467,7 @@ export class RoomMfr implements OnDestroy {
     this.starting.set(true);
     this.api.readPage(j.manufacturer.id, j.only, !!j.follow, route).subscribe({
       next: r => { this.starting.set(false); this.runs.put(r); this.showRun(r.id); },
-      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.')); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.'), 'danger'); },
     });
   }
 
@@ -1506,7 +1505,7 @@ export class RoomMfr implements OnDestroy {
         this.say(this.fmt(id ? '{p} saved' : '{p} added to the catalog', { p: r.product.name }));
         this.editing.set(null);
       },
-      error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not save it.')); },
+      error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not save it.'), 'danger'); },
     });
   }
   deleteProducts(m: Maker, ids: string[]) {
@@ -1532,7 +1531,7 @@ export class RoomMfr implements OnDestroy {
     this.cancelling.set(true);
     this.api.cancelJob(j.id).subscribe({
       next: r => { this.cancelling.set(false); this.take(r); this.runs.put(r); },
-      error: (e: HttpErrorResponse) => { this.cancelling.set(false); this.say(why(e, 'Could not cancel it.')); },
+      error: (e: HttpErrorResponse) => { this.cancelling.set(false); this.say(why(e, 'Could not cancel it.'), 'danger'); },
     });
   }
 
@@ -1739,7 +1738,8 @@ export class RoomMfr implements OnDestroy {
   private async sure(question: string, what: string): Promise<boolean> {
     return Confirm.ask({ title: question, text: what || undefined, ok: t('Delete'), danger: true });
   }
-  private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
+  /** A word in passing: the app's toast (toast.ts). */
+  private say(msg: string, tone: ToastTone = 'info') { Toast.show(msg, { tone }); }
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));
 
   key(e: KeyboardEvent) {

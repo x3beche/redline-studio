@@ -31,7 +31,7 @@ import type { LlmModel } from './rooms/commandcode';
   <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.chevron" /></svg>
 </button>
 @if (open()) {
-  <div class="tcv-cc-modelpop" #pop [class.tcv-mp-fixed]="fixed()" [style.left.px]="pos()?.left" [style.width.px]="pos()?.w" [style.top.px]="pos()?.top"
+  <div class="tcv-cc-modelpop" animate.leave="tcv-leave" #pop [class.tcv-mp-fixed]="fixed()" [style.left.px]="pos()?.left" [style.width.px]="pos()?.w" [style.top.px]="pos()?.top"
        [style.bottom.px]="pos()?.bottom" [style.max-height.px]="pos()?.maxH" (click)="$event.stopPropagation()">
     @if (providers().length) {
       <div class="tcv-cc-seg tcv-cc-seg-full">

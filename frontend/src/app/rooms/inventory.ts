@@ -1,4 +1,5 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Toast, ToastTone } from '../toast';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Selection } from '../selection';
@@ -256,7 +257,6 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
   </aside>
 
   <section class="tcv-notes-main tst inv">
-    @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
 
     <!-- ================= the overview ================= -->
     <header class="tst-head tsh-head mf-homehead">
@@ -430,7 +430,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
     <!-- ================= one item, in full ================= -->
     @if (iid()) {
-      <div class="mf-modal" (click)="closeItem()">
+      <div class="mf-modal" animate.leave="tcv-leave" (click)="closeItem()">
         <div class="mf-detail inv-detail" role="dialog" aria-modal="true" [attr.aria-label]="item()?.name || ''" (click)="$event.stopPropagation()">
           <button class="tcv-cc-ib mf-x" (click)="closeItem()" [title]="'Close' | t">
             <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
@@ -699,7 +699,6 @@ export class RoomInventory implements OnDestroy {
   item = signal<Item | null>(null);
   itemError = signal<string | null>(null);
   editing = signal(false);
-  flash = signal<string | null>(null);
   busy = signal(false);
   addError = signal<string | null>(null);
   step = signal('1');
@@ -1051,7 +1050,7 @@ export class RoomInventory implements OnDestroy {
         if (!bad.length) { this.pasted.set(''); this.pasteReason.set(''); }
         this.read();
       },
-      error: (e: HttpErrorResponse) => { this.busy.set(false); this.say(why(e, 'Could not add them.')); },
+      error: (e: HttpErrorResponse) => { this.busy.set(false); this.say(why(e, 'Could not add them.'), 'danger'); },
     });
   }
 
@@ -1077,7 +1076,7 @@ export class RoomInventory implements OnDestroy {
   patch(it: Item, p: Record<string, unknown>) {
     this.api.patch(it.id, p).subscribe({
       next: x => { this.item.set(x); this.replace(x); },
-      error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not save it.')); this.item.set({ ...it }); },
+      error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not save it.'), 'danger'); this.item.set({ ...it }); },
     });
   }
   adjust(it: Item, sign: 1 | -1) {
@@ -1086,7 +1085,7 @@ export class RoomInventory implements OnDestroy {
     this.busy.set(true);
     this.api.adjust(it.id, sign * n, this.reason().trim()).subscribe({
       next: x => { this.busy.set(false); this.item.set(x); this.replace(x); this.reason.set(''); this.reasonBox()?.nativeElement.blur(); },
-      error: (e: HttpErrorResponse) => { this.busy.set(false); this.say(why(e, 'Could not change it.')); },
+      error: (e: HttpErrorResponse) => { this.busy.set(false); this.say(why(e, 'Could not change it.'), 'danger'); },
     });
   }
   private replace(x: Item) {
@@ -1097,7 +1096,7 @@ export class RoomInventory implements OnDestroy {
     if (!await sure(t('Delete this item and its log?'), it.name)) return;
     this.api.remove(it.id).subscribe({
       next: () => { this.all.update(l => l.filter(i => i.id !== it.id)); if (this.iid() === it.id) this.closeItem(); this.say(this.fmt('Deleted {name}', { name: it.name })); },
-      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not delete it.')),
+      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not delete it.'), 'danger'),
     });
   }
   async removeSelected() {
@@ -1105,7 +1104,7 @@ export class RoomInventory implements OnDestroy {
     if (!items.length || !await sure(this.fmt('Delete {n} items and their logs?', { n: items.length }), items.map(i => i.name).slice(0, 12).join(', '))) return;
     this.api.removeMany(items.map(i => i.id)).subscribe({
       next: r => { this.picked.set(new Set()); this.all.update(l => l.filter(i => !r.deleted.includes(i.id))); this.say(this.fmt('Deleted {n} items', { n: r.deleted.length })); },
-      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not delete them.')),
+      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not delete them.'), 'danger'),
     });
   }
 
@@ -1136,7 +1135,7 @@ export class RoomInventory implements OnDestroy {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
-      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not export it.')),
+      error: (e: HttpErrorResponse) => this.say(why(e, 'Could not export it.'), 'danger'),
     });
   }
   importFile(input: HTMLInputElement) {
@@ -1148,7 +1147,7 @@ export class RoomInventory implements OnDestroy {
       try { data = JSON.parse(text); } catch { this.say(t('That file is not an inventory.')); return; }
       this.api.importFile(data).subscribe({
         next: r => { this.read(); this.say(this.fmt('Imported: {a} added, {m} topped up', { a: r.added, m: r.merged }) + (r.skipped.length ? ' · ' + this.fmt('{n} not added', { n: r.skipped.length }) : '')); },
-        error: (e: HttpErrorResponse) => this.say(why(e, 'Could not import it.')),
+        error: (e: HttpErrorResponse) => this.say(why(e, 'Could not import it.'), 'danger'),
       });
     });
   }
@@ -1198,7 +1197,8 @@ export class RoomInventory implements OnDestroy {
   fmt(text: string, vars: Record<string, string | number>) {
     return t(text).replace(/\{(\w+)\}/g, (m, k) => k in vars ? String(vars[k]) : m);
   }
-  private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 5000); }
+  /** A word in passing: the app's toast (toast.ts). */
+  private say(msg: string, tone: ToastTone = 'info') { Toast.show(msg, { tone }); }
 
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);

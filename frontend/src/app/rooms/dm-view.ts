@@ -252,7 +252,7 @@ export class DmPeople {
       </div>
     }
     @if (pop()) {
-      <div class="tcv-cc-mpop tcv-dm-pop" role="listbox" (mousedown)="keepFocus($event)">
+      <div class="tcv-cc-mpop tcv-dm-pop" animate.leave="tcv-leave" role="listbox" (mousedown)="keepFocus($event)">
         <div class="tcv-cc-mhead tcv-dm-pophead">
           <ng-container *ngTemplateOutlet="ico(); context: { $implicit: SHARE }" />
           <input #find class="tcv-dm-find" type="search" [value]="popQ()" [placeholder]="'Send something of yours…' | t"

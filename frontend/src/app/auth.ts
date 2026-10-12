@@ -315,7 +315,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
               <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.5" cy="8" r="1.25"/></svg>
             </button>
             @if (menuFor() === a.id) {
-              <div class="tcv-menu tcv-acct-menu" role="menu" (click)="$event.stopPropagation()">
+              <div class="tcv-menu tcv-acct-menu" animate.leave="tcv-leave" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" class="tcv-menu-item" role="menuitem" (click)="menuFor.set(null); auth.forget(a)">
                   <span class="tcv-menu-name">{{ 'Remove from this device' | t }}</span>
                   <span class="tcv-menu-blurb">{{ 'Signs it out here; the next sign-in asks for the password' | t }}</span></button>
@@ -515,7 +515,7 @@ export class SignIn {
          Analytics (Settings is a tab of its own). -->
     <button class="tcv-user tcv-user-gear" (click)="toggle()" [attr.data-on]="open() ? 1 : null" [title]="'Analytics' | t">⚙</button>
     @if (open()) {
-      <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
+      <div class="tcv-menu tcv-user-menu" animate.leave="tcv-leave" (mouseleave)="open.set(false)">
         <ng-container *ngTemplateOutlet="analyticsItem" />
       </div>
     }
@@ -533,7 +533,7 @@ export class SignIn {
       <svg class="tcv-user-caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>
     </button>
     @if (open()) {
-      <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
+      <div class="tcv-menu tcv-user-menu" animate.leave="tcv-leave" (mouseleave)="open.set(false)">
         <ng-container *ngTemplateOutlet="analyticsItem" />
         <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('profile')" [title]="'Profile' | t">
           <span class="tcv-menu-name">{{ u.name }}</span>

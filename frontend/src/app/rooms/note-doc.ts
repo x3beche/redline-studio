@@ -82,7 +82,7 @@ const ICONS: Record<string, string> = {
 }
 <div #host class="tcv-doc-host"></div>
 @if (slash(); as s) {
-  <div class="tcv-doc-slash" role="listbox" [style.left.px]="s.x" [style.top.px]="s.y + 6" (mousedown)="$event.preventDefault()">
+  <div class="tcv-doc-slash" animate.leave="tcv-leave" role="listbox" [style.left.px]="s.x" [style.top.px]="s.y + 6" (mousedown)="$event.preventDefault()">
     @for (it of s.items; track it.id; let i = $index) {
       <button role="option" [attr.data-on]="i === s.index ? 1 : null" (click)="s.pick(i)">
         <span>{{ it.label | t }}</span><em>{{ it.hint | t }}</em></button>

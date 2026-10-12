@@ -256,7 +256,7 @@ type BoardView = Pane | 'split' | 'focus';
            and shape - straight from EasyEDA, kept on the server's disk so
            a second look is instant. Esc or a click beside it closes it. -->
       @if (seen() || seeing()) {
-        <div (click)="closePart()" class="fixed inset-0 flex items-center justify-center p-4"
+        <div (click)="closePart()" animate.leave="tcv-leave" class="tcv-m-veil fixed inset-0 flex items-center justify-center p-4"
              style="background: var(--scrim); z-index: 1100">
           <div class="tcv-card tcv-part-modal flex max-h-[90vh] w-[min(60rem,96vw)] flex-col overflow-hidden p-0"
                (click)="$event.stopPropagation()" role="dialog" aria-modal="true"

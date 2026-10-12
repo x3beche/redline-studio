@@ -276,7 +276,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 </footer>
 
 @if (open() || forced()) {
-  <div class="ld-veil" (click)="veil($event)">
+  <div class="ld-veil" animate.leave="tcv-leave" (click)="veil($event)">
     <div class="ld-sheet">
       @if (!forced()) { <button type="button" class="ld-x" aria-label="Close" (click)="close()">×</button> }
       <app-sign-in />

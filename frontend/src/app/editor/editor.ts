@@ -2,6 +2,7 @@ import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject,
   signal, untracked, viewChild,
 } from '@angular/core';
+import { Toast } from '../toast';
 import { money } from '../money';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
@@ -119,7 +120,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   part = signal('');
   parts = signal<string[]>([]);
   revisions = signal<Revision[]>([]);
-  toast = signal('');
   glError = signal('');
   catalog = signal<FolderNode | null>(null);
   activeModel = signal<string>('');
@@ -2431,14 +2431,12 @@ export class Editor implements AfterViewInit, OnDestroy {
       : s === 'rejected' ? 'rejected' : 'draft';
   }
 
-  private toastTimer: ReturnType<typeof setTimeout> | undefined;
-
+  /** What just happened - saved, refused, sent - in the app's toast stack
+   *  (toast.ts): on the page, not in the 3D stage, which the other rooms take
+   *  out of the layout. A failure reads as one. */
   private flash(msg: string) {
-    // Cancel the previous timer: without this an older message's timeout
-    // wipes a newer one, and the second of two quick messages barely shows.
-    clearTimeout(this.toastTimer);
-    this.toast.set(msg);
-    this.toastTimer = setTimeout(() => this.toast.set(''), 2600);
+    const bad = /^(error|could not|load failed)|\bfailed\b|refused/i.test(msg);
+    Toast.show(msg, { tone: bad ? 'danger' : 'info' });
   }
 }
 
