@@ -6,6 +6,7 @@ import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
+import { onUsagePing } from '../cc-usage';
 
 /** Tabs with no tool package: Settings, Analytics. */
 const NO_PACKAGE = new Set(['settings', 'analyze']);
@@ -633,6 +634,7 @@ export class CcToolsLine {
   /** The first reading did not come: no placeholder then, as before. */
   failed = signal(false);
   private timer = (() => { const go = () => this.load(); go(); return setInterval(go, 120_000); })();
+  private live = onUsagePing(() => this.load());
   constructor() { inject(DestroyRef).onDestroy(() => clearInterval(this.timer)); }
   private load() {
     this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: 'week' } })

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
@@ -41,6 +41,23 @@ export interface CcAccount {
 }
 
 const EVERY_MS = 120_000;
+
+/** Bumped when the Chat sees a model call or a tool use happen (an answer's
+ *  steps, an answer done - this page's or anyone's it is following): the
+ *  Models and Tools cards under the list read their figures again then,
+ *  at most once every two seconds, so they follow the conversation live. */
+export const USAGE_PING = signal(0);
+let pingAt = 0, pingTimer = 0;
+export function pingUsage() {
+  if (pingTimer) return;
+  const wait = Math.max(600, 2000 - (Date.now() - pingAt));
+  pingTimer = window.setTimeout(() => { pingTimer = 0; pingAt = Date.now(); USAGE_PING.update(n => n + 1); }, wait);
+}
+/** Runs `go` whenever USAGE_PING is bumped (not at first). */
+export function onUsagePing(go: () => void) {
+  let first = true;
+  effect(() => { USAGE_PING(); if (first) { first = false; return; } untracked(go); });
+}
 
 @Injectable({ providedIn: 'root' })
 export class CcUsage {
@@ -353,6 +370,7 @@ export class CcUsageLine implements OnDestroy {
   sum = signal<LlmSummary | null>(null);
   err = signal(false);
   private timer = (() => { const go = () => this.load(); go(); return setInterval(go, EVERY_MS); })();
+  private live = onUsagePing(() => this.load());
   ngOnDestroy() { clearInterval(this.timer); }
   private load() {
     this.http.get<LlmSummary>('/api/llm/summary', { params: { days: 14 } }).subscribe({

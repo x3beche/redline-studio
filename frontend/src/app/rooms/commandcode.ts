@@ -11,7 +11,7 @@ import { LANG, T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { LogWindow } from './log-window';
-import { CcUsageLine } from '../cc-usage';
+import { CcUsageLine, pingUsage } from '../cc-usage';
 import { money as shownMoney } from '../money';
 import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
@@ -2251,12 +2251,14 @@ export class RoomCommandCode implements OnDestroy {
           if (here()) this.scroll(true);
         } else if (ev.type === 'steps') {
           this.setRun(id, r => r && { ...r, steps: ev.steps ?? [] });
+          pingUsage();
           if (here()) this.scroll(true);
         } else if (ev.type === 'error') {
           const err = ev.error ?? t('The model did not answer.');
           if (here()) this.error.set(err); else this.runErrors.set(id, err);
         } else if (ev.type === 'done' && ev.message) {
           finished = true;
+          pingUsage();
           this.inChat(id, x => (x.messages ?? []).some(y => y.id === ev.message!.id) ? x
                                 : { ...x, messages: [...(x.messages ?? []), ev.message!] });
           this.setRun(id, () => null);
@@ -2549,10 +2551,12 @@ export class RoomCommandCode implements OnDestroy {
         if (!this.watch().some(w => w.gen === ev.gen)) return;
         this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, steps: ev.steps ?? [] } : w));
         this.scroll(true);
+        pingUsage();
         break;
       case 'done': {
         if (!this.watch().some(w => w.gen === ev.gen)) return;
         this.watch.update(l => l.filter(w => w.gen !== ev.gen));
+        pingUsage();
         const m = ev.message;
         if (m) this.inChat(id, x => (x.messages ?? []).some(y => y.id === m.id) ? x : { ...x, messages: [...(x.messages ?? []), m] });
         this.scroll(true);
