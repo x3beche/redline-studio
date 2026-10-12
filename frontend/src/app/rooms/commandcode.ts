@@ -23,9 +23,10 @@ import { ContextMenu } from '../context-menu';
 import { Confirm } from '../confirm';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { ModelPicker } from '../model-picker';
-import { DmApi, DmStore } from '../dm';
+import { DmApi, DmChat, DmPerson, DmStore } from '../dm';
+import { Avatar } from '../avatar';
 import { Toast, ToastTone } from '../toast';
-import { DmPeople, DmView, dmWhen } from './dm-view';
+import { DmView, dmWhen } from './dm-view';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
 
@@ -387,13 +388,15 @@ const STARTERS: Starter[] = [
   { icon: I.cad, area: 'CAD', text: 'What clearances should I design for FDM-printed press fits, sliding fits and screw holes?' },
 ];
 
-type Group = { name: string; chats: CcChat[] };
+/** A row of the list: a conversation with a model, or a direct one with people (dm.ts). */
+type Row = { at: number; c?: CcChat; d?: DmChat };
+type Group = { name: string; rows: Row[] };
 /** A question asked in the list before something cannot be undone. */
 type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView, Skeleton],
+  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -517,10 +520,31 @@ type Ask = { text: string; label: string; go: () => void };
           </div>
         }
       }
-      <!-- The people on this server: direct messages, person to person, no
-           model in them (rooms/dm-view.ts, backend/dm.py). -->
-      @if (!trash()) {
-        <app-dm-people [q]="q()" (opened)="drawer.set(false); toolsOpen.set(false)" />
+      <!-- People are found by name with the search; a click opens the
+           direct conversation with them (rooms/dm-view.ts, backend/dm.py). -->
+      @if (peopleHits().length) {
+        <div class="tcv-cc-group">{{ 'People' | t }} · {{ peopleHits().length }}</div>
+        @for (p of peopleHits(); track p.id) {
+          <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-person]="p.id"
+               [attr.data-on]="p.chat && p.chat === dms.open() ? 1 : null" [attr.data-unread]="p.unread ? 1 : null"
+               (click)="openPerson(p)" (keydown.enter)="openPerson(p)">
+            <span class="tcv-dm-face">
+              <app-avatar [name]="p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [colour]="p.avatar_colour" [size]="26" />
+              @if (p.online) { <span class="tcv-dm-dot" [title]="'online' | t"></span> }
+            </span>
+            <div class="tcv-cc-itemtext">
+              <div class="tcv-cc-itemtop">
+                <span class="tcv-cc-itemtitle">{{ p.name }}</span>
+                @if (p.unread) { <span class="tcv-th-badge" [title]="'unread' | t">{{ p.unread }}</span> }
+                @else if (dms.chat(p.chat ?? null)?.last; as l) { <span class="tcv-cc-itemwhen">{{ dmWhen(l.at) }}</span> }
+              </div>
+              <div class="tcv-cc-itemsnip">
+                @if (dms.chat(p.chat ?? null)?.last; as l) { {{ l.by_id === dms.state()?.me ? ('you' | t) + ': ' : '' }}{{ snip(l.text) }} }
+                @else { {{ (p.online ? 'online' : 'Write a message') | t }} }
+              </div>
+            </div>
+          </div>
+        }
       }
       @if (trash() && shownChats().length) {
         <p class="tcv-cc-trashnote">{{ 'Deleted conversations are kept here for 30 days, then deleted for good.' | t }}</p>
@@ -555,7 +579,38 @@ type Ask = { text: string; label: string; go: () => void };
       } @else {
       @for (g of groups(); track g.name) {
         <div class="tcv-cc-group">{{ g.name | t }}</div>
-        @for (c of g.chats; track c.id) {
+        @for (row of g.rows; track row.c?.id ?? row.d?.id) {
+          <!-- A direct conversation, among the others by when it last moved:
+               the person's face, nothing to delete. -->
+          @if (row.d; as d) {
+          <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-dm]="d.id"
+               [attr.data-on]="d.id === dms.open() ? 1 : null" [attr.data-unread]="d.unread ? 1 : null"
+               (click)="openDmHit(d.id)" (keydown.enter)="openDmHit(d.id)">
+            @if (d.direct && d.members[0]; as m) {
+              <span class="tcv-dm-face">
+                <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="26" />
+                @if (online().has(m.id)) { <span class="tcv-dm-dot" [title]="'online' | t"></span> }
+              </span>
+            } @else {
+              <span class="tcv-dm-face tcv-dm-stack">
+                @for (m of d.members.slice(0, 2); track m.id) {
+                  <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="20" />
+                }
+              </span>
+            }
+            <div class="tcv-cc-itemtext">
+              <div class="tcv-cc-itemtop">
+                <span class="tcv-cc-itemtitle">{{ dmName(d) }}</span>
+                @if (d.unread) { <span class="tcv-th-badge" [title]="'unread' | t">{{ d.unread }}</span> }
+                @else { <span class="tcv-cc-itemwhen">{{ dmWhen(d.last?.at || d.updated_at) }}</span> }
+              </div>
+              <div class="tcv-cc-itemsnip">
+                @if (d.last; as l) { {{ l.by_id === dms.state()?.me ? ('you' | t) + ': ' : d.direct ? '' : l.by + ': ' }}{{ snip(l.text) }} }
+                @else { {{ 'Write a message' | t }} }
+              </div>
+            </div>
+          </div>
+          } @else if (row.c; as c) {
           <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
                [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
@@ -612,6 +667,7 @@ type Ask = { text: string; label: string; go: () => void };
               </div>
             }
           </div>
+          }
         }
       } @empty {
         @if (!listed()) { <wb-skel kind="rows" [count]="6" [h]="46" /> }
@@ -1325,18 +1381,47 @@ export class RoomCommandCode implements OnDestroy {
     return q ? rows.filter(c => c.title.toLowerCase().includes(q) || (c.last?.text ?? '').toLowerCase().includes(q)) : rows;
   });
 
-  /** Pinned, then Today, Yesterday, the previous seven days, older. */
+  /** The direct conversations with something in them (or open), among the
+   *  others in the list; never archived or in the trash. While searching,
+   *  the people are found by name above (peopleHits), so only groups here. */
+  shownDms = computed(() => {
+    if (this.tab() !== 'list' || !this.dms.enabled()) return [];
+    const q = this.q().trim().toLocaleLowerCase(), open = this.dms.open();
+    return (this.dms.state()?.chats ?? []).filter(d => (d.last || d.id === open)
+      && (!q || !d.direct && this.dmName(d).toLocaleLowerCase().includes(q)));
+  });
+  /** People by name, while searching: the way to a new direct conversation. */
+  peopleHits = computed(() => {
+    const q = this.q().trim().toLocaleLowerCase();
+    if (!q || this.tab() !== 'list' || !this.dms.enabled()) return [];
+    return this.dms.people().filter(p => p.name.toLocaleLowerCase().includes(q));
+  });
+  online = computed(() => new Set(this.dms.people().filter(p => p.online).map(p => p.id)));
+  dmName(d: DmChat) { return d.title || d.members.map(m => m.name).join(', '); }
+  async openPerson(p: DmPerson) {
+    try {
+      await this.dms.withPerson(p.id);
+      this.drawer.set(false); this.toolsOpen.set(false); this.setQuery('');
+    } catch { Toast.show(t('could not open the conversation'), { tone: 'danger' }); }
+  }
+
+  /** Pinned, then Today, Yesterday, the previous seven days, older; the
+   *  direct conversations go by their last line like the others. */
   groups = computed<Group[]>(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const today = start.getTime(), yesterday = today - 86_400_000, week = today - 7 * 86_400_000;
-    const g: Record<string, CcChat[]> = { Pinned: [], Today: [], Yesterday: [], 'Previous 7 days': [], Older: [] };
+    const g: Record<string, Row[]> = { Pinned: [], Today: [], Yesterday: [], 'Previous 7 days': [], Older: [] };
+    const when = (at: number) => at >= today ? 'Today' : at >= yesterday ? 'Yesterday' : at >= week ? 'Previous 7 days' : 'Older';
     for (const c of this.shownChats()) {
       const at = Date.parse(c.deleted_at || c.updated_at);   // the trash: by when it was deleted
-      const k = c.pinned && this.tab() === 'list' ? 'Pinned'
-        : at >= today ? 'Today' : at >= yesterday ? 'Yesterday' : at >= week ? 'Previous 7 days' : 'Older';
-      g[k].push(c);
+      g[c.pinned && this.tab() === 'list' ? 'Pinned' : when(at)].push({ at, c });
     }
-    return Object.entries(g).filter(([, v]) => v.length).map(([name, chats]) => ({ name, chats }));
+    for (const d of this.shownDms()) {
+      const at = Date.parse(d.last?.at || d.updated_at) || 0;
+      g[when(at)].push({ at, d });
+    }
+    return Object.entries(g).filter(([, v]) => v.length)
+      .map(([name, rows]) => ({ name, rows: name === 'Pinned' ? rows : rows.sort((a, b) => b.at - a.at) }));
   });
 
   allSelected = computed(() => {
@@ -1495,7 +1580,7 @@ export class RoomCommandCode implements OnDestroy {
         if (this.tab() !== tab) return;                  // the tab changed meanwhile
         this.chats.set(rows);
         this.listed.set(true);
-        if (openFirst && !this.openId()) {
+        if (openFirst && !this.openId() && !this.dms.open()) {   // a direct one (?dm=) stays open
           const first = this.shownChats()[0];
           if (first) this.open(first.id);
         }
@@ -1797,7 +1882,7 @@ export class RoomCommandCode implements OnDestroy {
     // The open one: on to the next in the list, or the one before it.
     const open = this.openId();
     if (open && ids.has(open)) {
-      const list = this.groups().flatMap(g => g.chats);   // as the list shows them
+      const list = this.groups().flatMap(g => g.rows).flatMap(r => r.c ? [r.c] : []);   // as the list shows them
       const at = list.findIndex(c => c.id === open);
       const next = list.slice(at + 1).find(c => !ids.has(c.id)) ?? list.slice(0, Math.max(at, 0)).reverse().find(c => !ids.has(c.id));
       if (this.live()) this.stop();

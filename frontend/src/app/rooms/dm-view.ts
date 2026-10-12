@@ -7,10 +7,9 @@ import { Avatar } from '../avatar';
 import { T, t } from '../i18n';
 import { Markdown } from '../markdown';
 import {
-  DM_ICONS, DM_KIND_NAME, DmApi, DmCard, DmChat, DmEvent, DmKind, DmLine, DmPerson, DmShareable, DmStore, SHARE_ICON,
+  DM_ICONS, DM_KIND_NAME, DmApi, DmCard, DmChat, DmEvent, DmKind, DmLine, DmShareable, DmStore, SHARE_ICON,
 } from '../dm';
 import { Skeleton } from '../skeleton';
-import { EmptyState } from '../empty-state';
 
 const MAX_TEXT = 20_000;
 const MAX_ITEMS = 8;
@@ -29,120 +28,6 @@ export function dmWhen(iso: string | null | undefined) {
   if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   if (now.getTime() - d.getTime() < 6 * 86400_000) return d.toLocaleDateString(undefined, { weekday: 'short' });
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-/** The People in the Chat's list (backend/dm.py): everyone else on the
- *  server, the ones who wrote first, then who is online; a click opens the
- *  conversation with them. The groups one is in follow; "New group" picks
- *  several people. A search in the list narrows them by name. */
-@Component({
-  selector: 'app-dm-people',
-  host: { style: 'display: contents' },
-  imports: [EmptyState, T, Avatar],
-  template: `
-@if (store.enabled()) {
-  <div class="tcv-cc-group tcv-dm-grouphead">
-    <span>{{ 'People' | t }}</span>
-    @if (auth.can('draw') && store.people().length > 1) {
-      <button class="tcv-cc-textbtn" data-act="dm-group" (click)="toggleGroup()" [class.on]="grouping()">
-        {{ (grouping() ? 'Cancel' : 'New group') | t }}</button>
-    }
-  </div>
-  @if (grouping()) {
-    <div class="tcv-dm-groupbar">
-      <input class="tcv-field" type="text" maxlength="120" [placeholder]="'Group name (optional)' | t" [value]="title()"
-             (input)="title.set($any($event.target).value)">
-      <button class="tcv-btn tcv-btn-accent" [disabled]="picked().size < 2" (click)="makeGroup()">
-        {{ 'Start' | t }}@if (picked().size) { ({{ picked().size }}) }</button>
-    </div>
-  }
-  @for (p of shown(); track p.id) {
-    <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-person]="p.id"
-         [attr.data-on]="p.chat && p.chat === store.open() ? 1 : null" [attr.data-unread]="p.unread ? 1 : null"
-         (click)="pick(p)" (keydown.enter)="pick(p)">
-      @if (grouping()) {
-        <input type="checkbox" class="tcv-check" [checked]="picked().has(p.id)" (click)="$event.stopPropagation()"
-               (change)="togglePick(p.id)" [attr.aria-label]="'Select' | t">
-      }
-      <span class="tcv-dm-face">
-        <app-avatar [name]="p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [colour]="p.avatar_colour" [size]="26" />
-        @if (p.online) { <span class="tcv-dm-dot" [title]="'online' | t"></span> }
-      </span>
-      <div class="tcv-cc-itemtext">
-        <div class="tcv-cc-itemtop">
-          <span class="tcv-cc-itemtitle">{{ p.name }}</span>
-          @if (p.unread) { <span class="tcv-th-badge" [title]="'unread' | t">{{ p.unread }}</span> }
-          @else if (lastOf(p.chat); as l) { <span class="tcv-cc-itemwhen">{{ when(l.at) }}</span> }
-        </div>
-        <div class="tcv-cc-itemsnip">
-          @if (lastOf(p.chat); as l) { {{ l.by_id === store.state()?.me ? ('you' | t) + ': ' : '' }}{{ l.text }} }
-          @else { {{ (p.online ? 'online' : 'Write a message') | t }} }
-        </div>
-      </div>
-    </div>
-  } @empty {
-    <wb-empty compact [icon]="q().trim() ? 'search' : 'chat'" [text]="q().trim() ? 'Nobody matches.' : 'There is nobody else on this server yet.'" />
-  }
-  @for (g of groups(); track g.id) {
-    <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-on]="g.id === store.open() ? 1 : null"
-         (click)="store.show(g.id); opened.emit()" (keydown.enter)="store.show(g.id); opened.emit()">
-      <span class="tcv-dm-face tcv-dm-stack">
-        @for (m of g.members.slice(0, 2); track m.id) {
-          <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="20" />
-        }
-      </span>
-      <div class="tcv-cc-itemtext">
-        <div class="tcv-cc-itemtop">
-          <span class="tcv-cc-itemtitle">{{ groupName(g) }}</span>
-          @if (g.unread) { <span class="tcv-th-badge">{{ g.unread }}</span> }
-          @else if (g.last) { <span class="tcv-cc-itemwhen">{{ when(g.last.at) }}</span> }
-        </div>
-        <div class="tcv-cc-itemsnip">{{ g.last ? g.last.by + ': ' + g.last.text : g.members.length + 1 + ' ' + ('people' | t) }}</div>
-      </div>
-    </div>
-  }
-  @if (err()) { <p class="tcv-cc-listempty tcv-dm-err">{{ err() }}</p> }
-}`,
-})
-export class DmPeople {
-  store = inject(DmStore);
-  auth = inject(Auth);
-  q = input('');
-  opened = output<void>();
-  grouping = signal(false);
-  picked = signal<Set<string>>(new Set());
-  title = signal('');
-  err = signal<string | null>(null);
-
-  shown = computed(() => {
-    const w = this.q().trim().toLocaleLowerCase();
-    return this.store.people().filter(p => !w || p.name.toLocaleLowerCase().includes(w));
-  });
-  groups = computed(() => {
-    const w = this.q().trim().toLocaleLowerCase();
-    return this.store.groups().filter(g => !w || this.groupName(g).toLocaleLowerCase().includes(w));
-  });
-  lastOf(cid: string | null | undefined) { return this.store.chat(cid ?? null)?.last ?? null; }
-  when = dmWhen;
-  groupName(g: DmChat) { return g.title || g.members.map(m => m.name).join(', '); }
-
-  async pick(p: DmPerson) {
-    if (this.grouping()) { this.togglePick(p.id); return; }
-    this.err.set(null);
-    try { await this.store.withPerson(p.id); this.opened.emit(); }
-    catch { this.err.set(t('could not open the conversation')); }
-  }
-  toggleGroup() { this.grouping.set(!this.grouping()); this.picked.set(new Set()); this.title.set(''); }
-  togglePick(id: string) {
-    this.picked.update(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  }
-  async makeGroup() {
-    try {
-      await this.store.group([...this.picked()], this.title().trim());
-      this.toggleGroup();
-      this.opened.emit();
-    } catch { this.err.set(t('could not open the conversation')); }
-  }
 }
 
 /** One direct conversation, in the Chat tab's conversation area: the
