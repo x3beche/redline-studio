@@ -2900,7 +2900,8 @@ a.tcv-ico { text-decoration: none; }
    column of times, a dot for the kind of line, and the line itself. Colour
    is the dot's; the text stays ink so a screen of errors is still read. */
 .tcv-logp { display: block; min-width: 0; }
-.tcv-logp-head { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 4px; min-width: 0; cursor: pointer; }
+.tcv-logp-head { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; min-width: 0; cursor: pointer; outline: none; }
+.tcv-logp-head:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .tcv-logp-ibtn { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0;
   color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer;
   transition: background-color .12s, color .12s; }
@@ -2909,21 +2910,12 @@ a.tcv-ico { text-decoration: none; }
 .tcv-logp-ibtn:disabled { opacity: .35; cursor: default; }
 .tcv-logp svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5;
   stroke-linecap: round; stroke-linejoin: round; }
-.tcv-logp-fold { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; padding: 0;
-  color: var(--ink); background: none; border: 1px solid var(--line); border-radius: 5px;
-  cursor: pointer; transition: background-color .12s, border-color .12s; }
 .tcv-logp-title { flex: none; font-size: 12px; font-weight: 600; color: var(--ink); }
 /* Folded, the bar is one target: anywhere on it opens the log. */
 .tcv-logp:not(.tcv-logp-open) .tcv-logp-head { transition: background-color .12s; }
 .tcv-logp:not(.tcv-logp-open) .tcv-logp-head:hover { background: var(--hover); }
-.tcv-logp-fold:hover { background: var(--hover); border-color: var(--ink-dim); }
-.tcv-logp-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.tcv-logp-fold svg { transition: transform .12s ease-out; }
-.tcv-logp-open .tcv-logp-fold svg { transform: rotate(90deg); }
 .tcv-logp-count { flex: none; font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
 .tcv-logp-run { flex: none; font-size: 11px; color: var(--accent); }
-.tcv-logp-badge { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11px; color: var(--ink-dim); }
-.tcv-logp-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
 .tcv-logp-gap { flex: 1; min-width: 8px; }
 .tcv-logp-seg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
 .tcv-logp-seg button { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; font-size: 11.5px;
@@ -2977,12 +2969,11 @@ a.tcv-ico { text-decoration: none; }
 .tcv-logp-jump svg { width: 12px; height: 12px; stroke-width: 1.8; }
 @keyframes tcv-logp-in { from { opacity: 0; transform: translateY(4px); } }
 @media (prefers-reduced-motion: reduce) {
-  .tcv-logp-fold svg, .tcv-logp-fold, .tcv-logp-ibtn, .tcv-logp-seg button, .tcv-logp-head { transition: none; }
+  .tcv-logp-ibtn, .tcv-logp-seg button, .tcv-logp-head { transition: none; }
   .tcv-logp-jump { animation: none; }
 }
 @media (max-width: 768px) {
   .tcv-logp-head { height: 44px; }
-  .tcv-logp-fold { width: 36px; height: 36px; }
   /* Narrow: the kinds are their dots and counts, the search goes. */
   .tcv-logp-count, .tcv-logp-search, .tcv-logp-seg button:not(:first-child) .tcv-logp-segl { display: none; }
   .tcv-logp-seg button { height: 30px; }

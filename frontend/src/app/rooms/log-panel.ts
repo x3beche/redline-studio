@@ -33,17 +33,27 @@ interface Row {
   imports: [T],
   host: { class: 'tcv-logp', '[class.tcv-logp-open]': 'open()' },
   template: `
-<div class="tcv-logp-head" (click)="headClick($event)">
-  <button class="tcv-logp-fold" (click)="toggle.emit()"
-          [attr.aria-expanded]="open()" [title]="(open() ? 'Fold the log' : 'Open the log') | t">
-    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
-  </button>
+<!-- No arrow: the head itself opens and folds the log, by click or Enter. -->
+<div class="tcv-logp-head" (click)="headClick($event)" tabindex="0" role="button" [attr.aria-expanded]="open()"
+     [title]="(open() ? 'Fold the log' : 'Open the log') | t" (keydown.enter)="headClick($any($event))" (keydown.space)="$event.preventDefault(); headClick($any($event))">
   <span class="tcv-logp-title">{{ 'Log' | t }}</span>
   <span class="tcv-logp-count">{{ lines().length }} {{ 'lines' | t }}</span>
-  @if (!open() && counts().error) {
-    <span class="tcv-logp-badge" data-level="error">{{ counts().error }} {{ 'errors' | t }}</span>
-  }
   <ng-content select="[logHead]"></ng-content>
+  <!-- Folded, the bar still tells what the log holds, at its right end: a kind
+       there opens the log on it. -->
+  @if (!open()) {
+    <span class="tcv-logp-gap"></span>
+    <div class="tcv-logp-seg" role="group" [attr.aria-label]="'Show' | t">
+      @for (k of kinds; track k.id) {
+        @if (k.id !== 'all') {
+          <button (click)="kind.set(k.id); toggle.emit()" [title]="('Open the log' | t) + ': ' + (k.label | t)">
+            <i class="tcv-logp-dot" [attr.data-level]="k.id === 'work' ? 'done' : k.id"></i>
+            <span class="tcv-logp-segl">{{ k.label | t }}</span><em>{{ counts()[k.id] }}</em>
+          </button>
+        }
+      }
+    </div>
+  }
   @if (open()) {
     <span class="tcv-logp-gap"></span>
     <div class="tcv-logp-seg" role="group" [attr.aria-label]="'Show' | t">
