@@ -110,7 +110,7 @@ PACKAGES = (
     Package("firmware", "Firmware", "The Firmware room's builds."),
     Package("notes", "Notes", "The notes jotted down in Notes: #tags, @boards, to-dos."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
-    Package("mfr", "Manufacturers", "The makers' catalogs saved in Manufacturers."),
+    Package("mfr", "Supply", "The makers' catalogs saved in Supply."),
     Package("commandcode", "Chat", "The Chat's conversations: their titles, and what was said in them."),
     Package("files", "Files", "The Files room."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),

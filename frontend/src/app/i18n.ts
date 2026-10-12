@@ -2075,6 +2075,8 @@ const TR: Record<string, string> = {
   'Read a taste palette': 'Tadım paleti oku',
   'Parts drawer': 'Parça çekmecesi',
   'Room notes': 'Oda notları',
+  'Supply': 'Tedarik',
+  'The makers\' catalogs saved in Supply.': 'Tedarik\'te kayıtlı üretici katalogları.',
   'Read the pages again': 'Sayfaları yeniden oku',
   'The model reads the {n} pages of the last run again - the site is not fetched': 'Model son taramanın {n} sayfasını yeniden okur - siteye tekrar gidilmez',
   'The pages could not be read again.': 'Sayfalar yeniden okunamadı.',
