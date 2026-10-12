@@ -219,7 +219,6 @@ const TR: Record<string, string> = {
   'Smaller cards': 'Daha küçük kartlar',
   'Cards per row - click for automatic': 'Satırdaki kart sayısı - otomatik için tıkla',
   '{n} per row': 'satırda {n}',
-  'Auto': 'Otomatik',
   'Selection': 'Seçim',
   'Drag on an empty spot to select; Ctrl or Shift adds': 'Seçmek için boş bir yerden sürükle; Ctrl ya da Shift ekler',
   'Show in the top bar': 'Üst barda göster',
