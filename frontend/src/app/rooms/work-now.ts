@@ -24,16 +24,16 @@ interface WorkNow { items: WorkItem[]; recent: WorkRecent[] }
 @Component({
   selector: 'app-work-now',
   template: `
-<div class="px-3 py-2" style="border-top: 1px solid var(--line)">
+<div class="tcv-work">
+  <!-- Headed like a folder of the tree above it: the same row, chevron and type. -->
   <button class="tcv-work-head" (click)="toggle()" [attr.aria-expanded]="open()">
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" [style.transform]="open() ? 'rotate(90deg)' : null">
-      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span class="tcv-label">Working now</span>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
+    <span class="tcv-work-title">Working now</span>
     @if (busy()) {
       <span class="tcv-work-dot"></span>
-      <span class="text-[10px]" style="color: var(--accent)">{{ data()?.items?.length }}</span>
+      <span class="mono text-[11px]" style="color: var(--accent)">{{ data()?.items?.length }}</span>
     } @else {
-      <span class="text-[10px]" style="color: var(--ink-dim)">idle</span>
+      <span class="text-[11px]" style="color: var(--ink-dim)">idle</span>
     }
   </button>
   @if (open()) {
@@ -43,13 +43,13 @@ interface WorkNow { items: WorkItem[]; recent: WorkRecent[] }
             [title]="w.why ? 'rebuilding because ' + w.why : w.id">
           <span class="flex items-center gap-1.5">
             <span class="tcv-work-state" [attr.data-state]="w.state"></span>
-            <span class="min-w-0 flex-1 truncate text-[11px]" style="color: var(--ink)">{{ w.title }}</span>
-            <span class="mono shrink-0 text-[10px]" style="color: var(--ink-dim)">
+            <span class="min-w-0 flex-1 truncate text-[12.5px]" style="color: var(--ink)">{{ w.title }}</span>
+            <span class="mono shrink-0 text-[11px]" style="color: var(--ink-dim)">
               @if (w.secs != null) { {{ clock(w.secs) }}@if (w.expected_secs) { / ~{{ clock(w.expected_secs) }} } }
               @else { waiting }
             </span>
           </span>
-          <span class="block truncate pl-3 text-[10px]" style="color: var(--ink-dim)">
+          <span class="block truncate pl-3 text-[11px]" style="color: var(--ink-dim)">
             {{ label(w) }}@if (w.why) { · {{ w.why }} }
           </span>
           @if (bar(w); as p) {
@@ -57,12 +57,12 @@ interface WorkNow { items: WorkItem[]; recent: WorkRecent[] }
           }
         </li>
       } @empty {
-        <li class="text-[11px]" style="color: var(--ink-dim)">nothing is building</li>
+        <li class="tcv-work-empty">nothing is building</li>
       }
       @if (data()?.recent?.length) {
-        <li class="tcv-label mt-1.5 text-[9px]">finished lately</li>
+        <li class="tcv-label mt-1.5 px-1.5 text-[10px]">finished lately</li>
         @for (r of data()!.recent; track $index) {
-          <li class="flex items-center gap-1.5 py-0.5 text-[10px]" [title]="r.id">
+          <li class="flex items-center gap-1.5 px-1.5 py-0.5 text-[11px]" [title]="r.id">
             <span [style.color]="r.ok ? 'var(--ok)' : 'var(--danger)'">{{ r.ok ? '✓' : '✗' }}</span>
             <span class="min-w-0 flex-1 truncate" style="color: var(--ink-dim)">{{ short(r.id) }}</span>
             <span class="mono shrink-0" style="color: var(--ink-dim)">{{ r.secs != null ? clock(r.secs) : '' }} · {{ ago(r.ago) }}</span>

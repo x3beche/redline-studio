@@ -1875,40 +1875,113 @@
   border-radius: 3px;
 }
 
-/* A folder heads the files under it, so it reads at least as strongly as
-   they do. Dimmer than its contents was backwards. */
-.tcv-folder {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .01em;
+/* The catalog tree: one row for a folder, a model, a board or a firmware,
+   on one 26px rhythm and one type size. Columns from the left: the indent
+   (with a hairline guide per level), a fold chevron (empty on a file, so
+   the icons line up), a kind icon, the name, its extension, a mark, what is
+   happening to it, and its figures pushed to the right. --tcv-tr-d is the level. */
+.tcv-tr {
+  --tcv-tr-step: 12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px 0 calc(6px + var(--tcv-tr-d, 0) * var(--tcv-tr-step));
+  font-size: 12.5px;
   color: var(--ink);
+  cursor: pointer;
+  user-select: none;
 }
-.tcv-folder-caret {
-  width: 9px;
-  font-size: 9px;
-  color: var(--ink-dim);
+/* The guides: a hairline under each open folder's chevron, down its rows. */
+.tcv-tr::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 6px;
+  width: calc(var(--tcv-tr-d, 0) * var(--tcv-tr-step));
+  background: repeating-linear-gradient(to right, transparent 0 6px, var(--line) 6px 7px, transparent 7px var(--tcv-tr-step));
+  pointer-events: none;
+}
+/* Hover, selection and focus light the item itself, from its own indent
+   to the right edge, as a rounded pill: the indent and its guides stay as
+   they are. */
+.tcv-tr::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 1px; bottom: 1px; right: 0;
+  left: calc(2px + var(--tcv-tr-d, 0) * var(--tcv-tr-step));
+  border-radius: 4px;
+  transition: background-color .1s;
+  pointer-events: none;
+}
+.tcv-tr { isolation: isolate; }
+/* A file has no chevron: its pill starts at its icon. */
+.tcv-tr:not(.tcv-tr-dir)::after { left: calc(20px + var(--tcv-tr-d, 0) * var(--tcv-tr-step)); }
+.tcv-tr:hover::after { background: color-mix(in srgb, var(--hover) 60%, transparent); }
+.tcv-tr[data-on]::after { background: var(--hover); }
+.tcv-tr[data-on] .tcv-tr-name { color: var(--ink-bright); }
+.tcv-tr:focus-visible { outline: none; }
+.tcv-tr:focus-visible::after { box-shadow: inset 0 0 0 1px var(--accent); }
+.tcv-tr[data-move]::after { box-shadow: inset 0 0 0 1px var(--line); }
+.tcv-tr[data-move]:hover::after { box-shadow: inset 0 0 0 1px var(--accent); }
+
+.tcv-tr-chev { flex: none; width: 14px; height: 14px; color: var(--ink-dim);
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .12s; }
+.tcv-tr-dir[aria-expanded="true"] .tcv-tr-chev { transform: rotate(90deg); }
+.tcv-tr-ico { flex: none; width: 14px; height: 14px; margin-right: 2px; color: var(--ink-dim);
+  fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linejoin: round; stroke-linecap: round; }
+.tcv-tr-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A folder heads the files under it: the same size, a little heavier. */
+.tcv-tr-dir .tcv-tr-name { font-weight: 600; }
+/* The extension says which room the file opens in; it should not shout
+   over what the file is called, and it is never cut off with the name. */
+.tcv-tr-ext { flex: none; margin-left: -4px; color: var(--ink-dim); }
+/* Changed since its last build (or never built, hollow), or broken. */
+.tcv-tr-dot { flex: none; width: 6px; height: 6px; margin-left: 2px; border-radius: 50%; background: var(--warn); }
+.tcv-tr-dot[data-k="new"] { background: none; box-shadow: inset 0 0 0 1.5px var(--warn); }
+.tcv-tr-dot[data-k="bad"] { background: var(--danger); }
+.tcv-tr-state { flex: none; margin-left: 2px; font-size: 11px; color: var(--accent); white-space: nowrap; }
+.tcv-tr-state[data-k="bad"] { color: var(--danger); }
+/* Figures about the file, not the file: quiet, mono, on the right. */
+.tcv-tr-meta { flex: none; display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding-left: 6px;
+  font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+.tcv-tr-meta .tcv-pin-ico { width: 10px; height: 10px; }
+.tcv-tr-nil { opacity: .5; }
+.tcv-tr-pulse { display: inline-block; width: 5px; height: 5px; margin-right: 4px; vertical-align: 1px; border-radius: 50%;
+  background: currentColor; animation: tcv-work-pulse 1.2s infinite ease-in-out; }
+/* The row's buttons float over its right end on hover or focus, so they
+   take no width from the name while they are hidden. */
+.tcv-tr-acts { position: absolute; display: flex; align-items: center; gap: 1px;
+  top: 2px; bottom: 2px; right: 1px; padding: 0 3px 0 10px; border-radius: 0 3px 3px 0; background: var(--surface); opacity: 0; pointer-events: none;
+  transition: opacity .1s; }
+.tcv-tr:hover .tcv-tr-acts, .tcv-tr:focus-within .tcv-tr-acts, .tcv-tr-acts[data-armed] { opacity: 1; pointer-events: auto; }
+.tcv-tr:hover .tcv-tr-acts, .tcv-tr:focus-within .tcv-tr-acts { background: color-mix(in srgb, var(--hover) 60%, var(--surface)); }
+.tcv-tr[data-on] .tcv-tr-acts { background: var(--hover); }
+.tcv-tr-acts button { min-width: 20px; height: 20px; padding: 0 4px; border: 0; border-radius: 3px; background: none;
+  font-size: 11px; color: var(--ink-dim); cursor: pointer; }
+.tcv-tr-acts button:hover { color: var(--ink); background: var(--pressed); }
+.tcv-tr-acts button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tcv-tr-acts .tcv-tr-danger { color: var(--danger); }
+.tcv-tr-acts .tcv-tr-warn { color: var(--warn); }
+/* A build's progress: a hairline along the row's foot, under the name. */
+.tcv-tr-bar { position: absolute; left: calc(26px + var(--tcv-tr-d, 0) * var(--tcv-tr-step)); right: 6px; bottom: 1px; height: 2px;
+  overflow: hidden; border-radius: 1px; background: var(--line); }
+.tcv-tr-bar > span { display: block; height: 100%; background: var(--accent); transition: width .15s; }
+@media (prefers-reduced-motion: reduce) {
+  .tcv-tr::after, .tcv-tr-chev, .tcv-tr-acts, .tcv-tr-bar > span { transition: none; }
+  .tcv-tr-pulse { animation: none; }
 }
 
-/* The extension, not the name: it says which room the file opens in, and
-   should not shout over what the file is called. */
+/* The catalog's one create button, over the tree: the app's button, on the
+   tree's row height, with the same line icons. */
+.tcv-newproj-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 28px; font-size: 12.5px; }
+.tcv-newproj-btn svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+
+/* The extension, wherever else a file is named (the Links card). */
 .tcv-ext {
   font-size: 10px;
-  color: var(--ink-dim);
-}
-
-/* What a file in the catalog uses, and how many designs use it: quiet,
-   because it is about the file and not the file itself. */
-.tcv-link-badge {
-  flex: none;
-  margin-left: 4px;
-  padding: 0 3px;
-  font-size: 9px;
-  line-height: 13px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
   color: var(--ink-dim);
 }
 
@@ -4563,13 +4636,22 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
 .tcv-drawer-all:hover { color: var(--ink); background: var(--hover); }
 
 /* Working now, under the catalog. */
-.tcv-work-head { display: flex; width: 100%; align-items: center; gap: 6px; padding: 0; background: none; border: 0; cursor: pointer; color: var(--ink-dim); }
-.tcv-work-head svg { flex: none; transition: transform .12s; }
+.tcv-work { padding: 4px 8px 8px; border-top: 1px solid var(--line); }
+.tcv-work-head { display: flex; width: 100%; height: 26px; align-items: center; gap: 4px; padding: 0 6px; background: none; border: 0;
+  border-radius: 4px; cursor: pointer; color: var(--ink-dim); font-size: 12.5px; }
+.tcv-work-head:hover { background: color-mix(in srgb, var(--hover) 60%, transparent); }
+.tcv-work-head:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tcv-work-head svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; transition: transform .12s; }
+.tcv-work-head[aria-expanded="true"] svg { transform: rotate(90deg); }
+.tcv-work-title { margin-right: 2px; font-weight: 600; color: var(--ink); }
+.tcv-work-empty { padding: 2px 6px 0 24px; font-size: 12px; color: var(--ink-dim); }
 .tcv-work-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: tcv-work-pulse 1.2s infinite ease-in-out; }
 @keyframes tcv-work-pulse { 50% { opacity: .3; } }
-.tcv-work-row { display: block; padding: 3px 4px; border-radius: 4px; }
+.tcv-work-row { display: block; padding: 4px 6px; border-radius: 4px; }
+.tcv-work-row + .tcv-work-row { margin-top: 1px; }
 .tcv-work-click { cursor: pointer; }
-.tcv-work-click:hover { background: var(--hover); }
+.tcv-work-click:hover { background: color-mix(in srgb, var(--hover) 60%, transparent); }
 .tcv-work-state { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-dim); }
 .tcv-work-state[data-state="building"], .tcv-work-state[data-state="running"] { background: var(--accent); animation: tcv-work-pulse 1.2s infinite ease-in-out; }
 .tcv-work-bar { display: block; height: 2px; margin: 3px 0 0 12px; overflow: hidden; border-radius: 1px; background: var(--surface); }
@@ -4581,12 +4663,10 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0; }
 
 /* A folder row's summary of what is happening under it. */
-.tcv-folder-status { display: inline-flex; flex: none; gap: 6px; margin-left: 6px; font-size: 10px; white-space: nowrap; }
+.tcv-folder-status { gap: 8px; }
 .tcv-fs-build { color: var(--accent); }
 .tcv-fs-queue { color: var(--ink-dim); }
 .tcv-fs-broke { color: var(--danger); }
-.tcv-fs-bar { position: absolute; left: 4px; right: 4px; bottom: 0; height: 2px; overflow: hidden; border-radius: 1px; background: var(--surface); }
-.tcv-fs-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
 
 /* ==== Parts drawer (rooms/parts-drawer.ts) ===============================
    Flat, in the app's own tones like the Settings pages: each group a plain

@@ -2198,6 +2198,38 @@ export class Editor implements AfterViewInit, OnDestroy {
       : room === 'cad' && this.activeModel() === id;
   }
 
+  /** The tree from the keyboard, the way a file tree is walked: up and
+   *  down move between rows, right opens a folder (or steps into it),
+   *  left shuts it (or steps out to the folder above), Enter and Space
+   *  do what a click does. The menu key opens the row's own menu. */
+  treeKey(e: KeyboardEvent) {
+    const row = e.currentTarget as HTMLElement;
+    if (e.target !== row) return;   // a hover button has the focus
+    const rows = [...row.closest('.tcv-scroll')?.querySelectorAll<HTMLElement>('.tcv-tr') ?? []];
+    const i = rows.indexOf(row), dir = row.classList.contains('tcv-tr-dir');
+    const level = (r: HTMLElement) => +r.style.getPropertyValue('--tcv-tr-d') || 0;
+    const open = row.getAttribute('aria-expanded') === 'true';
+    switch (e.key) {
+      case 'ArrowDown': rows[i + 1]?.focus(); break;
+      case 'ArrowUp': rows[i - 1]?.focus(); break;
+      case 'Home': rows[0]?.focus(); break;
+      case 'End': rows[rows.length - 1]?.focus(); break;
+      case 'ArrowRight':
+        if (!dir) return;
+        if (open) rows[i + 1]?.focus(); else row.click();
+        break;
+      case 'ArrowLeft':
+        if (dir && open) { row.click(); break; }
+        for (let j = i - 1; j >= 0; j--) {
+          if (rows[j].classList.contains('tcv-tr-dir') && level(rows[j]) < level(row)) { rows[j].focus(); break; }
+        }
+        break;
+      case 'Enter': case ' ': row.click(); break;
+      default: return;
+    }
+    e.preventDefault();
+  }
+
   /** The firmware made from a board, shown under it (a .fw opens the Firmware room). */
   fwOf(n: FolderNode, board: string): FirmwareNode[] { return (n.firmware ?? []).filter(f => f.board === board); }
   /** Firmware whose board is in another folder - shown after the boards. */
