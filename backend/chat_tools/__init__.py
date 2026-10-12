@@ -100,14 +100,19 @@ class Package:
 
 
 PACKAGES = (
-    # The rooms first, in the top bar's order.
-    Package("3d", "3D", "The 3D room's models."),
-    Package("pcb", "PCB", "The PCB room's boards, its parts drawer, LCSC's catalogue and the parts' datasheets."),
+    # What belongs to no one tab first; then one package per tab of the top
+    # bar, named by the tab's id (frontend/src/app/workspaces.ts) and in its
+    # order. The Tools panel draws a card for every tab from that list, so a
+    # new tab has its package there at once, empty until a tool names it.
+    Package("general", "General", "What belongs to no one tab: notes left in a room's queue."),
+    Package("cad", "3D Drawing", "The 3D room's models."),
+    Package("pcb", "PCB Design", "The PCB room's boards, its parts drawer, LCSC's catalogue and the parts' datasheets."),
     Package("firmware", "Firmware", "The Firmware room's builds."),
-    Package("files", "Files", "The Files room."),
+    Package("notes", "Notes", "The notes and tasks of every room."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
-    Package("manufacturers", "Manufacturers", "The makers' catalogs saved in Manufacturers."),
-    Package("notes", "Room notes", "Notes left in a room's queue."),
+    Package("mfr", "Manufacturers", "The makers' catalogs saved in Manufacturers."),
+    Package("files", "Files", "The Files room."),
+    Package("tools", "Basic Tools", "The Basic Tools calculators."),
 )
 PACKAGE = {p.name: p for p in PACKAGES}
 

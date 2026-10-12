@@ -75,7 +75,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="manufacturer_search", package="manufacturers", level="read", order=69,
+    name="manufacturer_search", package="mfr", level="read", order=69,
     label="Search the manufacturers",
     about="Lists the saved manufacturers, reads one's catalog, or searches their products by words and category.",
     description="The manufacturers this workspace keeps (the Manufacturers tab): makers whose websites were explored, "

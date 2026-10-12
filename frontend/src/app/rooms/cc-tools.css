@@ -139,3 +139,5 @@
 .ct-top .st-badge + .tcv-switch { margin-left: 6px; }
 /* a package's switch with some of its tools on */
 .tcv-switch[data-part] { opacity: .6; }
+.ct-pack[data-empty] { cursor: default; background: transparent; border-style: dashed; }
+.ct-pack[data-empty] .ct-name, .ct-pack[data-empty] .ct-ico { color: var(--ink-dim); }

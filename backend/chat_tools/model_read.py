@@ -60,7 +60,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="model_read", package="3d", level="read", order=62,
+    name="model_read", package="cad", level="read", order=62,
     label="Read a 3D model",
     about="Reads a 3D model: its source, version, last build with its sizes, and its last error.",
     description="Read one of this workspace's 3D models (the 3D room, build123d Python): its version, the "

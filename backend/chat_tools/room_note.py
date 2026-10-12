@@ -46,7 +46,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="room_note", package="notes", level="change", order=80, default=False,
+    name="room_note", package="general", level="change", order=80, default=False,
     label="Leave a note in a room",
     about="Leaves a note in the 3D, PCB or Firmware room's queue, for its agent.",
     description="Leave a note (a task) in the queue of the 3D room (cad: a model), the PCB room (pcb: a board) "

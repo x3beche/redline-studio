@@ -2,6 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
+import { WORKSPACES } from '../workspaces';
+
+/** Tabs with no tool package: the Chat itself, Settings, Analytics. */
+const NO_PACKAGE = new Set(['commandcode', 'settings', 'analyze']);
 
 /** What a tool may do, in the order it is asked about: reads run on their
  *  own, changes always leave a step in the answer, deletes ask first. */
@@ -259,19 +263,25 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
           @for (g of groups(); track g.id; let i = $index) {
             <div class="ct-tile ct-pack" [attr.data-on]="g.on ? 1 : null" role="button" tabindex="0"
                  [style.--sw]="span(i, groups().length, 4)" [style.--sn]="span(i, groups().length, 2)"
-                 (click)="pack.set(g.id)" (keydown.enter)="pack.set(g.id)" [title]="'Open the package' | t">
+                 [attr.data-empty]="g.tools.length ? null : 1"
+                 (click)="g.tools.length && pack.set(g.id)" (keydown.enter)="g.tools.length && pack.set(g.id)"
+                 [title]="(g.tools.length ? 'Open the package' : 'No tools yet') | t">
               <span class="ct-top">
-                <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(g.tools[0].name)" /></svg>
+                <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="g.tools.length ? icon(g.tools[0].name) : wrench" /></svg>
                 <span class="ct-name">{{ g.name | t }}</span>
+                @if (g.tools.length) {
                 <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="g.on === g.tools.length"
                         [attr.data-on]="g.on ? 1 : null" [attr.data-part]="g.on && g.on < g.tools.length ? 1 : null"
                         [disabled]="!canEdit()" [attr.aria-label]="g.name | t"
                         (click)="$event.stopPropagation(); setAll(g.tools, g.on < g.tools.length)"></button>
+                }
               </span>
               <span class="ct-about">{{ g.about | t }}</span>
               <span class="ct-foot-row">
-                <span class="ct-uses-n mono">{{ g.on }} / {{ g.tools.length }} {{ 'on' | t }} · {{ g.uses }} {{ (g.uses === 1 ? 'use' : 'uses') | t }}</span>
-                <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
+                @if (g.tools.length) {
+                  <span class="ct-uses-n mono">{{ g.on }} / {{ g.tools.length }} {{ 'on' | t }} · {{ g.uses }} {{ (g.uses === 1 ? 'use' : 'uses') | t }}</span>
+                  <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
+                } @else { <span class="ct-uses-n">{{ 'No tools yet' | t }}</span> }
               </span>
             </div>
           }
@@ -345,15 +355,19 @@ export class CcToolsView {
    *  order: one card each, a switch for the whole package and one per tool,
    *  so reading can stay on while writing is off. */
   groups = computed(() => {
-    const out: { id: string; name: string; about: string; tools: CcTool[]; on: number }[] = [];
-    for (const tl of this.tools()) {
-      const id = tl.package || 'other';
-      let g = out.find(x => x.id === id);
-      if (!g) out.push(g = { id, name: tl.package_label || id, about: tl.package_about || '', tools: [], on: 0 });
-      g.tools.push(tl);
-      g.on += tl.on ? 1 : 0;
-    }
-    return out.map(g => ({ ...g, uses: g.tools.reduce((n, x) => n + (x.uses ?? 0), 0) }));
+    // General first, then a package for every tab of the top bar in its order
+    // (workspaces.ts) - a new tab has its card here at once, empty until a
+    // tool names it as its package. Chat itself, Settings and Analytics have none.
+    const tabs = [{ id: 'general', name: 'General', about: 'What belongs to no one tab: notes left in a room\'s queue.' },
+                  ...WORKSPACES.filter(w => !NO_PACKAGE.has(w.id)).map(w => ({ id: w.id as string, name: w.label, about: w.blurb }))];
+    const known = new Set(tabs.map(x => x.id));
+    const extra = [...new Set(this.tools().map(x => x.package || 'other'))].filter(id => !known.has(id))
+      .map(id => ({ id, name: this.tools().find(x => x.package === id)?.package_label || id, about: '' }));
+    return [...tabs, ...extra].map(p => {
+      const tools = this.tools().filter(x => (x.package || 'other') === p.id);
+      const about = tools[0]?.package_about || p.about;
+      return { ...p, about, tools, on: tools.filter(x => x.on).length, uses: tools.reduce((n, x) => n + (x.uses ?? 0), 0) };
+    });
   });
   /** The package open in the modal. */
   pack = signal<string | null>(null);

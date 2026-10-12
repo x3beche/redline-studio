@@ -162,7 +162,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True,
                   "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
                   "room_note": False}
-    assert [t["package"] for t in got["tools"]][:8] == ["3d"] + ["pcb"] * 7     # the rooms first, as the tabs
+    assert [t["package"] for t in got["tools"]][:9] == ["general", "cad"] + ["pcb"] * 7     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -585,7 +585,7 @@ def test_the_next_line_is_answered_knowing_what_the_tools_gave(env, monkeypatch)
 def test_the_note_names_the_tools_and_their_number():
     on = [chat_tools.tools()[n] for n in ("drawer_search", "datasheet_read", "taste_read")]
     n = chat_tools.note(on)
-    assert "exactly these 3, by package - PCB: drawer_search, datasheet_read; Taste: taste_read." in n
+    assert "exactly these 3, by package - PCB Design: drawer_search, datasheet_read; Taste: taste_read." in n
     assert "not a tool" in n
 
 
