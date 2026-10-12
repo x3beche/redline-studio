@@ -5336,3 +5336,11 @@ html[data-shot] .tcv-log { display: none !important; }
 @container (max-width: 520px) {
   .tcv-guide-steps > li { display: flex; }
 }
+.tcv-notes-find { display: flex; gap: 6px; align-items: center; }
+.tcv-notes-find .tcv-notes-search { flex: 1; min-width: 0; }
+.tcv-notes-new { flex: none; white-space: nowrap; }
+/* Notes' list, as the Chat's list: hover buttons, a room menu for "send to an agent" */
+.tcv-notes-row { align-items: flex-start; }
+.tcv-notes-row .tcv-notes-item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.tcv-notes-row .tcv-cc-itemacts[data-open] { display: inline-flex; }
+.tcv-notes-sendmenu { right: 0; top: 30px; min-width: 140px; }

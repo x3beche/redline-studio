@@ -259,10 +259,18 @@ export class QuickNote {
   }
 }
 
+/** The list's hover buttons, drawn as the Chat's list draws its own. */
+const NOTE_ICONS = {
+  pin: 'M9 3h6 M10 3v6.5L7 13h10l-3-3.5V3 M12 13v8',
+  send: 'M12 19V5 M6 11l6-6 6 6',
+  copy: 'M9 9h11v11H9z M15 9V4H4v11h5',
+  trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
+};
+
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [NoteCompose, T],
+  imports: [T],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
@@ -271,6 +279,7 @@ export class QuickNote {
     <div class="tcv-notes-find">
       <input #search class="tcv-notes-search" [placeholder]="'Search notes   /' | t" [value]="q()"
              (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()">
+      <button class="tcv-btn tcv-notes-new" (click)="newNote()" [title]="'A new note (N)' | t">+ {{ 'New note' | t }}</button>
     </div>
     <div class="tcv-notes-filters">
       @for (f of filters; track f.id) {
@@ -290,34 +299,72 @@ export class QuickNote {
       @for (g of groups(); track g.name) {
         <div class="tcv-notes-group">{{ g.name | t }}</div>
         @for (n of g.notes; track n.id) {
-          <button class="tcv-notes-item" [attr.data-on]="n.id === openId() ? 1 : null" (click)="openId.set(n.id)">
-            <span class="tcv-notes-item-top">
-              @if (n.pinned) { <span class="tcv-notes-pin" title="Pinned">●</span> }
-              <span class="tcv-notes-item-title">{{ n.title || ('Untitled' | t) }}</span>
-              <span class="tcv-notes-item-when">{{ when(n.updated_at) }}</span>
-            </span>
-            <span class="tcv-notes-item-snip">{{ snippet(n) }}</span>
-            <span class="tcv-notes-item-meta">
-              @if (n.todo.open + n.todo.done) {
-                <span [attr.data-done]="!n.todo.open ? 1 : null">☑ {{ n.todo.done }}/{{ n.todo.open + n.todo.done }}</span>
+          <div class="tcv-cc-item tcv-notes-row" role="button" tabindex="0" [attr.data-on]="n.id === openId() ? 1 : null"
+               (click)="openId.set(n.id)" (keydown.enter)="openId.set(n.id)">
+            <div class="tcv-cc-itemtext">
+              <div class="tcv-cc-itemtop">
+                @if (n.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.pin" /></svg> }
+                <span class="tcv-cc-itemtitle">{{ n.title || ('Untitled' | t) }}</span>
+                <span class="tcv-cc-itemwhen">{{ when(n.updated_at) }}</span>
+              </div>
+              <div class="tcv-cc-itemsnip">{{ snippet(n) }}</div>
+              <span class="tcv-notes-item-meta">
+                @if (n.todo.open + n.todo.done) {
+                  <span [attr.data-done]="!n.todo.open ? 1 : null">☑ {{ n.todo.done }}/{{ n.todo.open + n.todo.done }}</span>
+                }
+                @if (n.context.room) { <span>{{ roomName(n.context.room) }}</span> }
+                @for (t of n.tags.slice(0, 3); track t) { <span class="tcv-note-tag">#{{ t }}</span> }
+                @if (n.sent) { <span title="Sent to the agent">→ agent</span> }
+              </span>
+            </div>
+            <!-- On hover, as in the Chat's list: what can be done with it. -->
+            <div class="tcv-cc-itemacts" [attr.data-open]="sendFor() === n.id ? 1 : null">
+              @if (auth.can('draw')) {
+                <button class="tcv-cc-ib" [class.on]="n.pinned" (click)="pin(n); $event.stopPropagation()" [title]="(n.pinned ? 'Unpin' : 'Pin') | t">
+                  <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.pin" /></svg></button>
+                <span class="tcv-cc-menuwrap">
+                  <button class="tcv-cc-ib" [class.on]="sendFor() === n.id" (click)="sendFor.set(sendFor() === n.id ? null : n.id); $event.stopPropagation()"
+                          [title]="'Send to an agent' | t">
+                    <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.send" /></svg></button>
+                  @if (sendFor() === n.id) {
+                    <div class="tcv-cc-menu tcv-notes-sendmenu" (click)="$event.stopPropagation()">
+                      @for (r of agentRooms; track r) { <button (click)="sendFor.set(null); send(n, r)">{{ roomName(r) }}</button> }
+                    </div>
+                  }
+                </span>
               }
-              @if (n.context.room) { <span>{{ roomName(n.context.room) }}</span> }
-              @for (t of n.tags.slice(0, 3); track t) { <span class="tcv-note-tag">#{{ t }}</span> }
-              @if (n.sent) { <span title="Sent to the agent">→ agent</span> }
-            </span>
-          </button>
+              <button class="tcv-cc-ib" (click)="copy(n); $event.stopPropagation()" [title]="'Copy' | t">
+                <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.copy" /></svg></button>
+              @if (auth.can('draw')) {
+                <button class="tcv-cc-ib tcv-cc-danger" (click)="remove(n); $event.stopPropagation()" [title]="'Delete' | t">
+                  <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash" /></svg></button>
+              }
+            </div>
+          </div>
         }
       } @empty {
-        <p class="tcv-notes-empty">{{ q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - write the first one on the right, or press Alt+N anywhere.' }}</p>
+        <p class="tcv-notes-empty">{{ q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - press New note, or Alt+N anywhere.' }}</p>
       }
     </div>
   </aside>
 
   <!-- RIGHT: write, and read one -->
   <section class="tcv-notes-main">
-    <app-note-compose #compose />
-
-    @if (open(); as n) {
+    @if (creating()) {
+      <!-- A new note: straight into the editor; it is kept from the first words. -->
+      <article class="tcv-note">
+        <header class="tcv-note-head">
+          <span class="tcv-note-meta">{{ 'New note' | t }}</span>
+          <span class="grow"></span>
+          @if (saving()) { <span class="tcv-note-meta">saving…</span> }
+          <button class="tcv-btn tcv-note-btn" (click)="done()">{{ 'Done' | t }}</button>
+        </header>
+        <textarea #editor class="tcv-note-edit" [value]="draft()" (input)="typed($any($event.target).value)"
+                  [placeholder]="'First line is the title - #tags, @controller, - [ ] to-dos…' | t"
+                  (keydown.escape)="done()" (keydown.control.enter)="done()"></textarea>
+        <p class="tcv-note-meta">{{ 'Saved as you type · Esc or Ctrl+Enter when done' | t }}</p>
+      </article>
+    } @else if (open(); as n) {
       <article class="tcv-note">
         <header class="tcv-note-head">
           <span class="tcv-note-meta">
@@ -331,16 +378,8 @@ export class QuickNote {
           </span>
           <span class="grow"></span>
           @if (saving()) { <span class="tcv-note-meta">saving…</span> }
-          <button class="tcv-note-icon" [attr.data-on]="n.pinned ? 1 : null" (click)="pin(n)"
-                  [title]="n.pinned ? 'Unpin' : 'Pin to the top'">📌</button>
-          <button class="tcv-btn tcv-note-btn" (click)="editing() ? done() : edit(n)">{{ (editing() ? 'Done' : 'Edit') | t }}</button>
-          <select class="tcv-note-send" (change)="send(n, $any($event.target).value); $any($event.target).value = ''"
-                  title="Hand this note to a room's agent">
-            <option value="">{{ 'Send to agent…' | t }}</option>
-            @for (r of agentRooms; track r) { <option [value]="r">{{ roomName(r) }}</option> }
-          </select>
-          <button class="tcv-btn tcv-note-btn" (click)="copy(n)">{{ (copied() ? 'Copied' : 'Copy') | t }}</button>
-          <button class="tcv-btn tcv-note-btn" (click)="remove(n)">{{ 'Delete' | t }}</button>
+          @if (copied()) { <span class="tcv-note-meta">{{ 'Copied' | t }}</span> }
+          @if (editing()) { <button class="tcv-btn tcv-note-btn" (click)="done()">{{ 'Done' | t }}</button> }
         </header>
         @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
         @if (editing()) {
@@ -364,7 +403,7 @@ export class QuickNote {
       </article>
     } @else {
       <div class="tcv-notes-tips">
-        <p><b>Writing a note should take no time.</b> Type and press Enter - no title, folder or form.</p>
+        <p><b>Writing a note should take no time.</b> Press <b>New note</b> (or N) and type - no title, folder or form. Double-click a note to change it.</p>
         <ul>
           <li><b>Alt+N</b> anywhere in Redline opens a small box; you stay where you are, and the note remembers the room and what was open.</li>
           <li><code>#tag</code> to find it later, <code>&#64;controller</code> to point at a board or model.</li>
@@ -380,7 +419,6 @@ export class QuickNote {
 export class RoomNotes implements OnDestroy {
   private api = inject(NotesApi);
   private picked = inject(Selection);
-  private compose = viewChild.required<NoteCompose>('compose');
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
   private editor = viewChild<ElementRef<HTMLTextAreaElement>>('editor');
 
@@ -394,6 +432,13 @@ export class RoomNotes implements OnDestroy {
   tags = signal<{ tag: string; n: number }[]>([]);
   openId = signal<string | null>(null);
   editing = signal(false);
+  /** A new note being written: not kept until it has words. */
+  creating = signal(false);
+  private keeping = false;
+  /** The note whose "send to an agent" menu is open in the list. */
+  sendFor = signal<string | null>(null);
+  auth = inject(Auth);
+  readonly I = NOTE_ICONS;
   draft = signal('');
   saving = signal(false);
   copied = signal(false);
@@ -425,11 +470,6 @@ export class RoomNotes implements OnDestroy {
       clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => untracked(() => this.read()), 150);
     });
-    effect(() => {
-      const c = this.compose();
-      c.kept = n => this.openId.set(n.id);
-      untracked(() => c.focus());
-    });
     // A note picked in the command palette.
     effect(() => {
       const w = this.picked.want();
@@ -438,8 +478,8 @@ export class RoomNotes implements OnDestroy {
         this.q.set(''); this.tag.set(''); this.only.set(''); this.openId.set(w.arg!);
       });
     });
-    // Leaving a note mid-edit keeps what was typed.
-    effect(() => { this.openId(); untracked(() => this.done()); });
+    // Leaving a note mid-edit keeps what was typed (not when the note opened is the one being written).
+    effect(() => { const id = this.openId(); untracked(() => { if (id !== this.editingId) this.done(); }); });
     // The note open here, for the command palette's "Ask Command Code about this note".
     effect(() => {
       const n = this.open();
@@ -474,6 +514,16 @@ export class RoomNotes implements OnDestroy {
     });
   }
 
+  newNote() {
+    this.done();
+    this.openId.set(null);
+    this.editingId = null;
+    this.draft.set('');
+    this.creating.set(true);
+    this.editing.set(true);
+    setTimeout(() => this.editor()?.nativeElement.focus());
+  }
+
   typed(text: string) {
     this.draft.set(text);
     clearTimeout(this.saveTimer);
@@ -482,6 +532,27 @@ export class RoomNotes implements OnDestroy {
 
   private saveDraft(then?: () => void) {
     const id = this.editingId, text = this.draft();
+    if (this.creating() && !id) {                       // a new note's first words: keep it now
+      if (!text.trim() || this.keeping) { then?.(); return; }
+      this.keeping = true;
+      this.saving.set(true);
+      this.api.create(text).subscribe({
+        next: n => {
+          this.keeping = false;
+          this.saving.set(false);
+          this.notes.set([n, ...this.notes()]);
+          this.api.changed.update(v => v + 1);
+          // Still being written: the editor stays as it is and goes on saving into this note.
+          if (this.creating()) { this.editingId = n.id; this.openId.set(n.id); }
+          // Typed while it was being kept: that goes in as an edit.
+          const now = this.draft();
+          if (now !== text && now.trim()) this.api.update(n.id, { text: now }).subscribe(r => this.replace(r));
+          then?.();
+        },
+        error: () => { this.keeping = false; this.saving.set(false); then?.(); },
+      });
+      return;
+    }
     const cur = this.notes().find(n => n.id === id);
     if (!id || !cur || !text.trim() || text === cur.text) { then?.(); return; }
     this.saving.set(true);
@@ -494,9 +565,12 @@ export class RoomNotes implements OnDestroy {
   done() {
     if (!this.editing()) return;
     clearTimeout(this.saveTimer);
+    const id = this.editingId;
     this.saveDraft(() => this.api.tags().subscribe(t => this.tags.set(t)));
     this.editing.set(false);
+    this.creating.set(false);
     this.editingId = null;
+    if (id) this.openId.set(id);
   }
 
   private replace(n: Note) { this.notes.set(this.notes().map(x => x.id === n.id ? n : x)); }
@@ -551,6 +625,7 @@ export class RoomNotes implements OnDestroy {
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === '/' && !typing) { e.preventDefault(); this.search().nativeElement.focus(); }
+    if ((e.key === 'n' || e.key === 'N') && !typing && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); this.newNote(); }
     if (!typing && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       const list = this.notes(), i = list.findIndex(n => n.id === this.openId());
       const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
