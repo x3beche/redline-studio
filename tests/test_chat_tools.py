@@ -671,7 +671,13 @@ def test_tools_usage_sums_every_tool(env):
     assert got["tools"]["drawer_search"] == {"uses": 2, "done": 1, "week": 2}
     assert got["tools"]["datasheet_read"]["uses"] == 1 and "gone_tool" not in got["tools"]
     assert got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
-    assert len(got["days"]) == cc_chat.STATS_DAYS
+    assert len(got["days"]) == 7 and got["span"] == "week"
+    # The other spans: by hour over a day, by day over a month, by month over a year.
+    for span, n in (("day", 24), ("month", 30), ("year", 12)):
+        got = run(cc_chat.tools_usage(span))
+        assert len(got["days"]) == n and got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
+    with pytest.raises(Exception):
+        run(cc_chat.tools_usage("decade"))
 
 
 # ---- the workspace tools: boards, models, BOM cost, firmware, files, notes, calculators ----

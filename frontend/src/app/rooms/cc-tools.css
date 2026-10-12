@@ -93,6 +93,10 @@
 .ct-legend i.bad { background: var(--danger); }
 .ct-legend b { font-weight: 500; color: var(--ink); }
 .ct-bars.tall { height: 110px; }
+/* The uses chart fills its card: the bars take what the legend leaves. */
+.ct-uses { display: flex; flex-direction: column; gap: 6px; overflow: hidden !important; }
+.ct-uses > .ct-bars.tall { flex: 1; height: auto; min-height: 80px; }
+.ct-uses .ct-legend { flex: none; max-height: 52px; overflow-y: auto; }
 .ct-by { gap: 8px; }
 .ct-who-btn { width: 100%; padding: 0; text-align: left; background: none; border: 0; cursor: pointer; }
 .ct-who-btn:hover span:first-child { color: var(--ink-bright); text-decoration: underline; }

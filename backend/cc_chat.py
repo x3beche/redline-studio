@@ -1405,17 +1405,54 @@ STATS_DAYS = 14                  # the day bars on a tool's page
 STATS_RECENT = 8                 # its latest uses listed there
 
 
+# The uses chart's spans: how many buckets, and how long each is.
+USAGE_SPANS = {"day": (24, "hour"), "week": (7, "day"), "month": (30, "day"), "year": (12, "month")}
+
+
+def _buckets(span: str, now: datetime) -> tuple[list[str], "callable"]:
+    """The bucket keys of a span, oldest first, in the app's time zone, and
+    the function that puts a moment in its bucket."""
+    import os
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(os.environ.get("REDLINE_TZ", "Europe/Istanbul"))
+    n, unit = USAGE_SPANS[span]
+    here = now.astimezone(tz)
+    if unit == "hour":
+        top = here.replace(minute=0, second=0, microsecond=0)
+        keys = [(top - timedelta(hours=n - 1 - i)).strftime("%Y-%m-%dT%H") for i in range(n)]
+        fmt = "%Y-%m-%dT%H"
+    elif unit == "day":
+        keys = [(here.date() - timedelta(days=n - 1 - i)).isoformat() for i in range(n)]
+        fmt = "%Y-%m-%d"
+    else:
+        y, m = here.year, here.month
+        keys = []
+        for i in range(n - 1, -1, -1):
+            yy, mm = y + (m - 1 - i) // 12, (m - 1 - i) % 12 + 1
+            keys.append(f"{yy:04d}-{mm:02d}")
+        fmt = "%Y-%m"
+
+    def key(at: str) -> str | None:
+        try:
+            return datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(tz).strftime(fmt)
+        except ValueError:
+            return None
+    return keys, key
+
+
 @router.get("/tools-usage")
-async def tools_usage() -> dict:
+async def tools_usage(span: str = "week") -> dict:
     """Every tool's uses in this workspace's conversations, for the top of
-    the Tools view: totals, how many worked, and the last STATS_DAYS days
-    by tool."""
+    the Tools view: totals, how many worked, and the uses over `span` (day:
+    by hour, week and month: by day, year: by month) by tool, in `days`."""
     from . import chat_tools
+    if span not in USAGE_SPANS:
+        raise HTTPException(400, f"span is one of {', '.join(USAGE_SPANS)}")
     me = (actors.current() or {}).get("id")
     now = datetime.now(timezone.utc)
-    day0 = (now - timedelta(days=STATS_DAYS - 1)).date()
+    keys, key = _buckets(span, now)
     names = list(chat_tools.tools())
-    days = {(day0 + timedelta(days=i)).isoformat(): {} for i in range(STATS_DAYS)}
+    days: dict[str, dict] = {k: {} for k in keys}
     per = {n: {"uses": 0, "done": 0, "week": 0} for n in names}
     mine = 0
     async for doc in _db()[COLL].find(dict(COUNTED), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
@@ -1433,13 +1470,14 @@ async def tools_usage() -> dict:
                 if me and asker.get("id") == me:
                     mine += 1
                 at = str(st.get("at") or "")
-                if at[:10] in days:
-                    days[at[:10]][n] = days[at[:10]].get(n, 0) + 1
+                k = key(at) if at else None
+                if k in days:
+                    days[k][n] = days[k].get(n, 0) + 1
                 try:
                     per[n]["week"] += now - datetime.fromisoformat(at.replace("Z", "+00:00")) <= timedelta(days=7)
                 except ValueError:
                     pass
-    return {"tools": per, "mine": mine, "days": [{"day": d, "by": by} for d, by in days.items()]}
+    return {"tools": per, "mine": mine, "span": span, "days": [{"day": d, "by": by} for d, by in days.items()]}
 
 
 @router.get("/tools/{name}")

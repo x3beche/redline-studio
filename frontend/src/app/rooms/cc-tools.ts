@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
-import { T, t } from '../i18n';
+import { LANG, T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
 
@@ -235,23 +235,29 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
       </div>
       <div class="ct-cols ct-over">
         <section class="st-card">
-          <div class="st-card-head"><h3>{{ 'Uses by tool' | t }}</h3><span class="st-sub">{{ 'last 14 days' | t }}</span>
-            <span class="st-right st-sub mono">{{ sum14(u) }}</span></div>
-          <div class="st-card-body">
+          <div class="st-card-head"><h3>{{ 'Uses by package' | t }}</h3>
+            <span class="st-sub mono">{{ sum14(u) }}</span>
+            <div class="st-right st-seg" role="group" [attr.aria-label]="'Period' | t">
+              @for (sp of spans; track sp.id) {
+                <button type="button" [class.on]="period() === sp.id" [attr.aria-pressed]="period() === sp.id" (click)="setSpan(sp.id)">{{ sp.label | t }}</button>
+              }
+            </div></div>
+          <div class="st-card-body ct-uses">
             <div class="ct-bars tall">
               @for (d of u.days; track d.day) {
-                <span class="ct-bar" [title]="d.day + ' · ' + dayTotal(d)">
+                <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)">
                   <span class="ct-stack" [style.height.%]="dayTotal(d) ? 6 + 94 * dayTotal(d) / peak14(u) : 0">
-                    @for (tl of tools(); track tl.name) {
-                      @if (d.by[tl.name]) { <i [style.flex-grow]="d.by[tl.name]" [style.background]="color(tl.name)"></i> }
+                    @for (s of stack(u, d); track s.name) {
+                      @if (s.n) { <i [style.flex-grow]="s.n" [style.background]="s.color"></i> }
                     }
                   </span></span>
               }
             </div>
-            <div class="ct-bars-axis mono"><span>{{ u.days[0].day.slice(5) }}</span><span>{{ 'today' | t }}</span></div>
+            <div class="ct-bars-axis mono"><span>{{ when(u.days[0].day) }}</span><span>{{ when(u.days[mid(u)].day) }}</span><span>{{ (period() === 'day' ? 'now' : period() === 'year' ? 'this month' : 'today') | t }}</span></div>
+            <!-- By package, not by tool: forty colours read as none. A package's tools are in its tooltip. -->
             <div class="ct-legend">
-              @for (tl of charted(u); track tl.name) {
-                <span><i [style.background]="color(tl.name)"></i>{{ tl.label | t }} <b class="mono">{{ u.tools[tl.name]?.uses ?? 0 }}</b></span>
+              @for (s of top14(u); track s.name) {
+                <span [title]="s.names"><i [style.background]="s.color"></i>{{ s.label | t }} <b class="mono">{{ s.n }}</b></span>
               }
             </div>
           </div>
@@ -415,7 +421,26 @@ export class CcToolsView {
   }
 
   usage = signal<ToolsUsage | null>(null);
-  constructor() { this.http.get<ToolsUsage>('/api/cc/tools-usage').subscribe({ next: u => this.usage.set(u), error: () => {} }); }
+  /** The uses chart's period: a day by hour, a week or a month by day, a year by month - kept in this browser. */
+  readonly spans = [{ id: 'day', label: 'Day' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' }];
+  period = signal<string>((() => { try { return localStorage.getItem('redline.tools.span') || 'week'; } catch { return 'week'; } })());
+  setSpan(s: string) {
+    this.period.set(s);
+    try { localStorage.setItem('redline.tools.span', s); } catch { /* private window */ }
+    this.loadUsage();
+  }
+  private loadUsage() {
+    this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: this.period() } }).subscribe({ next: u => this.usage.set(u), error: () => {} });
+  }
+  mid(u: ToolsUsage) { return Math.floor(u.days.length / 2); }
+  /** A bucket's key as the axis says it: "14:00", "12 Oct", "Oct 2026". */
+  when(k: string) {
+    const lang = LANG() === 'tr' ? 'tr-TR' : 'en-GB';
+    if (k.length === 13) return k.slice(11) + ':00';
+    if (k.length === 7) return new Date(k + '-01T12:00:00').toLocaleDateString(lang, { month: 'short', year: 'numeric' });
+    return new Date(k + 'T12:00:00').toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+  }
+  constructor() { this.loadUsage(); }
   /** A tool's colour in the charts (its page and the top of the list): the series palette, in the list's order. */
   readonly series = SERIES;
   color(name: string) {
@@ -427,6 +452,32 @@ export class CcToolsView {
   worked(u: ToolsUsage) {
     const n = this.total(u);
     return n ? Math.round(100 * Object.values(u.tools).reduce((a, x) => a + x.done, 0) / n) : null;
+  }
+  /** The uses chart by package (General, PCB, Notes...), not by tool: a
+   *  dozen colours at most, each with its count over the fourteen days. */
+  private pkgOf(name: string) { const t = this.tools().find(x => x.name === name); return t?.package || 'other'; }
+  top14(u: ToolsUsage): { name: string; label: string; n: number; color: string; names: string }[] {
+    const sum: Record<string, number> = {}, who: Record<string, Set<string>> = {};
+    for (const d of u.days) for (const [k, n] of Object.entries(d.by)) {
+      if (!n) continue;
+      const p = this.pkgOf(k);
+      sum[p] = (sum[p] ?? 0) + n;
+      (who[p] ??= new Set()).add(this.tools().find(x => x.name === k)?.label ?? k);
+    }
+    const label = (p: string) => this.groups().find(g => g.id === p)?.name ?? this.tools().find(x => x.package === p)?.package_label ?? p;
+    return Object.entries(sum).sort((a, b) => b[1] - a[1])
+      .map(([name, n]) => ({ name, n, color: this.pkgColor(name), label: label(name), names: [...who[name]].map(x => t(x)).join(', ') }));
+  }
+  /** A package's colour, the same in every period: by its place among the packages. */
+  pkgColor(p: string) {
+    const i = this.groups().findIndex(g => g.id === p);
+    // Eight series colours; past them, the same eight paler, so no two packages share one.
+    return i < 0 ? 'var(--ink-dim)' : i < 8 ? SERIES[i] : `color-mix(in srgb, ${SERIES[(i * 3 + 1) % 8]} 45%, var(--ink))`;
+  }
+  stack(u: ToolsUsage, d: { by: Record<string, number> }) {
+    const by: Record<string, number> = {};
+    for (const [k, n] of Object.entries(d.by)) by[this.pkgOf(k)] = (by[this.pkgOf(k)] ?? 0) + n;
+    return this.top14(u).map(x => ({ name: x.name, n: by[x.name] ?? 0, color: x.color }));
   }
   dayTotal(d: { by: Record<string, number> }) { return Object.values(d.by).reduce((a, x) => a + x, 0); }
   sum14(u: ToolsUsage) { return u.days.reduce((a, d) => a + this.dayTotal(d), 0); }
