@@ -210,14 +210,14 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
     <div class="save-x">
       <span>The plans against API prices</span>
       <b class="num">251.9<small>×</small></b>
-      <em>₺579,595 of work, paid with ₺2,301 of plans</em>
+      <em>$11,787 of work, paid with $46.79 of plans</em>
     </div>
     <div class="save-vs">
-      <div class="row"><span>At API list prices</span><b class="num">₺579,595</b></div>
+      <div class="row"><span>At API list prices</span><b class="num">$11,787</b></div>
       <div class="t"><i style="width:100%;background:var(--s2)"></i></div>
-      <div class="row"><span>Paid, the plans</span><b class="num">₺2,301</b></div>
+      <div class="row"><span>Paid, the plans</span><b class="num">$46.79</b></div>
       <div class="t"><i style="width:.4%;min-width:6px;background:var(--s3)"></i></div>
-      <p>Three weeks of work, 21 September to 11 October. Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.</p>
+      <p>Three weeks of work, 21 September to 11 October. Claude Max ($64.47 a month) and Command Code ($5 a month), prorated over 0.67 months.</p>
     </div>
   </div>
   <div class="stats plans rv">
@@ -357,11 +357,11 @@ export class Landing implements AfterViewInit, OnDestroy {
   chatFrame = [582, 648];
   /** The plans connected to Workbench (Settings > Costs, LLM settings). */
   plans = [
-    ['Claude Max', '₺3,170/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
+    ['Claude Max', '$64.47/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
     ['Command Code', '$5/mo', '8 of 9 jobs · 4,321 requests this period', 'var(--s1)'],
     ['Claude API', '1 job', '124k tokens this month', 'var(--s2)'],
     ['OpenRouter', '458 models', 'connected · no job on it now', 'var(--s4)'],
-    ['Cache', '98.5%', 'of prompt tokens · ₺4.17M not paid', 'var(--s3)'],
+    ['Cache', '98.5%', 'of prompt tokens · $84.8k not paid', 'var(--s3)'],
   ];
   /** What Workbench runs around the agents, in iot-fan's figures. */
   infra = [
