@@ -45,7 +45,8 @@ the answer and shown inline on the page.
 3. Optionally an icon: `TOOL_ICON` in `frontend/src/app/rooms/cc-tools.ts`
    (a wrench otherwise).
 
-4. A test in `tests/test_chat_tools.py`.
+4. A test in `tests/test_chat_tools.py` (or a file of its own beside it,
+   as `tests/test_chat_tools_notes.py`).
 
 Helpers: `_parts.py` (an LCSC number, a kept datasheet), `_things.py` (a
 board, model or firmware named by its id or by words of its title, read
@@ -65,6 +66,18 @@ through the workspace, and the list of them when the name fits nothing).
   build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
 - `room_note` (change, off by default): a queued note, as a ```task
   block's "Send to queue" files one (tasks.py `_file`).
+- The rooms' queues (General: they span the 3D, PCB and Firmware rooms):
+  `queue_list` (the revisions, by room, newest first, each with its state
+  - draft, queued, working, review, failed, applied, rejected - and the
+  runs open now, as "Working now" reads them) and `queue_read` (one, whole).
+- The Chat's own (package `commandcode`): `rename_chat` (change, on:
+  this conversation's title, through cc_chat.py `rename` - the list's own
+  rename, said to every open tab), `chat_list` and `chat_read` (the
+  conversations, as the list and opening one show them) and `chat_archive`
+  (change, off).
+- Notes (the Notes tab, notes.py): `notes_search`, `note_read`; and, off
+  by default, `note_write`, `note_todo` (tick or untick one to-do),
+  `note_edit` - with the rights the Notes API's routes need (`_notes.py`).
 
 ## Levels
 

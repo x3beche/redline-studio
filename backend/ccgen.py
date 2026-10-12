@@ -621,7 +621,9 @@ async def run(gid: str, db=None) -> dict | None:
             title = await cc_chat._name(db, gen["chat"], convo, answer)
         except Exception as exc:                                 # noqa: BLE001 - unnamed, not lost
             print(f"cc {gid}: not named: {exc}", file=sys.stderr)
-        await gens.update_one({"_id": gid}, {"$set": {"naming": False, "title": title}})
+        # Not named (renamed meanwhile - by hand or by the rename_chat tool):
+        # the title that rename left on this generation stays, to be said.
+        await gens.update_one({"_id": gid}, {"$set": {"naming": False, **({"title": title} if title else {})}})
     return {**gen, "status": status, "answer": answer}
 
 

@@ -774,13 +774,32 @@ async def patch_chat(cid: str, body: ChatPatch) -> dict:
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
     if "provider" in patch and patch["provider"] not in llm.PROVIDERS:
         raise HTTPException(400, f"unknown provider {patch['provider']!r}")
-    if "title" in patch:
-        patch["title"] = patch["title"].strip() or DEFAULT_TITLE
+    title = patch.pop("title", None)
     if patch:
         res = await _db()[COLL].update_one({"_id": cid, **LIVE}, {"$set": patch})
         if not getattr(res, "matched_count", 1):
             raise HTTPException(404, cid)
+    if title is not None and await rename(_db(), cid, title) is None:
+        raise HTTPException(404, cid)
     return await get_chat(cid)
+
+
+async def rename(db, cid: str, title: str) -> str | None:
+    """A conversation's new title - from the list (PATCH above) or from the
+    Chat's own rename_chat tool - told to every page that has it open (the
+    live stream's `title`, which the pages' lists take too). An answer being
+    written in it carries the title as well: its runner is another process,
+    so the API's tail (`_tail`) says it from there. None: no such
+    conversation (or in the trash)."""
+    title = title.strip() or DEFAULT_TITLE
+    res = await db[COLL].update_one({"_id": cid, **LIVE}, {"$set": {"title": title}})
+    if not getattr(res, "matched_count", 1):
+        return None
+    HUB.publish(live_key(cid), {"type": "title", "gen": None, "title": title})
+    gid = ((await db[COLL].find_one({"_id": cid}, {"gen": 1})) or {}).get("gen")
+    if gid:
+        await ccgen.coll(db).update_one({"_id": gid, "status": "running"}, {"$set": {"title": title}})
+    return title
 
 
 @router.delete("/chats/{cid}")
@@ -1104,6 +1123,13 @@ async def _tail(key: str, cid: str, db) -> None:
                 # the whole list each time - a few short rows.
                 st["steps"] = gen.get("steps") or []
                 HUB.publish(key, {"type": "steps", "gen": gid, "steps": st["steps"]})
+            if ((gen.get("status") == "running" or not gen.get("want_title"))
+                    and gen.get("title") and gen["title"] != st.get("title")):
+                # Renamed while it is written (`rename`: by hand, or the
+                # rename_chat tool) - said before its end. The title an
+                # answer names its conversation with comes after (_titled).
+                st["title"] = gen["title"]
+                HUB.publish(key, {"type": "title", "gen": gid, "title": gen["title"]})
             if gen.get("status") == "running":
                 continue
             answer = gen.get("answer") or ccgen.partial(gen)

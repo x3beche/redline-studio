@@ -28,7 +28,7 @@ export interface Note {
 
 const ROOM_NAMES: Record<string, string> = {
   cad: '3D Drawing', pcb: 'PCB Design',
-  notes: 'Notes', tools: 'Tools', analyze: 'Analytics',
+  notes: 'Notes', tools: 'Tools', analyze: 'Analytics', commandcode: 'Chat',
 };
 export const AGENT_ROOMS = ['cad', 'pcb'];
 

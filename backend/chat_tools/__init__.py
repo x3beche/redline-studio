@@ -104,13 +104,14 @@ PACKAGES = (
     # bar, named by the tab's id (frontend/src/app/workspaces.ts) and in its
     # order. The Tools panel draws a card for every tab from that list, so a
     # new tab has its package there at once, empty until a tool names it.
-    Package("general", "General", "What belongs to no one tab: notes left in a room's queue."),
+    Package("general", "General", "What belongs to no one tab: the rooms' queues."),
     Package("cad", "3D Drawing", "The 3D room's models."),
     Package("pcb", "PCB Design", "The PCB room's boards, its parts drawer, LCSC's catalogue and the parts' datasheets."),
     Package("firmware", "Firmware", "The Firmware room's builds."),
-    Package("notes", "Notes", "The notes and tasks of every room."),
+    Package("notes", "Notes", "The notes jotted down in Notes: #tags, @boards, to-dos."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
     Package("mfr", "Manufacturers", "The makers' catalogs saved in Manufacturers."),
+    Package("commandcode", "Chat", "The Chat's conversations: their titles, and what was said in them."),
     Package("files", "Files", "The Files room."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
 )
@@ -198,7 +199,12 @@ SYSTEM_NOTE = (
     "is read with taste_read: read it when they ask about their taste or rules, or before advising on a "
     "design. When the person needs a part or product from a maker, or says to look at a manufacturer, look in "
     "the manufacturers they saved (manufacturer_search: their catalogs, read from the makers' own sites) before "
-    "anywhere else, and link the product pages it gives. Leave a note in a room's queue (room_note) only when asked to."
+    "anywhere else, and link the product pages it gives. Leave a note in a room's queue (room_note) only when asked to. "
+    "The person's own notes (the Notes tab) are found with notes_search and read with note_read; write, tick or edit "
+    "one (note_write, note_todo, note_edit) only when asked. What the rooms' agents have queued or are working on - "
+    "the notes for the 3D, PCB and Firmware rooms - is read with queue_list and queue_read. Earlier conversations are "
+    "found with chat_list and read with chat_read; rename this conversation (rename_chat) or archive it (chat_archive) "
+    "only when asked to."
 )
 
 

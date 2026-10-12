@@ -4,8 +4,8 @@ import { T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
 
-/** Tabs with no tool package: the Chat itself, Settings, Analytics. */
-const NO_PACKAGE = new Set(['commandcode', 'settings', 'analyze']);
+/** Tabs with no tool package: Settings, Analytics. */
+const NO_PACKAGE = new Set(['settings', 'analyze']);
 
 /** What a tool may do, in the order it is asked about: reads run on their
  *  own, changes always leave a step in the answer, deletes ask first. */
@@ -30,12 +30,19 @@ const FILE = 'M6 3h8l4 4v14H6z M14 3v4h4';
 const NOTE = 'M5 4h14v12l-4 4H5z M15 20v-4h4 M8 9h8 M8 12h5';
 const FACTORY = 'M3 20V10l5 3V10l5 3V6h3l1 4h1l1-6h2v16z M7 16h2 M12 16h2 M17 16h1';
 const SWATCH = 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z';
+const QUEUE = 'M4 6h16 M4 12h16 M4 18h10 M17 16l3 2-3 2z';
+const PEN = 'M4 20h4L19 9l-4-4L4 16z M13 7l4 4';
+const CHECK = 'M5 4h14v16H5z M8 12l3 3 5-6';
+const CHAT = 'M4 5h16v11H9l-5 4z M8 9h8 M8 12h5';
+const BOX = 'M3 5h18v4H3z M5 9v10h14V9 M10 13h4';
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
   basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, manufacturer_search: FACTORY, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
-  room_note: NOTE,
+  room_note: NOTE, queue_list: QUEUE, queue_read: QUEUE, rename_chat: PEN,
+  notes_search: SEARCH, note_read: NOTE, note_write: PEN, note_todo: CHECK, note_edit: PEN,
+  chat_list: SEARCH, chat_read: CHAT, chat_archive: BOX,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
