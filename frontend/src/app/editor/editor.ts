@@ -28,6 +28,7 @@ import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
+import { LogPanel } from '../rooms/log-panel';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
 import { SelectOption, UiSelect } from '../ui-select';
@@ -54,7 +55,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, LogPanel, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -90,7 +91,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
-  private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
   saving = signal(false);
@@ -442,18 +442,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
     this.loadCatalog();
     this.activity.lines().subscribe({
-      next: v => {
-        // Only follow the tail while the user is already at the bottom, so
-        // scrolling back to read something is not yanked away.
-        const el = this.logBox()?.nativeElement;
-        const atBottom = !el
-          || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        this.log.set(v);
-        if (atBottom) {
-          setTimeout(() => this.scrollLog());
-          setTimeout(() => this.scrollLog(), 120);   // after layout settles
-        }
-      },
+      // The band follows the tail itself, and only while it is at the bottom.
+      next: v => this.log.set(v),
       error: () => {},
     });
   }
@@ -535,17 +525,10 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   }
 
-  /** Keep the newest line in view, the way a terminal does. */
-  private scrollLog() {
-    const el = this.logBox()?.nativeElement;
-    if (el) el.scrollTop = el.scrollHeight;
-  }
-
   toggleLog() {
     this.logOpen.update(v => !v);
     this.remember('log', this.logOpen());
     setTimeout(() => this.sizeOverlay(), 60);
-    setTimeout(() => this.scrollLog(), 80);
   }
 
   /** A run is live from the moment work starts until it reports finished. */

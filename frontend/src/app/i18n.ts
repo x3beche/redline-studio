@@ -3462,6 +3462,15 @@ const TR: Record<string, string> = {
   'Send to the {x} agent': '{x} ajanına gönder',
   'Name it again': 'Başlığı yeniden yaz',
   'Unfold': 'Katlamayı aç',
+  // The log band (rooms/log-panel.ts).
+  'Log': 'Kayıt', 'Fold the log': 'Kaydı katla', 'Open the log': 'Kaydı aç',
+  'Progress': 'İlerleme', 'Warnings': 'Uyarılar', 'Errors': 'Hatalar', 'Filter lines': 'Satırları süz',
+  'Following the newest line': 'En yeni satır izleniyor', 'Follow the newest line': 'En yeni satırı izle',
+  'Copy the lines shown': 'Gösterilen satırları kopyala',
+  'Clear the view - the lines are kept': 'Görünümü temizle - satırlar silinmez',
+  'Cleared - new lines show here.': 'Temizlendi - yeni satırlar burada görünür.',
+  'Show earlier lines': 'Önceki satırları göster', 'No line matches.': 'Eşleşen satır yok.',
+  'No activity yet.': 'Henüz etkinlik yok.', 'Jump to latest': 'En yeniye git', 'running…': 'çalışıyor…',
 };
 
 export function t(text: string): string {

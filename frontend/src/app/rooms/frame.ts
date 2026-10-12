@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { LogLine } from '../api';
 import { Selection } from '../selection';
+import { LogPanel } from './log-panel';
 
 /** The one layout every room shares.
  *
@@ -24,7 +25,7 @@ import { Selection } from '../selection';
  */
 @Component({
   selector: 'app-room-frame',
-  imports: [],
+  imports: [LogPanel],
   host: { class: 'tcv-frame' },
   template: `
 <div class="tcv_cad_toolbar tcv_round tcv-frame-bar">
@@ -51,32 +52,14 @@ import { Selection } from '../selection';
     <ng-content select="[view]"></ng-content>
     <div class="tcv-frame-corner"><ng-content select="[corner]"></ng-content></div>
   </div>
-  <div class="tcv-log tcv-panel rounded" style="border: 1px solid var(--line)">
-    <div class="flex items-center gap-2 px-2.5 py-1">
-      <button (click)="toggleLog()" class="tcv-chip">
-        {{ logOpen() ? '▾' : '▸' }} log
-      </button>
-      <span class="mono text-[10px]" style="color: var(--ink-dim)">
-        {{ log().length }} lines
-      </span>
-      <ng-content select="[logHead]"></ng-content>
-    </div>
+  <div class="tcv-log tcv-panel rounded">
     <!-- Open, the lines take the width; whatever the room keeps beside
          its log (what the runs cost) is a narrow column on the right, and
          folds away with it. -->
-    <div class="tcv-log-body" [class.hidden]="!logOpen()">
-      <div #logBox class="tcv-scroll mono min-w-0 flex-1 overflow-y-auto px-2.5 pb-2 text-[11px]">
-        @for (l of log(); track l._id) {
-          <div class="flex gap-2 leading-snug">
-            <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-            <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-          </div>
-        } @empty {
-          <div style="color: var(--ink-dim)">no activity yet</div>
-        }
-      </div>
-      <div class="tcv-log-side tcv-scroll"><ng-content select="[logSide]"></ng-content></div>
-    </div>
+    <app-log-panel [lines]="log()" [open]="logOpen()" (toggle)="toggleLog()">
+      <span logHead class="contents"><ng-content select="[logHead]"></ng-content></span>
+      <div logSide class="contents"><ng-content select="[logSide]"></ng-content></div>
+    </app-log-panel>
   </div>
 </div>`,
 })
@@ -101,23 +84,11 @@ export class RoomFrame implements AfterViewInit, OnDestroy {
   log = input<LogLine[]>([]);
 
   logOpen = signal(true);
-  private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
-  private lastLine: string | undefined;
 
   constructor() {
     effect(() => {
       try { this.logOpen.set(localStorage.getItem(`redline.${this.room()}.log`) !== ''); }
       catch { /* private window */ }
-    });
-    // A new last line scrolls the band down to it; reading back up is not
-    // interrupted by a poll that brought nothing new.
-    effect(() => {
-      const rows = this.log();
-      const last = rows[rows.length - 1]?._id;
-      if (last !== this.lastLine) {
-        this.lastLine = last;
-        setTimeout(() => this.scrollLog(), 30);
-      }
     });
   }
 
@@ -125,19 +96,6 @@ export class RoomFrame implements AfterViewInit, OnDestroy {
     this.logOpen.update(v => !v);
     try { localStorage.setItem(`redline.${this.room()}.log`, this.logOpen() ? '1' : ''); }
     catch { /* private window */ }
-    if (this.logOpen()) setTimeout(() => this.scrollLog(), 30);
-  }
-
-  private scrollLog() {
-    const box = this.logBox()?.nativeElement;
-    if (box) box.scrollTop = box.scrollHeight;
-  }
-
-  levelColor(l: LogLine['level']): string {
-    return l === 'error' ? 'var(--danger)'
-      : l === 'warn' ? 'var(--warn)'
-      : l === 'done' ? 'var(--ok)'
-      : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
   }
 }
 

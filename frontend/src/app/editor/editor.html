@@ -489,33 +489,13 @@
       <!-- Its own band under the 3D area, inside the stage. Outside it, the
            row left the tree column stranded above a strip of dead space; in
            here the column runs the full height beside both. -->
-      <div #logPanel class="tcv-log tcv-panel rounded"
-           style="border: 1px solid var(--line)">
-      <div class="flex items-center gap-2 px-2.5 py-1">
-        <button (click)="toggleLog()" class="tcv-chip">
-          {{ logOpen() ? '▾' : '▸' }} log
-        </button>
-        <span class="mono text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-        @if (runActive()) {
-          <span class="text-[10px]" style="color: var(--accent)">running…</span>
-        }
-      </div>
-      @if (logOpen()) {
-        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-             style="height: 132px; border-top: 1px solid var(--line)">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
+      <div #logPanel class="tcv-log tcv-panel rounded">
+        <app-log-panel [lines]="log()" [open]="logOpen()" (toggle)="toggleLog()">
+          @if (runActive()) {
+            <span logHead class="tcv-logp-run">{{ 'running…' | t }}</span>
           }
-        </div>
-      }
-    </div>
+        </app-log-panel>
+      </div>
 
     <!-- Drawing tools, docked in the viewer's toolbar once it is up: they
          belong over the thing being drawn on, not in a panel across the
