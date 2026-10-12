@@ -131,8 +131,8 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
     <div><div class="shot"><app-snap src="chattool" [page]="chatPage" [crop]="chatStep" [min]="0" [frame]="chatFrame" alt="Chat: a tool step, opened" /></div><p class="lbl">Chat · a tool step, opened: model_read lists the 3D models, then the task is written</p></div>
     <div><div class="shot"><app-snap src="chattool" [page]="chatPage" [crop]="chatPhoto" [min]="0" [frame]="chatFrame" alt="Chat: a photo of a screw, read" /></div><p class="lbl">Chat · a photo read: the screw named from the picture</p></div>
   </div>
-  <div class="shot wide rv"><app-snap src="chattools" [page]="[1800, 567]" [crop]="[271, 43, 1208, 511]" [min]="0" alt="Chat's usage card and the Tools page" /></div>
-  <p class="lbl">Chat · the plan's usage, Claude API calls and the Tools page: 12 of 13 tools on, uses by tool</p>
+  <div class="shot wide rv"><app-snap src="chattools" [page]="[1800, 920]" [crop]="[271, 43, 1208, 864]" [min]="0" alt="Chat's conversations and usage card, and the Tools page" /></div>
+  <p class="lbl">Chat · the conversations, the plan's usage and the Tools page: uses by tool, and the tools in packages, one for each tab</p>
 </section>
 
 <div class="stmt wrap">
@@ -166,11 +166,11 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
     <div class="stat"><span>Rules</span><b class="num">27</b><em>16 must · 11 prefer</em><div class="bar"><i style="flex:16;background:var(--ink)"></i><i style="flex:11;background:var(--s8)"></i></div></div>
     <div class="stat"><span>Domains</span><b class="num">4</b><em>3D 14 · PCB 7 · FW 2 · general 4</em><div class="bar"><i style="flex:14;background:var(--s1)"></i><i style="flex:7;background:var(--s3)"></i><i style="flex:2;background:var(--s4)"></i><i style="flex:4;background:var(--s7)"></i></div></div>
   </div>
-  <div class="shot rv"><app-snap src="taste-home" [crop]="[604, 100, 986, 330]" alt="The Taste tab's overview" /></div>
+  <div class="shot rv"><app-snap src="taste-home" [crop]="[604, 108, 986, 322]" alt="The Taste tab's overview" /></div>
   <p class="lbl">Taste · overview: palettes, items, MUST / PREFER / AVOID, runs; items by domain; a folder to start from</p>
   <div class="pair rv">
-    <div><div class="shot"><app-snap src="taste-run" [crop]="[606, 216, 492, 600]" alt="The finished iot-fan extraction" /></div><p class="lbl">Taste · the iot-fan run: 17 of 18 projects read, 27 proposals</p></div>
-    <div><div class="shot"><app-snap src="taste-pal" [crop]="[1097, 243, 492, 600]" alt="Taste of iot-fan: firmware and general rules" /></div><p class="lbl">Taste of iot-fan · the firmware and general columns of the palette</p></div>
+    <div><div class="shot"><app-snap src="taste-run" [crop]="[606, 214, 492, 600]" alt="The finished iot-fan extraction" /></div><p class="lbl">Taste · the iot-fan run: 17 of 18 projects read, 27 proposals</p></div>
+    <div><div class="shot"><app-snap src="taste-pal" [crop]="[1097, 279, 492, 600]" alt="3D Project Design Taste: firmware and general rules" /></div><p class="lbl">3D Project Design Taste · the firmware and general columns of the palette</p></div>
   </div>
   <div class="tcols rv">
     @for (c of taste; track c.name) {
@@ -180,7 +180,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
       </div>
     }
   </div>
-  <p class="lbl">Taste of iot-fan, as extracted. Every rule was reviewed before it was kept; attach the palette to a project and its agents follow it.</p>
+  <p class="lbl">The palette from iot-fan, as extracted. Every rule was reviewed before it was kept; attach the palette to a project and its agents follow it.</p>
 </section>
 
 <section class="wrap" id="themes">
