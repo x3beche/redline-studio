@@ -111,12 +111,13 @@ export class ConfirmHost implements OnDestroy {
       if (!r || r === this.shown) return;
       if (!this.shown) this.back = document.activeElement as HTMLElement | null;
       this.shown = r;
-      // After the box is drawn: the field, Cancel for a loss, otherwise OK.
+      // After the box is drawn: the field, otherwise the asked-for button.
       setTimeout(() => {
         if (this.cur() !== r) return;
         const f = this.field()?.nativeElement;
         if (r.kind === 'input' && f) { f.focus(); f.select(); return; }
-        (r.o.danger ? this.cancelBtn() ?? this.okBtn() : this.okBtn())?.nativeElement.focus();
+        // The asked-for button holds the focus, a delete too: Enter does it, Esc or Tab to Cancel backs out.
+        this.okBtn()?.nativeElement.focus();
       });
     });
     window.addEventListener('keydown', this.key, true);
@@ -173,6 +174,6 @@ export class ConfirmHost implements OnDestroy {
     const card = this.card()?.nativeElement;
     if (!this.cur() || !card || card.contains(e.target as Node)) return;
     e.stopImmediatePropagation();
-    (this.field() ?? this.cancelBtn() ?? this.okBtn())?.nativeElement.focus();
+    (this.field() ?? this.okBtn() ?? this.cancelBtn())?.nativeElement.focus();
   };
 }

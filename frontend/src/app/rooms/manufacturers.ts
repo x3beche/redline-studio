@@ -4,6 +4,7 @@ import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { Prefs } from '../preferences';
 import { LANG, T, t } from '../i18n';
+import { Confirm } from '../confirm';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -1137,7 +1138,7 @@ export class RoomMfr implements OnDestroy {
   }
   /** Asked before anything is deleted: the question, and what it is about. */
   private async sure(question: string, what: string): Promise<boolean> {
-    return confirm(what ? `${question}\n\n${what}` : question);
+    return Confirm.ask({ title: question, text: what || undefined, ok: t('Delete'), danger: true });
   }
   private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));

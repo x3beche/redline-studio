@@ -143,25 +143,24 @@ export class PvMeters {
             <p class="pv-src">{{ daysNote(a) }}</p>
           </section>
         }
-        <section class="st-chart c4"><h4>{{ 'Requests this period' | t }}<em>{{ count(a.account_totals?.requests) }}</em></h4>
+        <!-- Only Redline's own calls: what else uses the same Command Code account is not this app's. -->
+        <section class="st-chart c4"><h4>{{ 'Redline\\'s requests this period' | t }}<em>{{ count(a.redline?.requests ?? 0) }}</em></h4>
           <app-bar-list [rows]="shareRows(a)" [f]="count" />
         </section>
         @if (a.redline; as r) {
-          <section class="st-chart"><h4>{{ 'Who used the account' | t }}</h4>
+          <section class="st-chart"><h4>{{ 'Redline\\'s use, by job' | t }}</h4>
             <div class="st-table-wrap"><table class="st-table">
               <thead><tr><th></th><th class="r">{{ 'requests' | t }}</th><th class="r">{{ 'tokens in' | t }}</th><th class="r">{{ 'tokens out' | t }}</th></tr></thead>
               <tbody>
-                <tr><td><b>{{ 'Command Code, all' | t }}</b></td><td class="r mono">{{ count(a.account_totals?.requests) }}</td>
-                  <td class="r mono">{{ count(a.account_totals?.tokens_in) }}</td><td class="r mono">{{ count(a.account_totals?.tokens_out) }}</td></tr>
-                <tr><td [title]="jobsText(r)">Redline</td><td class="r mono">{{ count(r.requests) }}</td><td class="r mono">{{ count(r.tokens_in) }}</td>
-                  <td class="r mono">{{ count(r.tokens_out) }}</td></tr>
-                @if (a.others; as o) {
-                  <tr><td>{{ 'Other clients (Claude Code CLI, agents)' | t }}</td><td class="r mono">{{ count(o.requests) }}</td>
-                    <td class="r mono">{{ count(o.tokens_in) }}</td><td class="r mono">{{ count(o.tokens_out) }}</td></tr>
+                @for (j of r.by_job; track j.name) {
+                  <tr><td>{{ j.name | t }}</td><td class="r mono">{{ count(j.requests) }}</td>
+                    <td class="r mono">{{ count(j.tokens_in) }}</td><td class="r mono">{{ count(j.tokens_out) }}</td></tr>
                 }
+                <tr><td><b>{{ 'All of Redline' | t }}</b></td><td class="r mono">{{ count(r.requests) }}</td>
+                  <td class="r mono">{{ count(r.tokens_in) }}</td><td class="r mono">{{ count(r.tokens_out) }}</td></tr>
               </tbody>
             </table></div>
-            <p class="pv-src">{{ 'Command Code, all: its own totals. Redline: its own call log, by model and job. Other clients: the difference. Command Code does not say which model spent what.' | t }}</p>
+            <p class="pv-src">{{ 'Redline\\'s own call log, by job. Other programs using the same Command Code account are left out.' | t }}</p>
           </section>
         }
       </div>
@@ -206,9 +205,9 @@ export class CcCompact {
     const out: { label: string; value: string; sub: string; tone?: string | null; title?: string }[] = [
       { label: 'Spent this period', value: num(u?.credits), sub: t('credits, as Command Code reports') },
       { label: 'Left', value: num(d?.credits?.monthly_left), sub: t('monthly credits'), tone: d?.credits?.below_threshold ? 'warn' : null },
-      { label: 'Requests', value: u?.requests == null ? '–' : u.requests.toLocaleString('en-US'),
-        sub: u?.success_pct == null ? '' : `${u.success_pct}% ${t('succeeded')}` },
-      { label: 'Tokens in', value: count(u?.tokens_in), sub: `${t('out')} ${count(u?.tokens_out)} · ${num(u?.cost_avg)} ${t('per request')}` },
+      // Redline's own calls only: other programs on the same account are not this app's (the meters and credits are the account's).
+      { label: 'Redline\'s requests', value: count(a?.redline?.requests ?? null), sub: t('this period') },
+      { label: 'Redline\'s tokens in', value: count(a?.redline?.tokens_in ?? null), sub: `${t('out')} ${count(a?.redline?.tokens_out ?? null)}` },
     ];
     if (pr) {
       const end = a?.period?.end;
@@ -235,8 +234,7 @@ export class CcCompact {
     return src;
   }
   shareRows(a: CcAnalysis): Row[] {
-    const rows: Row[] = (a.redline?.by_model ?? []).map(m => ({ name: 'Redline · ' + m.name, value: m.requests }));
-    if (a.others) rows.push({ name: t('Other clients (Claude Code CLI, agents)'), value: a.others.requests });
+    const rows: Row[] = (a.redline?.by_model ?? []).map(m => ({ name: m.name, value: m.requests }));
     return rows.filter(r => r.value > 0).sort((x, y) => y.value - x.value);
   }
 }
