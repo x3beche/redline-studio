@@ -70,7 +70,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 <nav class="nav">
   <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Workbench</a>
   <!-- Five sections in the bar, the rest under More: the bar never runs into Sign in. -->
-  <div class="plinks">@for (l of links.slice(0, 5); track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }
+  <div class="links">@for (l of links.slice(0, 5); track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }
     <details class="more" #more>
       <summary>More</summary>
       <div class="more-menu">@for (l of links.slice(5); track l.id) {
