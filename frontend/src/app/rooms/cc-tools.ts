@@ -49,6 +49,8 @@ export const TOOL_ICON: Record<string, string> = {
   chat_list: SEARCH, chat_read: CHAT, chat_archive: BOX,
   inventory_search: SEARCH, inventory_read: SHELF, inventory_add: SHELF, inventory_adjust: PLUSMINUS, inventory_edit: PEN,
   inventory_remove: BOX,
+  catalog_read_page: FACTORY, catalog_add_product: FACTORY, catalog_edit_product: PEN, catalog_remove_product: BOX,
+  catalog_add_maker: FACTORY,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
