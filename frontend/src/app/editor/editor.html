@@ -36,13 +36,14 @@
       @if (!collapsed()) {
         <!-- Tight to the word: the mark and the name are one lockup, not a
              picture standing next to a label. -->
-        <div class="flex min-w-0 items-center gap-2.5">
+        <!-- A real link, so it opens in a new tab from a right-click, a middle-click or Ctrl+click. -->
+        <a href="/" class="tcv-brand flex min-w-0 items-center gap-2.5" title="Redline">
           <svg viewBox="0 0 64 64" class="h-[20px] w-[20px] shrink-0" aria-hidden="true" fill="var(--ink)">
             <!-- A section mark: a part cut open, the way a drawing shows it. -->
             <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
           </svg>
           <div class="brand-name min-w-0 truncate">Redline</div>
-        </div>
+        </a>
       }
     </div>
 
