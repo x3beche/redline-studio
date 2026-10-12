@@ -53,22 +53,24 @@
       <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
         @if (projectForm(); as pf) {
           <form class="tcv-newproj" (submit)="$event.preventDefault(); createProject()">
-            <input #projectName class="tcv-field w-full px-1.5 py-1" [value]="pf.name"
+            <div class="tcv-newproj-head">{{ 'New project' | t }}</div>
+            <input #projectName class="tcv-field w-full" [value]="pf.name"
                    (input)="patchProject({ name: $any($event.target).value })"
                    [placeholder]="'project name, e.g. desk-lamp' | t" autocomplete="off" spellcheck="false">
+            <!-- What the project holds: each one a folder made inside it. -->
             <div class="tcv-newproj-kinds">
-              <label><input type="checkbox" [checked]="pf.parts"
-                            (change)="patchProject({ parts: $any($event.target).checked })">
-                {{ '3D parts' | t }} <span class="mono">parts/</span></label>
-              <label><input type="checkbox" [checked]="pf.electronics"
-                            (change)="patchProject({ electronics: $any($event.target).checked })">
-                {{ 'Electronics' | t }} <span class="mono">electronics/</span></label>
+              <button type="button" [attr.aria-pressed]="pf.parts" [class.on]="pf.parts"
+                      (click)="patchProject({ parts: !pf.parts })">
+                <b>{{ '3D parts' | t }}</b><span class="mono">parts/</span></button>
+              <button type="button" [attr.aria-pressed]="pf.electronics" [class.on]="pf.electronics"
+                      (click)="patchProject({ electronics: !pf.electronics })">
+                <b>{{ 'Electronics' | t }}</b><span class="mono">electronics/</span></button>
             </div>
             @if (pf.error) { <p class="tcv-newproj-err">{{ pf.error }}</p> }
-            <div class="flex gap-1">
-              <button type="submit" class="tcv-btn tcv-btn-accent flex-1" [disabled]="pf.busy">
+            <div class="tcv-newproj-acts">
+              <button type="button" class="tcv-btn" (click)="projectForm.set(null)">{{ 'Cancel' | t }}</button>
+              <button type="submit" class="tcv-btn tcv-btn-accent" [disabled]="pf.busy">
                 {{ (pf.busy ? 'creating…' : 'Create') | t }}</button>
-              <button type="button" class="tcv-btn flex-1" (click)="projectForm.set(null)">{{ 'Cancel' | t }}</button>
             </div>
           </form>
         } @else {
@@ -321,7 +323,7 @@
        the room beside this one is a panel of its own, the same size in the
        same place. The viewer is not destroyed - its WebGL context and the
        geometry in it would go too - only hidden. -->
-  <div #stage class="tcv-stage relative min-w-0 flex-1 overflow-hidden rounded"
+  <div #stage class="tcv-stage relative min-w-0 flex-1 overflow-hidden rounded" [class.tcv-nomodel]="!activeModel()"
        [class.hidden]="picked.room() !== 'cad'"
        [attr.data-room]="picked.room()"
        style="border: 1px solid var(--line)">
@@ -493,7 +495,7 @@
          belong over the thing being drawn on, not in a panel across the
          screen from it. Always in the DOM, hidden when not frozen, so the
          docking survives. -->
-    <div #drawTools class="tcv-draw" [hidden]="!frozen()">
+    <div #drawTools class="tcv-draw tcv-dock-wait" [hidden]="!frozen()">
       @for (t of tools; track t.id) {
         <button (click)="tool.set(t.id)" [title]="t.label"
                 class="tcv-btn tcv-draw-btn"
@@ -527,7 +529,7 @@
 
     <!-- Insert a component: any .3d model or .pcb board, by its import
          line. Reuse is importing, never copying geometry or numbers. -->
-    <span #insertBtn class="tcv_tooltip" data-tooltip="Insert component - import a .3d model or a .pcb board">
+    <span #insertBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Insert component - import a .3d model or a .pcb board">
       <span class="tcv_button_frame" [class.tcv_btn_click2]="inserting()">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-insert" aria-label="Insert component"
                [disabled]="!activeModel() || frozen() || !auth.can('edit')" (click)="inserting.set(!inserting())">
@@ -549,13 +551,13 @@
 
     <!-- The project's releases, and this model's technical drawing: in the
          viewer's toolbar, before the code view's switch. -->
-    <span #releaseBtn class="tcv_tooltip" data-tooltip="Release - pack the project for manufacturing">
+    <span #releaseBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Release - pack the project for manufacturing">
       <span class="tcv_button_frame">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-release" aria-label="Release"
                [disabled]="!activeModel()" (click)="releasing.set(true)">
       </span>
     </span>
-    <span #drawingBtn class="tcv_tooltip" data-tooltip="Technical drawing - dimensioned views, as PDF">
+    <span #drawingBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Technical drawing - dimensioned views, as PDF">
       <span class="tcv_button_frame">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-drawing" aria-label="Technical drawing"
                [disabled]="!activeModel()" (click)="openDrawing()">
@@ -567,7 +569,7 @@
 
     <!-- The code view's switch: in the viewer's toolbar, just left of the
          pen (docked with it). The model's source, as an IDE shows it. -->
-    <span #ideBtn class="tcv_tooltip"
+    <span #ideBtn class="tcv_tooltip tcv-dock-wait"
           [attr.data-tooltip]="ide() ? 'Back to the view' : 'Code - the model source (build123d)'">
       <span class="tcv_button_frame" [class.tcv_btn_click2]="ide()">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-code" aria-label="Code"
@@ -579,7 +581,7 @@
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
          right-hand end. -->
-    <span #freezeBtn class="tcv_tooltip" [attr.data-on]="frozen() ? 1 : null">
+    <span #freezeBtn class="tcv_tooltip tcv-dock-wait" [attr.data-on]="frozen() ? 1 : null">
       <span class="tcv_button_frame">
         <button class="tcv_reset tcv_btn tcv-freeze"
                 [attr.data-on]="frozen() ? 1 : null"

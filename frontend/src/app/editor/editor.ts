@@ -336,6 +336,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.glError.set(String((e as Error)?.message ?? e));
       return;
     }
+    // Our buttons into the toolbar now, not on the first model: with none
+    // yet the bar is still drawn whole (faded, styles.css .tcv-nomodel).
+    this.dockFreezeButton();
     // The moment someone takes hold of the view, it is theirs: the
     // re-applies of a remembered or asked-for camera below stand down
     // instead of snapping it back under their hand.

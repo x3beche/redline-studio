@@ -5249,11 +5249,27 @@ html[data-shot] .tcv-log { display: none !important; }
 }
 
 /* ---- 3D room: a new project, and the first-run guide (editor.html) ---- */
-.tcv-newproj { display: flex; flex-direction: column; gap: 6px; }
-.tcv-newproj-kinds { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink); }
-.tcv-newproj-kinds label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
-.tcv-newproj-kinds input { accent-color: var(--accent); }
-.tcv-newproj-kinds .mono { color: var(--ink-dim); font-size: 11px; }
+.tcv-newproj { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 4px; }
+.tcv-newproj-head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.tcv-newproj .tcv-field { padding: 5px 8px; }
+.tcv-newproj-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tcv-newproj-kinds button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding: 6px 8px;
+  font: inherit; text-align: left; color: var(--ink-dim); background: var(--surface); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.tcv-newproj-kinds button:hover { border-color: var(--ink-dim); }
+.tcv-newproj-kinds button.on { color: var(--ink); border-color: var(--accent); background: var(--surface-2); }
+.tcv-newproj-kinds b { font-size: 12px; font-weight: 600; }
+.tcv-newproj-kinds .mono { font-size: 10.5px; color: var(--ink-dim); }
+.tcv-newproj-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+/* Controls of ours that live in the viewer's toolbar: out of sight until
+   they are docked there, so with no model open they don't float over the tree. */
+.tcv-dock-wait:not(.tcv_cad_toolbar > *) { display: none !important; }
+/* With no model open the viewer hides its buttons, leaving a row of empty
+   frames: show them, faded and out of reach, so the room keeps its shape. */
+.tcv-nomodel .tcv_cad_toolbar { opacity: .35; pointer-events: none; user-select: none; }
+.tcv-nomodel .tcv_cad_toolbar .tcv_btn { visibility: visible !important; }
 .tcv-newproj-err { margin: 0; font-size: 11px; color: var(--danger); }
 
 /* Across the whole view, one row of steps: read left to right, no cards

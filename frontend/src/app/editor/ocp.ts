@@ -106,6 +106,9 @@ export class OcpViewer {
       zebraTool: true, studioTool: true,
     };
     this.display = new Display(this.container, opts);
+    // The toolbar's icons hang off data-theme, which the viewer only sets on
+    // its first render: with no model yet the buttons were blank frames.
+    if (!this.container.hasAttribute('data-theme')) this.container.setAttribute('data-theme', opts.theme);
     // render() lives on Viewer, not Display; the docs' display.render is wrong.
     this.viewer = new Viewer(this.display, opts, null);
     // Handle for tooling: the headless render and UI tests drive clipping
