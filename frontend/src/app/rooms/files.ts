@@ -89,7 +89,8 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       }
     </ng-template>
 
-    <div class="tcv-notes-group">{{ 'Kind' | t }}</div>
+    <!-- Filters at the foot of the side panel, under the folders -->
+    <div class="tcv-notes-group tcv-fm-foot">{{ 'Kind' | t }}</div>
     <div class="tcv-notes-filters">
       @for (k of kinds(); track k.kind) {
         <button class="tcv-notes-chip" [attr.data-on]="kind() === k.kind ? 1 : null" [attr.aria-pressed]="kind() === k.kind"
