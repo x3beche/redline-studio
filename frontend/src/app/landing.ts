@@ -8,14 +8,14 @@ import { Auth, SignIn } from './auth';
  *  frame. `crop` is the part of the page shown, [x, y, w, h] in the page's
  *  pixels. Text never drops below `min` of its size in the app: a frame too
  *  narrow for the whole crop shows the part of it around `focus` instead.
- *  With `frame` (a width in the page's pixels) the crop is shown at the
- *  scale that fits that width, centred, dark on either side - so views in
+ *  With `frame` (a width, or [width, height], in the page's pixels) the crop
+ *  is shown at the scale that fits that width, centred, dark around it - so views in
  *  one row given one scale show their text at one size. */
 @Component({
   selector: 'app-snap',
   template: `<iframe [src]="url()" [width]="page()[0]" [height]="page()[1]" [title]="alt()" loading="lazy"
     sandbox="allow-same-origin" scrolling="no" tabindex="-1" aria-hidden="true" [style.transform]="tf()" [style.clip-path]="clip()"></iframe>`,
-  host: { role: 'img', '[attr.aria-label]': 'alt()', '[style.aspect-ratio]': '(frame() ?? box()[2]) + " / " + box()[3]' },
+  host: { role: 'img', '[attr.aria-label]': 'alt()', '[style.aspect-ratio]': '(fr() ?? box()).slice(-2).join(" / ")' },
   styles: `:host { display: block; position: relative; overflow: hidden; width: 100%; background: #09090b; }
     iframe { position: absolute; left: 0; top: 0; border: 0; display: block; transform-origin: 0 0; pointer-events: none; }`,
 })
@@ -28,7 +28,9 @@ export class Snap implements AfterViewInit, OnDestroy {
   crop = input<number[] | null>(null);
   focus = input<number[] | null>(null);
   min = input(0.85);
-  frame = input<number | null>(null);
+  frame = input<number | number[] | null>(null);
+  /** The frame as [width, height] in page pixels, from `frame`. */
+  protected fr = computed(() => { const f = this.frame(); return f == null ? null : typeof f === 'number' ? [f, this.box()[3]] : f; });
   alt = input('');
   private width = signal(0);
   box = computed(() => this.crop() ?? [0, 0, this.page()[0], this.page()[1]]);
@@ -36,8 +38,8 @@ export class Snap implements AfterViewInit, OnDestroy {
   tf = computed(() => {
     const [x, y, w, h] = this.box(), bw = this.width();
     if (!bw) return 'scale(0)';
-    const fw = this.frame();
-    if (fw) return `scale(${bw / fw}) translate(${(fw - w) / 2 - x}px, ${-y}px)`;
+    const f = this.fr();
+    if (f) return `scale(${bw / f[0]}) translate(${(f[0] - w) / 2 - x}px, ${(f[1] - h) / 2 - y}px)`;
     const k = Math.max(this.min(), bw / w), vw = bw / k, vh = vw * h / w;
     const [fx, fy] = this.focus() ?? [x, y];
     const x0 = Math.min(Math.max(fx - vw / 2, x), x + w - vw), y0 = Math.min(Math.max(fy - vh / 2, y), y + h - vh);
@@ -130,9 +132,9 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
     <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
   </div>
   <div class="pair fit rv">
-    <div [style.flex]="ar(treeCrop)"><div class="shot"><app-snap src="hero" [crop]="treeCrop" [min]="0" alt="The project tree" /></div><p class="lbl">3D Drawing · the project's folders</p></div>
-    <div [style.flex]="ar(workCrop)"><div class="shot"><app-snap src="hero" [crop]="workCrop" [min]="0" alt="Note d2d2ad's run" /></div><p class="lbl">Note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p></div>
-    <div [style.flex]="ar(modelCrop)"><div class="shot"><app-snap src="hero" [crop]="modelCrop" [min]="0" alt="The station the note is about" /></div><p class="lbl">The station, while the note runs</p></div>
+    <div [style.flex]="treeCrop[2]"><div class="shot"><app-snap src="hero" [crop]="treeCrop" [min]="0" alt="The project tree" /></div><p class="lbl">3D Drawing · the project's folders</p></div>
+    <div [style.flex]="workCrop[2]"><div class="shot"><app-snap src="hero" [crop]="workCrop" [min]="0" [frame]="[workCrop[2], treeCrop[3]]" alt="Note d2d2ad's run" /></div><p class="lbl">Note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p></div>
+    <div [style.flex]="treeCrop[3] * ar(modelCrop)"><div class="shot"><app-snap src="hero" [crop]="modelCrop" [min]="0" alt="The station the note is about" /></div><p class="lbl">The station, while the note runs</p></div>
   </div>
 </section>
 
@@ -347,6 +349,8 @@ export class Landing implements AfterViewInit, OnDestroy {
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [598, 52, 590, 720];
   revCrop = [960, 92, 640, 780];
+  /** The tree, the run and the model side by side: the two lists at one
+   *  scale (each column as wide as its crop), the model as tall as the tree. */
   treeCrop = [12, 95, 236, 566];
   workCrop = [272, 578, 292, 482];
   modelCrop = [740, 150, 700, 880];
