@@ -26,6 +26,7 @@ import { ModelPicker } from '../model-picker';
 import { DmApi, DmStore } from '../dm';
 import { Toast, ToastTone } from '../toast';
 import { DmPeople, DmView, dmWhen } from './dm-view';
+import { Skeleton } from '../skeleton';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -391,7 +392,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView, Skeleton],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -611,8 +612,11 @@ type Ask = { text: string; label: string; go: () => void };
           </div>
         }
       } @empty {
-        <p class="tcv-cc-listempty">{{ (trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
-                                        : 'No conversations yet - start one.') | t }}</p>
+        @if (!listed()) { <wb-skel kind="rows" [count]="6" [h]="46" /> }
+        @else {
+          <p class="tcv-cc-listempty">{{ (trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
+                                          : 'No conversations yet - start one.') | t }}</p>
+        }
       }
       }
     </div>
@@ -1484,12 +1488,15 @@ export class RoomCommandCode implements OnDestroy {
     if (this.modelPop()) this.modelPop.set(false);
   };
 
+  /** The list has come at least once for this tab: until then it is a skeleton, not "No conversations yet". */
+  listed = signal(false);
   refresh(openFirst = false) {
     const tab = this.tab();
     this.api.list('', tab).subscribe({
       next: rows => {
         if (this.tab() !== tab) return;                  // the tab changed meanwhile
         this.chats.set(rows);
+        this.listed.set(true);
         if (openFirst && !this.openId()) {
           const first = this.shownChats()[0];
           if (first) this.open(first.id);
@@ -1505,6 +1512,7 @@ export class RoomCommandCode implements OnDestroy {
     this.selected.set(new Set());
     this.ask.set(null);
     this.chats.set([]);
+    this.listed.set(false);
     this.refresh();
     if (this.q().trim()) this.runSearch();
   }
