@@ -16,7 +16,7 @@ import { CHART_BUSY } from '../chart-load';
  * ranked bars grow from the left. The CSS is in styles.css under "Charts:
  * loading and appearing". A chart drawn by hand can take the same look with
  * the classes .tcv-ch-busy (on its box) and .tcv-ch-rise (on each bar, with
- * --i its index). */
+ * --tcv-i its index). */
 /** A number that changes whenever `of` gives something new: a chart's marks
  *  are drawn inside `@for (g of [gen()]; track g)`, so new data draws them
  *  afresh and their entry animation plays again. */
@@ -83,7 +83,7 @@ export const fmt = {
       @for (g of [gen()]; track g) {
       @if (kind() === 'bar') {
         @for (b of bars(); track $index) {
-          <rect class="tcv-ch-rise" [style.--i]="b.i" [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.w" [attr.height]="b.h" [attr.fill]="b.c" rx="1" />
+          <rect class="tcv-ch-rise" [style.--tcv-i]="b.i" [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.w" [attr.height]="b.h" [attr.fill]="b.c" rx="1" />
         }
       } @else {
         <g class="tcv-ch-rise-all">
@@ -346,7 +346,7 @@ function nice(v: number): number {
 @for (r of rows(); track r.name; let i = $index) {
   <div class="tcv-bl-row" [title]="r.name + ': ' + f()(r.value) + (r.sub ? ' · ' + r.sub : '')">
     <span class="tcv-bl-name">{{ r.name }}</span>
-    <span class="tcv-bl-track"><span class="tcv-bl-bar tcv-ch-grow" [style.--i]="i" [style.width.%]="pct(r.value)"
+    <span class="tcv-bl-track"><span class="tcv-bl-bar tcv-ch-grow" [style.--tcv-i]="i" [style.width.%]="pct(r.value)"
           [style.background]="colorOf(i)"></span></span>
     <span class="tcv-bl-val mono">{{ f()(r.value) }}</span>
   </div>

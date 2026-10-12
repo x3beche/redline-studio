@@ -246,7 +246,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
             @if (usageLoading()) { <div class="ct-loader" role="status"><span class="ct-spin" aria-hidden="true"></span>{{ 'Loading…' | t }}</div> }
             <div class="ct-bars tall">
               @for (d of u.days; track d.day; let i = $index) {
-                <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)" [style.--i]="i">
+                <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)" [style.--tcv-i]="i">
                   <span class="ct-stack" [style.height.%]="dayTotal(d) ? 6 + 94 * dayTotal(d) / peak14(u) : 0">
                     @for (s of stack(u, d); track s.name) {
                       @if (s.n) { <i [style.flex-grow]="s.n" [style.background]="s.color"></i> }

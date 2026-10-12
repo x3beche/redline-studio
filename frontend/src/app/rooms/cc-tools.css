@@ -163,6 +163,6 @@
   animation: ct-spin .8s linear infinite; }
 @keyframes ct-spin { to { transform: rotate(360deg); } }
 .ct-uses .ct-stack { transform-origin: bottom; animation: ct-rise .55s cubic-bezier(.34, 1.56, .64, 1) both;
-  animation-delay: calc(var(--i, 0) * 18ms); }
+  animation-delay: calc(var(--tcv-i, 0) * 18ms); }
 @keyframes ct-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .ct-uses .ct-stack, .ct-spin { animation: none; } }
