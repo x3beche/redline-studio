@@ -589,16 +589,10 @@ type Ask = { text: string; label: string; go: () => void };
           <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-dm]="d.id"
                [attr.data-on]="d.id === dms.open() ? 1 : null" [attr.data-unread]="d.unread ? 1 : null"
                (click)="openDmHit(d.id)" (keydown.enter)="openDmHit(d.id)">
-            @if (d.direct && d.members[0]; as m) {
+            @if (d.members[0]; as m) {
               <span class="tcv-dm-face">
                 <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="26" />
                 @if (online().has(m.id)) { <span class="tcv-dm-dot" [title]="'online' | t"></span> }
-              </span>
-            } @else {
-              <span class="tcv-dm-face tcv-dm-stack">
-                @for (m of d.members.slice(0, 2); track m.id) {
-                  <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="20" />
-                }
               </span>
             }
             <div class="tcv-cc-itemtext">
@@ -608,7 +602,7 @@ type Ask = { text: string; label: string; go: () => void };
                 @else { <span class="tcv-cc-itemwhen">{{ dmWhen(d.last?.at || d.updated_at) }}</span> }
               </div>
               <div class="tcv-cc-itemsnip">
-                @if (d.last; as l) { {{ l.by_id === dms.state()?.me ? ('you' | t) + ': ' : d.direct ? '' : l.by + ': ' }}{{ snip(l.text) }} }
+                @if (d.last; as l) { {{ l.by_id === dms.state()?.me ? ('you' | t) + ': ' : '' }}{{ snip(l.text) }} }
                 @else { {{ 'Write a message' | t }} }
               </div>
             </div>
@@ -1402,12 +1396,11 @@ export class RoomCommandCode implements OnDestroy {
 
   /** The direct conversations with something in them (or open), among the
    *  others in the list; never archived or in the trash. While searching,
-   *  the people are found by name above (peopleHits), so only groups here. */
+   *  the people are found by name above (peopleHits) and these stay out. */
   shownDms = computed(() => {
-    if (this.tab() !== 'list' || !this.dms.enabled()) return [];
-    const q = this.q().trim().toLocaleLowerCase(), open = this.dms.open();
-    return (this.dms.state()?.chats ?? []).filter(d => (d.last || d.id === open)
-      && (!q || !d.direct && this.dmName(d).toLocaleLowerCase().includes(q)));
+    if (this.tab() !== 'list' || !this.dms.enabled() || this.q().trim()) return [];
+    const open = this.dms.open();
+    return (this.dms.state()?.chats ?? []).filter(d => d.last || d.id === open);
   });
   /** People by name, while searching: the way to a new direct conversation. */
   peopleHits = computed(() => {
@@ -1416,7 +1409,7 @@ export class RoomCommandCode implements OnDestroy {
     return this.dms.people().filter(p => p.name.toLocaleLowerCase().includes(q));
   });
   online = computed(() => new Set(this.dms.people().filter(p => p.online).map(p => p.id)));
-  dmName(d: DmChat) { return d.title || d.members.map(m => m.name).join(', '); }
+  dmName(d: DmChat) { return d.members[0]?.name ?? ''; }
   async openPerson(p: DmPerson) {
     try {
       await this.dms.withPerson(p.id);

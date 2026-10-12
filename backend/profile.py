@@ -315,8 +315,8 @@ async def avatar(user_id: str, v: str | None = None):
     u = await db[auth.USERS].find_one({"_id": user_id}, {"avatar": 1, "avatar_v": 1, "role": 1, "space": 1})
     admin = who.get("type") == "user" and not who.get("page") and access.current() in ("owner", "admin")
     if u and not (mine or admin or auth.space_of(u) == scope.current()):
-        # Someone one writes to (backend/dm.py): a direct or group
-        # conversation with them both in it.
+        # Someone one writes to (backend/dm.py): a direct conversation
+        # with them both in it.
         from . import dm
         if not await dm.together(who, user_id):
             u = None

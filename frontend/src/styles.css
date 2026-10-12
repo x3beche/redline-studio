@@ -5766,19 +5766,12 @@ html[data-shot] .tcv-log { display: none !important; }
    conversation between people, the cards of things sent in it, "Send to..."
    and the Chat tab's badge with the senders' faces. The Chat's own rows,
    bubbles and composer, with a few marks of their own. */
-.tcv-dm-grouphead { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-right: 8px; }
-.tcv-dm-grouphead .tcv-cc-textbtn { padding: 1px 6px; font-size: 10.5px; letter-spacing: 0; text-transform: none; }
-.tcv-dm-grouphead .tcv-cc-textbtn.on { color: var(--accent); }
-.tcv-dm-groupbar { display: flex; gap: 6px; padding: 4px 10px 6px; }
-.tcv-dm-groupbar .tcv-field { flex: 1; min-width: 0; height: 28px; font-size: 12px; }
-.tcv-dm-groupbar .tcv-btn { height: 28px; padding: 0 10px; font-size: 12px; }
 .tcv-dm-person[data-unread] .tcv-cc-itemtitle { font-weight: 650; color: var(--ink-bright); }
 .tcv-dm-person[data-unread] .tcv-cc-itemsnip { color: var(--ink); }
 .tcv-dm-face { position: relative; flex: none; display: inline-flex; align-items: center; }
 .tcv-dm-dot { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%;
   background: var(--ok); border: 2px solid var(--surface); box-sizing: border-box; }
 .tcv-dm-sendrow .tcv-dm-dot { position: static; border: 0; width: 7px; height: 7px; }
-.tcv-dm-stack app-avatar + app-avatar { margin-left: -8px; box-shadow: 0 0 0 2px var(--surface); }
 .tcv-dm-bar .tcv-dm-face { margin-left: 2px; }
 .tcv-dm-row[data-role="other"] .tcv-cc-bubble { border-radius: 4px 14px 14px 14px; background: var(--surface); }
 .tcv-dm-row[data-role="other"] .tcv-cc-rowmain { align-items: flex-start; }

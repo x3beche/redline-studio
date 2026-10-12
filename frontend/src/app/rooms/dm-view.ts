@@ -43,12 +43,12 @@ export function dmWhen(iso: string | null | undefined) {
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
     <ng-container *ngTemplateOutlet="ico(); context: { $implicit: MENU }" /></button>
   @if (chat(); as c) {
-    <span class="tcv-dm-face tcv-dm-stack">
-      @for (m of c.members.slice(0, 3); track m.id) {
+    @if (c.members[0]; as m) {
+      <span class="tcv-dm-face">
         <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="28" />
-      }
-      @if (c.direct && c.members[0]?.online) { <span class="tcv-dm-dot"></span> }
-    </span>
+        @if (m.online) { <span class="tcv-dm-dot"></span> }
+      </span>
+    }
     <div class="tcv-th-title">
       <b>{{ name() }}</b>
       <span class="tcv-cc-dim">{{ sub() }}</span>
@@ -224,13 +224,12 @@ export class DmView {
   name = computed(() => {
     const c = this.chat();
     if (!c) return '';
-    return c.title || c.members.map(m => m.name).join(', ');
+    return c.members[0]?.name ?? '';
   });
   sub = computed(() => {
     const c = this.chat();
     if (!c) return '';
-    if (c.direct) return c.members[0]?.online ? t('online') : t('direct message');
-    return `${c.members.length + 1} ${t('people')}`;
+    return c.members[0]?.online ? t('online') : t('direct message');
   });
   /** My last line that everyone else has read since. */
   seenId = computed(() => {

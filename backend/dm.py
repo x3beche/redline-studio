@@ -4,6 +4,10 @@ Each account works in a private space of its own (backend/scope.py), so a
 conversation between two people belongs to neither space: it lives in
 collections of the server's (`dm_chats`, `dm_messages`, not in
 scope.SCOPED), and who may read it is its `members` list - nothing else.
+A conversation is between two people, one per pair. Group conversations
+were made here once and are gone from the app: their documents stay in
+the database untouched, but no route lists, reads or writes them (`_mine`
+asks for `direct` ones only).
 Every route below finds a conversation by its id *and* the asker among its
 members; anyone else gets the same 404 as for an id that never existed.
 The AI conversations (backend/cc_chat.py), their search and the Chat tools
@@ -54,7 +58,6 @@ CHATS = "dm_chats"
 MSGS = "dm_messages"
 MAX_TEXT = 20_000          # characters of one line
 MAX_ITEMS = 8              # things sent with one line
-MAX_MEMBERS = 12           # people in one group conversation, the sender with them
 PAGE = 200                 # lines read at once
 KINDS = ("model", "board", "project", "taste", "product", "inventory", "note", "file", "firmware")
 # What a reader can add to their own space from what was sent.
@@ -143,8 +146,13 @@ async def together(who: dict, uid: str) -> bool:
     """Whether the person asking shares a conversation with `uid`."""
     if not auth.enabled() or who.get("type") != "user" or who.get("id") in (None, "local"):
         return False
-    doc = await _raw()[CHATS].find_one({"$and": [{"members": who["id"]}, {"members": uid}]}, {"_id": 1})
+    doc = await _raw()[CHATS].find_one({"pair": _pair(who["id"], uid), "direct": True}, {"_id": 1})
     return bool(doc)
+
+
+def _mine(uid: str) -> dict:
+    """The asker's conversations: the direct ones with them in it (old group ones stay hidden)."""
+    return {"members": uid, "direct": True}
 
 
 def _by(who: dict) -> dict:
@@ -155,7 +163,7 @@ def _by(who: dict) -> dict:
 
 async def _chat(cid: str, uid: str) -> dict:
     """The conversation, if the asker is in it; the same 404 otherwise."""
-    doc = await _raw()[CHATS].find_one({"_id": str(cid), "members": uid})
+    doc = await _raw()[CHATS].find_one({"_id": str(cid), **_mine(uid)})
     if not doc or uid not in (doc.get("members") or []):
         raise HTTPException(404, "no such conversation")
     return doc
@@ -173,8 +181,7 @@ async def summary(doc: dict, uid: str, folks: dict[str, dict] | None = None) -> 
     folks = folks if folks is not None else await _people(doc.get("members") or [])
     others = [person(folks[m]) for m in doc.get("members") or [] if m != uid and m in folks]
     unread = await _unread(doc, uid)
-    return {"id": doc["_id"], "direct": bool(doc.get("direct")), "title": doc.get("title") or "",
-            "members": others, "created_at": doc.get("created_at"), "updated_at": doc.get("updated_at"),
+    return {"id": doc["_id"], "members": others, "created_at": doc.get("created_at"), "updated_at": doc.get("updated_at"),
             "last": doc.get("last"), "unread": len(unread),
             # When each of the others last read it: "seen" under one's own last line.
             "read": {m: at for m, at in (doc.get("read") or {}).items() if m != uid}}
@@ -193,10 +200,10 @@ async def state() -> dict:
     uid = who["id"]
     users = [u async for u in _raw()[auth.USERS].find({}, {"pw": 0, "avatar": 0})]
     folks = {u["_id"]: u for u in users}
-    chats = [d async for d in _raw()[CHATS].find({"members": uid}).sort("updated_at", -1).limit(300)
+    chats = [d async for d in _raw()[CHATS].find(_mine(uid)).sort("updated_at", -1).limit(300)
              if uid in (d.get("members") or [])]
     rows = [await summary(d, uid, folks) for d in chats]
-    direct = {next((m for m in d.get("members") or [] if m != uid), None): d["_id"] for d in chats if d.get("direct")}
+    direct = {next((m for m in d.get("members") or [] if m != uid), None): d["_id"] for d in chats}
     known = {m for d in chats for m in d.get("members") or []}
     unread_by: dict[str, int] = {}
     last_at: dict[str, str] = {}
@@ -220,41 +227,32 @@ async def state() -> dict:
 
 
 class ChatIn(BaseModel):
-    people: list[str] = Field(min_length=1, max_length=MAX_MEMBERS)
-    title: str = Field(default="", max_length=120)
+    people: list[str] = Field(min_length=1, max_length=1)     # the one person to write to
 
 
 @router.post("/chats")
 async def open_chat(body: ChatIn) -> dict:
-    """A conversation with these people: the one there is with one person
-    (a direct conversation is one per pair), or a new group."""
+    """The conversation with this person: one per pair, made the first time."""
     who = me(write=True)
     uid = who["id"]
-    want = [p for p in dict.fromkeys(str(x) for x in body.people) if p and p != uid]
-    if not want:
+    other = str(body.people[0] or "")
+    if not other or other == uid:
         raise HTTPException(400, "say who to write to")
-    if len(want) + 1 > MAX_MEMBERS:
-        raise HTTPException(400, f"a conversation holds {MAX_MEMBERS} people at most")
-    folks = await _people(want + [uid])
-    gone = [p for p in want if p not in folks or folks[p].get("disabled")]
-    if gone:
+    folks = await _people([other, uid])
+    if other not in folks or folks[other].get("disabled"):
         raise HTTPException(404, "no such person")
     raw = _raw()
-    if len(want) == 1:
-        pair = _pair(uid, want[0])
-        doc = await raw[CHATS].find_one({"pair": pair})
-        if doc:
-            return await summary(doc, uid, folks)
+    pair = _pair(uid, other)
+    doc = await raw[CHATS].find_one({"pair": pair})
+    if doc:
+        return await summary(doc, uid, folks)
     now = _now()
-    doc = {"_id": "dm-" + secrets.token_hex(6), "members": sorted([uid, *want]), "direct": len(want) == 1,
-           "title": _clip(body.title, 120) if len(want) > 1 else "", "created_by": _by(who),
-           "created_at": now, "updated_at": now, "last": None, "read": {uid: now}}
-    if doc["direct"]:
-        doc["pair"] = _pair(uid, want[0])
+    doc = {"_id": "dm-" + secrets.token_hex(6), "members": sorted([uid, other]), "direct": True, "pair": pair,
+           "created_by": _by(who), "created_at": now, "updated_at": now, "last": None, "read": {uid: now}}
     try:
         await raw[CHATS].insert_one(doc)
     except Exception:                                  # noqa: BLE001 - the other one opened it at the same moment
-        got = await raw[CHATS].find_one({"pair": doc.get("pair")}) if doc.get("pair") else None
+        got = await raw[CHATS].find_one({"pair": pair})
         if not got:
             raise
         doc = got
@@ -468,7 +466,7 @@ async def search(q: str = "", limit: int = 30) -> dict:
     if not words:
         return {"q": q, "results": []}
     raw = _raw()
-    chats = {d["_id"]: d async for d in raw[CHATS].find({"members": who["id"]})
+    chats = {d["_id"]: d async for d in raw[CHATS].find(_mine(who["id"]))
              if who["id"] in (d.get("members") or [])}
     if not chats:
         return {"q": q, "results": []}
@@ -485,7 +483,7 @@ async def search(q: str = "", limit: int = 30) -> dict:
         names = [folks[x].get("name") for x in d.get("members") or [] if x != who["id"] and x in folks]
         i = low.find(words[0])
         snip = _clip((m.get("text") or "")[max(0, i - 60): i + 140], 200)
-        out.append({"chat_id": d["_id"], "title": d.get("title") or ", ".join(n or "?" for n in names),
+        out.append({"chat_id": d["_id"], "title": ", ".join(n or "?" for n in names),
                     "message_id": m["_id"], "at": m.get("at"), "by": (m.get("by") or {}).get("name"), "snippet": snip})
         if len(out) >= max(1, min(limit, 100)):
             break

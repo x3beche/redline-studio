@@ -112,12 +112,28 @@ def test_a_direct_conversation_is_one_per_pair(db):
     a, b = client(db, "u-ayse"), client(db, "u-bora")
     one = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()
     two = b.post("/api/dm/chats", json={"people": ["u-ayse"]}).json()
-    assert one["id"] == two["id"] and one["direct"]
+    assert one["id"] == two["id"] and "title" not in one
     assert [m["id"] for m in one["members"]] == ["u-bora"]
     assert a.post("/api/dm/chats", json={"people": ["u-gone"]}).status_code == 404
     assert a.post("/api/dm/chats", json={"people": ["u-ayse"]}).status_code == 400
-    group = a.post("/api/dm/chats", json={"people": ["u-bora", "u-cem"], "title": "Bench"}).json()
-    assert not group["direct"] and group["id"] != one["id"] and group["title"] == "Bench"
+    # Person to person only: no conversation of three.
+    assert a.post("/api/dm/chats", json={"people": ["u-bora", "u-cem"], "title": "Bench"}).status_code == 422
+
+
+def test_an_old_group_conversation_stays_but_is_hidden(db):
+    # Made before groups went: its documents are kept, no route shows or takes it.
+    run(db["dm_chats"].insert_one({"_id": "dm-group1", "members": ["u-ayse", "u-bora", "u-cem"], "direct": False,
+                                   "title": "Bench", "created_at": "2026-01-01T00:00:00Z",
+                                   "updated_at": "2026-01-01T00:00:00Z", "last": None, "read": {}}))
+    run(db["dm_messages"].insert_one({"_id": "m-g1", "chat": "dm-group1", "by": {"id": "u-bora", "name": "Bora"},
+                                      "at": "2026-01-01T00:00:01Z", "text": "the group hinge"}))
+    a = client(db, "u-ayse")
+    st = a.get("/api/dm/state").json()
+    assert st["chats"] == [] and st["unread"]["total"] == 0
+    assert a.get("/api/dm/chats/dm-group1").status_code == 404
+    assert a.post("/api/dm/chats/dm-group1/messages", json={"text": "hi"}).status_code == 404
+    assert a.get("/api/dm/search", params={"q": "group hinge"}).json()["results"] == []
+    assert run(db["dm_chats"].count_documents({})) == 1 and run(db["dm_messages"].count_documents({})) == 1
 
 
 def test_nobody_else_reads_a_conversation(db):

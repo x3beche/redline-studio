@@ -51,7 +51,8 @@ export interface DmSnapshot {
 }
 export interface DmLine { id: string; by: { id: string; name: string }; at: string; text: string; edited_at?: string; items?: DmItem[] }
 export interface DmChat {
-  id: string; direct: boolean; title: string; members: DmPerson[]; created_at: string; updated_at: string;
+  /** `members`: the other person (a conversation is between two). */
+  id: string; members: DmPerson[]; created_at: string; updated_at: string;
   last: { by: string; by_id: string; text: string; at: string; items?: number } | null;
   unread: number; read: Record<string, string>;
   messages?: DmLine[]; more?: boolean;
@@ -99,7 +100,7 @@ export const SHARE_ICON = 'M15 5l4 4-4 4 M19 9H10a5 5 0 0 0-5 5v5';
 export class DmApi {
   private http = inject(HttpClient);
   state() { return this.http.get<DmState>('/api/dm/state'); }
-  open(people: string[], title = '') { return this.http.post<DmChat>('/api/dm/chats', { people, title }); }
+  open(person: string) { return this.http.post<DmChat>('/api/dm/chats', { people: [person] }); }
   get(id: string, before = '') { return this.http.get<DmChat>(`/api/dm/chats/${id}` + (before ? `?before=${encodeURIComponent(before)}` : '')); }
   say(id: string, text: string, items: { kind: DmKind; id: string }[]) {
     return this.http.post<DmLine>(`/api/dm/chats/${id}/messages`, { text, items });
@@ -166,7 +167,6 @@ export class DmStore {
 
   enabled = computed(() => !!this.state()?.enabled);
   people = computed(() => this.state()?.people ?? []);
-  groups = computed(() => (this.state()?.chats ?? []).filter(c => !c.direct));
   total = computed(() => this.state()?.unread.total ?? 0);
   /** The badge's faces: the latest senders first, three at most. */
   senders = computed(() => (this.state()?.unread.senders ?? []).slice(0, 3));
@@ -277,12 +277,7 @@ export class DmStore {
   async withPerson(id: string) {
     const p = this.people().find(x => x.id === id);
     if (p?.chat) { this.show(p.chat); return; }
-    const c = await firstValueFrom(this.api.open([id]));
-    this.show(c.id);
-    this.refresh();
-  }
-  async group(people: string[], title: string) {
-    const c = await firstValueFrom(this.api.open(people, title));
+    const c = await firstValueFrom(this.api.open(id));
     this.show(c.id);
     this.refresh();
   }
@@ -462,7 +457,7 @@ export class DmSend {
     try {
       for (const pid of this.picked()) {
         const p = this.store.people().find(x => x.id === pid);
-        const cid = p?.chat ?? (await firstValueFrom(this.api.open([pid]))).id;
+        const cid = p?.chat ?? (await firstValueFrom(this.api.open(pid))).id;
         await firstValueFrom(this.api.say(cid, this.text().trim(), [{ kind: w.kind, id: w.id }]));
         names.push(p?.name ?? pid);
       }
