@@ -11,6 +11,7 @@ import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
+import { DASH_EVERYS, DASH_RANGES, csvText, saveFile, seriesRows, stepLabel, stepWord } from './dash';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
 
@@ -785,13 +786,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
 export class RoomAnalyze implements OnDestroy {
   private api = inject(InsightsApi);
   readonly f = fmt;
-  readonly ranges = [
-    { id: '1h', label: '1h' }, { id: '6h', label: '6h' }, { id: '24h', label: '24h' },
-    { id: '7d', label: '7d' }, { id: '30d', label: '30d' }, { id: '90d', label: '90d' },
-    { id: 'all', label: 'All' },
-  ];
-  readonly everys = [{ s: 0, label: 'no refresh' }, { s: 30, label: 'every 30 s' },
-                     { s: 60, label: 'every 1 min' }, { s: 300, label: 'every 5 min' }];
+  readonly ranges = DASH_RANGES;
+  readonly everys = DASH_EVERYS;
   readonly everyOpts: SelectOption[] = this.everys.map(e => ({ value: '' + e.s, label: e.label }));
 
   range = signal(recall('range', '7d'));
@@ -981,37 +977,17 @@ export class RoomAnalyze implements OnDestroy {
   // ---- export ----
 
   /** A time series as rows: one per bucket, a column per series. */
-  seriesRows(d: InsightSeries): Record<string, unknown>[] {
-    return Array.from({ length: d.n }, (_, i) => ({
-      time: new Date((d.t0 + i * d.step) * 1000).toISOString(),
-      ...Object.fromEntries(d.series.map(s => [s.name, s.values[i]])),
-    }));
-  }
+  seriesRows(d: InsightSeries): Record<string, unknown>[] { return seriesRows(d); }
 
   /** Any panel's rows, downloaded as CSV. */
   dl(name: string, rows: object[]) {
-    const flat = rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) =>
-      [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : v])));
-    const cols = [...new Set(flat.flatMap(r => Object.keys(r)))];
-    const cell = (v: unknown) => {
-      const t = v == null ? '' : String(v);
-      return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
-    };
-    const text = [cols.join(','), ...flat.map(r => cols.map(c => cell((r as Record<string, unknown>)[c])).join(','))].join('\n');
-    this.save_(`redline-${name}-${this.range()}.csv`, text, 'text/csv');
+    saveFile(`redline-${name}-${this.range()}.csv`, csvText(rows), 'text/csv');
   }
 
   /** The whole answer for the range, as JSON. */
   exportAll() {
     const d = this.data();
-    if (d) this.save_(`redline-analytics-${this.range()}.json`, JSON.stringify(d, null, 1), 'application/json');
-  }
-
-  private save_(file: string, text: string, type: string) {
-    const url = URL.createObjectURL(new Blob([text], { type }));
-    const a = document.createElement('a');
-    a.href = url; a.download = file; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (d) saveFile(`redline-analytics-${this.range()}.json`, JSON.stringify(d, null, 1), 'application/json');
   }
 
   updated = computed(() => this.at()?.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '');
@@ -1070,8 +1046,8 @@ export class RoomAnalyze implements OnDestroy {
   }
   readonly roomName = (n: string) => ({ cad: '3D Drawing', pcb: 'PCB Design',
     '(no run)': 'outside any note', '(no note)': 'outside any note' } as Record<string, string>)[n] ?? n;
-  stepLabel(s: number) { return s < 3600 ? `${s / 60}-minute buckets` : s < 86400 ? 'hourly' : s < 604800 ? 'daily' : 'weekly'; }
-  stepWord(s: number) { return s < 3600 ? `${s / 60} min` : s < 86400 ? 'hour' : s < 604800 ? 'day' : 'week'; }
+  readonly stepLabel = stepLabel;
+  readonly stepWord = stepWord;
   readonly money: Fmt = fmt.money;
 }
 

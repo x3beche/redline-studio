@@ -361,22 +361,42 @@ def test_the_overview_is_the_admins_and_counts_every_space(db):
     assert agent(tok).get("/api/admin/overview").status_code == 403
 
     ad = person(db, "ad")
-    assert ad.get("/api/admin/overview?span=decade").status_code == 400
-    r = ad.get("/api/admin/overview?span=week")
+    assert ad.get("/api/admin/overview?range=decade").status_code == 400
+    r = ad.get("/api/admin/overview?range=7d")
     assert r.status_code == 200, r.text
     body = r.json()
+    # The old periods' names still answer, as the ranges they mean.
+    assert ad.get("/api/admin/overview?span=week").json()["range"]["id"] == "7d"
     # The parts library is no project; a deleted chat is not counted.
     assert {k: body["totals"][k] for k in ("users", "projects", "models", "files", "chats", "messages")} == \
         {"users": 5, "projects": 2, "models": 3, "files": 1, "chats": 1, "messages": 2}
     act = body["activity"]
-    assert act["n"] == 7 and act["step"] == 86400
+    # Bucketed as Analytics buckets a week: by day, from a week ago to now.
+    assert act["n"] == 8 and act["step"] == 86400 and body["range"]["step"] == 86400
     sums = {s["name"]: sum(s["values"]) for s in act["series"]}
     # a's two changes and the owner's agent token above; the page session is nobody's doing
     assert sums == {"Sign-ins": 1, "Changes": 3, "Messages": 1, "Tool uses": 0, "Agents": 1}
+    assert {k: body["sums"][k] for k in ("sign_ins", "changes", "messages", "agents", "active", "llm_calls")} == \
+        {"sign_ins": 1, "changes": 3, "messages": 1, "agents": 1, "active": 2, "llm_calls": 1}
     people = {p["id"]: p for p in body["people"]}
     assert (people["a"]["sign_ins"], people["a"]["changes"], people["a"]["projects"], people["a"]["models"]) == (1, 2, 1, 2)
     assert people["o"]["messages"] == 1 and people["b"]["changes"] == 0      # forty days ago is not this week
-    assert body["projects"][0] == {"name": "rig", "user": "a", "models": 2, "boards": 0, "moves": 1}
-    assert body["llm"]["calls"] == 1 and body["llm"]["tokens"] == 120 and body["llm"]["by_model"][0]["name"] == "some-model"
+    # ...but that is when b was last seen.
+    assert people["b"]["last"].startswith((now - timedelta(days=40)).date().isoformat())
+    p0 = body["projects"][0]
+    assert {k: p0[k] for k in ("name", "user", "models", "boards", "moves", "versions", "edits")} == \
+        {"name": "rig", "user": "a", "models": 2, "boards": 0, "moves": 1, "versions": 1, "edits": 0}
+    llm = body["llm"]
+    assert llm["calls"] == 1 and llm["tokens"] == 120 and llm["by_model"][0]["name"] == "some-model"
+    assert llm["by_provider"][0]["calls"] == 1
+    assert {s["name"] for s in llm["tokens_by_type"]["series"]} == {"input", "output"}
     assert {f["action"] for f in body["feed"]} == {"sign-in", "change", "delete", "token"}
+    # The period before: b's change of forty days ago is in the thirty days
+    # before these thirty; 'all' has no period before.
+    month = ad.get("/api/admin/overview?range=30d").json()
+    assert month["previous"]["changes"] == 1 and month["previous"]["active"] == 1 and month["change"]["changes"] == 200.0
+    assert month["change"]["llm_calls"] is None                             # nothing then: no change to give
+    every = ad.get("/api/admin/overview?range=all").json()
+    assert every["previous"] is None and every["sums"]["changes"] == 4
+    assert ad.get("/api/admin/overview?range=1h").json()["range"]["step"] == 300
     assert '"pw"' not in r.text and "scrypt" not in r.text
