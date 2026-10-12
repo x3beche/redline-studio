@@ -7,12 +7,15 @@ import { Auth, SignIn } from './auth';
  *  pictures, no scripts) rendered at the app's own size and scaled to the
  *  frame. `crop` is the part of the page shown, [x, y, w, h] in the page's
  *  pixels. Text never drops below `min` of its size in the app: a frame too
- *  narrow for the whole crop shows the part of it around `focus` instead. */
+ *  narrow for the whole crop shows the part of it around `focus` instead.
+ *  With `frame` (a width in the page's pixels) the crop is shown at the
+ *  scale that fits that width, centred, dark on either side - so views in
+ *  one row given one scale show their text at one size. */
 @Component({
   selector: 'app-snap',
   template: `<iframe [src]="url()" [width]="page()[0]" [height]="page()[1]" [title]="alt()" loading="lazy"
-    sandbox="allow-same-origin" scrolling="no" tabindex="-1" aria-hidden="true" [style.transform]="tf()"></iframe>`,
-  host: { role: 'img', '[attr.aria-label]': 'alt()', '[style.aspect-ratio]': 'box()[2] + " / " + box()[3]' },
+    sandbox="allow-same-origin" scrolling="no" tabindex="-1" aria-hidden="true" [style.transform]="tf()" [style.clip-path]="clip()"></iframe>`,
+  host: { role: 'img', '[attr.aria-label]': 'alt()', '[style.aspect-ratio]': '(frame() ?? box()[2]) + " / " + box()[3]' },
   styles: `:host { display: block; position: relative; overflow: hidden; width: 100%; background: #09090b; }
     iframe { position: absolute; left: 0; top: 0; border: 0; display: block; transform-origin: 0 0; pointer-events: none; }`,
 })
@@ -25,6 +28,7 @@ export class Snap implements AfterViewInit, OnDestroy {
   crop = input<number[] | null>(null);
   focus = input<number[] | null>(null);
   min = input(0.85);
+  frame = input<number | null>(null);
   alt = input('');
   private width = signal(0);
   box = computed(() => this.crop() ?? [0, 0, this.page()[0], this.page()[1]]);
@@ -32,10 +36,17 @@ export class Snap implements AfterViewInit, OnDestroy {
   tf = computed(() => {
     const [x, y, w, h] = this.box(), bw = this.width();
     if (!bw) return 'scale(0)';
+    const fw = this.frame();
+    if (fw) return `scale(${bw / fw}) translate(${(fw - w) / 2 - x}px, ${-y}px)`;
     const k = Math.max(this.min(), bw / w), vw = bw / k, vh = vw * h / w;
     const [fx, fy] = this.focus() ?? [x, y];
     const x0 = Math.min(Math.max(fx - vw / 2, x), x + w - vw), y0 = Math.min(Math.max(fy - vh / 2, y), y + h - vh);
     return `scale(${k}) translate(${-x0}px, ${-y0}px)`;
+  });
+  clip = computed(() => {
+    if (!this.frame()) return null;
+    const [x, y, w, h] = this.box(), [pw, ph] = this.page();
+    return `inset(${y}px ${pw - x - w}px ${ph - y - h}px ${x}px)`;
   });
   ngAfterViewInit() {
     const fit = () => this.width.set(this.el.nativeElement.clientWidth);
@@ -44,6 +55,9 @@ export class Snap implements AfterViewInit, OnDestroy {
   }
   ngOnDestroy() { this.ro?.disconnect(); }
 }
+
+type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean;
+              crops: { src: string; crop: number[]; page?: number[]; fit?: boolean }[] };
 
 @Component({
   selector: 'app-landing',
@@ -95,12 +109,12 @@ export class Snap implements AfterViewInit, OnDestroy {
   </div>
 </section>
 
-<section class="wrap" id="features">
-  <div class="grid sh rv"><h2>Draw it, or write it</h2><p>Mark the model or the board and say what you want; the note is queued for that room's agent. Around it: themes, a proxy for part lookups, and Telegram.</p><span class="n">02</span></div>
+<section class="wrap" id="draw">
+  <div class="grid sh rv"><h2>Draw it, or write it</h2><p>Mark the model or the board and say what you want. The note keeps the drawing and goes to that room's agent.</p><span class="n">02</span></div>
   <div class="feats rv">
-    @for (f of feats; track f.name) {
+    @for (f of draws; track f.name) {
       <article class="feat" [class.wide]="f.wide">
-        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="c.min ?? 0.85" [alt]="f.name" /> }</div>
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
         <h3>{{ f.name }}</h3>
         <p class="lead">{{ f.lead }}</p>
         <p class="lbl">{{ f.lbl }}</p>
@@ -127,6 +141,8 @@ export class Snap implements AfterViewInit, OnDestroy {
   <div class="qa rv">
     <div><span>The 3D room's agent, on iot-fan</span><p>The fan's own plug does not fit the board's fan socket (CN1).</p></div>
     <div><span>The answer</span><p class="ans"><i></i>Re-terminate the fan cable with a 2-pin XH plug.</p></div>
+    <div class="tg"><app-snap src="tg" [crop]="tgCrop" [min]="0" [frame]="506" alt="Telegram: what the bot understands" />
+      <p><b>On your phone too.</b> The agents' questions reach Telegram; answer with a button, or send a note with a photo.</p></div>
   </div>
 </div>
 
@@ -168,8 +184,22 @@ export class Snap implements AfterViewInit, OnDestroy {
   <p class="lbl">Taste of iot-fan, as extracted. Every rule was reviewed before it was kept; attach the palette to a project and its agents follow it.</p>
 </section>
 
+<section class="wrap" id="themes">
+  <div class="grid sh rv"><h2>Themes</h2><p>28 themes, 22 dark and 6 light, chosen per browser. The 3D backdrop and the code editor follow.</p><span class="n">06</span></div>
+  <div class="feats rv">
+    @for (f of themes; track f.name) {
+      <article class="feat" [class.wide]="f.wide">
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
+        <h3>{{ f.name }}</h3>
+        <p class="lead">{{ f.lead }}</p>
+        <p class="lbl">{{ f.lbl }}</p>
+      </article>
+    }
+  </div>
+</section>
+
 <section class="wrap" id="cost">
-  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">06</span></div>
+  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">07</span></div>
   <div class="save rv">
     <div class="save-x">
       <span>The plans against API prices</span>
@@ -191,8 +221,22 @@ export class Snap implements AfterViewInit, OnDestroy {
   <p class="lbl">Settings · LLM settings: four providers, nine jobs, the Command Code plan with its windows and spend per day. Keys show as dots.</p>
 </section>
 
+<section class="wrap" id="proxy">
+  <div class="grid sh rv"><h2>A proxy for part lookups</h2><p>EasyEDA turns bursts of lookups away. A rotating proxy gives them another way out, with its traffic and cost measured.</p><span class="n">08</span></div>
+  <div class="feats rv">
+    @for (f of proxy; track f.name) {
+      <article class="feat" [class.wide]="f.wide">
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
+        <h3>{{ f.name }}</h3>
+        <p class="lead">{{ f.lead }}</p>
+        <p class="lbl">{{ f.lbl }}</p>
+      </article>
+    }
+  </div>
+</section>
+
 <section class="wrap" id="platform">
-  <div class="grid sh rv"><h2>Why not build it yourself</h2><p>An agent can write a part. What it needs around it to do a whole product is the rest of this.</p><span class="n">07</span></div>
+  <div class="grid sh rv"><h2>Why not build it yourself</h2><p>An agent can write a part. What it needs around it to do a whole product is the rest of this.</p><span class="n">09</span></div>
   <div class="infra rv">
     @for (c of infra; track c.name) {
       <div class="inf">
@@ -241,8 +285,9 @@ export class Landing implements AfterViewInit, OnDestroy {
   open = signal(new URLSearchParams(location.search).has('signin'));
   ask = 'mailto:info@medipol.dev?subject=Redline%20access';
   links = [
-    { id: 'rooms', name: 'Rooms' }, { id: 'features', name: 'Features' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
-    { id: 'taste', name: 'Taste' }, { id: 'cost', name: 'Cost' }, { id: 'platform', name: 'Platform' },
+    { id: 'rooms', name: 'Rooms' }, { id: 'draw', name: 'Draw' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
+    { id: 'taste', name: 'Taste' }, { id: 'themes', name: 'Themes' }, { id: 'cost', name: 'Cost' }, { id: 'proxy', name: 'Proxy' },
+    { id: 'platform', name: 'Platform' },
   ];
   /** The three rooms, each a live view and iot-fan's figures for it. */
   rooms = [
@@ -256,34 +301,43 @@ export class Landing implements AfterViewInit, OnDestroy {
       lead: 'Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.',
       facts: [['Chip', 'ESP32-WROOM-32', 'Arduino on PlatformIO'], ['Pins', '39', 'from the schematic'], ['Build', '0 errors · 8.4 s', 'flash 24.6% · RAM 7.0%']] },
   ];
-  /** What else the app does, each a view of it: crops of the snapshots
-   *  [x, y, w, h] in the page's pixels; `page` when it is not 1920 x 1080. */
-  feats: { name: string; lead: string; lbl: string; wide?: boolean;
-           crops: { src: string; crop: number[]; page?: number[]; min?: number }[] }[] = [
-    { name: 'Draw on the model', lbl: '3D Drawing · draw mode on the Station: seven tools, four inks',
+  /** Cards of app views, a row each: crops of the snapshots [x, y, w, h] in
+   *  the page's pixels, `page` when it is not 1920 x 1080. Every view in a
+   *  row is shown at one scale - the card's width is `w` page pixels - so
+   *  their text is one size; `fit` views (the model, the board) fill it. */
+  draws: Card[] = [
+    { name: 'Draw on the model', w: 430, lbl: '3D Drawing · draw mode on the Station: seven tools, four inks',
       lead: 'Hold the view, circle what is wrong and say it in a line. The picture and the camera go with the note to the 3D agent.',
-      crops: [{ src: 'draw3d', crop: [1158, 46, 386, 36] }, { src: 'draw3d', crop: [760, 150, 660, 870], min: 0 }] },
-    { name: 'Draw on the board', lbl: 'PCB Design · the same pen on the iot-fan board, and the comment box',
+      crops: [{ src: 'draw3d', crop: [1158, 46, 386, 36] }, { src: 'draw3d', crop: [760, 190, 660, 760], fit: true }] },
+    { name: 'Draw on the board', w: 430, lbl: 'PCB Design · the same pen on the iot-fan board, and the comment box',
       lead: 'The same pen over the layout. Write in your own language; Auto English turns the note into English for the agent.',
-      crops: [{ src: 'drawpcb', crop: [1076, 46, 384, 36] }, { src: 'drawpcb', crop: [590, 170, 1000, 640], min: 0 },
+      crops: [{ src: 'drawpcb', crop: [1076, 46, 384, 36] }, { src: 'drawpcb', crop: [590, 170, 1000, 640], fit: true },
               { src: 'drawpcb', crop: [1615, 95, 300, 185] }] },
-    { name: 'A note becomes a task', lbl: '3D Drawing · the queue, a drawn note in it, and Working now',
+    { name: 'A note becomes a task', w: 430, lbl: '3D Drawing · the queue, a drawn note in it, and Working now',
       lead: 'Saved as a draft, then queued. Each note keeps its drawing and its status; Working now shows what runs.',
       crops: [{ src: 'hero', crop: [1615, 284, 300, 284] }, { src: 'hero', crop: [12, 958, 250, 112] }] },
-    { name: 'A proxy for part lookups', lbl: 'Settings · Proxy: status, and the last 7 days of exits. Addresses and login left out.',
-      lead: 'EasyEDA turns bursts of lookups away. A rotating proxy gives them another way out, with traffic and cost measured.',
-      crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 152, 410, 154] }, { src: 'proxy', page: [1280, 1400], crop: [540, 912, 410, 218] }] },
-    { name: '28 themes, and your own', lbl: 'Settings · Appearance, the light themes, worn in GitHub Light',
-      lead: '22 dark and 6 light, per browser; the 3D backdrop and the code editor follow. Make your own from any of them and share it as a file.',
+  ];
+  themes: Card[] = [
+    { name: 'And your own', w: 430, lbl: 'Settings · Appearance, the light themes, worn in GitHub Light',
+      lead: 'Make a theme from any of them and share it as a file; a teammate imports it.',
       crops: [{ src: 'themes', page: [1280, 1100], crop: [542, 551, 406, 383] }] },
-    { name: 'Telegram', lbl: 'Settings · Telegram: what the bot understands',
-      lead: 'The agents\' questions reach your phone; answer with a button, or send a note with a photo.',
-      crops: [{ src: 'tg', crop: [1157, 432, 430, 304], min: 0.8 }] },
-    { name: 'Every view follows the theme', wide: true, lbl: 'Settings · the same list in Dracula, Nord and Solarized Light',
+    { name: 'Every view follows the theme', w: 290, wide: true, lbl: 'Settings · the same list in Dracula, Nord and Solarized Light',
       lead: 'The whole window takes the theme: panels, lines, text and the accent.',
       crops: [{ src: 'th-dracula', crop: [267, 114, 260, 210] }, { src: 'th-nord', crop: [267, 114, 260, 210] },
               { src: 'th-solarized-light', crop: [267, 114, 260, 210] }] },
   ];
+  proxy: Card[] = [
+    { name: 'Its state', w: 430, lbl: 'Settings · Proxy: on, the last 7 days of traffic, EasyEDA and the exits\' health',
+      lead: 'Whether it is on, what went through it this week and what that cost, and whether EasyEDA answers.',
+      crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 152, 410, 154] }] },
+    { name: 'Always, or when refused', w: 430, lbl: 'Settings · Proxy: the mode. Address and login left out.',
+      lead: 'Every lookup through it, or only the ones EasyEDA turns away. Each lookup comes out somewhere new.',
+      crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 314, 410, 64] }, { src: 'proxy', page: [1280, 1400], crop: [540, 838, 410, 66] }] },
+    { name: 'Where it came out', w: 430, lbl: 'Settings · Proxy: exits over 7 days',
+      lead: 'How many addresses and countries, and how often and how fast a lookup worked, with and without it.',
+      crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 912, 410, 218] }] },
+  ];
+  tgCrop = [1157, 432, 430, 304];
   /** Crops of the analytics snapshot (a 1920 × 3700 page). */
   anPage = [1920, 3700];
   an = { overview: [280, 92, 1316, 322], models: [280, 888, 870, 570], rooms: [1160, 888, 436, 570],
