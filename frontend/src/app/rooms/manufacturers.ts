@@ -238,7 +238,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
   selector: 'app-room-mfr',
   imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
-  host: { '(document:keydown)': 'key($event)' },
+  host: { '(document:keydown)': 'key($event)', '(document:click)': 'menu.set(null)', '(document:scroll)': 'menu.set(null)', '(window:resize)': 'menu.set(null)' },
   template: `
 <!-- How the next run goes out: the default order, or one of its own (the route order below) -->
 <ng-template #fetchSeg let-maker="maker">
@@ -647,7 +647,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                   <th>{{ 'Stock' | t }}</th><th>{{ 'Category' | t }}</th><th>{{ 'Code' | t }}</th><th class="r">{{ 'Read' | t }}</th></tr></thead>
                 <tbody>
                   @for (p of g.items; track p.maker.id + p.id) {
-                    <tr class="mf-prow" (click)="openDetail(p)">
+                    <tr class="mf-prow" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)">
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
                       <td class="give"><b>{{ p.name }}</b></td>
                       <td class="dim">{{ sellerName(p) }}</td>
@@ -887,9 +887,21 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     }
   </section>
 </div>
+<!-- A product's right-click menu, on the grid's cards and the table's rows -->
+@if (menu(); as mn) {
+  <div class="tcv-fm-menu mf-menu" role="menu" [style.left.px]="mn.x" [style.top.px]="mn.y" (click)="$event.stopPropagation()" (contextmenu)="$event.preventDefault()">
+    <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); openDetail(mn.p)"><span>{{ 'Open' | t }}</span></button>
+    @if (mn.p.url) { <a class="tcv-fm-menu-item" role="menuitem" [href]="mn.p.url" target="_blank" rel="noopener noreferrer" (click)="menu.set(null)"><span>{{ 'Open its page' | t }}</span><kbd>↗</kbd></a> }
+    @if (can()) {
+      <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); editFromDetail(mn.p)"><span>{{ 'Edit' | t }}</span></button>
+      <div class="tcv-fm-menu-sep"></div>
+      <button class="tcv-fm-menu-item" role="menuitem" data-danger (click)="menu.set(null); deleteFromDetail(mn.p)"><span>{{ 'Delete' | t }}</span><kbd>Del</kbd></button>
+    }
+  </div>
+}
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-p>
-  <button class="mf-card" (click)="openDetail(p)" [title]="p.name">
+  <button class="mf-card" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
     <span class="mf-card-img">
       @if (img(p); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
       @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }
@@ -1230,6 +1242,13 @@ export class RoomMfr implements OnDestroy {
     this.closeDetail();
     this.openMaker(d.maker.id);
     this.openProduct(d);
+  }
+  /** The right-click menu: where, and on which product. */
+  menu = signal<{ x: number; y: number; p: GridItem } | null>(null);
+  openMenu(e: MouseEvent, p: GridItem) {
+    e.preventDefault();
+    const w = 220, h = this.can() ? 150 : 80;
+    this.menu.set({ x: Math.min(e.clientX, innerWidth - w - 8), y: Math.min(e.clientY, innerHeight - h - 8), p });
   }
   deleteFromDetail(d: GridItem) {
     this.sure(t('Delete this product?'), d.name).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
@@ -1677,6 +1696,8 @@ export class RoomMfr implements OnDestroy {
 
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
+    if (e.key === 'Escape' && this.menu()) { this.menu.set(null); return; }
+    if (e.key === 'Delete' && this.menu() && this.can()) { const p = this.menu()!.p; this.menu.set(null); this.deleteFromDetail(p); return; }
     if (e.key === 'Escape' && this.detail() && !typing) { this.closeDetail(); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); (this.gridSearch() ?? this.search()).nativeElement.focus(); }
   }
