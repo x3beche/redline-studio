@@ -17,7 +17,8 @@ function read(): Lang {
     const v = localStorage.getItem(KEY);
     if (v === 'en' || v === 'tr') return v;
   } catch { /* private window */ }
-  return (navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  // English until the person picks Türkçe in Settings - not the browser's language.
+  return 'en';
 }
 
 export const LANG = signal<Lang>(read());
