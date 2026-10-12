@@ -44,7 +44,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="web_search", package="general", level="read", order=60,
+    name="web_search", package="commandcode", level="read", order=60,
     label="Search the web",
     about="Searches the web through Jina Search: the top results' titles, addresses and snippets.",
     description="Search the web (Jina Search). Returns the top results' title, URL and a short snippet - not the "

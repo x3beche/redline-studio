@@ -2263,7 +2263,7 @@ const TR: Record<string, string> = {
   'Search the tools in this package': 'Bu paketteki araçlarda ara',
   'No tool here matches.': 'Eşleşen araç yok.',
   'What belongs to no one tab: the rooms\' queues.': 'Tek bir sekmeye ait olmayanlar: odaların kuyrukları.',
-  'The Chat\'s conversations: their titles, and what was said in them.': 'Sohbet\'in konuşmaları: başlıkları ve içlerinde söylenenler.',
+  'The Chat\'s conversations and what it can do on its own: the clock, the web, PDFs.': 'Sohbet\'in konuşmaları ve kendi başına yapabildikleri: saat, web, PDF\'ler.',
   'No tools yet': 'Henüz araç yok',
   'The notes jotted down in Notes: #tags, @boards, to-dos.': 'Notlar\'a alınan notlar: #etiketler, @kartlar, yapılacaklar.',
   'The Basic Tools calculators.': 'Basic Tools hesaplayıcıları.',

@@ -112,7 +112,7 @@ PACKAGES = (
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
     Package("mfr", "Product Catalog", "The makers' catalogs saved in Product Catalog."),
     Package("inventory", "Inventory", "What is on hand: items, quantities and where they are."),
-    Package("commandcode", "Chat", "The Chat's conversations: their titles, and what was said in them."),
+    Package("commandcode", "Chat", "The Chat's conversations and what it can do on its own: the clock, the web, PDFs."),
     Package("files", "Files", "The Files room."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
 )

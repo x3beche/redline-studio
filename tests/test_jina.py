@@ -316,8 +316,8 @@ def test_makers_and_runs_from_before_the_orders_still_load():
 
 def test_web_search_and_web_read_tools(web, fake_jina):  # noqa: F811
     ws, wr = chat_tools.tools()["web_search"], chat_tools.tools()["web_read"]
-    assert (ws.package, ws.level, ws.default) == ("general", "read", True)
-    assert (wr.package, wr.level, wr.default) == ("general", "read", True)
+    assert (ws.package, ws.level, ws.default) == ("commandcode", "read", True)
+    assert (wr.package, wr.level, wr.default) == ("commandcode", "read", True)
     got = run(ws.run(Ctx(db=None), {"query": "M20 menteşe", "site": "https://dogus.com.tr/x", "count": 3}))
     (req,) = jina_calls(fake_jina, "s.jina.ai")
     assert req.url.path == "/search" and req.url.params["q"] == "M20 menteşe" and req.url.params["num"] == "3"

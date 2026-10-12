@@ -41,7 +41,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="web_read", package="general", level="read", order=61,
+    name="web_read", package="commandcode", level="read", order=61,
     label="Read a web page",
     about="Reads one public web page through Jina Reader, as text (Markdown).",
     description="Read one public web page (Jina Reader, which runs the page's script, so pages that need "

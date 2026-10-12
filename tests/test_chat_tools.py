@@ -171,7 +171,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
                   "web_search": True, "web_read": True, "clock": True}
-    assert [t["package"] for t in got["tools"]][:14] == ["general"] * 6 + ["cad"] + ["pcb"] * 7     # General, then the tabs
+    assert [t["package"] for t in got["tools"]][:11] == ["general"] * 3 + ["cad"] + ["pcb"] * 7     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)

@@ -22,7 +22,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="clock", package="general", level="read", order=5,
+    name="clock", package="commandcode", level="read", order=50,
     label="Date and time",
     about="Says the date and time now, here or in another time zone.",
     description="The current date and time. Each of the person's lines already starts with it; use this tool "
