@@ -28,6 +28,41 @@
 .mf-addrow > .tst-in:first-child, .mf-addrow > .tst-in:nth-child(3) { flex-grow: 1.4; }
 .mf-addrow > .st-seg, .mf-addrow > .tcv-btn { flex: none; }
 .mf-addhint { margin: 6px 0 0; }
+/* one height across a row of controls: the inputs, the segment, the checkbox, the buttons */
+.mf-ctl { --mf-h: 28px; }
+.mf-ctl > .tst-in:not(textarea), .mf-ctl > .tcv-btn, .mf-ctl > .st-seg, .mf-ctl > .mf-check,
+.mf-ctl > .mf-pf-acts > .tcv-btn { box-sizing: border-box; height: var(--mf-h); }
+.mf-ctl > .tst-in:not(textarea) { padding-top: 0; padding-bottom: 0; }
+.mf-ctl > .tcv-btn, .mf-ctl > .mf-pf-acts > .tcv-btn { display: inline-flex; align-items: center; justify-content: center; }
+.mf-ctl > .st-seg button { display: inline-flex; align-items: center; }
+.mf-check { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 12px; color: var(--ink-dim);
+  white-space: nowrap; cursor: pointer; }
+.mf-check input { margin: 0; accent-color: var(--accent); }
+
+/* reading one page into a maker's catalog: a single row */
+.mf-pageadd { padding: 8px 10px; }
+.mf-rowlabel { flex: none; }
+.mf-pageadd .mf-addrow > .tst-in { flex: 1 1 320px; }
+
+/* a product by hand: the short fields on one line, the description and the specs under them */
+.mf-pform { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr);
+  gap: 6px; align-items: start; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.mf-pform .tst-in { background: var(--surface); }
+.mf-pf-desc { grid-column: span 2; }
+.mf-pf-specs { grid-column: span 2; resize: vertical; min-height: var(--mf-h); padding-top: 5px; font-size: 12px; line-height: 1.4; }
+.mf-pf-acts { display: flex; gap: 6px; }
+.mf-selbar { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+.mf-selbar .tcv-btn { padding: 2px 8px; font-size: 11.5px; }
+
+/* rows with actions on hover, as the Chat list's */
+td.mf-actcell { position: relative; white-space: nowrap; min-width: 96px; }
+.mf-table .mf-actcell { width: 136px; }
+.mf-pagenote { flex: none; }
+.mf-prow:hover .mf-rowacts, .mf-prow:focus-within .mf-rowacts { display: inline-flex; }
+.mf-prow[data-sel] td { background: var(--pressed); }
+th.mf-selcol, td.mf-selcol { width: 38px; padding-right: 0; text-overflow: clip; }
+.mf-selcol input { margin: 0; accent-color: var(--accent); vertical-align: middle; }
+.mf-hand { margin-left: 6px; font-weight: 400; }
 .mf-proxyhint { margin: -4px 0 0; }
 
 /* the manufacturer: what they make beside the notes */
@@ -50,12 +85,16 @@
 .mf-find { flex: 1 1 260px; max-width: 520px; }
 .mf-table td { vertical-align: top; }
 .mf-table .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
-td.mf-pname { max-width: 0; width: 22%; font-weight: 600; }
-td.mf-specs { max-width: 0; width: 34%; white-space: normal; }
-td.mf-desc { max-width: 0; width: 24%; }
+.mf-table { table-layout: fixed; width: 100%; }
+.mf-table .mf-pname { width: 22%; font-weight: 600; }
+.mf-table .mf-pcode { width: 10%; overflow: hidden; text-overflow: ellipsis; }
+.mf-table .mf-pcat { width: 13%; overflow: hidden; text-overflow: ellipsis; }
+.mf-table .mf-specs { width: 28%; white-space: normal; }
+.mf-table .mf-desc { width: auto; }
+.mf-table .mf-pname, .mf-table .mf-desc { overflow: hidden; text-overflow: ellipsis; }
 .mf-spec { display: inline-block; margin-right: 10px; white-space: nowrap; }
 .mf-spec em { font-style: normal; color: var(--ink-dim); }
-.mf-open { display: inline; margin: 0 0 0 8px; }
+.mf-open { display: inline; margin: 0 0 0 4px; }
 .mf-morerows { margin: 4px 10px 8px; }
 .mf-mtable tbody tr { cursor: pointer; }
 .mf-mtable tbody tr:hover td { background: var(--hover); }
@@ -78,4 +117,8 @@ td.mf-pmark { width: 10px; padding-right: 0; }
 @container (max-width: 820px) {
   .mf-rtiles, .mf-htiles, .mf-mtiles { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .mf-about { grid-template-columns: minmax(0, 1fr); }
+  .mf-pform { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mf-pf-name { grid-column: span 2; }
 }
+/* the Add form keeps one row when "Only this page" brings its checkbox */
+.mf-add .mf-addrow > .tst-in { flex-basis: 110px; }

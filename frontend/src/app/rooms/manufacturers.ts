@@ -26,8 +26,13 @@ export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' 
 export interface Product {
   id: string; name: string; category: string; description: string; specs: Record<string, string>;
   sku: string; url: string; image: string;
+  /** Added by hand ('manual'), or changed by hand (`edited`): kept through a full exploration. */
+  source?: 'manual'; edited?: boolean;
 }
-export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null; kept_pages?: number }
+/** What the Add a product form sends: specs as "name: value" lines. */
+export interface ProductFields { name: string; category: string; sku: string; description: string; specs: string; url: string; image: string }
+export type RunKind = 'site' | 'page';
+export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null; kept_pages?: number; kind?: RunKind }
 export interface Maker {
   id: string; name: string; name_auto?: boolean; url: string; domain: string; notes: string; summary: string;
   categories: string[]; docs: { url: string; label: string }[]; proxy: ProxyChoice; product_count: number;
@@ -41,7 +46,7 @@ export interface MfrStep {
   files?: number; urls?: number; pages?: number; read?: number; cap?: number; queued?: number; skipped_robots?: number; current?: string | null;
   n?: number; of?: number; provider_name?: string; model?: string; prompt_chars?: number; tokens_est?: number; timeout?: number;
   tokens_in?: number | null; tokens_out?: number | null; cost?: number | null; products?: number; rows?: number; invalid?: number;
-  duplicates?: number; categories?: number;
+  duplicates?: number; categories?: number; added?: number; catalog?: number; only?: boolean;
 }
 export interface MfrPage {
   url: string; depth: number; status: number | null; via: 'direct' | 'proxy'; ms?: number; bytes: number; at: string;
@@ -63,6 +68,8 @@ export interface MfrJob {
   cancelled_by?: { name?: string };
   /** Pages it kept, so its model step can run again without the site; and the run whose pages it read. */
   kept_pages?: number; reused?: string | null;
+  /** 'page': only the pages in `only` were read (and, with `follow`, the product pages they link to), added to the catalog. */
+  kind?: RunKind; only?: string[]; follow?: boolean;
 }
 export interface ProxyState {
   configured: boolean; enabled: boolean; mode: ProxyChoice; setting: string; default: ProxyChoice;
@@ -82,7 +89,7 @@ export class MfrApi {
   changed = signal(0);
   list(q = '') { return this.http.get<Maker[]>(`/api/manufacturers?q=${encodeURIComponent(q)}`); }
   get(id: string) { return this.http.get<Maker>(`/api/manufacturers/${id}`); }
-  create(b: { url: string; name?: string; notes?: string; proxy: ProxyChoice; explore?: boolean }) {
+  create(b: { url: string; name?: string; notes?: string; proxy: ProxyChoice; explore?: boolean; only?: boolean; follow?: boolean }) {
     return this.http.post<{ manufacturer: Maker; job: (MfrJob & { job_id: string }) | null }>('/api/manufacturers', b);
   }
   patch(id: string, p: Partial<Pick<Maker, 'name' | 'notes' | 'summary' | 'url' | 'proxy'>>) {
@@ -91,6 +98,17 @@ export class MfrApi {
   remove(id: string) { return this.http.delete(`/api/manufacturers/${id}`); }
   explore(id: string, proxy: ProxyChoice) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/explore`, { proxy }); }
   readAgain(id: string, run: string) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-again`, { run }); }
+  readPage(id: string, urls: string[], follow: boolean, proxy: ProxyChoice) {
+    return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-page`, { urls, follow, proxy });
+  }
+  addProduct(id: string, p: ProductFields) { return this.http.post<{ product: Product; manufacturer: Maker }>(`/api/manufacturers/${id}/products`, p); }
+  editProduct(id: string, pid: string, p: ProductFields) {
+    return this.http.patch<{ product: Product; manufacturer: Maker }>(`/api/manufacturers/${id}/products/${pid}`, p);
+  }
+  deleteProducts(id: string, ids: string[]) {
+    return this.http.post<{ deleted: number; manufacturer: Maker }>(`/api/manufacturers/${id}/products/delete`, { ids });
+  }
+  deleteJob(id: string) { return this.http.delete(`/api/manufacturers/jobs/${id}`); }
   proxy() { return this.http.get<ProxyState>('/api/manufacturers/proxy'); }
   jobs(limit = 30) { return this.http.get<MfrJob[]>(`/api/manufacturers/jobs?limit=${limit}`); }
   job(id: string) { return this.http.get<MfrJob>(`/api/manufacturers/jobs/${id}`); }
@@ -162,6 +180,14 @@ function fold(s: string): string {
   return (s || '').replace(/[ıİ]/g, 'i').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
 }
 
+/** Row actions, drawn as the Chat list's. */
+const I = {
+  open: 'M14 5h5v5 M19 5l-8 8 M17 14v5H5V7h5',
+  edit: 'M4 20h4L19.5 8.5l-4-4L4 16z M13.5 6.5l4 4',
+  trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
+};
+const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '' };
+
 @Component({
   selector: 'app-room-mfr',
   imports: [T],
@@ -218,15 +244,20 @@ function fold(s: string): string {
       @if (job(); as j) {
         <header class="tst-head">
           <div class="tst-title">
-            <h2>{{ fmt('Exploring {m}', { m: j.manufacturer.name }) }}</h2>
-            <span class="st-sub"><a class="mf-link" [href]="j.manufacturer.url" target="_blank" rel="noopener noreferrer">{{ j.manufacturer.url }}</a>
-              · {{ fmt('at most {p} pages, {d} links deep, {s} s between requests; robots.txt obeyed', { p: j.limits?.pages ?? 0, d: j.limits?.depth ?? 0, s: j.totals.delay ?? j.limits?.delay ?? 0 }) }}</span>
+            <h2>{{ fmt(j.kind === 'page' ? 'Reading a page of {m}' : 'Exploring {m}', { m: j.manufacturer.name }) }}</h2>
+            @if (j.kind === 'page') {
+              <span class="st-sub">@for (u of j.only ?? []; track u) { <a class="mf-link" [href]="u" target="_blank" rel="noopener noreferrer">{{ u }}</a> · }
+                {{ (j.follow ? 'only the given pages and the product pages they link to' : 'only the given pages') | t }}; {{ 'robots.txt obeyed' | t }}</span>
+            } @else {
+              <span class="st-sub"><a class="mf-link" [href]="j.manufacturer.url" target="_blank" rel="noopener noreferrer">{{ j.manufacturer.url }}</a>
+                · {{ fmt('at most {p} pages, {d} links deep, {s} s between requests; robots.txt obeyed', { p: j.limits?.pages ?? 0, d: j.limits?.depth ?? 0, s: j.totals.delay ?? j.limits?.delay ?? 0 }) }}</span>
+            }
           </div>
           <div class="tst-acts">
             @if (running()) {
               <button class="tcv-btn tst-del" (click)="cancelRun()" [disabled]="cancelling() || !can()">{{ (cancelling() ? 'Cancelling…' : 'Cancel the run') | t }}</button>
             } @else if (can()) {
-              <button class="tcv-btn tcv-btn-accent" (click)="exploreAgain(j.manufacturer.id, j.proxy)" [disabled]="starting()">{{ 'Run again' | t }}</button>
+              <button class="tcv-btn tcv-btn-accent" (click)="runAgain(j)" [disabled]="starting()">{{ 'Run again' | t }}</button>
             }
             <button class="tcv-btn" (click)="openMaker(j.manufacturer.id)">{{ 'Open the catalog' | t }}</button>
           </div>
@@ -378,6 +409,20 @@ function fold(s: string): string {
         </div>
       </div>
 
+      @if (can()) {
+        <section class="st-card mf-pageadd">
+          <div class="mf-addrow mf-ctl">
+            <span class="mf-label mf-rowlabel" [title]="pageHint | t">{{ 'Add from a page' | t }}</span>
+            <input class="tst-in" [placeholder]="'https://… a product page, or a list of products' | t" [value]="pageUrl()"
+                   (input)="pageUrl.set($any($event.target).value)" (keydown.enter)="readPage(m)" [attr.aria-label]="'Page address' | t" [title]="pageHint | t">
+            <span class="st-sub mf-pagenote">{{ 'only that page; what is in the catalog stays' | t }}</span>
+            <label class="mf-check" [title]="'Same site, one link deep, at most 30 pages' | t"><input type="checkbox" [checked]="pageFollow()"
+                   (change)="pageFollow.set($any($event.target).checked)"> {{ 'also the product pages it links to' | t }}</label>
+            <button class="tcv-btn tcv-btn-accent" (click)="readPage(m)" [disabled]="!pageUrl().trim() || starting() || (runOf(m) && isActiveS(runOf(m)!.status))">{{ 'Read it' | t }}</button>
+          </div>
+        </section>
+      }
+
       <section class="st-card mf-catalog">
         <div class="st-card-head mf-cathead"><h3>{{ 'Catalog' | t }}</h3>
           <input class="tst-in mf-find" [placeholder]="'Find a product: name, code, size, material' | t" [value]="pq()"
@@ -386,23 +431,55 @@ function fold(s: string): string {
             <option value="">{{ 'All categories' | t }}</option>
             @for (c of productCats(); track c) { <option [value]="c" [selected]="c === cat()">{{ c }}</option> }
           </select>
-          <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span></div>
+          @if (picked_().size) {
+            <span class="mf-selbar">{{ fmt('{n} selected', { n: picked_().size }) }}
+              <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
+              <button class="tcv-btn" (click)="pickAll(false)">{{ 'Clear' | t }}</button></span>
+          }
+          <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span>
+          @if (can()) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
+        @if (editing() !== null) {
+          <div class="mf-pform mf-ctl">
+            <input class="tst-in mf-pf-name" [placeholder]="'Name' | t" [value]="pf().name" (input)="pfSet('name', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Name' | t">
+            <input class="tst-in" [placeholder]="'Code / SKU' | t" [value]="pf().sku" (input)="pfSet('sku', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Code' | t">
+            <input class="tst-in" [placeholder]="'Category' | t" [value]="pf().category" (input)="pfSet('category', $event)" (keydown.enter)="saveProduct(m)" list="mf-cats" [attr.aria-label]="'Category' | t">
+            <input class="tst-in" [placeholder]="'Page address (optional)' | t" [value]="pf().url" (input)="pfSet('url', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Page address' | t">
+            <input class="tst-in" [placeholder]="'Image address (optional)' | t" [value]="pf().image" (input)="pfSet('image', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Image address' | t">
+            <input class="tst-in mf-pf-desc" [placeholder]="'Description (optional)' | t" [value]="pf().description" (input)="pfSet('description', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Description' | t">
+            <textarea class="tst-in mf-pf-specs" rows="3" [placeholder]="'Specs, one per line - Length: 20 mm' | t" [value]="pf().specs" (input)="pfSet('specs', $event)" [attr.aria-label]="'Specs' | t"></textarea>
+            <div class="mf-pf-acts">
+              <button class="tcv-btn tcv-btn-accent" (click)="saveProduct(m)" [disabled]="!pf().name.trim() || saving()">{{ (editing() ? 'Save' : 'Add') | t }}</button>
+              <button class="tcv-btn" (click)="editing.set(null)">{{ 'Cancel' | t }}</button>
+            </div>
+            <datalist id="mf-cats">@for (c of productCats(); track c) { <option [value]="c"></option> }</datalist>
+          </div>
+        }
         @if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
-              <thead><tr><th>{{ 'Product' | t }}</th><th>{{ 'Code' | t }}</th><th>{{ 'Category' | t }}</th><th>{{ 'Specs' | t }}</th><th>{{ 'Description' | t }}</th><th></th></tr></thead>
+              <thead><tr>@if (can()) { <th class="mf-selcol"><input type="checkbox" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th> }
+                <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
               <tbody>
                 @for (p of found().slice(0, shownRows()); track p.id) {
-                  <tr>
-                    <td class="mf-pname" [title]="p.name">{{ p.name }}</td>
-                    <td class="mono">{{ p.sku || '–' }}</td>
-                    <td class="dim" [title]="p.category">{{ p.category || '–' }}</td>
+                  <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
+                    @if (can()) { <td class="mf-selcol"><input type="checkbox" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
+                    <td class="mf-pname" [title]="p.name">{{ p.name }}@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
+                    <td class="dim mf-pcat" [title]="p.category">{{ p.category || '–' }}</td>
                     <td class="mf-specs" [title]="specLine(p)">@for (s of specs(p); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }@if (!specs(p).length) { <span class="dim">–</span> }</td>
                     <td class="mf-desc dim" [title]="p.description">{{ p.description || '–' }}</td>
-                    <td class="r">@if (p.url) { <a class="st-more mf-open" [href]="p.url" target="_blank" rel="noopener noreferrer">{{ 'Page' | t }}</a> }
-                      @if (p.image) { <a class="st-more mf-open" [href]="p.image" target="_blank" rel="noopener noreferrer">{{ 'Image' | t }}</a> }</td>
+                    <td class="r mf-actcell">@if (p.url) { <a class="st-more mf-open" [href]="p.url" target="_blank" rel="noopener noreferrer">{{ 'Page' | t }}</a> }
+                      @if (p.image) { <a class="st-more mf-open" [href]="p.image" target="_blank" rel="noopener noreferrer">{{ 'Image' | t }}</a> }
+                      @if (can()) {
+                        <div class="tcv-cc-itemacts mf-rowacts">
+                          <button class="tcv-cc-ib" (click)="openProduct(p)" [title]="'Edit the product' | t">
+                            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.edit" /></svg></button>
+                          <button class="tcv-cc-ib tcv-cc-danger" (click)="deleteProducts(m, [p.id])" [title]="'Delete the product' | t">
+                            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash" /></svg></button>
+                        </div>
+                      }</td>
                   </tr>
-                } @empty { <tr><td colspan="6" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+                } @empty { <tr><td [attr.colspan]="can() ? 7 : 6" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
               </tbody>
             </table>
           </div>
@@ -410,7 +487,7 @@ function fold(s: string): string {
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <p class="st-hint mf-pad">{{ (runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site to read its catalog.') | t }}</p>
+          <p class="st-hint mf-pad">{{ (runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.') | t }}</p>
         }
       </section>
 
@@ -418,7 +495,7 @@ function fold(s: string): string {
       <!-- ================= the overview, and adding one ================= -->
       <header class="tst-head tsh-head">
         <div class="tst-title">
-          <h2>{{ 'Manufacturers' | t }}</h2>
+          <h2>{{ 'Product Catalog' | t }}</h2>
           <span class="st-sub">{{ 'Makers whose catalogs you keep, read from their own sites. Chat looks here when you need a part from a maker.' | t }}</span>
         </div>
       </header>
@@ -439,11 +516,15 @@ function fold(s: string): string {
       @if (can()) {
         <section class="st-card mf-add" id="mf-add">
           <div class="st-card-head"><h3>{{ 'Add a manufacturer' | t }}</h3>
-            <span class="st-sub">{{ 'its site is explored at once: the pages, then the products in them' | t }}</span></div>
+            <span class="st-sub">{{ (addOnly() ? 'only the page you give is read, and the products on it go into its catalog' : 'its site is explored at once: the pages, then the products in them') | t }}</span>
+            <div class="st-seg st-right" role="radiogroup" [attr.aria-label]="'What is read' | t">
+              <button [class.on]="!addOnly()" (click)="addOnly.set(false)" [title]="'The site is crawled: robots.txt, the sitemap, the product pages' | t">{{ 'Whole site' | t }}</button>
+              <button [class.on]="addOnly()" (click)="addOnly.set(true)" [title]="'Only the address given is read - a product, or a list of them' | t">{{ 'Only this page' | t }}</button>
+            </div></div>
           <div class="st-card-body">
-            <div class="mf-addrow">
-              <input #addUrlBox class="tst-in" [placeholder]="'https://www.example.com' | t" [value]="addUrl()" (input)="addUrl.set($any($event.target).value)"
-                     (keydown.enter)="add()" [attr.aria-label]="'Site address' | t">
+            <div class="mf-addrow mf-ctl">
+              <input #addUrlBox class="tst-in" [placeholder]="(addOnly() ? 'https://www.example.com/products/hinges' : 'https://www.example.com') | t" [value]="addUrl()" (input)="addUrl.set($any($event.target).value)"
+                     (keydown.enter)="add()" [attr.aria-label]="(addOnly() ? 'Page address' : 'Site address') | t">
               <input class="tst-in" [placeholder]="'Name (optional)' | t" [value]="addName()" (input)="addName.set($any($event.target).value)"
                      (keydown.enter)="add()" [attr.aria-label]="'Name' | t">
               <input class="tst-in" [placeholder]="'Notes for Chat (optional)' | t" [value]="addNotes()" (input)="addNotes.set($any($event.target).value)"
@@ -453,12 +534,17 @@ function fold(s: string): string {
                   <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="c.id !== 'off' && !proxy()?.configured" [title]="c.about | t">{{ c.label | t }}</button>
                 }
               </div>
-              <button class="tcv-btn tcv-btn-accent" (click)="add()" [disabled]="!addUrl().trim() || starting()">{{ (starting() ? 'Starting…' : 'Add and explore') | t }}</button>
+              @if (addOnly()) {
+                <label class="mf-check" [title]="'Same site, one link deep, at most 30 pages' | t"><input type="checkbox" [checked]="addFollow()"
+                       (change)="addFollow.set($any($event.target).checked)"> {{ 'also the product pages it links to' | t }}</label>
+              }
+              <button class="tcv-btn tcv-btn-accent" (click)="add()" [disabled]="!addUrl().trim() || starting()">{{ (starting() ? 'Starting…' : addOnly() ? 'Add and read the page' : 'Add and explore') | t }}</button>
             </div>
             <p class="st-hint mf-addhint">{{ choiceAbout() | t }}.
               @if (!proxy()?.configured) { {{ 'The proxy is not set up, so a run goes out directly.' | t }} <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy' | t }}</button> }
               @else if (!proxy()?.enabled) { {{ 'The proxy is set up but off for the part lookups; a run can still use it.' | t }} }
-              {{ fmt('At most {p} pages of the same site, {s} s apart, robots.txt obeyed; then the model reads them.', { p: limits.pages, s: limits.delay }) }}</p>
+              @if (addOnly()) { {{ pageHint | t }} }
+              @else { {{ fmt('At most {p} pages of the same site, {s} s apart, robots.txt obeyed; then the model reads them.', { p: limits.pages, s: limits.delay }) }} }</p>
             @if (addError(); as e) { <p class="st-hint mf-err">{{ e }}</p> }
           </div>
         </section>
@@ -497,19 +583,28 @@ function fold(s: string): string {
             <span class="st-sub">{{ 'open one to see its steps and pages' | t }}</span></div>
           <div class="st-table-wrap">
             <table class="st-table tsx-table">
-              <thead><tr><th>{{ 'Manufacturer' | t }}</th><th>{{ 'Started' | t }}</th><th>{{ 'Status' | t }}</th><th>{{ 'Fetching' | t }}</th>
+              <thead><tr><th>{{ 'Manufacturer' | t }}</th><th>{{ 'Kind' | t }}</th><th>{{ 'Started' | t }}</th><th>{{ 'Status' | t }}</th><th>{{ 'Fetching' | t }}</th>
                 <th class="r">{{ 'Pages' | t }}</th><th class="r">{{ 'Products' | t }}</th><th class="r">{{ 'Took' | t }}</th><th></th></tr></thead>
               <tbody>
                 @for (r of runs.jobs().slice(0, 10); track r.id) {
-                  <tr (click)="showRun(r.id)">
+                  <tr class="mf-prow" (click)="showRun(r.id)">
                     <td class="give">{{ r.manufacturer.name }} <span class="dim">{{ r.manufacturer.domain }}</span></td>
+                    <td><span class="st-tag" [attr.data-tone]="r.kind === 'page' ? 'accent' : null" [title]="(r.only ?? []).join('\n')">{{ (r.kind === 'page' ? 'Page' : 'Site') | t }}</span></td>
                     <td>{{ when(r.started_at) }} <span class="dim">· {{ r.by.name || ('someone' | t) }}</span></td>
                     <td><span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span></td>
                     <td class="dim">{{ proxyLabel(r.proxy) | t }}</td>
                     <td class="r mono">{{ r.page_count }}</td>
                     <td class="r mono">{{ r.products_found ?? '–' }}</td>
                     <td class="r mono">{{ dur(r.seconds) }}</td>
-                    <td class="r"><button class="st-more" (click)="showRun(r.id); $event.stopPropagation()">{{ 'Open' | t }}</button></td>
+                    <td class="r mf-actcell"><button class="st-more" (click)="showRun(r.id); $event.stopPropagation()">{{ 'Open' | t }}</button>
+                      @if (mayDeleteRun(r)) {
+                        <div class="tcv-cc-itemacts mf-rowacts">
+                          <button class="tcv-cc-ib" (click)="showRun(r.id); $event.stopPropagation()" [title]="'Open' | t">
+                            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.open" /></svg></button>
+                          <button class="tcv-cc-ib tcv-cc-danger" (click)="deleteRun(r); $event.stopPropagation()" [title]="'Delete the run and the pages it kept' | t">
+                            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash" /></svg></button>
+                        </div>
+                      }</td>
                   </tr>
                 }
               </tbody>
@@ -569,6 +664,18 @@ export class RoomMfr implements OnDestroy {
   addName = signal('');
   addNotes = signal('');
   addError = signal<string | null>(null);
+  /** "Only this page": the address is one page to read, not a site to explore. */
+  addOnly = signal(false);
+  addFollow = signal(false);
+  pageUrl = signal('');
+  pageFollow = signal(false);
+  /** The product form: null closed, '' adding, a product's id editing it. */
+  editing = signal<string | null>(null);
+  pf = signal<ProductFields>({ ...NO_PRODUCT });
+  saving = signal(false);
+  picked_ = signal<Set<string>>(new Set());
+  readonly I = I;
+  readonly pageHint = "Only that page is read (robots.txt obeyed) - the maker's site or a distributor's. A list or category page adds every product on it; what is in the catalog stays.";
   starting = signal(false);
   cancelling = signal(false);
   rows = signal(200);
@@ -637,10 +744,10 @@ export class RoomMfr implements OnDestroy {
   exploredCount = computed(() => this.all().filter(m => m.explored_at).length);
   lastJob = computed(() => this.runs.jobs()[0] ?? null);
   /** A manufacturer's latest run: the live list first (it is the freshest). */
-  runOf(m: Maker): { id: string; status: MfrStatus; started_at: string; error?: string | null; pages: number; kept_pages?: number } | null {
+  runOf(m: Maker): { id: string; status: MfrStatus; started_at: string; error?: string | null; pages: number; kept_pages?: number; kind?: RunKind } | null {
     const live = this.runs.jobs().find(j => j.manufacturer.id === m.id);
     if (live) return { id: live.id, status: live.status, started_at: live.started_at, error: live.error, pages: live.page_count,
-                       kept_pages: live.kept_pages };
+                       kept_pages: live.kept_pages, kind: live.kind };
     return m.last_run;
   }
   isActiveS(s: MfrStatus) { return ACTIVE.includes(s); }
@@ -670,6 +777,7 @@ export class RoomMfr implements OnDestroy {
   openMaker(id: string, keepSearch = false) {
     this.stopFollowing();
     if (!keepSearch && id !== this.mid()) { this.pq.set(''); this.cat.set(''); }
+    if (id !== this.mid()) { this.picked_.set(new Set()); this.editing.set(null); this.pageUrl.set(''); }
     this.mid.set(id);
     this.view.set('maker');
     this.rows.set(200);
@@ -695,8 +803,7 @@ export class RoomMfr implements OnDestroy {
     this.api.patch(m.id, { notes: notes.trim() }).subscribe({ next: r => { this.replace(r); this.say(t('Notes saved.')); }, error: this.failed('Could not save it.') });
   }
   remove(m: Maker) {
-    if (!confirm(t('Delete this manufacturer and its catalog?') + `\n\n${m.name}`)) return;
-    this.api.remove(m.id).subscribe({ next: () => { this.goHome(); this.read(); this.runs.refresh(); }, error: this.failed('Could not delete it.') });
+    this.sure(t('Delete this manufacturer, its catalog and its runs?'), m.name).then(ok => ok && this.api.remove(m.id).subscribe({ next: () => { this.goHome(); this.read(); this.runs.refresh(); }, error: this.failed('Could not delete it.') }));
   }
   private replace(m: Maker) {
     this.all.update(l => l.map(x => x.id === m.id ? { ...m, products: undefined } : x));
@@ -737,7 +844,8 @@ export class RoomMfr implements OnDestroy {
     if (!url || this.starting()) return;
     this.starting.set(true);
     this.addError.set(null);
-    this.api.create({ url, name: this.addName().trim(), notes: this.addNotes().trim(), proxy: this.choice() }).subscribe({
+    this.api.create({ url, name: this.addName().trim(), notes: this.addNotes().trim(), proxy: this.choice(),
+                      only: this.addOnly(), follow: this.addOnly() && this.addFollow() }).subscribe({
       next: r => {
         this.starting.set(false);
         this.addUrl.set(''); this.addName.set(''); this.addNotes.set('');
@@ -766,6 +874,82 @@ export class RoomMfr implements OnDestroy {
       error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The pages could not be read again.')); },
     });
   }
+
+  /** Only the page given, read into the catalog (added to it). */
+  readPage(m: Maker) {
+    const url = this.pageUrl().trim();
+    if (!url || this.starting()) return;
+    this.starting.set(true);
+    this.api.readPage(m.id, [url], this.pageFollow(), this.choice()).subscribe({
+      next: j => { this.starting.set(false); this.pageUrl.set(''); this.runs.put(j); this.showRun(j.id); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.')); },
+    });
+  }
+
+  /** The same run again: the site, or the same pages. */
+  runAgain(j: MfrJob) {
+    if (j.kind !== 'page' || !j.only?.length) { this.exploreAgain(j.manufacturer.id, j.proxy); return; }
+    if (this.starting()) return;
+    this.starting.set(true);
+    this.api.readPage(j.manufacturer.id, j.only, !!j.follow, j.proxy).subscribe({
+      next: r => { this.starting.set(false); this.runs.put(r); this.showRun(r.id); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.')); },
+    });
+  }
+
+  /** A finished run, with the pages it kept: its own, or anyone's with the right to delete. */
+  mayDeleteRun(r: MfrJob) {
+    return this.can() && !isActive(r) && (this.auth.can('delete') || r.by.id === this.auth.state()?.user?.id);
+  }
+  deleteRun(r: MfrJob) {
+    this.sure(t('Delete this run and the pages it kept?'), `${r.manufacturer.name} · ${when(r.started_at)}`).then(ok => ok && this.api.deleteJob(r.id).subscribe({
+      next: () => { this.runs.refresh(); this.read(); },
+      error: this.failed('Could not delete it.'),
+    }));
+  }
+
+  // ---- products by hand
+
+  openProduct(p: Product | null) {
+    this.editing.set(p ? p.id : '');
+    this.pf.set(p ? { name: p.name, category: p.category, sku: p.sku, description: p.description, url: p.url, image: p.image,
+                      specs: Object.entries(p.specs ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n') } : { ...NO_PRODUCT });
+  }
+  pfSet(k: keyof ProductFields, e: Event) {
+    const v = (e.target as HTMLInputElement).value;
+    this.pf.update(f => ({ ...f, [k]: v }));
+  }
+  saveProduct(m: Maker) {
+    const f = this.pf(), id = this.editing();
+    if (id === null || !f.name.trim() || this.saving()) return;
+    this.saving.set(true);
+    const call = id ? this.api.editProduct(m.id, id, f) : this.api.addProduct(m.id, f);
+    call.subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.replace(r.manufacturer);
+        this.say(this.fmt(id ? '{p} saved' : '{p} added to the catalog', { p: r.product.name }));
+        this.editing.set(null);
+      },
+      error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not save it.')); },
+    });
+  }
+  deleteProducts(m: Maker, ids: string[]) {
+    if (!ids.length) return;
+    const one = ids.length === 1 ? (m.products ?? []).find(p => p.id === ids[0]) : null;
+    this.sure(one ? t('Delete this product?') : this.fmt('Delete {n} products?', { n: ids.length }), one?.name ?? '').then(ok => ok && this.api.deleteProducts(m.id, ids).subscribe({
+      next: r => {
+        this.replace(r.manufacturer);
+        this.picked_.update(s => new Set([...s].filter(x => !ids.includes(x))));
+        if (this.editing() && ids.includes(this.editing()!)) this.editing.set(null);
+      },
+      error: this.failed('Could not delete it.'),
+    }));
+  }
+  pick(id: string, on: boolean) { this.picked_.update(s => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; }); }
+  allPicked = computed(() => { const f = this.found(), s = this.picked_(); return f.length > 0 && f.every(p => s.has(p.id)); });
+  pickedIds() { return [...this.picked_()]; }
+  pickAll(on: boolean) { this.picked_.set(on ? new Set(this.found().map(p => p.id)) : new Set()); }
 
   cancelRun() {
     const j = this.job();
@@ -876,11 +1060,11 @@ export class RoomMfr implements OnDestroy {
           fig: s.via === 'proxy' ? t('proxy') : '', time: live(s) });
       } else if (s.kind === 'sitemap') {
         rows.push({ id: s.id, state: s.state, kind: 'Sitemap', title: t('Sitemap'), reason: s.reason,
-          detail: this.fmt('{n} files, {m} addresses', { n: s.files ?? 0, m: s.urls ?? 0 }), fig: '', time: live(s) });
+          detail: s.note ? t(s.note) : this.fmt('{n} files, {m} addresses', { n: s.files ?? 0, m: s.urls ?? 0 }), fig: '', time: live(s) });
       } else if (s.kind === 'crawl') {
         rows.push({ id: s.id, state: s.state, kind: 'Pages', title: this.fmt('{n} pages read', { n: s.read ?? 0 }), reason: s.reason,
           detail: [this.fmt('{n} asked of {m}', { n: s.pages ?? 0, m: s.cap ?? 0 }), s.skipped_robots ? this.fmt('{n} left out by robots.txt', { n: s.skipped_robots }) : '',
-                   s.note ?? ''].filter(Boolean).join(' · '),
+                   s.note ? t(s.note) : ''].filter(Boolean).join(' · '),
           fig: s.state === 'running' && s.current ? this.path(s.current) : '', time: live(s) });
       } else if (s.kind === 'ask') {
         const bits = [this.fmt('{p} pages, ~{k} tokens sent', { p: s.pages ?? 0, k: this.num(s.tokens_est ?? 0) })];
@@ -893,8 +1077,11 @@ export class RoomMfr implements OnDestroy {
           detail: this.fmt('{n} found, {d} duplicates', { n: Number(s.found ?? 0), d: s.duplicates ?? 0 }),
           fig: s.products != null ? this.fmt('{n} kept', { n: s.products }) : '', time: live(s) });
       } else if (s.kind === 'done') {
-        rows.push({ id: s.id, state: 'done', kind: 'Result', title: this.fmt('{n} products in the catalog', { n: s.products ?? 0 }),
-          detail: this.fmt('{n} categories', { n: s.categories ?? 0 }), fig: '', time: '' });
+        rows.push(s.catalog != null
+          ? { id: s.id, state: 'done', kind: 'Result', title: this.fmt('{n} new products added', { n: s.added ?? 0 }),
+              detail: this.fmt('{n} read from the page · {c} in the catalog now', { n: s.products ?? 0, c: s.catalog }), fig: '', time: '' }
+          : { id: s.id, state: 'done', kind: 'Result', title: this.fmt('{n} products in the catalog', { n: s.products ?? 0 }),
+              detail: this.fmt('{n} categories', { n: s.categories ?? 0 }), fig: '', time: '' });
       }
     }
     if (isActive(j)) {
@@ -947,6 +1134,10 @@ export class RoomMfr implements OnDestroy {
   t = t;
   fmt(text: string, vars: Record<string, string | number>) {
     return t(text).replace(/\{(\w+)\}/g, (m, k) => k in vars ? String(vars[k]) : m);
+  }
+  /** Asked before anything is deleted: the question, and what it is about. */
+  private async sure(question: string, what: string): Promise<boolean> {
+    return confirm(what ? `${question}\n\n${what}` : question);
   }
   private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));

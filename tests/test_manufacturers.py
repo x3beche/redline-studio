@@ -417,6 +417,8 @@ def test_a_run_can_be_cancelled_and_a_restart_interrupts_it(web, monkeypatch):
 def test_a_run_left_by_a_restart_is_settled_when_read():
     fake = FakeDb()
     old = {"host": mf.WORKER["host"], "pid": 999_999_999, "boot": "gone"}
+    for m in ("m1", "m2"):
+        run(fake[mf.COLL].insert_one({"_id": m, "name": m}))
     run(fake[mf.JOBS].insert_one({"_id": "j1", "status": "crawling", "manufacturer": {"id": "m1"},
                                   "started_at": mf._now(), "beat": mf._now(), "worker": old,
                                   "steps": [{"id": "crawl", "kind": "crawl", "state": "running",
@@ -530,3 +532,213 @@ def test_a_manufacturer_is_an_at_mention():
     assert got["label"] == "Doğuş Kalıp" and "for molds" in got["text"] and "- Menteşe · [Bağlantı] (Boy: 20 mm)" in got["text"]
     rows = run(cc_context.candidates(fake, "doğuş", "manufacturer"))
     assert rows and rows[0]["kind"] == "manufacturer" and "1 products" in rows[0]["sub"]
+
+
+# ---------------------------------------------------------------- one page, by hand
+
+LIST = ("<html><head><title>Menteşeler</title></head><body><h1>Menteşeler</h1>"
+        "<table><tr><td>DK-1</td><td>Menteşe</td></tr><tr><td>DK-3</td><td>Kelepçe</td></tr></table>"
+        "<a href='/Urun/mentese/1'>Menteşe</a> <a href='/Urun/kelepce/3'>Kelepçe</a> <a href='/haberler/1'>Haber</a>"
+        "<a href='/iletisim'>İletişim</a> <a href='/gizli/urun-1'>x</a> <a href='/fiyat.pdf'>Fiyat listesi</a>"
+        "<a href='https://other.example/Urun/y'>dış</a></body></html>")
+
+
+def _only(urls, follow=False):
+    track = mf.Tracker()
+
+    async def go():
+        f = mf.Fetcher("off")
+        try:
+            return await mf.crawl(urls[0], track, f, only=urls, follow=follow)
+        finally:
+            await f.close()
+    return run(go()), track
+
+
+def test_only_the_given_page_is_read(web):
+    web["site"] = site(web["seen"], {"/liste": ("text/html", LIST)})
+    got, track = _only(["https://www.dogus.com.tr/liste"])
+    assert web["seen"] == ["https://www.dogus.com.tr/robots.txt", "https://www.dogus.com.tr/liste"]   # no sitemap, no links
+    assert [p["url"] for p in got["pages"]] == ["https://www.dogus.com.tr/liste"] and got["only"]
+    steps = {s["id"]: s for s in track.steps}
+    assert steps["sitemap"]["state"] == "skipped" and steps["sitemap"]["note"] == mf.ONLY_NOTE
+    assert steps["crawl"]["state"] == "done" and steps["crawl"]["note"] == mf.ONLY_NOTE and steps["crawl"]["cap"] == 1
+    assert got["docs"] == [{"url": "https://www.dogus.com.tr/fiyat.pdf", "label": "Fiyat listesi"}]
+
+
+def test_a_page_robots_forbids_is_refused_with_why(web):
+    with pytest.raises(mf.ExploreError, match="robots.txt of www.dogus.com.tr does not allow"):
+        _only(["https://www.dogus.com.tr/gizli/liste"])
+    assert web["seen"] == ["https://www.dogus.com.tr/robots.txt"]
+
+
+def test_following_reads_the_product_links_one_deep_and_capped(web, monkeypatch):
+    web["site"] = site(web["seen"], {"/liste": ("text/html", LIST)})
+    got, track = _only(["https://www.dogus.com.tr/liste"], follow=True)
+    urls = [p["url"] for p in got["pages"]]
+    assert urls == ["https://www.dogus.com.tr/liste", "https://www.dogus.com.tr/Urun/mentese/1",
+                    "https://www.dogus.com.tr/Urun/kelepce/3"]          # robots, news, contact and other sites left
+    assert not [u for u in web["seen"] if "haber" in u or "iletisim" in u or "other.example" in u or "gizli" in u]
+    assert {s["id"]: s for s in track.steps}["crawl"]["note"] == mf.FOLLOW_NOTE
+    # ...the links of those pages are not followed, and there is a cap
+    monkeypatch.setattr(mf, "FOLLOW_MAX", 1)
+    web["seen"].clear()
+    got, _ = _only(["https://www.dogus.com.tr/liste"], follow=True)
+    assert len(got["pages"]) == 2
+
+
+def test_a_long_page_reaches_the_model_whole():
+    page = {"url": "https://x.com/l", "title": "L", "text": "\n".join(f"row {i} " + "x" * 90 for i in range(800)),
+            "images": [], "links": []}
+    parts = mf.chunks([page], whole=True)
+    assert len(parts) > 1 and "row 799" in "".join(parts) and "(part 1 of" in parts[0]
+    assert "row 799" not in "".join(mf.chunks([page]))
+
+
+def _maker_with(fake, products):
+    doc = run(mf.create(fake, "https://www.dogus.com.tr/", by={"id": "a", "name": "A"}))
+    run(fake[mf.COLL].update_one({"_id": doc["_id"]}, {"$set": {"products": products, "summary": "Kalıp.",
+                                                                "categories": ["Eski"]}}))
+    return doc["_id"]
+
+
+def test_a_page_run_adds_to_the_catalog(web, monkeypatch):
+    _fake_llm(monkeypatch)
+    web["site"] = site(web["seen"], {"/liste": ("text/html", LIST)})
+    fake = FakeDb()
+    old = [{"id": "o1", "name": "Rulman", "category": "Eski", "description": "", "specs": {}, "sku": "", "url": "", "image": ""},
+           {"id": "o2", "name": "Menteşe", "category": "", "description": "eski", "specs": {}, "sku": "", "url": "", "image": ""}]
+    mid = _maker_with(fake, old)
+
+    async def go():
+        jd, _ = await mf.start_job(fake, mid, only=["https://www.dogus.com.tr/liste"], follow=True)
+        return await _until_done(fake, jd["_id"])()
+    d = run(go())
+    assert d["status"] == "done" and d["kind"] == "page" and d["only"] == ["https://www.dogus.com.tr/liste"]
+    assert d["limits"]["pages"] == 1 + mf.FOLLOW_MAX and d["kept_pages"] == 3
+    m = run(mf.get(fake, mid))
+    names = [p["name"] for p in m["products"]]
+    assert names == ["Rulman", "Menteşe", "Kelepçe"]                     # nothing dropped, the new one added
+    assert m["products"][1]["description"] == "eski" and m["products"][1]["category"] == "Bağlantı"
+    assert m["summary"] == "Kalıp." and m["categories"] == ["Eski", "Bağlantı"] and m["name"] == "dogus.com.tr"
+    done = next(s for s in d["steps"] if s["kind"] == "done")
+    assert done["added"] == 1 and done["catalog"] == 3
+    # read again, it is a page run still
+    async def again():
+        jd, _ = await mf.start_job(fake, mid, reuse=d["_id"])
+        return await _until_done(fake, jd["_id"])()
+    d2 = run(again())
+    assert d2["kind"] == "page" and len(run(mf.get(fake, mid))["products"]) == 3
+
+
+def test_products_by_hand_survive_a_full_exploration(web, monkeypatch):
+    _fake_llm(monkeypatch)
+    fake = FakeDb()
+    mid = _maker_with(fake, [{"id": "o1", "name": "Eski Ürün", "category": "", "description": "", "specs": {},
+                              "sku": "", "url": "", "image": ""},
+                             {"id": "o2", "name": "Rulman", "category": "", "description": "", "specs": {},
+                              "sku": "", "url": "", "image": ""}])
+    p = run(mf.add_product(fake, mid, {"name": "Özel Pim", "sku": "P-9", "specs": "Çap: 6 mm\nBoy: 40 mm\nbozuk",
+                                       "url": "www.dogus.com.tr/pim"}, {"id": "a", "name": "A"}))
+    assert p["source"] == "manual" and p["specs"] == {"Çap": "6 mm", "Boy": "40 mm"}
+    assert p["url"] == "https://www.dogus.com.tr/pim" and p["id"].startswith("m")
+    with pytest.raises(mf.Clash):
+        run(mf.add_product(fake, mid, {"name": "Başka", "sku": "p-9"}))
+    with pytest.raises(ValueError):
+        run(mf.add_product(fake, mid, {"name": "X", "url": "javascript:alert(1)"}))
+    e = run(mf.edit_product(fake, mid, "o2", {"description": "elle düzeltildi", "specs": {"Boy": "21 mm"}}))
+    assert e["edited"] and e["id"] == "o2" and e["name"] == "Rulman"
+    with pytest.raises(mf.Clash):
+        run(mf.edit_product(fake, mid, p["id"], {"name": "Rulman", "sku": ""}))
+    with pytest.raises(LookupError):
+        run(mf.edit_product(fake, mid, "nope", {"name": "x"}))
+
+    async def go():
+        jd, _ = await mf.start_job(fake, mid)
+        return await _until_done(fake, jd["_id"])()
+    assert run(go())["status"] == "done"
+    prods = {x["name"]: x for x in run(mf.get(fake, mid))["products"]}
+    assert set(prods) == {"Özel Pim", "Rulman", "Menteşe", "Kelepçe"}        # the old found one went; by hand stayed
+    assert prods["Rulman"]["description"] == "elle düzeltildi" and prods["Rulman"]["url"]   # the site filled the rest
+    assert run(mf.delete_products(fake, mid, [p["id"], "o2", "none"])) == 2
+    assert {x["name"] for x in run(mf.get(fake, mid))["products"]} == {"Menteşe", "Kelepçe"}
+
+
+def test_runs_and_their_pages_go_with_a_delete(web, monkeypatch):
+    _fake_llm(monkeypatch)
+    fake = FakeDb()
+
+    async def go():
+        a = await mf.create(fake, "https://www.dogus.com.tr/")
+        b = await mf.create(fake, "https://www.dogus.com.tr/", "B")
+        ja, _ = await mf.start_job(fake, a["_id"])
+        await _until_done(fake, ja["_id"])()
+        jb, _ = await mf.start_job(fake, b["_id"])
+        await _until_done(fake, jb["_id"])()
+        jb2, _ = await mf.start_job(fake, b["_id"])
+        await _until_done(fake, jb2["_id"])()
+        return a["_id"], b["_id"], ja["_id"], jb["_id"], jb2["_id"]
+    a, b, ja, jb, jb2 = run(go())
+    pages = fake[mf.PAGES].docs
+    assert {r["job"] for r in pages.values()} == {ja, jb, jb2}
+    run(mf.delete_run(fake, jb))
+    assert {r["job"] for r in pages.values()} == {ja, jb2}
+    run(mf.remove(fake, b))
+    assert {r["job"] for r in pages.values()} == {ja} and set(fake[mf.JOBS].docs) == {ja}
+    # a run left by a manufacturer deleted the old way: not listed, and pruned
+    run(fake[mf.JOBS].insert_one({"_id": "old", "status": "done", "manufacturer": {"id": "gone"}, "started_at": mf._now()}))
+    run(fake[mf.PAGES].insert_one({"_id": "old:0", "job": "old", "manufacturer": "gone", "page": {}}))
+    assert [j["_id"] for j in run(mf.jobs(fake))] == [ja]
+    run(mf._prune(fake))
+    assert "old" not in fake[mf.JOBS].docs and "old:0" not in pages and ja in fake[mf.JOBS].docs
+
+
+def test_the_page_and_product_api(db, web, monkeypatch):  # noqa: F811
+    started = []
+
+    async def work(dbx, jid, mid, choice, reuse=None):
+        started.append(jid)
+    monkeypatch.setattr(mf, "_work", work)
+    a, b = person(db, "a"), person(db, "b")
+    r = a.post("/api/manufacturers", json={"url": "https://www.dogus.com.tr/Urunler/10/baglanti", "only": True,
+                                           "follow": True, "proxy": "off"}).json()
+    m, j = r["manufacturer"], r["job"]
+    assert m["url"] == "https://www.dogus.com.tr/" and m["name"] == "dogus.com.tr"
+    assert j["kind"] == "page" and j["only"] == ["https://www.dogus.com.tr/Urunler/10/baglanti"] and j["follow"]
+    mid = m["id"]
+    ws = next(iter(db[mf.COLL].docs.values()))["workspace_id"]
+    run(db[mf.JOBS].update_one({"_id": j["job_id"]}, {"$set": {"status": "done"}}))
+    assert a.post(f"/api/manufacturers/{mid}/read-page", json={"urls": ["http://10.0.0.1/x"]}).status_code == 400
+    assert a.post(f"/api/manufacturers/{mid}/read-page", json={"urls": []}).status_code == 422
+    r = a.post(f"/api/manufacturers/{mid}/read-page", json={"urls": ["www.dogus.com.tr/a", "https://www.dogus.com.tr/a"]}).json()
+    assert r["kind"] == "page" and r["only"] == ["https://www.dogus.com.tr/a"] and not r["follow"]
+    assert b.post(f"/api/manufacturers/{mid}/read-page", json={"urls": ["https://www.dogus.com.tr/a"]}).status_code == 404
+    # products by hand
+    got = a.post(f"/api/manufacturers/{mid}/products", json={"name": "Pim", "sku": "P1", "specs": "Çap: 6 mm"}).json()
+    pid = got["product"]["id"]
+    assert got["manufacturer"]["product_count"] == 1 and got["product"]["source"] == "manual"
+    assert a.post(f"/api/manufacturers/{mid}/products", json={"name": "Pim 2", "sku": "p1"}).status_code == 409
+    assert a.post(f"/api/manufacturers/{mid}/products", json={"name": ""}).status_code == 422
+    assert b.post(f"/api/manufacturers/{mid}/products", json={"name": "x"}).status_code == 404
+    got = a.patch(f"/api/manufacturers/{mid}/products/{pid}", json={"category": "Pimler"}).json()
+    assert got["product"]["category"] == "Pimler" and got["product"]["specs"] == {"Çap": "6 mm"}
+    assert a.patch(f"/api/manufacturers/{mid}/products/nope", json={"name": "x"}).status_code == 404
+    a.post(f"/api/manufacturers/{mid}/products", json={"name": "Somun"})
+    a.post(f"/api/manufacturers/{mid}/products", json={"name": "Vida"})
+    ids = [p["id"] for p in a.get(f"/api/manufacturers/{mid}").json()["products"]]
+    assert a.delete(f"/api/manufacturers/{mid}/products/{ids[0]}").json()["deleted"] == ids[0]
+    assert a.delete(f"/api/manufacturers/{mid}/products/{ids[0]}").status_code == 404
+    got = a.post(f"/api/manufacturers/{mid}/products/delete", json={"ids": ids[1:]}).json()
+    assert got["deleted"] == 2 and got["manufacturer"]["product_count"] == 0
+    # deleting the maker takes its runs
+    assert a.delete(f"/api/manufacturers/{mid}").json() == {"deleted": mid}
+    assert a.get("/api/manufacturers/jobs").json() == []
+    assert not [d for d in db[mf.JOBS].docs.values() if d.get("workspace_id") == ws]
+
+
+def test_new_routes_follow_the_tabs_rules():
+    for m, p in (("POST", "/api/manufacturers/m1/read-page"), ("POST", "/api/manufacturers/m1/products"),
+                 ("PATCH", "/api/manufacturers/m1/products/p1"), ("DELETE", "/api/manufacturers/m1/products/p1"),
+                 ("POST", "/api/manufacturers/m1/products/delete")):
+        assert not access.page_allowed(m, p), (m, p)
+        assert access.allowed("reviewer", access.action(m, p)) and not access.allowed("viewer", access.action(m, p))

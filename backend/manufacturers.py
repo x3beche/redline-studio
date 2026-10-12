@@ -80,9 +80,12 @@ CRAWL_SECONDS = 15 * 60             # the whole crawl, at most
 SITEMAP_URLS = 5_000                # read from the sitemaps, at most
 SITEMAPS = 6                        # sitemap files read, at most
 QUERY_VARIANTS = 6                  # the same path with different queries (?page=2...)
+ONLY_MAX = 10                       # pages given at once, to be read on their own ("Add from a page")
+FOLLOW_MAX = 30                     # product pages followed from them, at most (depth 1)
 
 # What the model reads.
 PAGE_CHARS = 6_000                  # of one page
+PART_CHARS = 24_000                 # of a page given by hand, in one question (a longer one goes in parts)
 CHUNK_CHARS = 32_000                # pages handed to the model in one question
 MAX_CHUNKS = 8
 EXTRACT_TOKENS = 8_000
@@ -540,12 +543,70 @@ def _is_xml(ct: str) -> bool:
     return ct in ("application/xml", "text/xml", "text/plain", "application/rss+xml", "") or ct.endswith("+xml")
 
 
+async def _read_robots(root: str, track: Tracker, fetcher: Fetcher, allowed, sid: str = "robots"):
+    """robots.txt, from a site's own root: (its rules, its sitemaps, its
+    Crawl-delay), each written on the step `sid`."""
+    robots = urllib.robotparser.RobotFileParser()
+    sitemaps: list[str] = []
+    delay = DELAY
+    await track.step(sid, kind="robots", url=root + "robots.txt", state="running")
+    got = await fetcher.get(root + "robots.txt", lambda ct: True, allowed)
+    if got["status"] == 200 and got["body"]:
+        lines = decode(got["body"], got["type"]).splitlines()
+        robots.parse(lines)
+        found = [normalise(ln.split(":", 1)[1].strip()) for ln in lines if ln.lower().startswith("sitemap:")]
+        sitemaps = [s for s in found if s and allowed(s)]
+        cd = robots.crawl_delay(USER_AGENT)
+        if cd:
+            delay = min(MAX_DELAY, max(DELAY, float(cd)))
+        await track.step(sid, state="done", found=True, rules=len(lines), sitemaps=len(sitemaps),
+                         delay=delay, via=got["via"])
+    elif got["status"] in (401, 403):
+        robots.disallow_all = True
+        await track.step(sid, state="done", found=True, delay=delay, via=got["via"],
+                         note="robots.txt is refused to us: the site is read as closed")
+    else:
+        robots.allow_all = True
+        await track.step(sid, state="done", found=False, delay=delay, via=got["via"],
+                         note="no robots.txt: every page may be read" if not got["error"] else got["error"])
+    track.add(delay=delay)
+    return robots, sitemaps, delay
+
+
+def _root_of(u: str) -> str:
+    return urllib.parse.urlunsplit(urllib.parse.urlsplit(u)[:2] + ("/", "", ""))
+
+
+def _domain_of(u: str) -> str:
+    return registrable(urllib.parse.urlsplit(u).hostname or "")
+
+
+def _page_row(got: dict, url: str, depth: int) -> dict:
+    """A request as a row of the run's page list."""
+    row = {"url": got["url"] if got["status"] == 200 else url, "depth": depth, "status": got["status"],
+           "via": got["via"], "ms": got.get("ms"), "bytes": got["bytes"], "at": _now()}
+    if got.get("fallback"):
+        row["fallback"] = True
+    if got["error"]:
+        row["error"] = got["error"]
+    elif got["status"] == 200 and not _is_html(got["type"]):
+        row["error"] = f"not a web page ({got['type'].split(';')[0]})"
+    elif got["status"] != 200:
+        row["error"] = f"HTTP {got['status']}"
+    return row
+
+
 async def crawl(start: str, track: Tracker, fetcher: Fetcher, max_pages: int = MAX_PAGES,
-                sleep=asyncio.sleep) -> dict:
+                sleep=asyncio.sleep, only: list[str] | None = None, follow: bool = False) -> dict:
     """Read the site from `start`: robots.txt, the sitemaps, then pages,
     the likeliest product pages first. Returns {pages, domain, docs, home}
     - a page {url, title, description, text, images, depth, product}.
-    Each request is a row of the run's page list, written as it goes."""
+    Each request is a row of the run's page list, written as it goes.
+
+    With `only`, just those pages are read (crawl_only): no sitemap, no
+    links followed - but the product pages they link to when `follow`."""
+    if only:
+        return await crawl_only(only, track, fetcher, follow, sleep)
     t_start = time.monotonic()
     pages_meta: list[dict] = track.meta.setdefault("pages", [])
     first = await check(start)
@@ -562,32 +623,10 @@ async def crawl(start: str, track: Tracker, fetcher: Fetcher, max_pages: int = M
         """robots.txt, from the site's own root: its rules, its sitemaps,
         its Crawl-delay."""
         nonlocal robots, sitemaps, delay
-        robots = urllib.robotparser.RobotFileParser()
-        await track.step("robots", kind="robots", url=root + "robots.txt", state="running")
-        got = await fetcher.get(root + "robots.txt", lambda ct: True, allowed)
-        if got["status"] == 200 and got["body"]:
-            lines = decode(got["body"], got["type"]).splitlines()
-            robots.parse(lines)
-            found = [normalise(ln.split(":", 1)[1].strip()) for ln in lines if ln.lower().startswith("sitemap:")]
-            sitemaps = [s for s in found if s and allowed(s)]
-            cd = robots.crawl_delay(USER_AGENT)
-            if cd:
-                delay = min(MAX_DELAY, max(DELAY, float(cd)))
-            await track.step("robots", state="done", found=True, rules=len(lines), sitemaps=len(sitemaps),
-                             delay=delay, via=got["via"])
-        elif got["status"] in (401, 403):
-            robots.disallow_all = True
-            await track.step("robots", state="done", found=True, delay=delay, via=got["via"],
-                             note="robots.txt is refused to us: the site is read as closed")
-        else:
-            robots.allow_all = True
-            await track.step("robots", state="done", found=False, delay=delay, via=got["via"],
-                             note="no robots.txt: every page may be read" if not got["error"] else got["error"])
-        track.add(delay=delay)
+        robots, sitemaps, delay = await _read_robots(root, track, fetcher, allowed)
         await sleep(delay)
 
-    def root_of(u: str) -> str:
-        return urllib.parse.urlunsplit(urllib.parse.urlsplit(u)[:2] + ("/", "", ""))
+    root_of = _root_of
 
     await read_robots(root_of(first))
     root = root_of(first)
@@ -675,16 +714,7 @@ async def crawl(start: str, track: Tracker, fetcher: Fetcher, max_pages: int = M
         fetched += 1
         # the first page may redirect to another site (checked like any address)
         got = await fetcher.get(url, _is_html, (lambda u: True) if url == first and home is None else allowed)
-        row = {"url": got["url"] if got["status"] == 200 else url, "depth": depth, "status": got["status"],
-               "via": got["via"], "ms": got.get("ms"), "bytes": got["bytes"], "at": _now()}
-        if got.get("fallback"):
-            row["fallback"] = True
-        if got["error"]:
-            row["error"] = got["error"]
-        elif got["status"] == 200 and not _is_html(got["type"]):
-            row["error"] = f"not a web page ({got['type'].split(';')[0]})"
-        elif got["status"] != 200:
-            row["error"] = f"HTTP {got['status']}"
+        row = _page_row(got, url, depth)
         if got["status"] == 200 and got["body"] and _is_html(got["type"]):
             final = normalise(got["url"]) or url
             seen.add(final)
@@ -723,6 +753,108 @@ async def crawl(start: str, track: Tracker, fetcher: Fetcher, max_pages: int = M
             "home": home}
 
 
+ONLY_NOTE = "only the given pages"
+FOLLOW_NOTE = "only the given pages and the product pages they link to"
+
+
+async def crawl_only(urls: list[str], track: Tracker, fetcher: Fetcher, follow: bool = False,
+                     sleep=asyncio.sleep) -> dict:
+    """Read just the pages given (1 to ONLY_MAX) - a product, or a list or
+    category of them, on the maker's site or a distributor's: each under
+    its own site's robots.txt (a page it forbids is not read, and the row
+    says why), the sitemap skipped, no link followed - except, with
+    `follow`, the product pages they link to on the same site, one link
+    deep, FOLLOW_MAX at most. Returns what crawl() returns."""
+    pages_meta: list[dict] = track.meta.setdefault("pages", [])
+    given: list[str] = []
+    for u in urls[:ONLY_MAX]:
+        u = await check(u)
+        if u not in given:
+            given.append(u)
+    if not given:
+        raise ExploreError("no page to read")
+    rules: dict[str, urllib.robotparser.RobotFileParser] = {}
+    delay = DELAY
+
+    async def robots_for(u: str):
+        nonlocal delay
+        root = _root_of(u)
+        if root not in rules:
+            sid = "robots" if not rules else f"robots:{len(rules) + 1}"
+            dom = _domain_of(root)
+            rp, _, d = await _read_robots(root, track, fetcher, lambda x: _domain_of(x) == dom, sid)
+            rules[root] = rp
+            delay = max(delay, d)
+            await sleep(delay)
+        return rules[root]
+
+    await track.step("sitemap", kind="sitemap", state="skipped", files=0, urls=0, note=ONLY_NOTE)
+    await track.phase("crawling")
+    cap = len(given) + (FOLLOW_MAX if follow else 0)
+    note = FOLLOW_NOTE if follow else ONLY_NOTE
+    await track.step("crawl", kind="crawl", pages=0, read=0, cap=cap, queued=len(given), note=note, only=True)
+    pages: list[dict] = []
+    docs: dict[str, str] = {}
+    seen: set[str] = set(given)
+    counts = {"fetched": 0, "robots": 0}
+    queue: list[tuple[str, int]] = [(u, 0) for u in given]
+
+    async def read(url: str, depth: int) -> None:
+        rp = await robots_for(url)
+        if not rp.can_fetch(USER_AGENT, url):
+            counts["robots"] += 1
+            host = urllib.parse.urlsplit(url).hostname
+            pages_meta.append({"url": url, "depth": depth, "status": None, "via": "proxy" if fetcher.via_proxy else "direct",
+                               "bytes": 0, "at": _now(), "robots": True,
+                               "error": f"robots.txt of {host} does not allow reading this page"})
+            return
+        counts["fetched"] += 1
+        dom = _domain_of(url)
+        got = await fetcher.get(url, _is_html, lambda x: _domain_of(x) == dom)
+        row = _page_row(got, url, depth)
+        if got["status"] == 200 and got["body"] and _is_html(got["type"]):
+            final = normalise(got["url"]) or url
+            seen.add(final)
+            page = parse_page(decode(got["body"], got["type"]), final)
+            row.update(title=page["title"][:160], chars=len(page["text"]), links=len(page["links"]),
+                       product=depth > 0 or looks_like_product(final, page["title"]))
+            page.update(url=final, depth=depth, product=row["product"])
+            pages.append(page)
+            for link, words in page["links"]:
+                path = urllib.parse.urlsplit(link).path
+                if _domain_of(link) != _domain_of(final):
+                    continue
+                if FILE_EXT.search(path):
+                    if DOC_EXT.search(path) and len(docs) < MAX_DOCS:
+                        docs.setdefault(link, words or urllib.parse.unquote(link.rsplit("/", 1)[-1]))
+                    continue
+                if (follow and depth == 0 and link not in seen and score(link, words) > -50
+                        and looks_like_product(link, words)
+                        and sum(1 for _, d in queue if d) < FOLLOW_MAX):
+                    seen.add(link)
+                    queue.append((link, 1))
+        pages_meta.append(row)
+
+    i = 0
+    while i < len(queue):
+        url, depth = queue[i]
+        i += 1
+        if i > 1:
+            await sleep(delay)
+        await read(url, depth)
+        await track.step("crawl", pages=counts["fetched"], read=len(pages), cap=cap, queued=len(queue) - i,
+                         skipped_robots=counts["robots"], current=url)
+    if not pages:
+        why = next((p.get("error") for p in pages_meta if p.get("error")), None) or "nothing could be read"
+        await track.step("crawl", state="failed", reason=f"the page could not be read: {why}")
+        raise ExploreError(f"the page could not be read: {why}")
+    await track.step("crawl", state="done", pages=counts["fetched"], read=len(pages), queued=0,
+                     skipped_robots=counts["robots"], current=None)
+    track.add(pages=counts["fetched"], read=len(pages), docs=len(docs))
+    return {"pages": pages, "domain": _domain_of(given[0]), "only": True, "home": pages[0],
+            "docs": [{"url": u, "label": _clean(w, 120)} for u, w in docs.items()]}
+
+
 # ---- what the model reads, and what it says ----------------------------------
 
 def _boiler(pages: list[dict]) -> set[str]:
@@ -737,11 +869,11 @@ def _boiler(pages: list[dict]) -> set[str]:
     return {ln for ln, c in counts.items() if c >= cut}
 
 
-def page_block(p: dict, boiler: set[str], first: bool = False) -> str:
+def page_block(p: dict, boiler: set[str], first: bool = False, most: int = PAGE_CHARS) -> str:
     lines = [ln for ln in p["text"].split("\n") if first or ln not in boiler]
     text = "\n".join(lines)
-    if len(text) > PAGE_CHARS:
-        text = text[:PAGE_CHARS] + "\n[... rest of the page left out]"
+    if len(text) > most:
+        text = text[:most] + "\n[... rest of the page left out]"
     head = [f"=== PAGE {p['url']}", f"Title: {p['title']}"]
     if p.get("description"):
         head.append(f"Description: {p['description']}")
@@ -752,10 +884,48 @@ def page_block(p: dict, boiler: set[str], first: bool = False) -> str:
     return out
 
 
-def chunks(pages: list[dict]) -> list[str]:
+def _parts(p: dict, size: int = PART_CHARS) -> list[dict]:
+    """A long page given by hand (a list of a few hundred products) in
+    parts of at most `size` characters, cut between lines, so the whole
+    list reaches the model rather than its first screen."""
+    text = p["text"]
+    if len(text) <= size:
+        return [p]
+    bits: list[str] = []
+    cur: list[str] = []
+    n = 0
+    for ln in text.split("\n"):
+        ln = ln[:size]
+        if cur and n + len(ln) > size:
+            bits.append("\n".join(cur))
+            cur, n = [], 0
+        cur.append(ln)
+        n += len(ln) + 1
+    if cur:
+        bits.append("\n".join(cur))
+    return [{**p, "text": b, "title": f"{p['title']} (part {i} of {len(bits)})",
+             "images": p.get("images") if i == 1 else []} for i, b in enumerate(bits, 1)]
+
+
+def chunks(pages: list[dict], whole: bool = False) -> list[str]:
     """The pages in questions of at most CHUNK_CHARS: the first page (with
     the company in it) and the about pages first, then product pages,
-    then the rest; pages with next to no text left out."""
+    then the rest; pages with next to no text left out. `whole`: pages
+    given by hand - each read to its end, a long one in parts."""
+    if whole:
+        out: list[str] = []
+        cur = ""
+        for p in [x for page in pages for x in _parts(page)]:
+            b = page_block(p, set(), first=True, most=PART_CHARS)
+            if cur and len(cur) + len(b) > CHUNK_CHARS:
+                out.append(cur)
+                cur = ""
+                if len(out) >= MAX_CHUNKS:
+                    return out
+            cur += ("\n\n" if cur else "") + b
+        if cur and len(out) < MAX_CHUNKS:
+            out.append(cur)
+        return out
     boiler = _boiler(pages)
     first = pages[:1]
     rest = pages[1:]
@@ -797,6 +967,12 @@ EXTRACT_PROMPT = (
     "description may be in the same language.\n"
     "- Leave a field out rather than guessing. Navigation, news, contact and campaign pages are not products.\n"
     "- At most 120 products in one answer: the most specific ones first."
+)
+ONLY_PROMPT = (
+    "These pages were picked by hand, not crawled: read them to the end. A page may be a list, a table or a category "
+    "of products - write down every product it lists, each as its own entry, even when the list gives only a name, "
+    "a code or a size; keep each entry short when there are many. The site may be a distributor's: the company is "
+    "the one whose products these are when the page says so."
 )
 
 
@@ -919,7 +1095,8 @@ def _failed(prov: str, model: str, exc: BaseException, timeout: float) -> str:
 async def extract(db, site: dict, track: Tracker) -> dict:
     """The company and its products, read from the crawled pages a chunk
     at a time: {company, products, provider, model}."""
-    parts = chunks(site["pages"])
+    whole = bool(site.get("only"))
+    parts = chunks(site["pages"], whole)
     if not parts:
         raise ExploreError("the pages read had no text to give the model")
     known: set[str] = set()
@@ -943,7 +1120,7 @@ async def extract(db, site: dict, track: Tracker) -> dict:
     failures = []
     for n, chunk in enumerate(parts, 1):
         sid = f"ask:{n}"
-        user = f"Website: {site['domain']}\n\n{chunk}"
+        user = f"Website: {site['domain']}\n\n" + (f"{ONLY_PROMPT}\n\n" if whole else "") + chunk
         chars = len(EXTRACT_PROMPT) + len(user)
         await track.step(sid, kind="ask", n=n, of=len(parts), provider=prov, model=model, provider_name=pname,
                          prompt_chars=chars, tokens_est=chars // CHARS_PER_TOKEN, max_tokens=EXTRACT_TOKENS,
@@ -1076,7 +1253,102 @@ async def patch(db, mid: str, sets: dict) -> dict | None:
 
 
 async def remove(db, mid: str) -> bool:
-    return bool((await db[COLL].delete_one({"_id": mid})).deleted_count)
+    """The manufacturer, and its runs and their kept pages with it (a
+    running one cancelled first), so no run is left without its maker."""
+    for j in [d async for d in db[JOBS].find({"manufacturer.id": mid})]:
+        if j.get("status") in ACTIVE:
+            await cancel_job(db, j["_id"])
+    gone = bool((await db[COLL].delete_one({"_id": mid})).deleted_count)
+    await db[JOBS].delete_many({"manufacturer.id": mid})
+    await db[PAGES].delete_many({"manufacturer": mid})
+    return gone
+
+
+# ---- products added by hand --------------------------------------------------
+
+class Clash(Exception):
+    """A product with the same code (or, without one, the same name) is already in the catalog."""
+
+
+def manual_product(fields: dict) -> dict:
+    """A product as the person typed it, in the extractor's shape
+    (clean_product): specs as {name: value} or "name: value" lines, the
+    page and the picture as http(s) addresses."""
+    raw = dict(fields)
+    specs = raw.get("specs")
+    if isinstance(specs, str):
+        raw["specs"] = [ln for ln in specs.splitlines() if ln.strip()]
+    for k, what in (("url", "page"), ("image", "image")):
+        v = str(raw.get(k) or "").strip()
+        if v:
+            u = normalise(v if "://" in v else "https://" + v)
+            if not u:
+                raise ValueError(f"the {what} address must be an http(s) address")
+            raw[k] = u
+    p = clean_product(raw)
+    if not p:
+        raise ValueError("give the product a name")
+    return p
+
+
+def _clashes(products: list[dict], p: dict, but: str | None = None) -> dict | None:
+    k = product_key(p)
+    return next((x for x in products if x.get("id") != but and product_key(x) == k), None)
+
+
+async def add_product(db, mid: str, fields: dict, by: dict | None = None) -> dict:
+    doc = await get(db, mid)
+    if not doc:
+        raise LookupError(f"no manufacturer {mid}")
+    p = manual_product(fields)
+    have = doc.get("products") or []
+    if _clashes(have, p):
+        raise Clash(f"\"{p['name']}\" is already in the catalog" + (f" (code {p['sku']})" if p["sku"] else ""))
+    if len(have) >= MAX_PRODUCTS:
+        raise ValueError(f"the catalog is full ({MAX_PRODUCTS} products)")
+    who = by or actors.current()
+    p.update(id="m" + secrets.token_hex(5), source="manual", added_by={"id": who.get("id"), "name": who.get("name")},
+             added_at=_now())
+    await db[COLL].update_one({"_id": mid}, {"$set": {"products": have + [p], "updated_at": _now()}})
+    return p
+
+
+async def edit_product(db, mid: str, pid: str, fields: dict, by: dict | None = None) -> dict:
+    """A product changed by hand - one the run found, or one added by hand.
+    Either way it is kept through the next full exploration."""
+    doc = await get(db, mid)
+    if not doc:
+        raise LookupError(f"no manufacturer {mid}")
+    have = doc.get("products") or []
+    old = next((x for x in have if x.get("id") == pid), None)
+    if not old:
+        raise LookupError(f"no product {pid}")
+    p = manual_product({**old, **{k: v for k, v in fields.items() if v is not None}})
+    if _clashes(have, p, pid):
+        raise Clash(f"\"{p['name']}\" is already in the catalog" + (f" (code {p['sku']})" if p["sku"] else ""))
+    who = by or actors.current()
+    keep = {k: old[k] for k in ("source", "added_by", "added_at") if k in old}
+    p.update(id=pid, **keep, edited=True, edited_by={"id": who.get("id"), "name": who.get("name")}, edited_at=_now())
+    await db[COLL].update_one({"_id": mid}, {"$set": {"products": [p if x.get("id") == pid else x for x in have],
+                                                      "updated_at": _now()}})
+    return p
+
+
+async def delete_products(db, mid: str, ids: list[str]) -> int:
+    doc = await get(db, mid)
+    if not doc:
+        raise LookupError(f"no manufacturer {mid}")
+    have = doc.get("products") or []
+    drop = set(ids)
+    left = [x for x in have if x.get("id") not in drop]
+    if len(left) != len(have):
+        await db[COLL].update_one({"_id": mid}, {"$set": {"products": left, "updated_at": _now()}})
+    return len(have) - len(left)
+
+
+def by_hand(p: dict) -> bool:
+    """Added or changed by hand: kept when a full exploration replaces the catalog."""
+    return p.get("source") == "manual" or bool(p.get("edited"))
 
 
 # ---- searching the catalogs --------------------------------------------------
@@ -1289,6 +1561,8 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
     beating = asyncio.create_task(beat())
     fetcher = None
     try:
+        jd = await db[JOBS].find_one({"_id": jid}) or {}
+        page_run = jd.get("kind") == "page"
         doc = await get(db, mid)
         if not doc:
             raise ExploreError("the manufacturer was deleted")
@@ -1297,6 +1571,7 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
             site = await load_pages(db, reuse)
             if not site:
                 raise ExploreError("that run's pages are no longer kept - explore the site again")
+            site["only"] = page_run
             n = len(site["pages"])
             site["docs"] = doc.get("docs") or []
             await track.step("crawl", kind="crawl", state="done", pages=n, read=n, cap=n,
@@ -1308,7 +1583,8 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
             except Refused as exc:
                 raise ExploreError(str(exc)) from exc
             try:
-                site = await crawl(doc["url"], track, fetcher)
+                site = await crawl(doc["url"], track, fetcher, only=jd.get("only") if page_run else None,
+                                   follow=bool(jd.get("follow")))
             except Refused as exc:
                 await track.step("robots", kind="robots", state="failed", reason=str(exc))
                 raise ExploreError(str(exc)) from exc
@@ -1319,22 +1595,37 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
             except Exception:                           # noqa: BLE001 - not keeping them only costs a re-fetch later
                 log.exception("keeping the pages of run %s", jid)
         got = await extract(db, site, track)
+        if page_run and not got["products"]:
+            raise ExploreError("the model found no products on the page")
         if not got["products"] and not got["company"]["description"]:
             raise ExploreError("the model found no products and no description on the pages read")
         doc = await get(db, mid)
         if not doc:
             raise ExploreError("the manufacturer was deleted while it was explored")
-        sets = {"summary": got["company"]["description"] or doc.get("summary") or "",
-                "categories": got["company"]["categories"] or doc.get("categories") or [],
-                "docs": site["docs"] or doc.get("docs") or [], "domain": site["domain"] or doc.get("domain"),
-                "explored_at": _now(), "updated_at": _now()}
-        if got["products"] or not doc.get("products"):
-            sets["products"] = got["products"]
-        if doc.get("name_auto") and got["company"]["name"]:
-            sets["name"] = got["company"]["name"][:120]
+        have = doc.get("products") or []
+        if page_run:
+            # A page read by hand adds to the catalog: nothing in it is dropped.
+            merged, _ = merge_products([have, got["products"]])
+            added = len(merged) - len(have)
+            sets = {"products": merged, "summary": doc.get("summary") or got["company"]["description"] or "",
+                    "categories": list(dict.fromkeys((doc.get("categories") or []) + got["company"]["categories"]))[:80],
+                    "docs": list({d["url"]: d for d in (doc.get("docs") or []) + (site.get("docs") or [])}.values())[:MAX_DOCS],
+                    "explored_at": _now(), "updated_at": _now()}
+        else:
+            sets = {"summary": got["company"]["description"] or doc.get("summary") or "",
+                    "categories": got["company"]["categories"] or doc.get("categories") or [],
+                    "docs": site["docs"] or doc.get("docs") or [], "domain": site["domain"] or doc.get("domain"),
+                    "explored_at": _now(), "updated_at": _now()}
+            if got["products"] or not have:
+                # The site's catalog replaces the old one; what was added or changed by hand stays.
+                sets["products"], _ = merge_products([[p for p in have if by_hand(p)], got["products"]])
+            if doc.get("name_auto") and got["company"]["name"]:
+                sets["name"] = got["company"]["name"][:120]
+            added = None
         await db[COLL].update_one({"_id": mid}, {"$set": sets})
         await track.step("done", kind="done", state="done", products=len(got["products"]),
-                         categories=len(got["company"]["categories"]))
+                         categories=len(got["company"]["categories"]),
+                         **({"added": added, "catalog": len(sets["products"])} if page_run else {}))
         await _end(db, jid, "done", {**track.fields(), "status": "done", "provider": got["provider"],
                                      "model": got["model"], "products_found": len(got["products"])})
     except Stopped:
@@ -1367,8 +1658,17 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
         _CANCEL.discard(jid)
 
 
+async def _maker_ids(db) -> set[str]:
+    return {d["_id"] async for d in db[COLL].find({}, {"_id": 1})}
+
+
 async def jobs(db, limit: int = 20, mid: str | None = None) -> list[dict]:
+    """The latest runs (of one manufacturer); a run whose manufacturer is
+    gone is left out."""
     rows = [d async for d in db[JOBS].find({"manufacturer.id": mid} if mid else {})]
+    if not mid:
+        makers = await _maker_ids(db)
+        rows = [d for d in rows if (d.get("manufacturer") or {}).get("id") in makers]
     rows.sort(key=lambda d: d.get("started_at") or "", reverse=True)
     return [await settle(db, d) for d in rows[:limit]]
 
@@ -1377,19 +1677,31 @@ async def job(db, jid: str) -> dict | None:
     return await settle(db, await db[JOBS].find_one({"_id": jid}))
 
 
+async def delete_run(db, jid: str) -> None:
+    """A finished run, and the pages it kept."""
+    await db[JOBS].delete_one({"_id": jid})
+    await db[PAGES].delete_many({"job": jid})
+
+
 async def _prune(db) -> None:
-    rows = [d async for d in db[JOBS].find({}, {"status": 1, "started_at": 1})]
+    """The oldest finished runs past KEEP_JOBS, and every finished run whose
+    manufacturer is gone, with their kept pages."""
+    rows = [d async for d in db[JOBS].find({}, {"status": 1, "started_at": 1, "manufacturer.id": 1})]
+    makers = await _maker_ids(db)
     done = sorted((d for d in rows if d.get("status") not in ACTIVE),
                   key=lambda d: d.get("started_at") or "", reverse=True)
-    for d in done[KEEP_JOBS:]:
-        await db[JOBS].delete_one({"_id": d["_id"]})
-        await db[PAGES].delete_many({"job": d["_id"]})
+    orphans = [d for d in done if (d.get("manufacturer") or {}).get("id") not in makers]
+    kept = [d for d in done if d not in orphans]
+    for d in orphans + kept[KEEP_JOBS:]:
+        await delete_run(db, d["_id"])
 
 
 async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = None,
-                    reuse: str | None = None) -> tuple[dict, bool]:
+                    reuse: str | None = None, only: list[str] | None = None, follow: bool = False) -> tuple[dict, bool]:
     """Explore a manufacturer's site (in the background): (job, started).
-    One already running for it is that run."""
+    One already running for it is that run. With `only`, just those pages
+    are read ("page" run) and what they hold is added to the catalog; read
+    again (`reuse`), a run is of the kind the run it reads was."""
     doc = await get(db, mid)
     if not doc:
         raise LookupError(f"no manufacturer {mid}")
@@ -1401,13 +1713,21 @@ async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = No
         raise ValueError("the proxy is not set up (Settings > Proxy) - choose Off, or set it up first")
     if choice != doc.get("proxy"):
         await db[COLL].update_one({"_id": mid}, {"$set": {"proxy": choice}})
+    kind = "page" if only else "site"
+    if reuse:
+        was = await db[JOBS].find_one({"_id": reuse}) or {}
+        kind, only, follow = was.get("kind") or "site", was.get("only"), bool(was.get("follow"))
+    limits = {"pages": MAX_PAGES, "depth": MAX_DEPTH, "delay": DELAY}
+    if kind == "page":
+        limits = {"pages": len(only or []) + (FOLLOW_MAX if follow else 0), "depth": 1 if follow else 0, "delay": DELAY}
     prov, model = llm.route(JOB)
     now = _now()
-    jd = {"_id": secrets.token_hex(6), "status": "queued",
+    jd = {"_id": secrets.token_hex(6), "status": "queued", "kind": kind,
+          **({"only": list(only or []), "follow": bool(follow)} if kind == "page" else {}),
           "manufacturer": {"id": mid, "name": doc.get("name") or "", "url": doc.get("url"), "domain": doc.get("domain")},
           "by": by or actors.current(), "started_at": now, "finished_at": None, "beat": now, "worker": WORKER,
           "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov),
-          "proxy": choice, "limits": {"pages": MAX_PAGES, "depth": MAX_DEPTH, "delay": DELAY},
+          "proxy": choice, "limits": limits,
           "steps": [], "totals": {}, "pages": [], "error": None, "products_found": None, "reused": reuse}
     await db[JOBS].insert_one(jd)
     await db[COLL].update_one({"_id": mid}, {"$set": {"last_job": jd["_id"]}})
@@ -1450,7 +1770,7 @@ def out(d: dict, last: dict | None = None, full: bool = True) -> dict:
          "last_run": ({"id": last["_id"], "status": last.get("status"), "started_at": last.get("started_at"),
                        "finished_at": last.get("finished_at"), "error": last.get("error"),
                        "pages": len(last.get("pages") or []), "products": last.get("products_found"),
-                       "kept_pages": last.get("kept_pages") or 0} if last else None)}
+                       "kept_pages": last.get("kept_pages") or 0, "kind": last.get("kind") or "site"} if last else None)}
     if full:
         o["products"] = d.get("products") or []
     return o
@@ -1474,6 +1794,8 @@ class MakerIn(BaseModel):
     notes: str = Field(default="", max_length=4000)
     proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
     explore: bool = True
+    only: bool = False              # the address is one page to read, not a site to explore
+    follow: bool = False            # ...and the product pages it links to
 
 
 class MakerPatch(BaseModel):
@@ -1486,6 +1808,54 @@ class MakerPatch(BaseModel):
 
 class ExploreIn(BaseModel):
     proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+
+
+class ReadPageIn(BaseModel):
+    urls: list[str] = Field(min_length=1, max_length=ONLY_MAX)
+    follow: bool = False
+    proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+
+
+class ProductIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(default="", max_length=120)
+    sku: str = Field(default="", max_length=80)
+    description: str = Field(default="", max_length=600)
+    specs: dict[str, str] | list[str] | str | None = None
+    url: str = Field(default="", max_length=500)
+    image: str = Field(default="", max_length=500)
+
+
+class ProductPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=120)
+    sku: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=600)
+    specs: dict[str, str] | list[str] | str | None = None
+    url: str | None = Field(default=None, max_length=500)
+    image: str | None = Field(default=None, max_length=500)
+
+
+class ProductIds(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=MAX_PRODUCTS)
+
+
+async def _pages_given(urls: list[str]) -> list[str]:
+    """The pages to read, each checked as any fetch is; 400 for one that may not be."""
+    out: list[str] = []
+    for u in urls:
+        u = u.strip()
+        if not u:
+            continue
+        try:
+            u = await check(u if "://" in u else "https://" + u)
+        except Refused as exc:
+            raise HTTPException(400, f"{u}: {exc}") from exc
+        if u not in out:
+            out.append(u)
+    if not out:
+        raise HTTPException(400, "give the page's address, like https://www.example.com/products/hinges")
+    return out[:ONLY_MAX]
 
 
 @router.get("")
@@ -1509,9 +1879,10 @@ async def api_search(q: str = "", category: str = "", m: str = "", limit: int = 
     return [{"manufacturer": {"id": d["_id"], "name": d.get("name")}, "product": p} for d, p, _ in rows]
 
 
-async def _start(mid: str, proxy: str | None, reuse: str | None = None):
+async def _start(mid: str, proxy: str | None, reuse: str | None = None, only: list[str] | None = None,
+                 follow: bool = False):
     try:
-        jd, started = await start_job(_db(), mid, proxy, actors.current(), reuse)
+        jd, started = await start_job(_db(), mid, proxy, actors.current(), reuse, only, follow)
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
@@ -1521,26 +1892,35 @@ async def _start(mid: str, proxy: str | None, reuse: str | None = None):
 
 @router.post("")
 async def api_create(body: MakerIn):
-    """A manufacturer, by its site; explored at once unless `explore` is off."""
+    """A manufacturer, by its site; explored at once unless `explore` is off.
+    With `only`, the address is a page: the manufacturer is made for its
+    site, and just that page is read into the catalog."""
     db = _db()
     try:
-        await check(body.url if "://" in body.url else "https://" + body.url.strip())
+        page = await check(body.url if "://" in body.url else "https://" + body.url.strip())
     except Refused as exc:
         raise HTTPException(400, str(exc)) from exc
     proxy = body.proxy or proxy_state()["default"]
     if proxy != "off" and not proxy_state()["configured"]:
         raise HTTPException(400, "the proxy is not set up (Settings > Proxy) - choose Off, or set it up first")
     try:
-        doc = await create(db, body.url, body.name, body.notes, proxy, actors.current())
+        doc = await create(db, _root_of(page) if body.only else body.url, body.name, body.notes, proxy, actors.current())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    run = await _start(doc["_id"], proxy) if body.explore else None
+    if body.only:
+        run = await _start(doc["_id"], proxy, only=[page], follow=body.follow)
+    else:
+        run = await _start(doc["_id"], proxy) if body.explore else None
     doc = await get(db, doc["_id"])
     return {"manufacturer": out(doc), "job": run}
 
 
 @router.get("/jobs")
 async def api_jobs(limit: int = 20, m: str = ""):
+    try:
+        await _prune(_db())                             # runs left by a manufacturer deleted before they went with it
+    except Exception:                                   # noqa: BLE001
+        pass
     return [job_out(d, full=False) for d in await jobs(_db(), max(1, min(limit, KEEP_JOBS)), m or None)]
 
 
@@ -1573,7 +1953,7 @@ async def api_job_delete(jid: str):
         raise HTTPException(409, "the exploration is still running - cancel it first")
     if (d.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    await _db()[JOBS].delete_one({"_id": jid})
+    await delete_run(_db(), jid)
     return {"deleted": jid}
 
 
@@ -1663,9 +2043,6 @@ async def api_delete(mid: str):
         _404(mid)
     if (doc.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    for j in await jobs(db, KEEP_JOBS, mid):
-        if j and j.get("status") in ACTIVE:
-            await cancel_job(db, j["_id"])
     await remove(db, mid)
     return {"deleted": mid}
 
@@ -1682,6 +2059,73 @@ async def api_read_again(mid: str, body: ReadAgainIn):
     if not job or not job.get("kept_pages"):
         raise HTTPException(404, "that run kept no pages - explore the site again")
     return await _start(mid, None, body.run)
+
+
+@router.post("/{mid}/read-page")
+async def api_read_page(mid: str, body: ReadPageIn):
+    """Just these pages (and, with `follow`, the product pages they link to)
+    read into the catalog - added to it, nothing dropped."""
+    urls = await _pages_given(body.urls)
+    return await _start(mid, body.proxy, only=urls, follow=body.follow)
+
+
+async def _maker_out(db, mid: str) -> dict:
+    doc = await get(db, mid)
+    if not doc:
+        _404(mid)
+    runs = await jobs(db, 1, mid)
+    return out(doc, runs[0] if runs else None)
+
+
+def _product_call(exc: Exception):
+    if isinstance(exc, LookupError):
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    if isinstance(exc, Clash):
+        raise HTTPException(409, str(exc)) from exc
+    raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/{mid}/products")
+async def api_product_add(mid: str, body: ProductIn):
+    """A product added by hand; kept through a full exploration."""
+    db = _db()
+    try:
+        p = await add_product(db, mid, body.model_dump(), actors.current())
+    except (LookupError, Clash, ValueError) as exc:
+        _product_call(exc)
+    return {"product": p, "manufacturer": await _maker_out(db, mid)}
+
+
+@router.post("/{mid}/products/delete")
+async def api_products_delete(mid: str, body: ProductIds):
+    db = _db()
+    try:
+        n = await delete_products(db, mid, body.ids)
+    except LookupError as exc:
+        _product_call(exc)
+    return {"deleted": n, "manufacturer": await _maker_out(db, mid)}
+
+
+@router.patch("/{mid}/products/{pid}")
+async def api_product_edit(mid: str, pid: str, body: ProductPatch):
+    db = _db()
+    try:
+        p = await edit_product(db, mid, pid, body.model_dump(), actors.current())
+    except (LookupError, Clash, ValueError) as exc:
+        _product_call(exc)
+    return {"product": p, "manufacturer": await _maker_out(db, mid)}
+
+
+@router.delete("/{mid}/products/{pid}")
+async def api_product_delete(mid: str, pid: str):
+    db = _db()
+    try:
+        n = await delete_products(db, mid, [pid])
+    except LookupError as exc:
+        _product_call(exc)
+    if not n:
+        raise HTTPException(404, f"no product {pid}")
+    return {"deleted": pid, "manufacturer": await _maker_out(db, mid)}
 
 
 @router.post("/{mid}/explore")

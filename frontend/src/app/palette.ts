@@ -166,7 +166,7 @@ export class Palette {
       { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', run: () => this.picked.room.set('taste') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '≡', label: 'Extract taste from a project', hint: 'a model proposes, you review',
         run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste-extract'), 50); } }] : []),
-      { group: 'Actions', icon: '▥', label: 'Open Manufacturers', hint: 'makers and their catalogs', run: () => this.picked.room.set('mfr') },
+      { group: 'Actions', icon: '▥', label: 'Open Product Catalog', hint: 'makers and their catalogs', run: () => this.picked.room.set('mfr') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▥', label: 'Add a manufacturer', hint: 'by its website; its products are read',
         run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-add'), 50); } }] : []),
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
