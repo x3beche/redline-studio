@@ -146,6 +146,7 @@ def env(monkeypatch):
     monkeypatch.setattr(actors, "current", lambda: state["who"])
     monkeypatch.setattr(access, "current", lambda: state["role"])
     monkeypatch.setattr(llm, "key", lambda p: "k")
+    monkeypatch.setattr(cc_chat, "now_line", lambda tz=None: "")   # no clock stamp unless a test asks
 
     async def stream(messages, *, provider, model, max_tokens=8000, temperature=None):
         state["sent"] = messages
@@ -666,3 +667,15 @@ def test_a_stopped_answer_is_kept_and_marked(env, monkeypatch):
     events(cc_chat.say("c1", cc_chat.SayIn(text="again")))
     last = db.coll.rows["c1"]["messages"][-1]
     assert last["content"] == "" and last["stopped"] and last["error"] == "stopped before the answer began"
+
+
+def test_the_line_being_answered_says_the_time(monkeypatch):
+    monkeypatch.setattr(cc_chat, "now_line", lambda tz=None: "It is now.")
+    sent = cc_chat.history([msg("a", "user", "q1"), msg("b", "assistant", "x"), msg("c", "user", "q2")])
+    assert sent[-1]["content"] == "[It is now.]\n\nq2" and sent[1]["content"] == "q1"
+    assert "It is now" not in sent[0]["content"]
+
+
+def test_now_line_names_the_zone():
+    line = cc_chat.now_line("UTC")
+    assert line.startswith("It is ") and line.endswith("(UTC, UTC+00:00).")
