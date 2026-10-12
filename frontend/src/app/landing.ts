@@ -131,8 +131,6 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
     <div><div class="shot"><app-snap src="chat" [page]="[1500, 1080]" [crop]="chatCrop" [focus]="[900, 560]" alt="Chat: a request written up as a 3D note" /></div><p class="lbl">Chat · a spoken request, written up as a task and queued in 3D as note d2d2ad</p></div>
     <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
   </div>
-  <div class="shot wide rv"><app-snap src="hero" [crop]="runCrop" [min]="0" alt="Note d2d2ad running, beside the station it is about" /></div>
-  <p class="lbl">3D Drawing · note d2d2ad as it runs: tokens, cost, models, kinds of call, jobs, CPU and energy, beside the station it is about</p>
 </section>
 
 <div class="stmt wrap">
@@ -345,8 +343,6 @@ export class Landing implements AfterViewInit, OnDestroy {
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [595, 52, 584, 720];
   revCrop = [960, 92, 640, 780];
-  /** The middle of the 3D room while a note runs: its run card and the model. */
-  runCrop = [271, 87, 1328, 985];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
     ['Claude Max', '₺3,170/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
