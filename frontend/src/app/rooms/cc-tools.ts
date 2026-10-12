@@ -231,7 +231,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
             </div>
             <div class="ct-bars-axis mono"><span>{{ u.days[0].day.slice(5) }}</span><span>{{ 'today' | t }}</span></div>
             <div class="ct-legend">
-              @for (tl of tools(); track tl.name) {
+              @for (tl of charted(u); track tl.name) {
                 <span><i [style.background]="color(tl.name)"></i>{{ tl.label | t }} <b class="mono">{{ u.tools[tl.name]?.uses ?? 0 }}</b></span>
               }
             </div>
@@ -264,7 +264,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
             <div class="ct-tile ct-pack" [attr.data-on]="g.on ? 1 : null" role="button" tabindex="0"
                  [style.--sw]="span(i, groups().length, 4)" [style.--sn]="span(i, groups().length, 2)"
                  [attr.data-empty]="g.tools.length ? null : 1"
-                 (click)="g.tools.length && pack.set(g.id)" (keydown.enter)="g.tools.length && pack.set(g.id)"
+                 (click)="g.tools.length && openPack(g.id)" (keydown.enter)="g.tools.length && openPack(g.id)"
                  [title]="(g.tools.length ? 'Open the package' : 'No tools yet') | t">
               <span class="ct-top">
                 <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="g.tools.length ? icon(g.tools[0].name) : wrench" /></svg>
@@ -306,10 +306,15 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
             </span>
           </div>
+          <div class="ct-msearch">
+            <input class="tcv-field" type="search" [value]="packQ()" (input)="packQ.set($any($event.target).value)"
+                   [placeholder]="'Search the tools in this package' | t" autocomplete="off" spellcheck="false">
+            <span class="st-sub mono">{{ packTools().length }} / {{ g.tools.length }}</span>
+          </div>
           <div class="ct-tiles">
-            @for (tl of g.tools; track tl.name; let i = $index) {
+            @for (tl of packTools(); track tl.name; let i = $index) {
               <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
-                   [style.--sw]="span(i, g.tools.length, 3)" [style.--sn]="span(i, g.tools.length, 2)"
+                   [style.--sw]="span(i, packTools().length, 3)" [style.--sn]="span(i, packTools().length, 2)"
                    (click)="pack.set(null); show(tl.name)" (keydown.enter)="pack.set(null); show(tl.name)" [title]="'Open its page' | t">
                 <span class="ct-top">
                   <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
@@ -325,7 +330,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
                   <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
                 </span>
               </div>
-            }
+            } @empty { <div class="ct-empty">{{ 'No tool here matches.' | t }}</div> }
           </div>
         </section>
       }
@@ -372,6 +377,17 @@ export class CcToolsView {
   /** The package open in the modal. */
   pack = signal<string | null>(null);
   packOpen = computed(() => this.groups().find(g => g.id === this.pack()) ?? null);
+  /** The package modal's search: words of a tool's name, id or line. */
+  packQ = signal('');
+  packTools = computed(() => {
+    const g = this.packOpen(), words = this.packQ().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    if (!g) return [];
+    return words.length ? g.tools.filter(x => {
+      const hay = `${t(x.label)} ${x.label} ${x.name} ${t(x.description)} ${x.description}`.toLocaleLowerCase();
+      return words.every(w => hay.includes(w));
+    }) : g.tools;
+  });
+  openPack(id: string) { this.packQ.set(''); this.pack.set(id); }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   flip(tl: CcTool) { this.set.emit({ [tl.name]: !tl.on }); }
   setAll(tools: CcTool[], on: boolean) {
@@ -397,7 +413,9 @@ export class CcToolsView {
   sum14(u: ToolsUsage) { return u.days.reduce((a, d) => a + this.dayTotal(d), 0); }
   peak14(u: ToolsUsage) { return Math.max(1, ...u.days.map(d => this.dayTotal(d))); }
   peakTool(u: ToolsUsage) { return Math.max(1, ...Object.values(u.tools).map(x => x.uses)); }
-  byUse(u: ToolsUsage) { return [...this.tools()].sort((a, b) => (u.tools[b.name]?.uses ?? 0) - (u.tools[a.name]?.uses ?? 0)); }
+  /** The tools the overview names: those on or ever used - not two hundred calculators nobody turned on. */
+  charted(u: ToolsUsage) { return this.tools().filter(x => x.on || (u.tools[x.name]?.uses ?? 0) > 0); }
+  byUse(u: ToolsUsage) { return this.charted(u).sort((a, b) => (u.tools[b.name]?.uses ?? 0) - (u.tools[a.name]?.uses ?? 0)); }
 
   /** A tile's width in a 12-column grid: up to `most` to a row, and the
    *  last row's tiles share the whole row - never an empty cell. */

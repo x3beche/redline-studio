@@ -2054,6 +2054,8 @@ const TR: Record<string, string> = {
   'Read a taste palette': 'Tadım paleti oku',
   'Parts drawer': 'Parça çekmecesi',
   'Room notes': 'Oda notları',
+  'Search the tools in this package': 'Bu paketteki araçlarda ara',
+  'No tool here matches.': 'Eşleşen araç yok.',
   'What belongs to no one tab: notes left in a room\'s queue.': 'Tek bir sekmeye ait olmayanlar: bir odanın kuyruğuna bırakılan notlar.',
   'No tools yet': 'Henüz araç yok',
   'The notes and tasks of every room.': 'Her odanın notları ve görevleri.',

@@ -157,7 +157,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     monkeypatch.setattr(raw.__class__, "__getitem__",
                         lambda self, n: Prefs() if n == chat_tools.PREFS else real(self, n))
     got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"file_read": False, "taste_read": False})))
-    on = {t["name"]: t["on"] for t in got["tools"]}
+    calcs = [t for t in got["tools"] if t["package"] == "tools"]          # the Basic Tools calculators: off
+    assert len(calcs) > 100 and not any(t["on"] for t in calcs)
+    on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True,
                   "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
@@ -1046,3 +1048,22 @@ def test_a_kit_tool_runs_in_node_when_the_tools_image_is_missing(monkeypatch):
 
 def test_the_note_tells_how_to_use_the_workspace_tools():
     assert "board_read" in chat_tools.SYSTEM_NOTE and "basic_tool" not in chat_tools.SYSTEM_NOTE
+
+
+def test_every_basic_tools_calculator_is_a_tool_of_its_own_and_off(env, monkeypatch):
+    from backend import tools_api
+    from backend.chat_tools import basic_tools
+    calcs = [t for t in chat_tools.tools().values() if t.package == "tools"]
+    runnable = [e for e in tools_api.catalog() if e.get("runnable")]
+    assert len(calcs) == len(runnable) and all(not t.default and t.level == "read" for t in calcs)
+    tw = chat_tools.tools()["calc_trace_width"]
+    assert tw.label and set(tw.schema["properties"]) and all(len(t.name) <= 64 for t in calcs)
+    seen = {}
+
+    async def run_kit(tid, given, surface):
+        seen.update(tid=tid, given=given, surface=surface)
+        return {"ok": True, "tool": tid, "input": given, "result": {"values": [{"label": "Width", "value": "0.3", "unit": "mm"}]}}
+    monkeypatch.setattr(basic_tools.tools_api, "run_kit", run_kit)
+    got = run(tw.run(Ctx(db=Db()), {"current": "1"}))
+    assert seen == {"tid": "trace-width", "given": {"current": "1"}, "surface": "chat"}
+    assert got.say == "Calculated with {name}" and "Width: 0.3 mm" in got.text

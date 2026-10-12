@@ -128,11 +128,13 @@ def tools() -> dict[str, Tool]:
         for mod in pkgutil.iter_modules(__path__):
             if mod.name.startswith("_"):
                 continue
-            t = getattr(importlib.import_module(f"{__name__}.{mod.name}"), "TOOL", None)
-            if isinstance(t, Tool):
-                if t.level not in LEVELS:
-                    raise ValueError(f"chat tool {t.name}: level {t.level!r} is not one of {LEVELS}")
-                found.append(t)
+            m = importlib.import_module(f"{__name__}.{mod.name}")
+            # One TOOL a module, or a TOOLS list made from data (basic_tools.py: a calculator each).
+            for t in [getattr(m, "TOOL", None), *getattr(m, "TOOLS", [])]:
+                if isinstance(t, Tool):
+                    if t.level not in LEVELS:
+                        raise ValueError(f"chat tool {t.name}: level {t.level!r} is not one of {LEVELS}")
+                    found.append(t)
         rank = {p.name: i for i, p in enumerate(PACKAGES)}
         _TOOLS = {t.name: t for t in sorted(found, key=lambda t: (rank.get(t.package, len(rank)), t.order, t.name))}
     return _TOOLS
