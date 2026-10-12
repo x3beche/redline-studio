@@ -43,7 +43,8 @@ DRAW_IMAGE = os.environ.get("REDLINE_DRAW_IMAGE", "redline-draw")
 DRAW_TIMEOUT = 300
 DRAWINGS = ROOT / ".cache" / "drawings"
 # Bumped when tools/techdraw.py draws differently, so kept drawings are made again.
-DRAW_VERSION = 2
+# 3: each kept drawing has an SVG of its sheet beside it, the 3D room's preview.
+DRAW_VERSION = 3
 # The zips on disk as well as in the database: the database is far away,
 # and thirty megabytes from it is minutes; from disk it is at once.
 ZIPS = ROOT / ".cache" / "releases"
@@ -59,9 +60,11 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- drawings
 
-async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str, ident: str, sha: str) -> str | None:
+async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str, ident: str, sha: str,
+                  svg: Path | None = None) -> str | None:
     """A technical drawing of a STEP, in the drawing container. None if it
-    was made; otherwise why not."""
+    was made; otherwise why not. With `svg`, the same sheet as SVG there
+    too (a preview; a release has no use for one)."""
     work = Path(tempfile.mkdtemp(prefix="redline-draw-"))
     try:
         os.chmod(work, 0o777)
@@ -70,7 +73,7 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
                 "--user", f"{os.getuid()}:{os.getgid()}",
                 "-v", f"{work}:/work", "-v", f"{ROOT / 'tools'}:/tools:ro", DRAW_IMAGE,
                 "/work/model.step", "/work/drawing.pdf", "--title", title, "--project", project,
-                "--tag", tag, "--id", ident, "--sha", sha]
+                "--tag", tag, "--id", ident, "--sha", sha, *(["--svg", "/work/drawing.svg"] if svg else [])]
         proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.STDOUT)
         try:
@@ -84,15 +87,23 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
             if any("Unable to find image" in t or "pull access denied" in t for t in text):
                 return "the drawing image is not built: docker build -t redline-draw -f docker/draw/Dockerfile docker/draw"
             return (text[-1] if text else "the drawing failed")[:300]
+        # The preview first: the PDF on disk is what says the drawing is made.
+        if svg and (work / "drawing.svg").exists():
+            svg.write_bytes((work / "drawing.svg").read_bytes())
         out.write_bytes(pdf.read_bytes())
         return None
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _kept(meta: dict, suffix: str = ".pdf") -> Path:
+    """Where a model's drawing is kept: by its STEP's fingerprint."""
+    return DRAWINGS / f"{meta['sha256'][:24]}-v{DRAW_VERSION}{suffix}"
+
+
 async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
     """A model's technical drawing on its own, for the 3D room: made once
-    per STEP (kept by the STEP's fingerprint)."""
+    per STEP (kept by the STEP's fingerprint), with its SVG preview."""
     doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1})
     if not doc:
         raise KeyError(model_id)
@@ -100,16 +111,29 @@ async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
     if not meta:
         raise LookupError("this model has no STEP to draw from - its script does not export one")
     DRAWINGS.mkdir(parents=True, exist_ok=True)
-    kept = DRAWINGS / f"{meta['sha256'][:24]}-v{DRAW_VERSION}.pdf"
+    kept = _kept(meta)
     if kept.exists():
         return kept.read_bytes()
     step = await store.get_artifact(db, model_id, "step")
     why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
-                        project=model_id.split("/")[0], tag=tag, ident=model_id, sha=doc.get("sha256") or "")
+                        project=model_id.split("/")[0], tag=tag, ident=model_id, sha=doc.get("sha256") or "",
+                        svg=_kept(meta, ".svg"))
     if why:
         raise RuntimeError(why)
     return kept.read_bytes()
 
+
+async def model_drawing_preview(db, model_id: str) -> bytes | None:
+    """The SVG preview of a model's drawing if it is already made, else
+    None - never made here: the preview only shows what is there."""
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1})
+    if not doc:
+        raise KeyError(model_id)
+    meta = (doc.get("artifacts") or {}).get("step")
+    if not meta:
+        return None
+    svg = _kept(meta, ".svg")
+    return svg.read_bytes() if svg.exists() and _kept(meta).exists() else None
 
 
 # A model's drawing made by itself a while after it is built, so the 3D

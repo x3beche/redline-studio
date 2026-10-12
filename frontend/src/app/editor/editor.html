@@ -544,22 +544,15 @@
       </div>
     }
 
-    <!-- The project's releases, and this model's technical drawing: kept
-         out of sight and pressed by the rows of the side panel's Model tab
-         (model-tab.ts). -->
-    <span #releaseBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Release - pack the project for manufacturing">
-      <span class="tcv_button_frame">
-        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-release" aria-label="Release"
-               [disabled]="!activeModel()" (click)="releasing.set(true)">
-      </span>
-    </span>
-    <span #drawingBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Technical drawing - dimensioned views, as PDF">
-      <span class="tcv_button_frame">
-        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-drawing" aria-label="Technical drawing"
-               [attr.data-busy]="drawingBusy() ? 1 : null"
-               [disabled]="!activeModel() || drawingBusy()" (click)="openDrawing()">
-      </span>
-    </span>
+    <!-- The side panel's Model tab (model-tab.ts): the open model's build,
+         facts, the project's releases and its technical drawing, moved
+         into the tab as it is. -->
+    <div #modelHealth class="tcv-model-host">
+      <app-model-health [entry]="activeEntry()" [facts]="modelFacts()" [pct]="activePct()"
+                        [canBuild]="auth.can('run')" [drawingBusy]="drawingBusy()" [releasing]="releasing()"
+                        (build)="buildActive()" (release)="releasing.set(true)" (releases)="releasing.set(true)"
+                        (openDrawing)="openDrawing()" />
+    </div>
     @if (releasing() && activeModel()) {
       <app-releases animate.leave="tcv-leave" [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
     }

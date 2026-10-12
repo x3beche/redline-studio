@@ -28,6 +28,7 @@ import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { LinksCard, PinIcon } from '../rooms/links';
 import { Releases } from '../rooms/releases';
+import { ModelFacts, ModelHealth } from './model-health';
 import { LogPanel } from '../rooms/log-panel';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
@@ -55,7 +56,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, LinksCard, LogPanel, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, DecimalPipe, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -84,8 +85,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
   private ideBtn = viewChild<ElementRef<HTMLElement>>('ideBtn');
-  private releaseBtn = viewChild<ElementRef<HTMLElement>>('releaseBtn');
-  private drawingBtn = viewChild<ElementRef<HTMLElement>>('drawingBtn');
+  private modelHealth = viewChild<ElementRef<HTMLElement>>('modelHealth');
   private codeView = viewChild(CodeView);
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
@@ -369,6 +369,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       this.viewer.init(shot ?? { w: Math.max(box.clientWidth - 250, 400),
                                  h: Math.max(box.clientHeight, 400) });
+      if (this.viewer.modelTab) this.viewer.modelTab.onLoaded = () => this.readFacts();
     } catch (e) {
       this.glError.set(String((e as Error)?.message ?? e));
       return;
@@ -532,11 +533,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     // The code view's switch, left of both.
     const ide = this.ideBtn()?.nativeElement;
     if (ide && bar && ide.parentElement !== bar) bar.insertBefore(ide, tools ?? btn ?? null);
-    // Release and the technical drawing are rows of the side panel's
-    // Model tab (model-tab.ts), not toolbar buttons: the buttons stay
-    // here, out of sight, and the rows press them.
-    this.viewer?.modelTab?.adopt({ release: this.releaseBtn()?.nativeElement,
-      drawing: this.drawingBtn()?.nativeElement });
+    // The side panel's Model tab (model-tab.ts) shows <app-model-health>
+    // from here: build, facts, releases, the technical drawing.
+    this.viewer?.modelTab?.adopt(this.modelHealth()?.nativeElement);
 
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an
@@ -1333,6 +1332,27 @@ export class Editor implements AfterViewInit, OnDestroy {
     const t = this.catalog(), id = this.activeModel();
     return t && id ? this.findModel(t, id) : null;
   });
+  /** What the loaded model says about itself, for the Model tab
+   *  (model-health.ts): its parts, its motions, its overall size. */
+  modelFacts = signal<ModelFacts | null>(null);
+  private readFacts() {
+    const v = this.viewer;
+    let size: [number, number, number] | null = null;
+    try {
+      const bb = (v?.viewer as any)?.bbox;
+      if (bb?.max && bb?.min) size = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z];
+    } catch { /* not rendered */ }
+    if (size && !size.every(n => isFinite(n) && n >= 0)) size = null;
+    this.modelFacts.set({ parts: v?.parts.length ?? 0, motions: v?.motions?.specs.length ?? 0, size });
+  }
+  /** The open model's build, how far along (buildPct). */
+  activePct = computed(() => { const m = this.activeEntry(); return m ? this.buildPct(m) : null; });
+  /** "Build again" on the Model tab: the open model, as the tree's Rebuild. */
+  buildActive() {
+    const m = this.activeEntry();
+    if (m && this.auth.can('run')) this.rebuild(m, new Event('model-tab'));
+  }
+
   /** Read the links card again when any of this moves. */
   linkStamp = computed(() => {
     const m = this.activeEntry();

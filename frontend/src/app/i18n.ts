@@ -3477,6 +3477,27 @@ const TR: Record<string, string> = {
   'Camera glide': 'Kamera kayması', 'The camera moves from the old view to the new one.': 'Kamera eski görünümden yenisine kayarak geçer.',
   'Fade and glide': 'Solma ve kayma', 'Fade, with the camera gliding to the new view.': 'Solma, kamera da yeni görünüme kayarak.',
   'Parts in turn': 'Parça parça', 'The parts appear one after another; large models fade.': 'Parçalar sırayla belirir; büyük modeller solarak gelir.',
+  // The Model tab (editor/model-health.ts).
+  'Runs the model\'s script again': 'Modelin betiğini yeniden çalıştırır', 'Releases': 'Sürümler',
+  'All releases': 'Tüm sürümler', 'Open PDF': 'PDF\'i aç', 'No STEP to draw from': 'Çizilecek STEP yok',
+  'The model\'s script does not export one.': 'Modelin betiği STEP dışa aktarmıyor.',
+  'Not made yet': 'Henüz yapılmadı',
+  'Made 10 minutes after a build, or now.': 'Derlemeden 10 dakika sonra yapılır, ya da şimdi.',
+  'Make now': 'Şimdi yap', 'Open the technical drawing as PDF': 'Teknik çizimi PDF olarak aç',
+  'No releases of {x} yet.': '{x} için henüz sürüm yok.', 'packing…': 'paketleniyor…', 'Building': 'Derleniyor',
+  'It imports itself, through': 'Kendini içe aktarıyor, şunlar üzerinden', 'Build held up': 'Derleme bekletildi',
+  'Build failed': 'Derleme başarısız', 'after': 'şundan sonra:', 'Queued to build': 'Derleme sırasında',
+  'Build it to see it': 'Görmek için derleyin', 'imports moved on': 'içe aktarılan ilerledi',
+  'against the latest of': 'en güncellerine göre:', 'import': 'içe aktarma', 'imports': 'içe aktarma',
+  'Source changed since the build': 'Derlemeden sonra kaynak değişti',
+  'Built, imports moved on': 'Derlendi, içe aktarılanlar ilerledi', 'Build': 'Derleme',
+  'The last build failed; the one before is on show': 'Son derleme başarısız; gösterilen bir öncekisi',
+  'Last': 'Son', 'source changed since': 'kaynak sonra değişti', 'STEP exported': 'STEP dışa aktarıldı',
+  'No': 'Hayır', 'For CAD, the drawing and releases': 'CAD, çizim ve sürümler için',
+  'The script does not export one': 'Betik STEP dışa aktarmıyor', 'One body': 'Tek gövde',
+  'In the model tree': 'Model ağacında', 'Moved on': 'İlerleyenler', 'used in': 'kullanıldığı yer',
+  'Moving parts, on the Motion tab': 'Hareketli parçalar, Hareket sekmesinde', 'Nothing moves': 'Hareket eden yok',
+  'Overall, in mm (x × y × z)': 'Toplam, mm (x × y × z)',
 };
 
 export function t(text: string): string {

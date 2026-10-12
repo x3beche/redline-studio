@@ -13,6 +13,9 @@ removal), not a picture of the screen.
 Run in its own container (docker/draw, image redline-draw - nothing is
 installed on the machine): projecting a large assembly takes memory and
 time, and a release must not fall over because one drawing did.
+
+With --svg it also writes the same sheet as an SVG, a light preview the
+3D room shows before the PDF is opened (the PDF stays the drawing).
 """
 
 from __future__ import annotations
@@ -20,7 +23,9 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+from contextlib import contextmanager
 from datetime import date
+from html import escape
 
 from fpdf import FPDF
 
@@ -67,10 +72,88 @@ def bounds(polys):
 
 
 class Sheet(FPDF):
-    pass
+    """The PDF, and the same strokes and words kept as SVG elements on the
+    way: only what draw() uses (lines, polylines, polygons, rectangles,
+    text, a rotation), on the sheet's own millimetres."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.svg: list[str] = []
+        self._ink = "#000"
+        self._width = 0.2
+        self._dash = ""
+        self._font = (False, 8.0)
+        self._turn: list[str] = []
+
+    @staticmethod
+    def _n(v: float) -> str:
+        return f"{v:.1f}".rstrip("0").rstrip(".")
+
+    def _stroke(self) -> str:
+        dash = f' stroke-dasharray="{self._dash}"' if self._dash else ""
+        return f'stroke="{self._ink}" stroke-width="{self._width:.2f}"{dash}'
+
+    def set_draw_color(self, r, g=-1, b=-1):
+        super().set_draw_color(r, g, b)
+        g, b = (r, r) if g == -1 else (g, b)
+        self._ink = "#000" if (r, g, b) == (0, 0, 0) else f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+    def set_line_width(self, width):
+        super().set_line_width(width)
+        self._width = width
+
+    def set_dash_pattern(self, dash=0, gap=0, phase=0):
+        super().set_dash_pattern(dash, gap, phase)
+        self._dash = f"{self._n(dash)} {self._n(gap)}" if dash else ""
+
+    def set_font(self, family=None, style="", size=0):
+        super().set_font(family, style, size)
+        self._font = ("B" in (style or "").upper(), size or self._font[1])
+
+    def line(self, x1, y1, x2, y2):
+        super().line(x1, y1, x2, y2)
+        n = self._n
+        self.svg.append(f'<line x1="{n(x1)}" y1="{n(y1)}" x2="{n(x2)}" y2="{n(y2)}" {self._stroke()}/>')
+
+    def rect(self, x, y, w, h, style=None, *args, **kwargs):
+        super().rect(x, y, w, h, style, *args, **kwargs)
+        n = self._n
+        self.svg.append(f'<rect x="{n(x)}" y="{n(y)}" width="{n(w)}" height="{n(h)}" fill="none" {self._stroke()}/>')
+
+    def polyline(self, point_list, fill=False, polygon=False, style=None):
+        super().polyline(point_list, fill=fill, polygon=polygon, style=style)
+        pts = " ".join(f"{self._n(x)},{self._n(y)}" for x, y in point_list)
+        if str(style or "").upper().endswith("F"):
+            self.svg.append(f'<polygon points="{pts}" fill="#000"/>')
+        else:
+            self.svg.append(f'<{"polygon" if polygon else "polyline"} points="{pts}" fill="none" {self._stroke()}/>')
+
+    def text(self, x, y, text=""):
+        super().text(x, y, text)
+        bold, size = self._font
+        weight = ' font-weight="bold"' if bold else ""
+        turn = f' transform="{" ".join(self._turn)}"' if self._turn else ""
+        self.svg.append(f'<text x="{self._n(x)}" y="{self._n(y)}" font-size="{size * 0.3528:.2f}"'
+                        f'{weight}{turn}>{escape(str(text))}</text>')
+
+    @contextmanager
+    def rotation(self, angle, x=None, y=None):
+        # The PDF turns counter-clockwise; on the SVG's downward y that is minus.
+        self._turn.append(f"rotate({self._n(-angle)} {self._n(x)} {self._n(y)})")
+        try:
+            with super().rotation(angle, x, y):
+                yield
+        finally:
+            self._turn.pop()
+
+    def svg_text(self) -> str:
+        return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 297" width="420mm" height="297mm" '
+                'font-family="Helvetica, Arial, sans-serif" stroke-linecap="round" stroke-linejoin="round">'
+                '<rect width="420" height="297" fill="#fff"/>' + "".join(self.svg) + "</svg>\n")
 
 
-def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: str, sha: str) -> None:
+def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: str, sha: str,
+         svg: str = "") -> None:
     from build123d import import_step
     shape = import_step(step)
     bb = shape.bounding_box()
@@ -188,6 +271,9 @@ def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: st
     for i, line in enumerate(notes):
         pdf.text(MARGIN + 2, y + 25 + i * 5, line)
     pdf.output(out)
+    if svg:
+        with open(svg, "w", encoding="utf-8") as f:
+            f.write(pdf.svg_text())
 
 
 def main() -> None:
@@ -199,9 +285,10 @@ def main() -> None:
     ap.add_argument("--tag", default="")
     ap.add_argument("--id", default="")
     ap.add_argument("--sha", default="")
+    ap.add_argument("--svg", default="", help="also write the sheet as SVG here (a preview)")
     a = ap.parse_args()
     try:
-        draw(a.step, a.out, a.title or a.id, a.project, a.tag, a.id, a.sha)
+        draw(a.step, a.out, a.title or a.id, a.project, a.tag, a.id, a.sha, a.svg)
     except Exception as exc:                     # said plainly, for the release log
         sys.exit(f"drawing failed: {type(exc).__name__}: {exc}")
 

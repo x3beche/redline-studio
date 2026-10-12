@@ -2331,10 +2331,10 @@ body {
   .tcv-motion-play, .tcv-motion-auto, .tcv-motion-reset { transition: none; }
 }
 
-/* The Model tab (editor/model-tab.ts): release and the technical drawing,
-   out of the toolbar into the side panel - a full-width row each, the
-   toolbar's icon, the name and a line under it. Shown and hidden like the
-   Motion tab. The viewer's help, reset and fit buttons and its properties
+/* The Model tab (editor/model-tab.ts): the open model's build, facts,
+   releases and drawing (editor/model-health.ts, in the board health look),
+   in the side panel. Shown and hidden like the Motion tab. The viewer's
+   help, reset and fit buttons and its properties
    tool leave the toolbar (the select tool goes with its option, ocp.ts). */
 .tcv_cad_toolbar .tcv_tooltip:has(> .tcv_button_frame > .tcv_button_help),
 .tcv_cad_toolbar .tcv_tooltip:has(> .tcv_button_frame > .tcv_button_reset),
@@ -2343,51 +2343,9 @@ body {
 .tcv_cad_tree:not([data-model="1"]) .tcv-model,
 .tcv_cad_tree[data-model="1"] .tcv_cad_tree_toggles,
 .tcv_cad_tree[data-model="1"] .tcv_box_content > :not(.tcv-model) { display: none !important; }
-.tcv-model { display: flex; flex-direction: column; padding: 4px 4px 8px; cursor: default; }
-.tcv-model-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 6px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  transition: background .12s;
-}
-.tcv-model-row:last-child { border-bottom: 0; }
-.tcv-model-row:hover:not(:disabled) { background: var(--hover); }
-.tcv-model-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
-.tcv-model-row:disabled { cursor: default; }
-.tcv-model-row:disabled > * { opacity: .4; }
-.tcv-model-ico {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 26px 26px;
-}
-.tcv-model-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 1px; min-width: 0; }
-.tcv-model-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tcv_cad_tree .tcv-model-line { color: var(--ink-dim); font-size: 11px !important; line-height: 1.3; }
-.tcv-model-spin {
-  display: none;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  box-sizing: border-box;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-}
-.tcv-model-row[aria-busy] .tcv-model-spin { display: block; animation: tcv-fm-spin .8s linear infinite; }
-.tcv-model-row[aria-busy]:disabled > * { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .tcv-model-row { transition: none; } .tcv-model-row[aria-busy] .tcv-model-spin { animation: none; } }
+.tcv-model { display: flex; flex-direction: column; cursor: default; }
+/* Out of sight until it is in the tab's panel. */
+.tcv-model-host:not(.tcv-model > *) { display: none !important; }
 
 /* The reverse switch on each clip plane's N=(...) row (clip-reverse.ts):
    the same flat, outlined chip as the wheel step's presets, lit while the

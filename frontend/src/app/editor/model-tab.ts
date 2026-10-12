@@ -1,41 +1,30 @@
 import { t } from '../i18n';
 
 /** The Model tab of the viewer's side panel (Tree / Clip / Motion / Studio /
- *  Model): what is done with the model as a whole, moved out of the
- *  crowded toolbar - release the project, the technical drawing. A row
- *  each, icon, name and a line saying what it does.
+ *  Model): the open model as a whole - its build, its facts, the project's
+ *  releases, its technical drawing.
  *
- *  The rows do not repeat the actions. Release and drawing stay the
- *  editor's own buttons (editor.html, with their permissions and disabled
- *  states), kept out of sight; a row presses its button and follows its
- *  state. Built like the Motion tab (motions.ts). */
+ *  What is on it is the editor's (editor.html, <app-model-health>,
+ *  model-health.ts): an Angular component with the editor's data and its
+ *  actions, moved in here as it is (adopt), the way the editor docks its
+ *  other parts into the viewer. This keeps the tab itself: its button in
+ *  the tab row, showing and hiding, and being the one on show over a
+ *  reload. Built like the Motion tab (motions.ts). */
 
 /** Whether the Model tab was the one on show, kept over a reload. */
 const KEPT = 'redline.viewer.modelTab';
 
-interface Row {
-  key: 'release' | 'drawing';
-  icon: string;
-  name: string;
-  line: string;
-}
-
-const ROWS: Row[] = [
-  { key: 'release', icon: 'tcv-ico tcv-ico-release', name: 'Release',
-    line: 'Pack the project for manufacturing' },
-  { key: 'drawing', icon: 'tcv-ico tcv-ico-drawing', name: 'Technical drawing',
-    line: 'Dimensioned views, as PDF' },
-];
-
 export class ModelTab {
   private tab: HTMLElement | null = null;
   private panel: HTMLElement | null = null;
-  /** The editor's own buttons the rows press. */
-  private sources: Partial<Record<Row['key'], HTMLInputElement>> = {};
-  private watch: MutationObserver | null = null;
+  /** What the editor put on the tab (model-health.ts). */
+  private content: HTMLElement | null = null;
   private open = false;
   /** Called when this tab opens: the Motion tab closes. */
   onOpen: () => void = () => {};
+  /** Called after each model load: the editor reads what the model says
+   *  about itself (its parts, motions, size). */
+  onLoaded: () => void = () => {};
 
   constructor(private root: HTMLElement, private viewer: () => any) {}
 
@@ -70,17 +59,7 @@ export class ModelTab {
     el.className = 'tcv-model';
     el.id = 'tcv-model-panel';
     el.setAttribute('role', 'group');
-    for (const r of ROWS) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'tcv-model-row';
-      b.dataset['key'] = r.key;
-      b.innerHTML = `<span class="tcv-model-ico ${r.icon}" aria-hidden="true"></span>` +
-        '<span class="tcv-model-text"><span class="tcv-model-name"></span><span class="tcv-model-line"></span></span>' +
-        '<span class="tcv-model-spin" aria-hidden="true"></span>';
-      b.addEventListener('click', () => this.press(r.key));
-      el.appendChild(b);
-    }
+    if (this.content) el.appendChild(this.content);
     box.appendChild(el);
     this.tab = wrap;
     this.panel = el;
@@ -100,39 +79,12 @@ export class ModelTab {
     this.relabel();
   }
 
-  /** The editor's buttons for release and drawing. Their own [disabled]
-   *  is followed from here on. */
-  adopt(els: { release?: HTMLElement | null; drawing?: HTMLElement | null }) {
-    let changed = false;
-    for (const k of ['release', 'drawing'] as const) {
-      const input = els[k]?.querySelector<HTMLInputElement>('input') ?? null;
-      if (input && this.sources[k] !== input) { this.sources[k] = input; changed = true; }
-    }
-    if (!changed) return;
-    this.watch?.disconnect();
-    this.watch = new MutationObserver(() => this.paint());
-    for (const input of Object.values(this.sources)) {
-      this.watch.observe(input!, { attributes: true, attributeFilter: ['disabled', 'data-busy'] });
-    }
-    this.paint();
-  }
-
-  private press(key: Row['key']) {
-    const src = this.sources[key];
-    if (src && !src.disabled) src.click();
-  }
-
-  /** The rows follow their buttons: disabled with them, and busy - a
-   *  spinner and "Drawing…" - while their work runs (data-busy). */
-  private paint() {
-    this.panel?.querySelectorAll<HTMLButtonElement>('.tcv-model-row').forEach(b => {
-      const r = ROWS.find(x => x.key === b.dataset['key'])!;
-      const src = this.sources[r.key];
-      const busy = !!src?.hasAttribute('data-busy');
-      b.disabled = !src || src.disabled;
-      b.toggleAttribute('aria-busy', busy);
-      b.querySelector('.tcv-model-line')!.textContent = busy ? t('Drawing…') : t(r.line);
-    });
+  /** The editor's content for the tab, moved in (and again into a new
+   *  panel, should the viewer's side panel be made anew). */
+  adopt(content: HTMLElement | null | undefined) {
+    if (!content) return;
+    this.content = content;
+    if (this.panel && content.parentElement !== this.panel) this.panel.appendChild(content);
   }
 
   /** Show the tab's panel, or go back to the viewer's own tab. As with
@@ -164,6 +116,7 @@ export class ModelTab {
    *  if this was the tab on show. */
   restore() {
     this.ensure();
+    this.onLoaded();
     let kept = false;
     try { kept = localStorage.getItem(KEPT) === '1'; } catch { /* private window */ }
     if (kept) this.show(true);
@@ -178,10 +131,5 @@ export class ModelTab {
     const tab = this.tab?.querySelector<HTMLInputElement>('input');
     if (tab) tab.value = t('Model');
     this.panel?.setAttribute('aria-label', t('Model tools'));
-    this.panel?.querySelectorAll<HTMLElement>('.tcv-model-row').forEach(b => {
-      const r = ROWS.find(x => x.key === b.dataset['key'])!;
-      b.querySelector('.tcv-model-name')!.textContent = t(r.name);
-    });
-    this.paint();
   }
 }

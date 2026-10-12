@@ -269,6 +269,8 @@ export interface ModelEntry {
   id: string; name: string; title: string;
   ready: boolean; stale: boolean; data: boolean; data_bytes: number;
   updated_at: string; built_at: string | null; sha256: string;
+  /** The STEP its script exported (bytes; 0 when it exports none). */
+  step_bytes?: number;
   /** True while a build is running, whether it was started here or from
    *  the command line. */
   building: boolean;

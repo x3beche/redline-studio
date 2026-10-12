@@ -3268,6 +3268,21 @@ async def model_drawing(model_id: str):
                     headers={"Content-Disposition": f'inline; filename="{name}-drawing.pdf"'})
 
 
+@app.get("/api/models/{model_id:path}/drawing.svg")
+async def model_drawing_preview(model_id: str):
+    """The model's technical drawing as an SVG of the same sheet - the 3D
+    room's preview - only if the drawing is already made: 404 otherwise,
+    and nothing is made here (drawing.pdf makes it). A HEAD asks whether
+    it is there."""
+    try:
+        svg = await release.model_drawing_preview(db(), model_id)
+    except KeyError as exc:
+        raise HTTPException(404, model_id) from exc
+    if svg is None:
+        raise HTTPException(404, "not made yet")
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
+
+
 # ---------------- notes ----------------
 class NoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)

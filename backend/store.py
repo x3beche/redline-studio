@@ -639,6 +639,8 @@ async def catalog(db) -> dict:
                     "ready": m.get("ready", False), "stale": m.get("stale", True),
                     "data": "viewer" in m.get("artifacts", {}),
                     "data_bytes": m.get("artifacts", {}).get("viewer", {}).get("bytes", 0),
+                    # The STEP its script exported, if any (0: none).
+                    "step_bytes": m.get("artifacts", {}).get("step", {}).get("bytes", 0),
                     # The open page watches this to notice a rebuild.
                     "built_at": m.get("artifacts", {}).get("viewer", {}).get("at"),
                     "updated_at": m.get("updated_at"),
