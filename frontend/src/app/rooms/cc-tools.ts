@@ -249,50 +249,76 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
     @if (!ready()) {
       <section class="st-card"><div class="ct-empty">{{ 'Loading…' | t }}</div></section>
     } @else {
-      <div class="ct-packs">
-      @for (g of groups(); track g.id; let gi = $index) {
-        <section class="st-card" [attr.data-package]="g.id" [style.--pw]="g.span">
-          <div class="st-card-head">
-            <h3>{{ g.name | t }}</h3>
-            <span class="st-sub">{{ g.about | t }}</span>
-            @if (g.tools.length) {
-              <span class="st-right">
-                <span class="st-sub mono">{{ g.on }} / {{ g.tools.length }}</span>
-                <span class="st-seg">
-                  <button type="button" [class.on]="g.on === g.tools.length" [disabled]="!canEdit()"
-                          (click)="setAll(g.tools, true)">{{ 'all on' | t }}</button>
-                  <button type="button" [class.on]="g.on === 0" [disabled]="!canEdit()"
-                          (click)="setAll(g.tools, false)">{{ 'all off' | t }}</button>
-                </span>
+      <!-- The packages, one tile each: the drawer's tools, a room's... Its switch
+           turns all of them on or off; a click opens them, each with its own. -->
+      <section class="st-card">
+        <div class="st-card-head"><h3>{{ 'Tools' | t }}</h3>
+          <span class="st-sub">{{ 'in packages: open one to switch its tools one by one' | t }}</span>
+          <span class="st-right st-sub mono">{{ groups().length }} {{ 'packages' | t }}</span></div>
+        <div class="ct-tiles">
+          @for (g of groups(); track g.id; let i = $index) {
+            <div class="ct-tile ct-pack" [attr.data-on]="g.on ? 1 : null" role="button" tabindex="0"
+                 [style.--sw]="span(i, groups().length, 4)" [style.--sn]="span(i, groups().length, 2)"
+                 (click)="pack.set(g.id)" (keydown.enter)="pack.set(g.id)" [title]="'Open the package' | t">
+              <span class="ct-top">
+                <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(g.tools[0].name)" /></svg>
+                <span class="ct-name">{{ g.name | t }}</span>
+                <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="g.on === g.tools.length"
+                        [attr.data-on]="g.on ? 1 : null" [attr.data-part]="g.on && g.on < g.tools.length ? 1 : null"
+                        [disabled]="!canEdit()" [attr.aria-label]="g.name | t"
+                        (click)="$event.stopPropagation(); setAll(g.tools, g.on < g.tools.length)"></button>
               </span>
-            }
-          </div>
-          @if (g.tools.length) {
-            <div class="ct-tiles">
-              @for (tl of g.tools; track tl.name; let i = $index) {
-                <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
-                     [style.--sw]="span(i, g.tools.length, 3)" [style.--sn]="span(i, g.tools.length, 2)"
-                     (click)="show(tl.name)" (keydown.enter)="show(tl.name)" [title]="'Open its page' | t">
-                  <span class="ct-top">
-                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
-                    <span class="ct-name">{{ tl.label | t }}</span>
-                    <span class="st-badge" [attr.data-tone]="behaves(tl.level).tone">{{ levelName(tl.level) | t }}</span>
-                    <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
-                            [disabled]="!canEdit()" [attr.aria-label]="tl.label | t" (click)="$event.stopPropagation(); flip(tl)"></button>
-                  </span>
-                  <span class="ct-about">{{ tl.description | t }}</span>
-                  <span class="ct-foot-row">
-                    <code class="ct-id">{{ tl.name }}</code>
-                    <span class="ct-uses-n mono">{{ tl.uses ?? 0 }} {{ (tl.uses === 1 ? 'use' : 'uses') | t }}</span>
-                    <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
-                  </span>
-                </div>
-              }
+              <span class="ct-about">{{ g.about | t }}</span>
+              <span class="ct-foot-row">
+                <span class="ct-uses-n mono">{{ g.on }} / {{ g.tools.length }} {{ 'on' | t }} · {{ g.uses }} {{ (g.uses === 1 ? 'use' : 'uses') | t }}</span>
+                <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
+              </span>
             </div>
           }
+        </div>
+      </section>
+      @if (packOpen(); as g) {
+        <div class="ct-scrim" (click)="pack.set(null)"></div>
+        <section class="st-card ct-modal" role="dialog" aria-modal="true" [attr.aria-label]="g.name | t" (keydown.escape)="pack.set(null)">
+          <div class="st-card-head">
+            <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(g.tools[0].name)" /></svg>
+            <h3>{{ g.name | t }}</h3>
+            <span class="st-sub">{{ g.about | t }}</span>
+            <span class="st-right">
+              <span class="st-sub mono">{{ g.on }} / {{ g.tools.length }}</span>
+              <span class="st-seg">
+                <button type="button" [class.on]="g.on === g.tools.length" [disabled]="!canEdit()"
+                        (click)="setAll(g.tools, true)">{{ 'all on' | t }}</button>
+                <button type="button" [class.on]="g.on === 0" [disabled]="!canEdit()"
+                        (click)="setAll(g.tools, false)">{{ 'all off' | t }}</button>
+              </span>
+              <button class="ct-ib" type="button" (click)="pack.set(null)" [title]="('Close' | t) + ' (Esc)'">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
+            </span>
+          </div>
+          <div class="ct-tiles">
+            @for (tl of g.tools; track tl.name; let i = $index) {
+              <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
+                   [style.--sw]="span(i, g.tools.length, 3)" [style.--sn]="span(i, g.tools.length, 2)"
+                   (click)="pack.set(null); show(tl.name)" (keydown.enter)="pack.set(null); show(tl.name)" [title]="'Open its page' | t">
+                <span class="ct-top">
+                  <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
+                  <span class="ct-name">{{ tl.label | t }}</span>
+                  <span class="st-badge" [attr.data-tone]="behaves(tl.level).tone">{{ levelName(tl.level) | t }}</span>
+                  <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
+                          [disabled]="!canEdit()" [attr.aria-label]="tl.label | t" (click)="$event.stopPropagation(); flip(tl)"></button>
+                </span>
+                <span class="ct-about">{{ tl.description | t }}</span>
+                <span class="ct-foot-row">
+                  <code class="ct-id">{{ tl.name }}</code>
+                  <span class="ct-uses-n mono">{{ tl.uses ?? 0 }} {{ (tl.uses === 1 ? 'use' : 'uses') | t }}</span>
+                  <svg class="ct-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7l5 5-5 5" /></svg>
+                </span>
+              </div>
+            }
+          </div>
         </section>
       }
-      </div>
     }
     <p class="st-hint">{{ 'A model that cannot use tools answers without them. Turning a tool off takes effect from your next message.' | t }}</p>
   </div>
@@ -327,11 +353,11 @@ export class CcToolsView {
       g.tools.push(tl);
       g.on += tl.on ? 1 : 0;
     }
-    // A package of a few tools shares its row with others (up to three to a
-    // row, the last row's sharing the whole width); a bigger one has a row.
-    const small = out.filter(g => g.tools.length < 3);
-    return out.map(g => ({ ...g, span: g.tools.length >= 3 ? 12 : this.span(small.indexOf(g), small.length, 3) }));
+    return out.map(g => ({ ...g, uses: g.tools.reduce((n, x) => n + (x.uses ?? 0), 0) }));
   });
+  /** The package open in the modal. */
+  pack = signal<string | null>(null);
+  packOpen = computed(() => this.groups().find(g => g.id === this.pack()) ?? null);
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   flip(tl: CcTool) { this.set.emit({ [tl.name]: !tl.on }); }
   setAll(tools: CcTool[], on: boolean) {
