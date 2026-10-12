@@ -1,0 +1,71 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.roles > div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 0; border-top: 1px solid var(--line); }
+.roles > div:first-child { border-top: 0; }
+.roles .r { margin-left: auto; }
+.keys > div { display: grid; grid-template-columns: 1fr 80px; gap: 10px; align-items: center; font: 500 11.5px 'IBM Plex Mono', monospace; padding: 5px 0; color: var(--ink-dim); }
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+.spark i { flex: 1; display: block; background: var(--s1); border-radius: 1px; }
+.machine { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.machine .m { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 10px 12px; }
+.machine .m .num { font-size: 18px; margin-top: 4px; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Yours</div>
+    <h2>Runs on your machine. Stays on your machine.</h2>
+    <p>Redline Studio is self-hosted. Your designs, your conversations and your API keys live on your own server, and you decide who gets in and what every agent may do.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card wide span3">
+      <div class="txt">
+        <div class="tile ok"><i data-i="server"></i></div>
+        <h3>Your server, your data</h3>
+        <div class="sub ok">Your keys stay on your server</div>
+        <p class="body">Models, boards, firmware, files and chats are kept in your own database. Builds run in sealed containers with a memory ceiling, so a heavy job never takes the machine down with it.</p>
+      </div>
+      <div class="viz" style="display:block">
+        <div class="machine">
+          <div class="m"><div class="label">designs</div><div class="num">your database</div></div>
+          <div class="m"><div class="label">builds</div><div class="num">sandboxed</div></div>
+          <div class="m"><div class="label">API keys</div><div class="num">on the server</div></div>
+        </div>
+        <div style="margin-top:16px" class="row"><span class="label" style="width:110px">memory ceiling</span><div class="meter" style="flex:1"><i style="width:38%;background:var(--ok)"></i></div><span class="num" style="width:44px;text-align:right;font-size:12px">38%</span></div>
+        <div style="margin-top:10px" class="row"><span class="label" style="width:110px">cpu</span><div class="meter" style="flex:1"><i style="width:22%;background:var(--s1)"></i></div><span class="num" style="width:44px;text-align:right;font-size:12px">22%</span></div>
+        <div class="dots" data-cols="44" data-rows="3" data-fill=".35" data-pal="on,b" data-seed="11" data-size="6" style="margin-top:18px;gap:5px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile"><i data-i="users"></i></div>
+      <h3>Private accounts</h3><div class="sub blue">Owner, admin, user</div>
+      <p class="body">Everyone works in a space of their own. Admins add people and manage the server; there is no public sign-up.</p>
+      <div class="viz-b roles">
+        <div><span class="dot" style="background:var(--warn)"></span>Owner<span class="r chip warn">everything</span></div>
+        <div><span class="dot" style="background:var(--s1)"></span>Admin<span class="r chip blue">people &amp; settings</span></div>
+        <div><span class="dot" style="background:#71717a"></span>User<span class="r chip">their own work</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="key"></i></div>
+      <h3>Agent tokens you control</h3><div class="sub warn">Take one back any time</div>
+      <p class="body">Agents get their own token, never your password, and you see what each one did and used.</p>
+      <div class="viz-b keys">
+        <div><span>3d room</span><div class="spark"><i style="height:30%"></i><i style="height:60%"></i><i style="height:45%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:55%"></i></div></div>
+        <div><span>pcb room</span><div class="spark"><i style="height:20%"></i><i style="height:35%"></i><i style="height:80%"></i><i style="height:40%"></i><i style="height:25%"></i><i style="height:60%"></i><i style="height:30%"></i></div></div>
+        <div><span>firmware room</span><div class="spark"><i style="height:10%"></i><i style="height:15%"></i><i style="height:20%"></i><i style="height:50%"></i><i style="height:35%"></i><i style="height:15%"></i><i style="height:45%"></i></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="gauge"></i></div>
+      <h3>Budgets that warn early</h3><div class="sub ok">Costs in your currency</div>
+      <p class="body">Set a monthly budget per service. Usage meters show where you stand, and you hear about it before the limit.</p>
+      <div class="viz-b">
+        <div class="row"><span class="label" style="width:84px">models</span><div class="meter" style="flex:1"><i style="width:46%;background:var(--ok)"></i></div><span class="num" style="width:40px;text-align:right;font-size:12px">46%</span></div>
+        <div class="row" style="margin-top:9px"><span class="label" style="width:84px">machine</span><div class="meter" style="flex:1"><i style="width:21%;background:var(--ok)"></i></div><span class="num" style="width:40px;text-align:right;font-size:12px">21%</span></div>
+        <div class="row" style="margin-top:9px"><span class="label" style="width:84px">chat plan</span><div class="meter" style="flex:1"><i style="width:78%;background:var(--warn)"></i></div><span class="num" style="width:40px;text-align:right;font-size:12px">78%</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

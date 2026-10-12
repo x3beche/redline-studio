@@ -1,131 +1,131 @@
-# Redline
+<p align="center">
+  <img src="docs/readme/hero.png" width="100%" alt="Redline Studio: design hardware with an AI team">
+</p>
 
-A hardware design workbench. AI agents design the 3D parts, the circuit board and the firmware of one product, together, and check each other's work.
+<h3 align="center">Draw it. Say it. Your AI team builds it.</h3>
 
-**[redline.medipol.dev](https://redline.medipol.dev)** · in private beta
+<p align="center">
+  3D parts, circuit boards and the firmware that runs on them, in one place.<br>
+  Draw on what you see, say what you want in a sentence, and watch it get built.<br>
+  On your own machine, with your own keys.
+</p>
 
-![Redline's 3D Drawing room with the iot-fan station open: the project tree, Working now, a note the Chat agent wrote and its run with tokens and cost, and the queue of drawn notes](docs/readme/hero.png)
+<br>
 
-## The project, in numbers
+<h2 align="center">Circle it, say it, and it gets done.</h2>
 
-Straight from Redline's own analytics for iot-fan.
+<p align="center">Stop the model at any angle, mark the spot with the red pen and write one sentence. An agent changes the design, rebuilds it and shows you the result from the very same camera.</p>
 
-![iot-fan in numbers: 27 items (26 models, 1 board), 67 notes, 54 runs by the agents, 342 jobs, 7 failed (2.0% of jobs)](docs/readme/numbers.png)
+<p align="center">
+  <img src="docs/readme/card-pen.png" width="100%" alt="The pen: draw, leave a note, an agent works, see before and after">
+</p>
 
-## 01 · Three rooms, one product
+<h2 align="center">Parametric parts, and every way to look at them.</h2>
 
-Parts, board and firmware are built against each other. Change the board, and the case and the pin map follow.
+<p align="center">Every part is described by its dimensions, so a change is a number, not a redraw. Parts you make and parts you buy come together in one assembly you can turn, cut open and inspect.</p>
 
-- **3D parts.** Three assemblies built from 26 models. Change one part, and everything that uses it is rebuilt.
-- **Circuit board.** Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.
-- **Firmware.** Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.
+<p align="center">
+  <img src="docs/readme/card-3d.png" width="100%" alt="3D drawing: studio and zebra views, the assembly tree, clip planes, bought parts">
+</p>
 
-![The three rooms: the Station assembly in 3D Drawing (58 notes, 3 assemblies, 113-150 s a build), the iot-fan board in PCB Design (95.5 x 58.7 mm, 1,014 tracks, $20.51 in parts) and src/main.cpp in Firmware (ESP32-WROOM-32, 39 pins, 0 errors in 8.4 s)](docs/readme/rooms.png)
+<h2 align="center">Change one part. Everything that uses it follows.</h2>
 
-## 02 · Draw it, or write it
+<p align="center">Edit the enclosure, and the lid, the buttons and the whole assembly rebuild on their own, in the right order, each one telling you why.</p>
 
-Mark the model or the board and say what you want. The note keeps the drawing and goes to that room's agent.
+<p align="center">
+  <img src="docs/readme/card-linked.png" width="100%" alt="Linked parts: a change travels to everything that uses it">
+</p>
 
-- **Draw on the model.** Hold the view, circle what is wrong and say it in a line. The picture and the camera go with the note to the 3D agent.
-- **Draw on the board.** The same pen over the layout: circle the part, point where it should go, and say it in your own language.
-- **A note becomes a task.** Auto English turns it into English for the agent. Saved as a draft, then queued; the note keeps its drawing and its status.
+<h2 align="center">From a sentence to a board you can order.</h2>
 
-![Draw mode on the Station model and on the iot-fan board, and a drawn note in the queue](docs/readme/draw.png)
+<p align="center">Describe a circuit or bring one you already have. Real parts with stock and price, placed and routed for you, then checked until the answer is simple: ready to order.</p>
 
-## 03 · Notes, chat and agents
+<p align="center">
+  <img src="docs/readme/card-board.png" width="100%" alt="PCB design: placed and routed, board health, real parts, one sheet per chip">
+</p>
 
-Ask in Chat. It looks things up with its tools, reads your photos, and writes tasks that go to a room's agent.
+<p align="center">
+  <img src="docs/readme/shot-pcb-board.png" width="49%" alt="A routed board with Board health saying Ready to order">
+  <img src="docs/readme/shot-pcb-schematic.png" width="49%" alt="The schematic's microcontroller sheet">
+</p>
 
-![Chat: a tool step opened, model_read listing the 3D models before the task is written; and a photo of a screw, named from the picture](docs/readme/chat-tools.png)
+<h2 align="center">The code knows the board it runs on.</h2>
 
-![Chat's plan usage, Claude API calls and the Tools page: 12 of 13 tools on, uses by tool](docs/readme/chat-usage.png)
+<p align="center">Firmware starts from the board's own schematic, so every pin already has its name. It builds in a sandbox, and you put it on the chip from your browser, over USB.</p>
 
-### It asks before it guesses.
+<p align="center">
+  <img src="docs/readme/card-firmware.png" width="100%" alt="Firmware: pins from the schematic, sandboxed builds, flashing from the browser, a serial monitor">
+</p>
 
-**On your phone too.** The agents' questions reach Telegram; answer with a button, or send a note with a photo.
+<p align="center">
+  <img src="docs/readme/shot-firmware.png" width="49%" alt="The firmware room: the chip's pins next to its schematic sheet">
+  <img src="docs/readme/shot-firmware-code.png" width="49%" alt="Ready to flash: 0 errors, pins match the board, flash and RAM use">
+</p>
 
-![A question from the 3D room's agent on iot-fan and its answer, next to the Telegram bot's commands](docs/readme/asks.png)
+<p align="center">
+  <img src="docs/readme/shot-firmware-flash.png" width="70%" alt="Flashing the board from the browser">
+</p>
 
-## 04 · Analytics
+<h2 align="center">A team that works in parallel, and shows its work.</h2>
 
-Every call, job and kilowatt-hour since the first note, 21 September to 11 October.
+<p align="center">A lead agent hands each note to the specialist for its room. You see every step as it happens, answer its questions on screen or from your phone, and decide what gets applied.</p>
 
-![Analytics overview tiles, spend by model, tokens by type, and spend by room and by kind of work](docs/readme/analytics-llm.png)
+<p align="center">
+  <img src="docs/readme/card-agents.png" width="100%" alt="The agent team: parallel rooms, live progress, questions, Telegram, review, usage">
+</p>
 
-![Analytics, machine and energy: load, power, energy per day, CPU hours by kind of job, and every job counted](docs/readme/analytics-machine.png)
+<h2 align="center">Talk it through. Then hand it over.</h2>
 
-## 05 · Taste
+<p align="center">A private chat with the model of your choice that knows your project. When an idea is ready, it becomes a note for the team in one click.</p>
 
-A finished project, distilled into the rules the next one follows. One run read every model, board and firmware in iot-fan.
+<p align="center">
+  <img src="docs/readme/card-chat.png" width="100%" alt="Chat: mentions, model choice, thinking and speed, tasks to the queue">
+</p>
 
-![The iot-fan extraction: 17 of 18 projects read, 66k tokens sent, 20 s in one call to Claude Haiku 5.5, 27 rules (16 must, 11 prefer) across 4 domains](docs/readme/taste-stats.png)
+<p align="center">
+  <img src="docs/readme/shot-chat.png" width="80%" alt="A chat with a thinking answer and its tokens per second">
+</p>
 
-![The Taste tab's overview, the finished iot-fan run and the firmware and general columns of its palette](docs/readme/taste-views.png)
+<h2 align="center">Everything else your project needs, in one drive.</h2>
 
-Every rule was reviewed before it was kept; attach the palette to a project and its agents follow it.
+<p align="center">Datasheets, BOMs, photos and supplier models, kept in folders and opened right where they are. Hand a file to an agent, or turn a 3D file into a part of your design.</p>
 
-![Taste of iot-fan, as extracted: two rules each for 3D parts, the circuit board, firmware and across them](docs/readme/taste-rules.png)
+<p align="center">
+  <img src="docs/readme/card-files.png" width="100%" alt="Files: folders, previews, add to project, send to an agent">
+</p>
 
-## 06 · Themes
+<h2 align="center">The rest of the workshop, already in the box.</h2>
 
-28 themes, 22 dark and 6 light, chosen per browser. The 3D backdrop and the code editor follow.
+<p align="center">221 engineering tools, a command bar for everything, notes, drawings and releases, 28 themes and a clear view of what the work used.</p>
 
-- **And your own.** Make a theme from any of them and share it as a file; a teammate imports it.
-- **Every view follows the theme.** The whole window takes the theme: panels, lines, text and the accent.
+<p align="center">
+  <img src="docs/readme/card-more.png" width="100%" alt="Tools, Ctrl+K, themes, notes, drawings, code view, CAD import, analytics, languages">
+</p>
 
-![Settings, Appearance: the light themes and custom themes, and the same settings list in Dracula, Nord and Solarized Light](docs/readme/themes.png)
+<p align="center">
+  <img src="docs/readme/shot-tools.png" width="49%" alt="Basic Tools: an I2C pull-up calculator with its live bus drawing">
+  <img src="docs/readme/shot-palette.png" width="49%" alt="Ctrl+K finds models, tools and lines of code">
+</p>
 
-## 07 · What it cost
+<p align="center">
+  <img src="docs/readme/shot-themes.png" width="49%" alt="28 themes, and your own">
+  <img src="docs/readme/shot-analytics.png" width="49%" alt="Analytics: load, power, energy per day and compute by job">
+</p>
 
-Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.
+<h2 align="center">Runs on your machine. Stays on your machine.</h2>
 
-The plans against API prices: **251.9×**. ₺579,595 of work, paid with ₺2,301 of plans. Three weeks of work, 21 September to 11 October. Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.
+<p align="center">Self-hosted from end to end. Your designs, conversations and API keys live on your own server, and you decide who gets in and what every agent may do.</p>
 
-![The plans against API prices, 251.9x, and the connected plans: Claude Max, Command Code, Claude API, OpenRouter, and a 98.5% cache rate](docs/readme/cost-savings.png)
+<p align="center">
+  <img src="docs/readme/card-privacy.png" width="100%" alt="Self-hosted: your data, private accounts, agent tokens, budgets">
+</p>
 
-![Settings, LLM settings: four providers, nine jobs, the Command Code plan with its windows and spend per day; keys show as dots](docs/readme/cost-llm.png)
+<h2 align="center">What you get</h2>
 
-## 08 · A proxy for part lookups
+<p align="center">
+  <img src="docs/readme/card-summary.png" width="100%" alt="Everything in Redline Studio at a glance">
+</p>
 
-EasyEDA turns bursts of lookups away. A rotating proxy gives them another way out, with its traffic and cost measured.
+<br>
 
-- **Its state.** Whether it is on, what went through it this week and what that cost, and whether EasyEDA answers.
-- **Always, or when refused.** Every lookup through it, or only the ones EasyEDA turns away. Each lookup comes out somewhere new.
-- **Where it came out.** How many addresses and countries, and how often and how fast a lookup worked, with and without it.
-
-![Settings, Proxy: its state over the last 7 days, the mode, and the exits](docs/readme/proxy.png)
-
-## 09 · Why not build it yourself
-
-An agent can write a part. What it needs around it to do a whole product is the rest of this.
-
-| | | |
-|---|---|---|
-| **Compute** | 1,310 jobs · 35.2 h of CPU · 8.16 kWh | 801 model builds, 342 renders; 78 board runs, 76 layouts, 13 firmware builds; queued, run in containers, timed and metered |
-| **Storage** | 677 MB database · 168k documents | 250 built models, 344 MB; 229 source versions, 370 history entries; 195 note pictures, 50 files, 2 releases |
-| **Agent API and MCP** | 26 tools over MCP, for any agent | agents connect from their own tools with `REDLINE_TRANSPORT=api` and a token you can revoke; each token sees one workspace; deletes are audited; 221 engineering calculators through `find_tool` and `run_tool` |
-| **LLM routing and cost** | 21.8k calls, each priced and counted | 4 providers: Claude API, Command Code, OpenRouter, OpenCode Go; 9 kinds of job, each with its own model; plans you connect, priced against API rates; budgets and spend per note |
-
-![Compute, Storage, Agent API and MCP, and LLM routing and cost, in iot-fan's figures](docs/readme/platform.png)
-
-## Running it
-
-Redline is in private beta at [redline.medipol.dev](https://redline.medipol.dev). To run it yourself you need Python 3.10 or newer, Node 20.19 or newer, and a MongoDB connection (Atlas or a local server).
-
-```bash
-git clone https://github.com/x3beche/redline-studio.git
-cd redline-studio
-cp .env.example .env          # fill in MONGODB_URI
-./start.sh
-```
-
-On first run `start.sh` creates the virtual environment, installs the npm dependencies and starts both servers with live reload: the UI on <http://127.0.0.1:4200>, the API on <http://127.0.0.1:8000>. `./start.sh --build` compiles the UI and serves it from `:8000` alone. `compose.dev.yml` runs the same two servers in containers, with the checkout mounted.
-
-The model API keys are not read from `.env`: they are kept in the database and typed in Settings > LLM settings, where each job also picks its provider and model. The board room (atopile, and KiCad with Freerouting in a container), the firmware room (PlatformIO in a container), technical drawings and the Tools tab's checks each need an image built once; without them the rest still works and says what is missing.
-
-To run an agent on your own computer against a Redline server, use [redline-agent-seed](https://github.com/x3beche/redline-agent-seed) with a token from Agent tokens (the user menu): a start script and a few instructions, which fetch the agents' tools from the server on every start.
-
-- [INSTALL.md](INSTALL.md): requirements, Windows (WSL 2), containers, configuration, the images, Telegram
-- [USAGE.md](USAGE.md): the rooms and the everyday loop
-- [AGENTS.md](AGENTS.md): for agents working in this repository
-- [TOOLS.md](TOOLS.md) · [SECURITY.md](SECURITY.md) · [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
+<p align="center"><sub>Setting it up: <a href="INSTALL.md">Install</a> · <a href="USAGE.md">Usage</a> · <a href="AGENTS.md">For agents</a></sub></p>

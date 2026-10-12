@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.page { padding: 44px 44px 36px; }
+.hero-top { display: flex; justify-content: space-between; align-items: center; }
+h1 { font-size: 50px; font-weight: 600; letter-spacing: -.02em; line-height: 1.08; margin-top: 34px; }
+h1 .pen { color: var(--pen); }
+.lead { color: var(--ink-dim); font-size: 18px; margin-top: 14px; max-width: 780px; line-height: 1.5; }
+.rooms { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
+.rooms .chip { height: 26px; font-size: 12px; padding: 0 10px; color: var(--ink); }
+.rooms .chip svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--ink-dim); }
+.product { margin-top: 30px; border-radius: 12px; overflow: hidden; }
+.product img { display: block; width: 100%; margin: -14px 0 -14px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; }
+.stat { border-top: 1px solid var(--line); padding-top: 12px; }
+.stat .n { font: 600 22px 'IBM Plex Mono', monospace; }
+.stat .t { color: var(--ink-dim); font-size: 13px; margin-top: 2px; }
+</style></head><body>
+<div class="page">
+  <div class="hero-top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24"><path d="M12 2.7 L20.4 7.35 V16.65 L12 21.3 L3.6 16.65 V7.35 Z" fill="none" stroke="#a1a1aa" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 2.7 V12 M12 12 L20.4 7.35 M12 12 L3.6 7.35" stroke="#a1a1aa" stroke-width="1" opacity=".5"/><path d="M5.6 16.2 C9 13.4 12.4 12.6 18.4 8.4" fill="none" stroke="#ff2d3f" stroke-width="2.7" stroke-linecap="round"/></svg>
+      <div class="brand-name">Redl<span class="brand-i">i</span>ne <span style="color:var(--ink-dim);font-weight:500">Studio</span></div>
+    </div>
+    <span class="chip ok"><span class="dot" style="background:var(--ok)"></span>self-hosted · runs on your machine</span>
+  </div>
+  <h1>Design hardware<br>with an <span class="pen">AI team</span>.</h1>
+  <p class="lead">3D parts, circuit boards and the firmware that runs on them, in one place. Draw on what you see, say what you want in a sentence, and agents build it while you watch.</p>
+  <div class="rooms">
+    <span class="chip"><i data-i="box"></i>3D Drawing</span>
+    <span class="chip"><i data-i="board"></i>PCB Design</span>
+    <span class="chip"><i data-i="chip"></i>Firmware</span>
+    <span class="chip"><i data-i="bot"></i>Agents</span>
+    <span class="chip"><i data-i="chat"></i>Chat</span>
+    <span class="chip"><i data-i="folder"></i>Files</span>
+    <span class="chip"><i data-i="wrench"></i>220+ tools</span>
+  </div>
+  <div class="product"><img src="../shot-3d-station.png"></div>
+</div>
+<script src="icons.js"></script>
+</body></html>

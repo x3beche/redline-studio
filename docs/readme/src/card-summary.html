@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.mini { padding: 16px 16px 15px; }
+.mini .row { gap: 12px; align-items: flex-start; }
+.mini h3 { margin-top: 0; font-size: 15px; }
+.mini p { color: var(--ink-dim); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
+.mini .tile { width: 32px; height: 32px; }
+.mini .tile svg { width: 17px; height: 17px; }
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+.nums .card { padding: 16px 18px; }
+.nums .n { font: 600 34px/1.1 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
+.nums .t { color: var(--ink-dim); font-size: 13px; margin-top: 4px; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">What you get</div>
+    <h2>One studio for the whole product.</h2>
+  </div>
+  <div class="nums">
+    <div class="card"><div class="n">3</div><div class="t">design rooms: 3D, PCB, firmware</div><div class="meter" style="margin-top:12px"><i style="width:100%;background:var(--s1)"></i></div></div>
+    <div class="card"><div class="n">221</div><div class="t">engineering tools, 209 agent-ready</div><div class="meter" style="margin-top:12px"><i style="width:95%;background:var(--ok)"></i></div></div>
+    <div class="card"><div class="n">28</div><div class="t">themes, plus your own</div><div class="meter" style="margin-top:12px"><i style="width:79%;background:var(--s4)"></i></div></div>
+    <div class="card"><div class="n">2</div><div class="t">languages: English, Türkçe</div><div class="meter" style="margin-top:12px"><i style="width:100%;background:var(--warn)"></i></div></div>
+  </div>
+  <div class="grid g4">
+    <div class="card mini"><div class="row"><div class="tile pen"><i data-i="pen"></i></div><div><h3>Draw to ask</h3><p>Mark the model, write a sentence, get it built.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="check"></i></div><div><h3>Before and after</h3><p>Every change shown from your own camera.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="link"></i></div><div><h3>Linked parts</h3><p>Change one part; everything using it rebuilds.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile blue"><i data-i="eye"></i></div><div><h3>Studio, zebra, clip</h3><p>Look at a design every way that matters.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="board"></i></div><div><h3>Boards you can order</h3><p>Placed, routed, checked: ready to order.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile warn"><i data-i="search"></i></div><div><h3>Real parts</h3><p>Catalogue search with stock and 3D shapes.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile blue"><i data-i="chip"></i></div><div><h3>Pins from the board</h3><p>Firmware that always matches the copper.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile warn"><i data-i="usb"></i></div><div><h3>Flash in the browser</h3><p>USB, one button, verified, with a serial monitor.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile violet"><i data-i="users"></i></div><div><h3>An AI team</h3><p>A lead and three specialists, in parallel.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile warn"><i data-i="question"></i></div><div><h3>It asks you</h3><p>Plain questions on screen and on Telegram.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile blue"><i data-i="chat"></i></div><div><h3>Chat</h3><p>Any model, thinking, math, tasks in one click.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile"><i data-i="folder"></i></div><div><h3>Files</h3><p>A drive with previews, straight into the design.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile"><i data-i="command"></i></div><div><h3>Ctrl+K</h3><p>Find and do anything from one box.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="chart"></i></div><div><h3>Analytics</h3><p>Tokens, builds, the machine and its energy.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="gauge"></i></div><div><h3>Budgets</h3><p>Usage meters that warn you early.</p></div></div></div>
+    <div class="card mini"><div class="row"><div class="tile ok"><i data-i="shield"></i></div><div><h3>Self-hosted</h3><p>Private accounts; your keys stay with you.</p></div></div></div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

@@ -127,15 +127,12 @@
   .st-seg button { min-height: 30px; }
 }
 
-/* a package's tools, over the list */
-.ct-scrim { position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .5); }
-.ct-modal { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; margin: 0;
-  box-shadow: 0 16px 48px var(--shadow-hard, rgb(0 0 0 / .5)); }
-.ct-modal .st-card-head { flex-wrap: nowrap; }
-.ct-modal .st-card-head > .st-sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ct-modal .st-right { display: flex; align-items: center; gap: 8px; flex: none; }
+/* the packages: a big one has its row, small ones share theirs */
+.ct-packs { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; }
+.ct-packs > .st-card { grid-column: span var(--pw, 12); min-width: 0; margin: 0; }
+@media (max-width: 1100px) { .ct-packs > .st-card { grid-column: span 12; } }
 .ct-top .st-badge { flex: none; margin-left: auto; }
 .ct-top .st-badge + .tcv-switch { margin-left: 6px; }
-/* a package's switch with some of its tools on */
-.tcv-switch[data-part] { opacity: .6; }
+.ct-packs .st-card-head { flex-wrap: nowrap; }
+.ct-packs .st-card-head > .st-sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-packs .st-card-head > .st-right { flex: none; }

@@ -1,0 +1,107 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.graph text { font: 500 11.5px 'IBM Plex Mono', monospace; fill: var(--ink); }
+.graph .ext { fill: var(--ink-faint); }
+.graph .node { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.graph .node.src { stroke: var(--warn); }
+.graph .node.upd { stroke: rgba(46,184,138,.55); }
+.graph .edge { stroke: #3f3f46; stroke-width: 1.25; fill: none; }
+.graph .edge.hot { stroke: var(--warn); stroke-dasharray: 3 3; }
+.graph .tag { font: 500 10px 'IBM Plex Mono', monospace; }
+.vmenu { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; font: 500 11.5px 'IBM Plex Mono', monospace; }
+.vmenu div { display: flex; justify-content: space-between; padding: 6px 10px; color: var(--ink-dim); border-top: 1px solid var(--line); }
+.vmenu div:first-child { border-top: 0; }
+.vmenu div.on { color: var(--ink); background: var(--hover); }
+.bars .b { display: grid; grid-template-columns: 74px 1fr 52px; align-items: center; gap: 10px; font-size: 12px; margin-top: 8px; }
+.bars .b span:first-child { color: var(--ink-dim); }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Linked parts</div>
+    <h2>Change one part. Everything that uses it follows.</h2>
+    <p>Every model and every board is a part you design once and use everywhere. Edit the enclosure and the lid, the buttons and the whole assembly rebuild on their own, in the right order.</p>
+  </div>
+  <div class="grid g4">
+    <div class="card wide span4">
+      <div class="txt">
+        <div class="tile ok"><i data-i="link"></i></div>
+        <h3>Your product is a family of parts</h3>
+        <div class="sub ok">Rebuilt because Enclosure v6 changed</div>
+        <p class="body">Parts you make, parts you buy and the circuit board itself all plug into one another. When one changes, every design that depends on it is rebuilt and tells you exactly why.</p>
+        <div class="viz-b row" style="gap:6px;flex-wrap:wrap">
+          <span class="chip">uses 11</span><span class="chip">in 5</span><span class="chip ok">latest v7</span><span class="chip warn">updating…</span>
+        </div>
+      </div>
+      <div class="viz">
+        <svg class="graph" width="640" height="290" viewBox="0 0 640 290">
+          <path class="edge hot" d="M118 140 C 150 140, 150 60, 182 60"/>
+          <path class="edge hot" d="M118 140 C 150 140, 150 140, 182 140"/>
+          <path class="edge hot" d="M118 140 C 150 140, 150 220, 182 220"/>
+          <path class="edge" d="M290 60 C 320 60, 320 140, 350 140"/>
+          <path class="edge" d="M290 140 L 350 140"/>
+          <path class="edge" d="M290 220 C 320 220, 320 140, 350 140"/>
+          <path class="edge" d="M118 262 C 240 262, 300 150, 350 146"/>
+          <path class="edge" d="M440 140 L 480 140"/>
+          <text x="8" y="114" class="tag" style="fill:var(--warn)">YOU EDITED</text>
+          <rect class="node src" x="8" y="124" width="110" height="32" rx="5"/><text x="20" y="144">Enclosure<tspan class="ext"> v6</tspan></text>
+          <rect class="node" x="8" y="246" width="110" height="32" rx="5"/><text x="20" y="266">board<tspan class="ext">.pcb</tspan></text>
+          <text x="182" y="30" class="tag" style="fill:var(--ink-faint)">REBUILT ON THEIR OWN</text>
+          <rect class="node upd" x="182" y="44" width="108" height="32" rx="5"/><text x="194" y="64">Lid<tspan class="ext">.3d</tspan></text>
+          <rect class="node upd" x="182" y="124" width="108" height="32" rx="5"/><text x="194" y="144">Button Caps</text>
+          <rect class="node upd" x="182" y="204" width="108" height="32" rx="5"/><text x="194" y="224">Light Pipes</text>
+          <rect class="node upd" x="350" y="124" width="90" height="32" rx="5"/><text x="362" y="144">Base<tspan class="ext">.3d</tspan></text>
+          <text x="480" y="104" class="tag" style="fill:var(--ink-faint)">ASSEMBLY</text>
+          <rect class="node upd" x="480" y="116" width="150" height="48" rx="5"/><text x="494" y="137">Station</text><text x="494" y="154" class="tag" style="fill:var(--ok)">✓ rebuilt, in order</text>
+          <circle cx="290" cy="60" r="3" fill="var(--ok)"/><circle cx="290" cy="140" r="3" fill="var(--ok)"/><circle cx="290" cy="220" r="3" fill="var(--ok)"/><circle cx="440" cy="140" r="3" fill="var(--ok)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile warn"><i data-i="layers"></i></div>
+      <h3>Pin a version</h3><div class="sub warn">Or always follow the latest</div>
+      <p class="body">Hold a design on the version you trust. Each version says what changed.</p>
+      <div class="viz-b"><div class="vmenu">
+        <div class="on"><span>latest · v7</span><span>W 12 → 14</span></div>
+        <div><span>v6</span><span>holes 4 → 6</span></div>
+        <div><span>v5 · pinned</span><span style="color:var(--warn)">●</span></div>
+      </div></div>
+    </div>
+    <div class="card">
+      <div class="tile blue"><i data-i="board"></i></div>
+      <h3>The board is a part too</h3><div class="sub blue">Holes, outline, connectors</div>
+      <p class="body">The case reads the real board: where its mounting holes and ports are, and how tall each part stands.</p>
+      <div class="viz-b">
+        <svg width="220" height="70" viewBox="0 0 220 70">
+          <rect x="1" y="1" width="218" height="68" rx="5" fill="none" stroke="#3f3f46"/>
+          <rect x="12" y="12" width="150" height="46" rx="3" fill="rgba(46,184,138,.10)" stroke="var(--ok)" stroke-width="1"/>
+          <circle cx="20" cy="20" r="3" fill="none" stroke="var(--s6)"/><circle cx="154" cy="20" r="3" fill="none" stroke="var(--s6)"/>
+          <circle cx="20" cy="50" r="3" fill="none" stroke="var(--s6)"/><circle cx="154" cy="50" r="3" fill="none" stroke="var(--s6)"/>
+          <rect x="150" y="28" width="20" height="14" rx="2" fill="none" stroke="var(--warn)"/>
+          <rect x="60" y="24" width="22" height="22" rx="2" fill="none" stroke="#71717a"/>
+          <text x="180" y="40" style="font:500 10px 'IBM Plex Mono';fill:var(--warn)">USB</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="ruler"></i></div>
+      <h3>No copied numbers</h3><div class="sub ok">One source for every size</div>
+      <p class="body">If a part retypes a size another part already names, you are told, so the two can never drift apart.</p>
+      <div class="viz-b">
+        <div class="row" style="justify-content:space-between"><span class="label">copied numbers</span><span class="num" style="color:var(--ok)">0</span></div>
+        <div class="dots" data-cols="26" data-rows="3" data-fill="1" data-pal="on" data-seed="3" style="margin-top:8px;gap:3px" data-size="5"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="zap"></i></div>
+      <h3>Built once, reused</h3><div class="sub violet">Seconds, not minutes</div>
+      <p class="body">A part used in five places is built once; the others load its finished result.</p>
+      <div class="viz-b bars">
+        <div class="b"><span>first build</span><div class="meter"><i style="width:100%;background:#71717a"></i></div><span class="num">2 min</span></div>
+        <div class="b"><span>each reuse</span><div class="meter"><i style="width:2%;background:var(--s4)"></i></div><span class="num">~1 s</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.fm { display: grid; grid-template-columns: 150px 1fr; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; width: 100%; }
+.fm .side { border-right: 1px solid var(--line); padding: 10px 8px; font-size: 12px; }
+.fm .side div { display: flex; gap: 7px; align-items: center; padding: 5px 6px; border-radius: 4px; color: var(--ink-dim); }
+.fm .side div.on { background: var(--hover); color: var(--ink); }
+.fm .side svg, .ft svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.fm .main { padding: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ft { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); overflow: hidden; font-size: 11.5px; }
+.ft .th { height: 64px; display: grid; place-items: center; background: #111113; border-bottom: 1px solid var(--line); position: relative; }
+.ft .th .k { position: absolute; left: 6px; bottom: 6px; font: 600 9px 'IBM Plex Mono', monospace; padding: 1px 4px; border-radius: 3px; color: #fff; }
+.ft .nm { padding: 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft .sz { padding: 0 8px 7px; color: var(--ink-faint); font: 500 10px 'IBM Plex Mono', monospace; }
+.kinds { display: flex; flex-wrap: wrap; gap: 5px; }
+.page-lines i { display: block; height: 4px; border-radius: 2px; background: #3f3f46; margin: 5px 0; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Files</div>
+    <h2>Everything else your project needs, in one drive.</h2>
+    <p>Datasheets, a BOM, a pick-and-place file, a photo of the bench, a clip of the prototype. Keep them in folders, open them right there, and hand them to an agent or straight into the design.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card wide span3">
+      <div class="txt" style="flex-basis:34%">
+        <div class="tile blue"><i data-i="folder"></i></div>
+        <h3>A file manager that feels familiar</h3>
+        <div class="sub blue">Folders, grid or list, drag and drop</div>
+        <p class="body">Each file remembers who brought it and which board it is for. A BOM is recognised the moment it lands.</p>
+      </div>
+      <div class="viz">
+        <div class="fm">
+          <div class="side">
+            <div><i data-i="home"></i>All files</div>
+            <div class="on"><i data-i="folder"></i>iot-fan</div>
+            <div style="padding-left:20px"><i data-i="folder"></i>datasheets</div>
+            <div style="padding-left:20px"><i data-i="folder"></i>photos</div>
+            <div><i data-i="folder"></i>board</div>
+          </div>
+          <div class="main">
+            <div class="ft"><div class="th"><div class="page-lines" style="width:40px"><i></i><i style="width:70%"></i><i></i><i style="width:50%"></i></div><span class="k" style="background:#e23670">PDF</span></div><div class="nm">ESP32 datasheet.pdf</div><div class="sz">2.1 MB</div></div>
+            <div class="ft"><div class="th"><svg width="60" height="36" viewBox="0 0 60 36"><rect x="1" y="1" width="58" height="34" rx="3" fill="none" stroke="#3f3f46"/><path d="M1 12 H59 M1 23 H59 M20 1 V35 M40 1 V35" stroke="#3f3f46"/></svg><span class="k" style="background:#2eb88a">CSV</span></div><div class="nm">bom.csv</div><div class="sz">BOM · 91 parts</div></div>
+            <div class="ft"><div class="th" style="background:linear-gradient(135deg,#27272a,#3f3f46)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="1.6"><path d="M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3a1.5 1.5 0 1 0 0 3M21 15l-5-5L5 21"/></svg><span class="k" style="background:#2662d9">JPG</span></div><div class="nm">bench.jpg</div><div class="sz">3.4 MB</div></div>
+            <div class="ft"><div class="th"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="k" style="background:#e88c30">STEP</span></div><div class="nm">OLED_0.91_128x32.stp</div><div class="sz">1.2 MB</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="eye"></i></div>
+      <h3>Open it in place</h3><div class="sub violet">No downloads to look</div>
+      <p class="body">A built-in reader for PDFs, plus images, video, audio, text and code, Markdown, tables, archives and 3D meshes.</p>
+      <div class="viz-b kinds"><span class="chip">PDF</span><span class="chip">image</span><span class="chip">video</span><span class="chip">audio</span><span class="chip">Markdown</span><span class="chip">table</span><span class="chip">code</span><span class="chip">zip</span><span class="chip">mesh</span></div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="box"></i></div>
+      <h3>Add to project</h3><div class="sub warn">A supplier’s STEP becomes a part</div>
+      <p class="body">One click turns a downloaded 3D file into a part your assemblies can use, kept even if the file is later deleted.</p>
+      <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">OLED_0.91_128x32.stp</span><span style="color:var(--ink-faint)">→</span><span class="chip ok">OLED 0.91 inch .3d</span></div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="send"></i></div>
+      <h3>Send to an agent</h3><div class="sub ok">The right room, with context</div>
+      <p class="body">Hand a BOM or a datasheet to a room’s agent; it knows what the file is and how to read it.</p>
+      <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">bom.csv</span><span style="color:var(--ink-faint)">→</span><span class="chip blue">PCB Design</span></div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

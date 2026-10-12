@@ -1,0 +1,115 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.pcb .t1 { stroke: var(--s2); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.pcb .t2 { stroke: var(--s1); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+.pcb .pad { fill: #d4a017; }
+.pcb .via { fill: var(--surface-2); stroke: #a1a1aa; stroke-width: 1.4; }
+.pcb text { font: 500 9px 'IBM Plex Mono', monospace; fill: #71717a; }
+.health > div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 5px 0; border-top: 1px solid var(--line); }
+.health > div:first-child { border-top: 0; }
+.health .v { margin-left: auto; font: 500 11.5px 'IBM Plex Mono', monospace; color: var(--ink-dim); }
+.parts > div { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; align-items: center; font-size: 12px; padding: 4px 0; }
+.parts .pn { font: 500 11.5px 'IBM Plex Mono', monospace; color: var(--ink); }
+.sheets { display: flex; gap: 4px; flex-wrap: wrap; }
+.sheets span { font: 500 11px 'IBM Plex Mono', monospace; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-dim); background: var(--surface); }
+.sheets span.on { color: var(--ink); border-color: #52525b; background: var(--hover); }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">PCB design</div>
+    <h2>From a sentence to a board you can order.</h2>
+    <p>Describe the circuit, or bring one you already have. Parts come straight from the catalogue with stock and price, the board is placed, routed and checked, and you get a clear answer: ready to order, or what is left to fix.</p>
+  </div>
+  <div class="grid g4">
+    <div class="card wide span4">
+      <div class="txt">
+        <div class="tile ok"><i data-i="board"></i></div>
+        <h3>Placed and routed for you</h3>
+        <div class="sub ok">0 unrouted · DRC 0 · ERC 0</div>
+        <p class="body">Each part lands beside the chip it serves, connectors face the edge, every wire is routed to your rules and ground is poured on both sides. Then the board is checked the way a factory would.</p>
+        <div class="viz-b">
+          <div class="row" style="gap:18px">
+            <div style="flex:1"><div class="row" style="justify-content:space-between"><span class="label">routed</span><span class="num">100%</span></div><div class="meter" style="margin-top:6px"><i style="width:100%"></i></div></div>
+            <div style="flex:1"><div class="row" style="justify-content:space-between"><span class="label">checks passed</span><span class="num">3/3</span></div><div class="meter" style="margin-top:6px"><i style="width:100%"></i></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="viz">
+        <svg class="pcb" width="600" height="300" viewBox="0 0 600 300">
+          <rect x="10" y="10" width="580" height="280" rx="14" fill="#0d1a14" stroke="#2eb88a" stroke-opacity=".45"/>
+          <g fill="none" stroke="#2eb88a" stroke-opacity=".08" stroke-width="1">
+            <path d="M10 60 H590 M10 110 H590 M10 160 H590 M10 210 H590 M10 260 H590"/>
+          </g>
+          <circle cx="34" cy="34" r="8" fill="none" stroke="#a1a1aa" stroke-width="1.4"/><circle cx="566" cy="34" r="8" fill="none" stroke="#a1a1aa" stroke-width="1.4"/>
+          <circle cx="34" cy="266" r="8" fill="none" stroke="#a1a1aa" stroke-width="1.4"/><circle cx="566" cy="266" r="8" fill="none" stroke="#a1a1aa" stroke-width="1.4"/>
+          <!-- MCU -->
+          <rect x="250" y="100" width="100" height="100" rx="4" fill="#18181b" stroke="#52525b"/>
+          <text x="300" y="154" text-anchor="middle" style="fill:#a1a1aa;font-size:11px">U2 ESP32</text>
+          <g class="pad">
+            <rect x="256" y="92" width="6" height="8"/><rect x="272" y="92" width="6" height="8"/><rect x="288" y="92" width="6" height="8"/><rect x="304" y="92" width="6" height="8"/><rect x="320" y="92" width="6" height="8"/><rect x="336" y="92" width="6" height="8"/>
+            <rect x="256" y="200" width="6" height="8"/><rect x="272" y="200" width="6" height="8"/><rect x="288" y="200" width="6" height="8"/><rect x="304" y="200" width="6" height="8"/><rect x="320" y="200" width="6" height="8"/><rect x="336" y="200" width="6" height="8"/>
+            <rect x="242" y="112" width="8" height="6"/><rect x="242" y="130" width="8" height="6"/><rect x="242" y="148" width="8" height="6"/><rect x="242" y="166" width="8" height="6"/><rect x="242" y="184" width="8" height="6"/>
+            <rect x="350" y="112" width="8" height="6"/><rect x="350" y="130" width="8" height="6"/><rect x="350" y="148" width="8" height="6"/><rect x="350" y="166" width="8" height="6"/><rect x="350" y="184" width="8" height="6"/>
+          </g>
+          <!-- USB-C on the edge -->
+          <rect x="560" y="128" width="30" height="44" rx="4" fill="#18181b" stroke="#a1a1aa"/><text x="575" y="190" text-anchor="middle">J1 USB-C</text>
+          <!-- small parts -->
+          <g fill="#27272a" stroke="#71717a">
+            <rect x="130" y="70" width="22" height="12" rx="2"/><rect x="130" y="100" width="22" height="12" rx="2"/><rect x="420" y="70" width="22" height="12" rx="2"/>
+            <rect x="420" y="220" width="22" height="12" rx="2"/><rect x="130" y="220" width="22" height="12" rx="2"/><rect x="460" y="140" width="40" height="24" rx="3"/>
+          </g>
+          <text x="141" y="64" text-anchor="middle">C4</text><text x="431" y="64" text-anchor="middle">R7</text><text x="480" y="134" text-anchor="middle">U5</text>
+          <!-- routes: front (amber), back (blue) -->
+          <path class="t1" d="M259 92 V60 L245 46 H160 L152 54 V70"/>
+          <path class="t1" d="M275 92 V70 L265 60"/>
+          <path class="t1" d="M339 92 V56 H410 L420 66 V70"/>
+          <path class="t1" d="M358 151 H455 L460 146"/>
+          <path class="t1" d="M358 115 H420 L440 95 H520 L540 115 V132 H560"/>
+          <path class="t1" d="M358 133 H400 L410 123 H500 L512 135 V140"/>
+          <path class="t2" d="M242 187 H200 L180 207 V226 H152"/>
+          <path class="t2" d="M242 169 H190 L170 149 V112 H152"/>
+          <path class="t2" d="M323 208 V240 H410 L420 230"/>
+          <path class="t2" d="M500 158 H530 L545 173 V180 H560"/>
+          <path class="t2" d="M291 208 V255 H90 L70 235 V90 L90 70 H130"/>
+          <circle class="via" cx="265" cy="60" r="4"/><circle class="via" cx="410" cy="123" r="4"/><circle class="via" cx="170" cy="149" r="4"/><circle class="via" cx="70" cy="160" r="4"/><circle class="via" cx="530" cy="158" r="4"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile ok"><i data-i="check"></i></div>
+      <h3>Board health</h3><div class="sub ok">Ready to order</div>
+      <p class="body">One page that says whether the board can be made, in plain words, with every problem shown where it is.</p>
+      <div class="viz-b health">
+        <div><span class="dot" style="background:var(--ok)"></span>Every wire routed<span class="v">0 left</span></div>
+        <div><span class="dot" style="background:var(--ok)"></span>Design rules<span class="v">0 errors</span></div>
+        <div><span class="dot" style="background:var(--ok)"></span>Schematic check<span class="v">0 errors</span></div>
+        <div><span class="dot" style="background:var(--ok)"></span>3D model<span class="v">up to date</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="search"></i></div>
+      <h3>Real parts, in stock</h3><div class="sub warn">Searched by number or by need</div>
+      <p class="body">Type “0603 100nF” or a part number. See stock, price and whether the assembler stocks it, with its 3D shape and footprint.</p>
+      <div class="viz-b parts">
+        <div><span class="pn">C25744</span><div class="meter"><i style="width:92%"></i></div><span class="chip ok">Basic</span></div>
+        <div><span class="pn">C14267</span><div class="meter"><i style="width:64%"></i></div><span class="chip ok">Basic</span></div>
+        <div><span class="pn">C2969989</span><div class="meter"><i style="width:38%;background:var(--warn)"></i></div><span class="chip warn">Extended</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile blue"><i data-i="list"></i></div>
+      <h3>One sheet per chip</h3><div class="sub blue">A schematic you can read</div>
+      <p class="body">The schematic is drawn with each part’s real symbol and split into sheets, one for every microcontroller.</p>
+      <div class="viz-b sheets"><span>Overview</span><span class="on">U2 · ESP32-WROOM-32</span><span>Power</span><span>Connectors &amp; peripherals</span></div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="refresh"></i></div>
+      <h3>Bring the board you have</h3><div class="sub violet">Gerbers or EasyEDA</div>
+      <p class="body">Import an existing design. It is rebuilt as an editable board and checked, connection by connection, against the original.</p>
+      <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">gerber.zip</span><span style="color:var(--ink-faint)">→</span><span class="chip">netlist</span><span style="color:var(--ink-faint)">→</span><span class="chip ok">equivalent</span></div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>
