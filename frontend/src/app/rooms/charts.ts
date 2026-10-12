@@ -469,7 +469,8 @@ export interface StackCol { label: string; parts: { name: string; n: number; col
 /** A small stacked bar chart drawn with boxes: a column a bucket, its parts
  *  piled in their own colours from the axis up, as the Tools panel's uses by
  *  package. For the cards under the Chat list, where an SVG with axes is too
- *  much; each column's tooltip says what it holds. */
+ *  much; each column's tooltip says what it holds. Its bars rise when it
+ *  first appears, never again. */
 @Component({
   selector: 'app-mini-stack',
   styles: [`
@@ -480,22 +481,21 @@ export interface StackCol { label: string; parts: { name: string; n: number; col
     .ms-col i + i { margin-bottom: 1px; }
   `],
   template: `
-@for (g of [gen()]; track g) {
 <div class="ms" [style.height.px]="height()">
   @for (c of cols(); track $index; let i = $index) {
     <div class="ms-col tcv-ch-rise-all" [title]="c.tip" [style.--tcv-i]="i">
       @for (p of c.parts; track p.name) { <i [style.height.%]="p.h" [style.background]="p.color"></i> }
     </div>
   }
-</div>
-}`,
+</div>`,
 })
 export class MiniStack {
   data = input.required<StackCol[]>();
   height = input(40);
   /** How a part's figure is written in the tooltip. */
   f = input<Fmt>(fmt.count);
-  readonly gen = generation(() => this.data());
+  // The bars rise once, when the chart first appears; new figures (the
+  // Chat's live refresh) only change their heights, with no animation.
   cols = computed(() => {
     const d = this.data(), f = this.f();
     const peak = Math.max(1, ...d.map(c => c.parts.reduce((a, p) => a + p.n, 0)));
