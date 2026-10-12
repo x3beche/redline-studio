@@ -31,6 +31,20 @@ REPO = Path(__file__).resolve().parent.parent
 pytest.importorskip("build123d")
 
 MODELS = {
+    "boxed": '''
+        from build123d import *
+        TITLE = "Boxed"
+        PARTS = [Box(10, 10, 2), Pos(0, 0, 10) * Box(10, 10, 2), Pos(20, 0, 0) * Cylinder(1, 5),
+                 Pos(30, 0, 0) * Cylinder(1, 5), Pos(40, 0, 0) * Box(3, 3, 3)]
+        NAMES = ["Enclosure/Base", "Enclosure/Lid", "Fasteners/M3 #1", "Fasteners/M3 #2", "board"]
+    ''',
+    "kit": '''
+        from build123d import *
+        import foot
+        TITLE = "Kit"
+        PARTS = [Box(10, 10, 2), foot.part, Pos(20, 0, 0) * Cylinder(1, 5)]
+        NAMES = ["Enclosure/Base", "foot", "Fasteners/M3 #1"]
+    ''',
     "screw": '''
         from build123d import *
         TITLE = "Screw M3"
@@ -223,3 +237,19 @@ def test_marks_are_in_the_cache_key():
     assert buildcache.FORMAT >= 2
     src = (REPO / "backend" / "buildcache.py").read_text()
     assert 'with_name("assembly.py")' in src
+
+
+def test_slashes_in_part_names_are_groups(tmp_path):
+    """A slash in a part's name made a viewer path to a node that was not
+    there: the part showed as an empty row. It is a group now."""
+    root, _ = layout(tmp_path)
+    viewer = export(root, "boxed", "off")
+    assert outline(viewer) == {"Boxed": {"Enclosure": {"Base": None, "Lid": None},
+                                         "Fasteners": {"M3 #1": None, "M3 #2": None}, "board": None}}
+    assert viewer["names"][0] == "Enclosure/Base"
+
+
+def test_slashes_are_groups_beside_components(tmp_path, cache):
+    root, _ = layout(tmp_path)
+    got = outline(export(root, "kit", cache))
+    assert got == {"Kit": {"Enclosure": {"Base": None}, "Foot": {"foot": None}, "Fasteners": {"M3 #1": None}}}

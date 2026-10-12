@@ -365,4 +365,61 @@ def tree(parts: list, names: list, title: str, titles: dict | None = None,
             kids.append(Compound(label=f"{name} {TIMES}{len(inst)}", children=copies))
         return kids
 
-    return Compound(label=title, children=build(items, 0))
+    return nest(Compound(label=title, children=build(items, 0)))
+
+
+def nest(node):
+    """Part names with a slash - "Fasteners/lid M3x10 #1", "Enclosure/Base" -
+    made into the groups they name. The viewer's tree is keyed by the path
+    of labels joined with "/", so a slash inside one label made a path to a
+    node that was not there, and the part showed as an empty row. The path
+    each part ends up at is the one its name already spelled."""
+    from build123d import Compound
+    kids = list(getattr(node, "children", None) or ())
+    if not kids:
+        return node
+    out: list = []
+    groups: dict[str, list] = {}
+    for k in kids:
+        label = str(getattr(k, "label", "") or "")
+        head, sep, rest = label.strip("/").partition("/")
+        if sep and head.strip() and rest.strip():
+            k.label = rest
+            if head not in groups:
+                groups[head] = []
+                out.append(head)
+            groups[head].append(k)
+        else:
+            out.append(k)
+    if not groups:
+        for k in kids:
+            nest(k)
+        return node
+    for k in kids:
+        k.parent = None
+    made = []
+    for x in out:
+        if isinstance(x, str):
+            made.append(nest(Compound(label=x, children=groups[x])))
+        else:
+            made.append(nest(x))
+    node.children = made
+    return node
+
+
+def slashed(parts: list, names: list, title: str):
+    """A model exported flat whose part names hold slashes, as one tree
+    (`nest`); None when no name has one, so it stays flat as before."""
+    if not any("/" in str(n).strip("/") for n in names):
+        return None
+    from build123d import Compound
+    import copy
+    seen: set[int] = set()
+    leaves = []
+    for p, n in zip(parts, names):
+        if id(p) in seen:
+            p = copy.copy(p)
+        seen.add(id(p))
+        p.label = str(n)
+        leaves.append(p)
+    return nest(Compound(label=title, children=leaves))

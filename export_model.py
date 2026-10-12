@@ -82,6 +82,13 @@ def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
         except Exception as exc:                     # noqa: BLE001 - flat, then
             print(f"note: parts not grouped ({type(exc).__name__}: {exc})")
             root = None
+    if root is None:
+        try:
+            from backend import assembly
+            root = assembly.slashed(list(parts), names, str(getattr(module, "TITLE", None) or name.split("__")[-1]))
+        except Exception as exc:                     # noqa: BLE001 - flat, then
+            print(f"note: slashed names not grouped ({type(exc).__name__}: {exc})")
+            root = None
     with _phase("tessellate"):
         envelope, _ = _convert(root, names=[root.label]) if root is not None \
             else _convert(*parts, names=names)
