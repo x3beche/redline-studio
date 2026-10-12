@@ -11,9 +11,10 @@ import { T, t } from './i18n';
  *  It floats over the list instead of taking a line above it, so a
  *  selection never moves what is being selected: the element is put last in
  *  the list's scrolling pane and has no height there - it sticks to the
- *  pane's bottom and the bar hangs above that point, centred. It slides up
- *  when the count leaves 0 and back down when it returns to it, showing the
- *  last count on the way out. */
+ *  pane's bottom and the bar hangs above that point, centred. While it is
+ *  up it takes the bar's height at the end of the pane, so the last row can
+ *  be scrolled clear of it. It slides up when the count leaves 0 and back
+ *  down when it returns to it, showing the last count on the way out. */
 @Component({
   selector: 'wb-selbar',
   imports: [T],
@@ -27,6 +28,7 @@ import { T, t } from './i18n';
 </div>`,
   styles: [`
 :host { position: sticky; bottom: 0; z-index: 30; flex: none; display: block; height: 0; margin: auto 0 0; pointer-events: none; }
+:host([data-on]) { height: 56px; }
 .wb-selbar-bar { position: absolute; left: 50%; bottom: 12px; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 24px);
   padding: 6px 6px 6px 14px; font-size: 12px; color: var(--ink); white-space: nowrap;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px var(--shadow-soft);

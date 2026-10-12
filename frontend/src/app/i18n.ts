@@ -3048,6 +3048,8 @@ const TR: Record<string, string> = {
   'Delete "{x}"?': '"{x}" silinsin mi?',
   'Delete this note?': 'Bu not silinsin mi?',
   'The note is deleted for good.': 'Not kalıcı olarak silinir.',
+  'Delete {n} notes?': '{n} not silinsin mi?',
+  'The notes are deleted for good.': 'Notlar kalıcı olarak silinir.',
   'The zip goes with it.': 'Zip dosyası da silinir.',
   'The palette and its items are deleted.': 'Palet ve öğeleri silinir.',
   'Close "{x}" without saving?': '"{x}" kaydedilmeden kapatılsın mı?',

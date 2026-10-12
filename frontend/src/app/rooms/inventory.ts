@@ -9,6 +9,7 @@ import { Confirm } from '../confirm';
 import { DmSendButton } from '../dm';
 import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
+import { Marquee } from '../marquee';
 import { SelectOption, UiSelect } from '../ui-select';
 import { TimeChart, TimeData, fmt as chartFmt } from './charts';
 import { CountUp } from '../count';
@@ -218,7 +219,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [EmptyState, Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
+  imports: [EmptyState, Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar, Marquee],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -260,7 +261,8 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
     </div>
   </aside>
 
-  <section class="tcv-notes-main tst inv">
+  <section class="tcv-notes-main tst inv" wbMarquee [marqueeOn]="all().length > 0" [marqueeFromItems]="layout() === 'table'"
+           marqueeSkip="thead, .st-card, .mf-gbar, .mf-modal" [marqueeBase]="picked()" (wbMarquee)="picked.set($event)">
 
     <!-- ================= the overview ================= -->
     <header class="tst-head tsh-head mf-homehead">
@@ -394,7 +396,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
                     @if (g.low) { <span class="st-tag" data-tone="warn">{{ fmt('{n} low', { n: g.low }) }}</span> }
                     <span class="inv-growv mono">{{ g.valueLine }}</span></span></td></tr>
                 @for (i of g.items; track i.id) {
-                  <tr (click)="openItem(i.id)" (contextmenu)="openMenu($event, i)" [attr.data-low]="i.low ? 1 : null" [attr.data-sel]="picked().has(i.id) ? 1 : null">
+                  <tr [attr.data-key]="i.id" (click)="itemClick($event, i)" (contextmenu)="openMenu($event, i)" [attr.data-low]="i.low ? 1 : null" [attr.data-sel]="picked().has(i.id) ? 1 : null">
                     <td class="inv-ck" (click)="$event.stopPropagation()"><button class="inv-tick" role="checkbox" [attr.aria-checked]="picked().has(i.id)" (click)="pick(i.id, !picked().has(i.id))" [attr.aria-label]="'Select' | t">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.check" /></svg></button></td>
                     <td class="inv-thumbc">@if (pic(i); as src) { <img class="inv-thumb" [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
@@ -616,7 +618,8 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 </div>
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-i>
-  <button class="mf-card inv-card" [attr.data-fam]="family(i.type)" (click)="openItem(i.id)" (contextmenu)="openMenu($event, i)" [title]="i.name">
+  <button class="mf-card inv-card" [attr.data-fam]="family(i.type)" [attr.data-key]="i.id" [attr.data-on]="picked().has(i.id) ? 1 : null"
+          [attr.aria-pressed]="picked().has(i.id)" (click)="itemClick($event, i)" (contextmenu)="openMenu($event, i)" [title]="i.name">
     <span class="mf-card-img inv-cimg">
       @if (pic(i); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
       @else if (i.facts.colour_hex) { <ng-container *ngTemplateOutlet="spoolT; context: { $implicit: i }" /> }
@@ -859,6 +862,11 @@ export class RoomInventory implements OnDestroy {
   }
   pick(id: string, on: boolean) { const s = new Set(this.picked()); if (on) s.add(id); else s.delete(id); this.picked.set(s); }
   clearPicked() { this.picked.set(new Set()); }
+  /** Ctrl/Shift-click picks it, as a box drawn over it does (marquee.ts); a plain click opens it. */
+  itemClick(e: MouseEvent, i: Item) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) { this.pick(i.id, !this.picked().has(i.id)); return; }
+    this.openItem(i.id);
+  }
   pickAll(on: boolean) { this.picked.set(on ? new Set(this.shown().map(i => i.id)) : new Set()); }
   allPicked = computed(() => this.shown().length > 0 && this.shown().every(i => this.picked().has(i.id)));
   selectedItems = computed(() => this.all().filter(i => this.picked().has(i.id)));
@@ -1219,6 +1227,7 @@ export class RoomInventory implements OnDestroy {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape') {
       if (this.iid() && !document.querySelector('.wb-sel-pop')) { this.closeItem(); return; }
+      if (this.picked().size && !typing && !ContextMenu.isOpen()) { this.clearPicked(); return; }
     }
     if (e.key === '/' && !typing && !this.iid()) { e.preventDefault(); this.search()?.nativeElement.focus(); }
   }

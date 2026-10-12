@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { Toast, ToastTone } from '../toast';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { forkJoin } from 'rxjs';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
@@ -10,6 +11,8 @@ import { NoteDoc } from './note-doc';
 import { Confirm } from '../confirm';
 import { ContextMenu } from '../context-menu';
 import { Skeleton } from '../skeleton';
+import { Marquee } from '../marquee';
+import { SelectionBar } from '../selection-bar';
 import { EmptyState } from '../empty-state';
 
 /** Notes: what you jot down while working, without a form to fill.
@@ -254,8 +257,12 @@ const NOTE_ICONS = {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [EmptyState, Skeleton, T, NoteDoc],
+  imports: [EmptyState, Skeleton, T, NoteDoc, Marquee, SelectionBar],
   host: { '(document:keydown)': 'key($event)' },
+  styles: [`
+.tcv-notes-row[data-picked] { background: color-mix(in srgb, var(--marquee) 14%, transparent); border-left-color: var(--marquee); }
+.tcv-notes-row[data-picked]:hover { background: color-mix(in srgb, var(--marquee) 20%, transparent); }
+`],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
   <!-- LEFT: find a note -->
@@ -288,12 +295,14 @@ const NOTE_ICONS = {
         }
       </div>
     }
-    <div class="tcv-notes-list">
+    <!-- Ctrl/Shift-click or a box drawn over the rows picks several (marquee.ts); the bar below acts on them. -->
+    <div class="tcv-notes-list" wbMarquee marqueeFromItems [marqueeOn]="notes().length > 0" [marqueeBase]="sel()" (wbMarquee)="sel.set($event)">
       @for (g of groups(); track g.name) {
         <div class="tcv-notes-group">{{ g.name | t }}</div>
         @for (n of g.notes; track n.id) {
           <div class="tcv-cc-item tcv-notes-row" role="button" tabindex="0" [attr.data-on]="n.id === openId() ? 1 : null"
-               (click)="openId.set(n.id)" (keydown.enter)="openId.set(n.id)" (contextmenu)="noteMenu($event, n)">
+               [attr.data-key]="n.id" [attr.data-picked]="sel().has(n.id) ? 1 : null" [attr.aria-pressed]="sel().size ? sel().has(n.id) : null"
+               (click)="rowClick($event, n)" (keydown.enter)="openId.set(n.id)" (contextmenu)="noteMenu($event, n)">
             <div class="tcv-cc-itemtext">
               <div class="tcv-cc-itemtop">
                 @if (n.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.pin" /></svg> }
@@ -341,6 +350,13 @@ const NOTE_ICONS = {
         @else { <wb-skel kind="rows" [count]="6" [h]="64" /> }
       }
     </div>
+    <wb-selbar [count]="sel().size" (clear)="clearSel()">
+      @if (auth.can('draw')) {
+        @if (chosenUnpinned()) { <button class="tcv-btn" (click)="pinPicked(true)">{{ 'Pin' | t }}</button> }
+        @else { <button class="tcv-btn" (click)="pinPicked(false)">{{ 'Unpin' | t }}</button> }
+        <button class="tcv-btn tst-del" (click)="removePicked()">{{ 'Delete' | t }}</button>
+      }
+    </wb-selbar>
   </aside>
 
   <!-- RIGHT: write, and read one -->
@@ -410,6 +426,13 @@ export class RoomNotes implements OnDestroy {
   loaded = signal(false);
   tags = signal<{ tag: string; n: number }[]>([]);
   openId = signal<string | null>(null);
+  /** Notes picked in the list - Ctrl/Shift-clicks or a box drawn over them - for the bar's Pin and Delete. */
+  sel = signal<Set<string>>(new Set());
+  chosen = computed(() => this.notes().filter(n => this.sel().has(n.id)));
+  chosenUnpinned = computed(() => this.chosen().some(n => !n.pinned));
+  clearSel() { this.sel.set(new Set()); }
+  /** Where a Shift-click's run starts. */
+  private anchor: string | null = null;
   editing = signal(false);
   /** A new note being written: not kept until it has words. */
   creating = signal(false);
@@ -469,6 +492,8 @@ export class RoomNotes implements OnDestroy {
       // A note being edited here keeps the text typed into it.
       const ed = this.editing() ? this.editingId : null;
       this.notes.set(ed ? ns.map(n => n.id === ed ? { ...n, text: this.draft() } : n) : ns);
+      // Picked notes that are gone (deleted, filtered away) are no longer picked.
+      if (this.sel().size) this.sel.set(new Set([...this.sel()].filter(id => ns.some(n => n.id === id))));
       if (!this.openId() && ns.length && !this.q()) this.openId.set(ns[0].id);
       this.loaded.set(true);
     }, error: () => this.loaded.set(true) });
@@ -587,6 +612,49 @@ export class RoomNotes implements OnDestroy {
     ]);
   }
 
+  /** Ctrl/Cmd-click picks or drops one, Shift-click the run from the last one; a plain click opens it. */
+  rowClick(e: MouseEvent, n: Note) {
+    if (e.shiftKey) {
+      const ids = this.groups().flatMap(g => g.notes.map(x => x.id));
+      const to = ids.indexOf(n.id);
+      let from = ids.indexOf(this.anchor ?? this.openId() ?? n.id);
+      if (from < 0) from = to;
+      const run = ids.slice(Math.min(from, to), Math.max(from, to) + 1);
+      this.sel.set(new Set([...(e.ctrlKey || e.metaKey ? this.sel() : []), ...run]));
+      return;
+    }
+    this.anchor = n.id;
+    if (e.ctrlKey || e.metaKey) {
+      this.sel.update(s => { const c = new Set(s); if (c.has(n.id)) c.delete(n.id); else c.add(n.id); return c; });
+      return;
+    }
+    this.sel.set(new Set());
+    this.openId.set(n.id);
+  }
+
+  /** The bar's Pin / Unpin: every picked note that is not already so. */
+  pinPicked(on: boolean) {
+    const ns = this.chosen().filter(n => n.pinned !== on);
+    if (!ns.length) return;
+    forkJoin(ns.map(n => this.api.update(n.id, { pinned: on }))).subscribe({
+      next: () => this.read(),
+      error: (e: HttpErrorResponse) => { this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not change them', 'danger'); this.read(); },
+    });
+  }
+
+  /** The bar's Delete: one question for all of them. */
+  async removePicked() {
+    const ns = this.chosen();
+    if (!ns.length) return;
+    if (ns.length === 1) { this.remove(ns[0]); return; }
+    if (!await Confirm.ask({ title: t('Delete {n} notes?').replace('{n}', String(ns.length)),
+      text: t('The notes are deleted for good.'), ok: t('Delete'), danger: true })) return;
+    forkJoin(ns.map(n => this.api.remove(n.id))).subscribe({
+      next: () => { if (ns.some(n => n.id === this.openId())) this.openId.set(null); this.sel.set(new Set()); this.read(); },
+      error: (e: HttpErrorResponse) => { this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not delete them', 'danger'); this.read(); },
+    });
+  }
+
   pin(n: Note) { this.api.update(n.id, { pinned: !n.pinned }).subscribe(() => this.read()); }
 
   send(n: Note, room: string) {
@@ -624,6 +692,10 @@ export class RoomNotes implements OnDestroy {
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable;
     if (e.key === '/' && !typing) { e.preventDefault(); this.search().nativeElement.focus(); }
+    if (this.sel().size && !typing && !ContextMenu.isOpen() && !document.querySelector('[role="alertdialog"], [aria-modal="true"]')) {
+      if (e.key === 'Escape') { this.sel.set(new Set()); return; }
+      if (e.key === 'Delete' && this.auth.can('draw')) { e.preventDefault(); this.removePicked(); return; }
+    }
     if ((e.key === 'n' || e.key === 'N') && !typing && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); this.newNote(); }
     if (!typing && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       const list = this.notes(), i = list.findIndex(n => n.id === this.openId());

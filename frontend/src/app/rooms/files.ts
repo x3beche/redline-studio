@@ -16,6 +16,7 @@ import {
 import { pdfFirstPage } from './pdf-reader';
 import { MeshThumbs } from './mesh-thumb';
 import { ContextMenu, MenuEntry } from '../context-menu';
+import { Marquee } from '../marquee';
 import { EmptyState } from '../empty-state';
 
 export { FilesApi } from './files-model';
@@ -52,7 +53,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
 @Component({
   selector: 'app-room-files',
-  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect],
+  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect, Marquee],
   host: { '(document:keydown)': 'globalKey($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
@@ -195,10 +196,8 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
     <div class="tcv-fm-body">
       <div class="tcv-fm-items" tabindex="0" role="grid" [attr.aria-label]="'Files' | t" [attr.aria-multiselectable]="true"
            [attr.data-view]="view()" (keydown)="itemsKey($event)" (click)="backgroundClick($event)"
-           (contextmenu)="backgroundMenu($event)" (pointerdown)="boxStart($event)" (scroll)="boxScroll()">
-        @if (box(); as b) {
-          <div class="tcv-fm-box" aria-hidden="true" [style.left.px]="b.x" [style.top.px]="b.y" [style.width.px]="b.w" [style.height.px]="b.h"></div>
-        }
+           (contextmenu)="backgroundMenu($event)"
+           wbMarquee marqueeSkip=".tcv-fm-row-head" [marqueeBase]="selected()" (wbMarquee)="selected.set($event)">
         @if (loading()) {
           @if (view() === 'grid') {
             <div class="tcv-fm-grid" aria-busy="true">
@@ -823,57 +822,9 @@ export class RoomFiles implements OnDestroy {
     }
     this.focusKey.set(key);
   }
-  /** A rectangle drawn from an empty spot selects what it touches; Ctrl or Shift adds to what was selected. */
-  box = signal<{ x: number; y: number; w: number; h: number } | null>(null);
-  private drawn: { el: HTMLElement; x: number; y: number; cx: number; cy: number; base: Set<string>; moved: boolean } | null = null;
-  private justDrew = false;
-  boxStart(e: PointerEvent) {
-    if (e.button !== 0 || e.pointerType === 'touch') return;
-    const el = e.currentTarget as HTMLElement;
-    if ((e.target as HTMLElement).closest('[data-key], button, a, input, select, textarea, .tcv-fm-row-head')) return;
-    const r = el.getBoundingClientRect();
-    if (e.clientX > r.left + el.clientWidth) return;   // the scrollbar
-    e.preventDefault();   // no text selection while drawing
-    (e.currentTarget as HTMLElement).focus({ preventScroll: true });
-    const add = e.ctrlKey || e.metaKey || e.shiftKey;
-    this.drawn = { el, x: e.clientX - r.left + el.scrollLeft, y: e.clientY - r.top + el.scrollTop, cx: e.clientX, cy: e.clientY,
-                   base: add ? new Set(this.selected()) : new Set(), moved: false };
-    const move = (m: PointerEvent) => { if (this.drawn) { this.drawn.cx = m.clientX; this.drawn.cy = m.clientY; this.boxDraw(); } };
-    const up = () => {
-      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
-      clearInterval(edge);
-      if (this.drawn?.moved) { this.justDrew = true; setTimeout(() => this.justDrew = false); }
-      this.drawn = null; this.box.set(null);
-    };
-    // Near the top or bottom edge, the list scrolls on by itself.
-    const edge = setInterval(() => {
-      const d = this.drawn; if (!d?.moved) return;
-      const b = d.el.getBoundingClientRect();
-      const dy = d.cy < b.top + 24 ? -14 : d.cy > b.bottom - 24 ? 14 : 0;
-      if (dy) { d.el.scrollTop += dy; this.boxDraw(); }
-    }, 30);
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
-  }
-  boxScroll() { if (this.drawn?.moved) this.boxDraw(); }
-  private boxDraw() {
-    const d = this.drawn!; const r = d.el.getBoundingClientRect();
-    const cx = Math.min(Math.max(d.cx, r.left), r.left + d.el.clientWidth) - r.left + d.el.scrollLeft;
-    const cy = Math.min(Math.max(d.cy, r.top), r.bottom) - r.top + d.el.scrollTop;
-    if (!d.moved && Math.abs(cx - d.x) < 5 && Math.abs(cy - d.y) < 5) return;
-    d.moved = true;
-    const b = { x: Math.min(d.x, cx), y: Math.min(d.y, cy), w: Math.abs(cx - d.x), h: Math.abs(cy - d.y) };
-    this.box.set(b);
-    const sel = new Set(d.base);
-    d.el.querySelectorAll<HTMLElement>('[data-key]').forEach(it => {
-      const q = it.getBoundingClientRect();
-      const x = q.left - r.left + d.el.scrollLeft, y = q.top - r.top + d.el.scrollTop;
-      if (x < b.x + b.w && x + q.width > b.x && y < b.y + b.h && y + q.height > b.y) sel.add(it.dataset['key']!);
-    });
-    this.selected.set(sel);
-  }
-
+  /** A rectangle drawn from an empty spot selects what it touches (marquee.ts); its
+   *  ending click never comes here. */
   backgroundClick(e: MouseEvent) {
-    if (this.justDrew) return;
     if ((e.target as HTMLElement).closest('[data-key], button, a, input, select, textarea')) return;
     this.clearSel();
   }
