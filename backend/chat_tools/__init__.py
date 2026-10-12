@@ -219,7 +219,9 @@ SYSTEM_NOTE = (
     "only when asked to. When the person asks for a document - a report, a datasheet summary, a BOM, a comparison, a "
     "spec - or for a PDF, gather the facts with the tools first, then write it with pdf_make: a few-word title, a "
     "one-line purpose, a short summary first, '## ' sections, tables with units, the sources cited (datasheet pages, "
-    "LCSC numbers), no filler; then link the file it returns in your answer."
+    "LCSC numbers), no filler; then link the file it returns in your answer. For what is not in this workspace - a "
+    "maker's site, a product or a standard on the web - search the web (web_search: titles, addresses and snippets) "
+    "and read the page you need (web_read) before quoting it, and link the pages you use."
 )
 
 

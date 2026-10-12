@@ -72,8 +72,11 @@ app.include_router(imports_api.router)
 from . import cc_chat, llm, llm_api, netproxy  # noqa: E402
 app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
-# Settings > Proxy: a second way out for the EasyEDA part lookups.
+# Settings > Proxy & Data: a second way out for the EasyEDA part lookups,
+# and Jina AI (its Reader and Search, the key kept here).
 app.include_router(netproxy.router)
+from . import jina  # noqa: E402
+app.include_router(jina.router)
 from . import routelive  # noqa: E402
 app.include_router(routelive.router)
 from . import costs as costs_api, fx  # noqa: E402
@@ -3073,7 +3076,9 @@ async def _start_sampler():
             netmeter.bind(db)                          # every proxied byte, counted on the wire
             await netmeter.start()
             await netproxy.load(db())                  # the EasyEDA proxy, if one is set
-            netproxy.bind(db)                          # its log, for Settings > Proxy
+            netproxy.bind(db)                          # its log, for Settings > Proxy & Data
+            await jina.load(db())                      # Jina's key, if one is saved
+            jina.bind(db)                              # its calls' log, for the same page
             asyncio.create_task(netproxy.health_loop())
             await fx.load(db())                        # the last exchange rates kept
             asyncio.create_task(fx.loop(db))           # and Frankfurter's, every hour

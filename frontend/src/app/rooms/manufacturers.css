@@ -14,7 +14,7 @@
 .mf-pad { padding: 8px 10px; }
 
 /* tiles: one row, as wide as the room */
-.mf-htiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mf-htiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .mf-mtiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .mf-rtiles { grid-template-columns: .9fr 1fr 1fr .9fr 1.5fr 1.2fr 1.6fr; }
 .mf-rtiles .st-tile > b { font-size: 13.5px; }
@@ -25,7 +25,8 @@
 /* adding one: the address, the name, the notes, how it fetches, the button - one row */
 .mf-addrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .mf-addrow > .tst-in { flex: 1 1 150px; min-width: 0; }
-.mf-addrow > .tst-in:first-child, .mf-addrow > .tst-in:nth-child(3) { flex-grow: 1.4; }
+.mf-addrow > .tst-in:first-child { flex-grow: 2.4; }
+.mf-addrow > .tst-in:nth-child(3) { flex-grow: 1.4; }
 .mf-addrow > .st-seg, .mf-addrow > .tcv-btn { flex: none; }
 .mf-addhint { margin: 6px 0 0; }
 /* one height across a row of controls: the inputs, the segment, the checkbox, the buttons */

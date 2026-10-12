@@ -20,7 +20,7 @@ import { RustdeskSettings } from './rustdesk-settings';
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
  *  server's: the LLM keys and models (llm-settings.ts) and the proxy for
- *  the part lookups (proxy-settings.ts), and what things cost and in which
+ *  the part lookups with Jina AI beside it (proxy-settings.ts, "Proxy & Data"), and what things cost and in which
  *  currency (costs-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page). The owner
  *  and the admins also get the admin panel: the accounts (admin-users.ts).
@@ -333,8 +333,8 @@ export class RoomSettings {
     { group: 'The server', items: [
       { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what', ico: 'M7 7h10v10H7zM10 10h4v4h-4zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
         blurb: 'Keys, which model does each job, and what they used.' },
-      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups', ico: 'M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4',
-        blurb: 'A second way out for the part lookups, and the traffic it carried.' },
+      { id: 'proxy', label: 'Proxy & Data', about: 'the EasyEDA proxy, Jina AI for web pages and search', ico: 'M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4',
+        blurb: 'A second way out for the part lookups, Jina AI for reading web pages and searching, and what each carried.' },
       { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M6 12h.01M18 12h.01',
         blurb: 'What Redline costs to run, and the currency money is shown in.' },
       { id: 'telegram', label: 'Telegram', about: 'notifications, questions and notes from your phone', ico: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',

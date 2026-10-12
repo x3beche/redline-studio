@@ -332,13 +332,13 @@ export class Landing implements AfterViewInit, OnDestroy {
               { src: 'th-solarized-light', crop: [267, 114, 260, 210] }] },
   ];
   proxy: Card[] = [
-    { name: 'Its state', w: 430, lbl: 'Settings · Proxy: on, the last 7 days of traffic, EasyEDA and the exits\' health',
+    { name: 'Its state', w: 430, lbl: 'Settings · Proxy & Data: on, the last 7 days of traffic, EasyEDA and the exits\' health',
       lead: 'Whether it is on, what went through it this week and what that cost, and whether EasyEDA answers.',
       crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 152, 410, 154] }] },
-    { name: 'Always, or when refused', w: 430, lbl: 'Settings · Proxy: the mode. Address and login left out.',
+    { name: 'Always, or when refused', w: 430, lbl: 'Settings · Proxy & Data: the mode. Address and login left out.',
       lead: 'Every lookup through it, or only the ones EasyEDA turns away. Each lookup comes out somewhere new.',
       crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 314, 410, 64] }, { src: 'proxy', page: [1280, 1400], crop: [540, 838, 410, 66] }] },
-    { name: 'Where it came out', w: 430, lbl: 'Settings · Proxy: exits over 7 days',
+    { name: 'Where it came out', w: 430, lbl: 'Settings · Proxy & Data: exits over 7 days',
       lead: 'How many addresses and countries, and how often and how fast a lookup worked, with and without it.',
       crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 912, 410, 218] }] },
   ];

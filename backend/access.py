@@ -188,6 +188,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("PUT", "/api/costs", "settings"),
     ("POST", "/api/fx/refresh", "settings"),
     ("POST", "/api/proxy/test", "settings"),
+    # Jina AI (backend/jina.py): its key is the server's; the balance and
+    # the counts are looking
+    ("PUT", "/api/jina/settings", "settings"),
+    ("POST", "/api/jina/test", "settings"),
     # Telegram (backend/tgbot/api.py): Telegram itself, with the webhook's
     # secret header and no session; the bot is the server's settings;
     # linking one's own chat, and what one hears about, is anyone's

@@ -23,9 +23,16 @@ Fetching is plain HTTP (httpx): no page's script is ever run. Each request
 is refused unless it is http(s) to a public address - checked again on
 every redirect - so a site cannot point the crawler into this machine's
 network. How it goes out is chosen per run: directly, through the proxy of
-Settings > Proxy only when the site turns a request away ("fallback"), or
-every request through it ("always") - backend/netproxy.py's proxy, metered
-and logged there like the part lookups.
+Settings > Proxy & Data only when the site turns a request away
+("fallback"), or every request through it ("always") - backend/netproxy.py's
+proxy, metered and logged there like the part lookups. Or through Jina
+Reader (backend/jina.py), which reads a page in a real browser on Jina's
+side and answers with its Markdown: every page ("jina"), or directly first
+and Jina when the site refuses or the page is empty without its script,
+then the proxy, when one is set up, if Jina could not read it either
+("jina_fallback"). Jina reads web pages only: robots.txt and the sitemaps
+are always read here, and a target is checked (public, http(s)) before
+Jina is asked for it.
 
 How the agents get it: the Chat's `manufacturer_search` tool
 (backend/chat_tools/manufacturer_search.py) lists them, reads a catalog
@@ -94,7 +101,12 @@ EXTRACT_TIMEOUT = 240.0
 MAX_PRODUCTS = 2_000                # in one catalog
 MAX_SPECS = 24                      # on one product
 MAX_DOCS = 40                       # catalog PDFs and the like, as links
-PROXY_CHOICES = ("off", "fallback", "always")
+PROXY_CHOICES = ("off", "fallback", "always", "jina", "jina_fallback")
+NEEDS_PROXY = ("fallback", "always")
+JINA_CHOICES = ("jina", "jina_fallback")
+THIN_TEXT = 200                     # a page read directly with less text than this is tried again through Jina ("jina_fallback")
+NO_PROXY = "the proxy is not set up (Settings > Proxy & Data) - choose Off, or set it up first"
+NO_JINA = "Jina is not set up (Settings > Proxy & Data) - choose another way, or paste its API key first"
 REFUSED = (403, 429, 503)           # a site turning a request away: the proxy's moment in "fallback"
 
 log = logging.getLogger("redline.manufacturers")
@@ -419,16 +431,26 @@ def _client(proxy: str | None = None):
 
 
 def proxy_state() -> dict:
-    """Whether the proxy of Settings > Proxy can carry a run, and how it is
-    set for the part lookups (a run's default)."""
-    from . import netproxy
+    """Whether the proxy of Settings > Proxy & Data can carry a run, and how
+    it is set for the part lookups (a run's default); whether Jina can."""
+    from . import jina, netproxy
     conf = netproxy._conf
     configured = bool(netproxy.url())
     active = netproxy.mode()
     return {"configured": configured, "enabled": bool(conf.get("enabled")), "mode": active or "off",
             "setting": conf.get("mode") or "fallback", "default": active or "off",
             "price_per_gb": conf.get("price_per_gb", 3.99), "country": conf.get("country") or "",
-            "metered": bool(_meter_port())}
+            "metered": bool(_meter_port()), "jina": jina.configured()}
+
+
+def choice_problem(choice: str) -> str | None:
+    """Why a run cannot go out the way `choice` says, or None."""
+    from . import jina
+    if choice in NEEDS_PROXY and not proxy_state()["configured"]:
+        return NO_PROXY
+    if choice in JINA_CHOICES and not jina.configured():
+        return NO_JINA
+    return None
 
 
 def _meter_port():
@@ -439,19 +461,30 @@ def _meter_port():
 class Fetcher:
     """One run's way out: direct, through the proxy, or direct until the
     site turns a request away and through the proxy after (the run stays
-    on it once it has been refused). Counts what went each way."""
+    on it once it has been refused). Or the web pages through Jina Reader:
+    all of them ("jina"), or directly until the site refuses and through
+    Jina after - a page that comes back next to empty (its text written by
+    its script) is read through Jina too - and the proxy when Jina cannot
+    read one ("jina_fallback"). Counts what went each way."""
 
     def __init__(self, choice: str, session: str | None = None):
-        from . import netproxy
+        from . import jina, netproxy
         self.choice = choice if choice in PROXY_CHOICES else "off"
-        self.session = session if self.choice != "off" else None
-        self.proxy_url = netproxy.client_url(self.session) if self.choice != "off" else None
-        if self.choice != "off" and not self.proxy_url:
-            raise Refused("the proxy is not set up (Settings > Proxy) - choose Off, or set it up first")
+        if self.choice in JINA_CHOICES and not jina.configured():
+            raise Refused(NO_JINA)
+        # "jina_fallback" uses the proxy as its last way only when one is set up.
+        proxied = self.choice in NEEDS_PROXY or (self.choice == "jina_fallback" and bool(netproxy.url()))
+        self.session = session if proxied else None
+        self.proxy_url = netproxy.client_url(self.session) if proxied else None
+        if self.choice in NEEDS_PROXY and not self.proxy_url:
+            raise Refused(NO_PROXY)
         self.via_proxy = self.choice == "always"
+        self.via_jina = self.choice == "jina"
         self.switched_at: str | None = None
+        self.jina_since: str | None = None
         self.stats = {"direct": {"requests": 0, "bytes": 0, "refused": 0},
-                      "proxy": {"requests": 0, "bytes": 0, "refused": 0}}
+                      "proxy": {"requests": 0, "bytes": 0, "refused": 0},
+                      "jina": {"requests": 0, "bytes": 0, "refused": 0, "failed": 0, "tokens": 0}}
         self._clients: dict[bool, object] = {}
 
     def client(self, via: bool):
@@ -470,17 +503,86 @@ class Fetcher:
         """One page: {url (where it ended up), status, type, body, via, ms,
         bytes, error}. `accept(content_type)` says which types are read;
         `allowed(url)` which hosts a redirect may go to. Every hop is
-        checked (check()) before it is asked."""
+        checked (check()) before it is asked - and before Jina is asked
+        for it. Only web pages (accept is _is_html) go through Jina."""
+        page = accept is _is_html
+        if page and self.via_jina:
+            got = await self._jina(url, allowed)
+            if got["error"] and got.get("error_kind") != "refused" and self.choice == "jina_fallback" and self.proxy_url:
+                again = await self._get(url, accept, allowed, True, attempt="fallback")
+                again["fallback"] = True
+                return again
+            return got
         via = self.via_proxy
         got = await self._get(url, accept, allowed, via)
-        if (self.choice == "fallback" and not via and
-                (got.get("status") in REFUSED or got.get("error_kind") == "network")):
-            self.via_proxy = True
-            self.switched_at = self.switched_at or _now()
-            again = await self._get(url, accept, allowed, True, attempt="fallback")
-            again["fallback"] = True
-            return again
-        return got
+        trouble = not via and (got.get("status") in REFUSED or got.get("error_kind") == "network")
+        if self.choice == "jina_fallback" and not via:
+            if page and (trouble or self._thin(got)):
+                j = await self._jina(url, allowed, attempt="fallback")
+                if not j["error"]:
+                    j["fallback"] = True
+                    if trouble:                         # the site turns us away: Jina from here on
+                        self.via_jina = True
+                        self.jina_since = self.jina_since or _now()
+                    return j
+            if not trouble or not self.proxy_url:
+                return got
+        elif self.choice != "fallback" or not trouble:
+            return got
+        self.via_proxy = True
+        self.switched_at = self.switched_at or _now()
+        again = await self._get(url, accept, allowed, True, attempt="fallback")
+        again["fallback"] = True
+        return again
+
+    def _thin(self, got: dict) -> bool:
+        """A web page that came back with next to no text: written by its
+        script, most likely. The page read is kept on `got` either way."""
+        if got.get("status") != 200 or not got.get("body") or not _is_html(got.get("type", "")):
+            return False
+        got["page"] = parse_page(decode(got["body"], got["type"]), got["url"])
+        return len(got["page"]["text"].strip()) < THIN_TEXT
+
+    async def _jina(self, url: str, allowed, attempt: str = "first") -> dict:
+        """One web page through Jina Reader, as _get answers: its Markdown
+        is the page's text, its links and pictures the page's (`page`)."""
+        from . import jina
+        t0 = time.monotonic()
+        out: dict = {"url": url, "status": None, "type": "", "body": b"", "via": "jina", "bytes": 0,
+                     "error": None, "attempt": attempt}
+        try:
+            cur = await check(url)                      # never ask Jina for this machine's network
+            if not allowed(cur):
+                raise Refused(f"it leads off the site, to {urllib.parse.urlsplit(cur).hostname}")
+        except Refused as exc:
+            out.update(error=str(exc), error_kind="refused", ms=round((time.monotonic() - t0) * 1000))
+            return out
+        st = self.stats["jina"]
+        st["requests"] += 1
+        got = await jina.read(cur, who="manufacturers")
+        final = (normalise(got["url"]) if got.get("url") else None) or cur
+        if got["ok"] and not allowed(final):
+            got = {**got, "ok": False, "error": f"it leads off the site, to {urllib.parse.urlsplit(final).hostname}"}
+        if got["ok"]:
+            links = [(u, w) for u, w in ((normalise(h, final), w) for h, w in got["links"]) if u]
+            images = [(u, _clean(a, 120)) for u, a in ((normalise(h, final), a) for h, a in got["images"])
+                      if u and not re.search(r"(logo|icon|sprite|flag|banner|spacer|pixel|blank)", u, re.I)]
+            body = got["text"].encode("utf-8")
+            out.update(url=final, status=200, type="text/html; charset=utf-8", body=body,
+                       page={"title": _clean(got["title"], 200), "description": _clean(got["description"], 400),
+                             "site_name": "", "text": got["text"], "links": links, "images": images[:40]})
+        else:
+            out.update(status=got.get("status") if got.get("status") not in (None, 200) else None,
+                       error=got["error"], error_kind="jina")
+            st["failed"] += 1
+            if out["status"] in REFUSED:
+                st["refused"] += 1
+        out["bytes"] = len(out["body"])
+        out["tokens"] = got.get("tokens") or 0
+        out["ms"] = got.get("ms") or round((time.monotonic() - t0) * 1000)
+        st["bytes"] += out["bytes"]
+        st["tokens"] += out["tokens"]
+        return out
 
     async def _get(self, url: str, accept, allowed, via: bool, attempt: str = "first") -> dict:
         import httpx
@@ -571,6 +673,11 @@ async def _read_robots(root: str, track: Tracker, fetcher: Fetcher, allowed, sid
                          note="no robots.txt: every page may be read" if not got["error"] else got["error"])
     track.add(delay=delay)
     return robots, sitemaps, delay
+
+
+def _page_of(got: dict, url: str) -> dict:
+    """The page a request read: Jina's (or one already parsed), else its HTML parsed."""
+    return got.get("page") or parse_page(decode(got["body"], got["type"]), url)
 
 
 def _root_of(u: str) -> str:
@@ -718,7 +825,7 @@ async def crawl(start: str, track: Tracker, fetcher: Fetcher, max_pages: int = M
         if got["status"] == 200 and got["body"] and _is_html(got["type"]):
             final = normalise(got["url"]) or url
             seen.add(final)
-            page = parse_page(decode(got["body"], got["type"]), final)
+            page = _page_of(got, final)
             row.update(title=page["title"][:160], chars=len(page["text"]), links=len(page["links"]),
                        product=looks_like_product(final, page["title"]))
             page.update(url=final, depth=depth, product=row["product"])
@@ -815,7 +922,7 @@ async def crawl_only(urls: list[str], track: Tracker, fetcher: Fetcher, follow: 
         if got["status"] == 200 and got["body"] and _is_html(got["type"]):
             final = normalise(got["url"]) or url
             seen.add(final)
-            page = parse_page(decode(got["body"], got["type"]), final)
+            page = _page_of(got, final)
             row.update(title=page["title"][:160], chars=len(page["text"]), links=len(page["links"]),
                        product=depth > 0 or looks_like_product(final, page["title"]))
             page.update(url=final, depth=depth, product=row["product"])
@@ -1522,6 +1629,12 @@ async def _traffic(db, fetcher: Fetcher, track: Tracker) -> None:
          "refused": s["direct"]["refused"] + s["proxy"]["refused"]}
     if fetcher.switched_at:
         t["proxy_since"] = fetcher.switched_at
+    j = s.get("jina") or {}
+    if j.get("requests"):
+        t.update(requests_jina=j["requests"], bytes_jina=j["bytes"], tokens_jina=j["tokens"], failed_jina=j["failed"])
+        t["refused"] += j["refused"]
+    if fetcher.jina_since:
+        t["jina_since"] = fetcher.jina_since
     if fetcher.session and s["proxy"]["requests"]:
         await asyncio.sleep(1.0)                        # the meter closes its books a moment after the tunnel
         wire = netmeter.session_bytes(fetcher.session) or {}
@@ -1716,8 +1829,8 @@ async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = No
         if d and d.get("status") in ACTIVE:
             return d, False
     choice = proxy if proxy in PROXY_CHOICES else doc.get("proxy") or "off"
-    if choice != "off" and not proxy_state()["configured"]:
-        raise ValueError("the proxy is not set up (Settings > Proxy) - choose Off, or set it up first")
+    if choice_problem(choice):
+        raise ValueError(choice_problem(choice))
     if choice != doc.get("proxy"):
         await db[COLL].update_one({"_id": mid}, {"$set": {"proxy": choice}})
     kind = "page" if only else "site"
@@ -1799,7 +1912,7 @@ class MakerIn(BaseModel):
     url: str = Field(min_length=3, max_length=500)
     name: str = Field(default="", max_length=120)
     notes: str = Field(default="", max_length=4000)
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
     explore: bool = True
     only: bool = False              # the address is one page to read, not a site to explore
     follow: bool = False            # ...and the product pages it links to
@@ -1810,17 +1923,17 @@ class MakerPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=4000)
     summary: str | None = Field(default=None, max_length=3000)
     url: str | None = Field(default=None, min_length=3, max_length=500)
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
 
 
 class ExploreIn(BaseModel):
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
 
 
 class ReadPageIn(BaseModel):
     urls: list[str] = Field(min_length=1, max_length=ONLY_MAX)
     follow: bool = False
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always)$")
+    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
 
 
 class ProductIn(BaseModel):
@@ -1874,7 +1987,7 @@ async def api_list(q: str = ""):
 
 @router.get("/proxy")
 async def api_proxy():
-    """How a run may go out: the proxy of Settings > Proxy, set up or not."""
+    """How a run may go out: the proxy of Settings > Proxy & Data, and Jina, set up or not."""
     return proxy_state()
 
 
@@ -1908,8 +2021,8 @@ async def api_create(body: MakerIn):
     except Refused as exc:
         raise HTTPException(400, str(exc)) from exc
     proxy = body.proxy or proxy_state()["default"]
-    if proxy != "off" and not proxy_state()["configured"]:
-        raise HTTPException(400, "the proxy is not set up (Settings > Proxy) - choose Off, or set it up first")
+    if choice_problem(proxy):
+        raise HTTPException(400, choice_problem(proxy))
     try:
         doc = await create(db, _root_of(page) if body.only else body.url, body.name, body.notes, proxy, actors.current())
     except ValueError as exc:

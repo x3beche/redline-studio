@@ -7,13 +7,15 @@ import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
 import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
 import { Prefs } from './preferences';
+import { JinaSettingsPanel } from './jina-settings';
 
-/** Settings > Proxy: a second way out for EasyEDA's part lookups
+/** Settings > Proxy & Data: a second way out for EasyEDA's part lookups
  *  (backend/netproxy.py). Only those go through it - the model providers
  *  and everything else stay direct. The password is kept on the server
  *  and never shown again. Under the settings: where the lookups came out
  *  in the world, how fast and how reliably, what the periodic health check
- *  saw, and how much went through the proxy - the traffic 2Captcha bills. */
+ *  saw, and how much went through the proxy - the traffic 2Captcha bills.
+ *  Beside it, Jina AI (jina-settings.ts): its key, its balance and its calls. */
 interface ProxySettings {
   enabled: boolean; mode: 'always' | 'fallback'; scheme: string; host: string; port: number | null;
   username: string; password_set: boolean; active: string | null;
@@ -59,7 +61,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [T, TimeChart, BarList, NgTemplateOutlet],
+  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <ng-template #period>
@@ -70,7 +72,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @if (data(); as d) {
 <div class="st-page">
-  <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while. A proxy gives them another way out. Only the LCSC / EasyEDA lookups use it; the asking stays as polite as before.' | t }}</p>
+  <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while. A proxy gives them another way out. Only the LCSC / EasyEDA lookups use it; the asking stays as polite as before.' | t }}
+    {{ 'Jina AI reads web pages and searches the web for the Product Catalog and the Chat.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <!-- Status at a glance -->
@@ -194,6 +197,9 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       }
     </div>
   </div>
+
+  <!-- Jina AI: reading web pages and searching, its key and its calls -->
+  <app-jina-settings />
 
   @if (u(); as us) {
     <!-- Where the lookups came out, and how fast -->

@@ -23,7 +23,7 @@ import { CatalogStock, InventoryApi, qty } from './inventory';
  *  to the same place, and a run that was going is still going (it is the
  *  server's, not the page's).
  */
-export type ProxyChoice = 'off' | 'fallback' | 'always';
+export type ProxyChoice = 'off' | 'fallback' | 'always' | 'jina' | 'jina_fallback';
 export type MfrStatus = 'queued' | 'crawling' | 'asking' | 'merging' | 'done' | 'failed' | 'cancelled';
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
 export interface Product {
@@ -52,7 +52,7 @@ export interface MfrStep {
   duplicates?: number; categories?: number; added?: number; catalog?: number; only?: boolean;
 }
 export interface MfrPage {
-  url: string; depth: number; status: number | null; via: 'direct' | 'proxy'; ms?: number; bytes: number; at: string;
+  url: string; depth: number; status: number | null; via: 'direct' | 'proxy' | 'jina'; ms?: number; bytes: number; at: string;
   title?: string; chars?: number; links?: number; product?: boolean; error?: string; fallback?: boolean;
 }
 export interface MfrTotals {
@@ -60,6 +60,8 @@ export interface MfrTotals {
   cost?: number | null; products?: number; duplicates?: number; delay?: number;
   requests_direct?: number; bytes_direct?: number; requests_proxy?: number; bytes_proxy?: number; refused?: number;
   proxy_since?: string; wire_up?: number; wire_down?: number; proxy_cost?: number;
+  /** Pages read through Jina Reader (backend/jina.py), and since when a refusal sent the run there. */
+  requests_jina?: number; bytes_jina?: number; tokens_jina?: number; failed_jina?: number; jina_since?: string;
 }
 /** One exploration (backend/manufacturers.py, `manufacturer_jobs`). */
 export interface MfrJob {
@@ -77,6 +79,8 @@ export interface MfrJob {
 export interface ProxyState {
   configured: boolean; enabled: boolean; mode: ProxyChoice; setting: string; default: ProxyChoice;
   price_per_gb: number; country: string; metered: boolean;
+  /** Whether Jina AI has its key (Settings > Proxy & Data). */
+  jina?: boolean;
 }
 export const ACTIVE: MfrStatus[] = ['queued', 'crawling', 'asking', 'merging'];
 export const isActive = (j: { status: MfrStatus } | null | undefined) => !!j && ACTIVE.includes(j.status);
@@ -84,7 +88,13 @@ export const PROXY_CHOICES: { id: ProxyChoice; label: string; about: string }[] 
   { id: 'off', label: 'Off', about: 'every request goes out directly' },
   { id: 'fallback', label: 'When refused', about: 'directly first; through the proxy once the site refuses or rate-limits' },
   { id: 'always', label: 'Always', about: 'every request through the proxy' },
+  { id: 'jina', label: 'Jina Reader', about: 'every web page read through Jina Reader, its script run there; robots.txt and the sitemap directly' },
+  { id: 'jina_fallback', label: 'Jina when refused', about: 'directly first; through Jina Reader when the site refuses or a page is empty without its script, then the proxy' },
 ];
+/** Whether a fetch choice can be used: the proxy's need the proxy, Jina's need its key. */
+export function choiceUsable(c: ProxyChoice, p: ProxyState | null | undefined): boolean {
+  return c === 'off' ? true : c === 'jina' || c === 'jina_fallback' ? !!p?.jina : !!p?.configured;
+}
 
 @Injectable({ providedIn: 'root' })
 export class MfrApi {
@@ -320,7 +330,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                       <td class="give"><a class="mf-link" [href]="p.url" target="_blank" rel="noopener noreferrer" [title]="p.url">{{ path(p.url) }}</a></td>
                       <td class="give-s" [title]="p.error || p.title || ''">@if (p.error) { <span class="mf-err">{{ p.error }}</span> } @else { {{ p.title }} }</td>
                       <td class="r mono">{{ p.bytes ? kb(p.bytes) : '–' }}</td>
-                      <td><span class="st-tag" [attr.data-tone]="p.via === 'proxy' ? 'accent' : null">{{ (p.via === 'proxy' ? 'proxy' : 'direct') | t }}</span></td>
+                      <td><span class="st-tag" [attr.data-tone]="p.via === 'proxy' || p.via === 'jina' ? 'accent' : null">{{ (p.via === 'proxy' ? 'proxy' : p.via === 'jina' ? 'Jina' : 'direct') | t }}</span></td>
                       <td class="r mono">{{ p.ms != null ? p.ms + ' ms' : '' }}</td>
                     </tr>
                   } @empty { <tr><td colspan="6" class="dim">{{ 'No page read yet.' | t }}</td></tr> }
@@ -348,7 +358,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
             <span class="st-sub">{{ 'Fetching' | t }}</span>
             <div class="st-seg" role="radiogroup" [attr.aria-label]="'Fetching' | t">
               @for (c of choices; track c.id) {
-                <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="c.id !== 'off' && !proxy()?.configured"
+                <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="!usable(c.id)"
                         [title]="c.about | t">{{ c.label | t }}</button>
               }
             </div>
@@ -370,7 +380,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
         </div>
       </header>
       @if (can() && !proxy()?.configured) { <p class="st-hint mf-proxyhint">{{ 'The proxy is not set up, so a run goes out directly.' | t }}
-        <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy' | t }}</button></p> }
+        <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button></p> }
 
       <div class="st-tiles mf-mtiles">
         <div class="st-tile" [attr.data-tone]="m.product_count ? null : 'dim'"><span>{{ 'Products' | t }}</span><b>{{ m.product_count }}</b>
@@ -542,7 +552,9 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
           <b>{{ lastJob() ? when(lastJob()!.started_at) : '–' }}</b>
           <small>{{ lastJob() ? (statusName(lastJob()!.status) | t) + ' · ' + lastJob()!.manufacturer.name : ('none yet' | t) }}</small></div>
         <button class="st-tile mf-tilebtn" [attr.data-tone]="proxy()?.configured ? (proxy()?.enabled ? 'ok' : null) : 'dim'" (click)="toProxy()"><span>{{ 'Proxy' | t }}</span>
-          <b>{{ proxyStateLine() | t }}</b><small>{{ (proxy()?.configured ? 'Settings > Proxy' : 'not set up - Settings > Proxy') | t }}</small></button>
+          <b>{{ proxyStateLine() | t }}</b><small>{{ (proxy()?.configured ? 'Settings > Proxy & Data' : 'not set up - Settings > Proxy & Data') | t }}</small></button>
+        <button class="st-tile mf-tilebtn" [attr.data-tone]="proxy()?.jina ? 'ok' : 'dim'" (click)="toProxy()"><span>Jina AI</span>
+          <b>{{ (proxy()?.jina ? 'Ready' : 'Not set up') | t }}</b><small>{{ (proxy()?.jina ? 'reads pages a plain fetch cannot' : 'no API key - Settings > Proxy & Data') | t }}</small></button>
       </div>
 
       @if (can()) {
@@ -563,7 +575,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                      (keydown.enter)="add()" [attr.aria-label]="'Notes' | t">
               <div class="st-seg" role="radiogroup" [attr.aria-label]="'Fetching' | t">
                 @for (c of choices; track c.id) {
-                  <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="c.id !== 'off' && !proxy()?.configured" [title]="c.about | t">{{ c.label | t }}</button>
+                  <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="!usable(c.id)" [title]="c.about | t">{{ c.label | t }}</button>
                 }
               </div>
               @if (addOnly()) {
@@ -572,8 +584,8 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
               }
               <button class="tcv-btn tcv-btn-accent" (click)="add()" [disabled]="!addUrl().trim() || starting()">{{ (starting() ? 'Starting…' : addOnly() ? 'Add and read the page' : 'Add and explore') | t }}</button>
             </div>
-            <p class="st-hint mf-addhint">{{ choiceAbout() | t }}.
-              @if (!proxy()?.configured) { {{ 'The proxy is not set up, so a run goes out directly.' | t }} <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy' | t }}</button> }
+            <p class="st-hint mf-addhint">{{ choiceAbout() }}.
+              @if (!proxy()?.configured) { {{ 'The proxy is not set up, so a run goes out directly.' | t }} <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button> }
               @else if (!proxy()?.enabled) { {{ 'The proxy is set up but off for the part lookups; a run can still use it.' | t }} }
               @if (addOnly()) { {{ pageHint | t }} }
               @else { {{ fmt('At most {p} pages of the same site, {s} s apart, robots.txt obeyed; then the model reads them.', { p: limits.pages, s: limits.delay }) }} }</p>
@@ -1126,6 +1138,7 @@ export class RoomMfr implements OnDestroy {
     if (this.job()?.proxy !== 'off') parts.push(this.fmt('{n} via proxy', { n: tt.requests_proxy ?? 0 }));
     if (tt.wire_up != null || tt.wire_down != null) parts.push(this.kb((tt.wire_up ?? 0) + (tt.wire_down ?? 0)) + (tt.proxy_cost != null ? ' · ' + this.money(tt.proxy_cost) : ''));
     else if (tt.bytes_proxy) parts.push(this.kb(tt.bytes_proxy));
+    if (tt.requests_jina) parts.push(this.fmt('{n} via Jina', { n: tt.requests_jina }));
     return parts.join(' · ');
   });
   trafficTip = computed(() => {
@@ -1133,7 +1146,9 @@ export class RoomMfr implements OnDestroy {
     return [this.fmt('{n} requests directly, {b}', { n: tt.requests_direct ?? 0, b: this.kb(tt.bytes_direct ?? 0) }),
             this.fmt('{n} requests through the proxy, {b}', { n: tt.requests_proxy ?? 0, b: this.kb(tt.bytes_proxy ?? 0) }),
             tt.wire_up != null ? this.fmt('on the wire to the proxy: {u} up, {d} down', { u: this.kb(tt.wire_up), d: this.kb(tt.wire_down ?? 0) }) : '',
-            tt.proxy_since ? this.fmt('through the proxy since {w}, after a refusal', { w: when(tt.proxy_since) }) : ''].filter(Boolean).join('\n');
+            tt.proxy_since ? this.fmt('through the proxy since {w}, after a refusal', { w: when(tt.proxy_since) }) : '',
+            tt.requests_jina ? this.fmt('{n} pages through Jina Reader, {b}, {k} tokens', { n: tt.requests_jina, b: this.kb(tt.bytes_jina ?? 0), k: tt.tokens_jina ?? 0 }) : '',
+            tt.jina_since ? this.fmt('through Jina since {w}, after a refusal', { w: when(tt.jina_since) }) : ''].filter(Boolean).join('\n');
   });
   doneSteps = computed(() => this.timeline().filter(r => r.state === 'done').length);
 
@@ -1201,8 +1216,9 @@ export class RoomMfr implements OnDestroy {
   stateName(s: StepState) {
     return ({ running: 'running', done: 'done', skipped: 'skipped', failed: 'failed', cancelled: 'cancelled', pending: 'to come' } as Record<StepState, string>)[s] ?? s;
   }
+  usable(c: ProxyChoice) { return choiceUsable(c, this.proxy()); }
   proxyLabel(p: ProxyChoice) { return PROXY_CHOICES.find(c => c.id === p)?.label ?? 'Off'; }
-  choiceAbout = computed(() => { const c = PROXY_CHOICES.find(x => x.id === this.choice()); return c ? `${c.label}: ${c.about}` : ''; });
+  choiceAbout = computed(() => { const c = PROXY_CHOICES.find(x => x.id === this.choice()); return c ? `${t(c.label)}: ${t(c.about)}` : ''; });
   proxyStateLine = computed(() => {
     const p = this.proxy();
     if (!p) return '–';
