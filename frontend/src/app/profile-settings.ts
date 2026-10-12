@@ -90,7 +90,7 @@ const MIN_PASSWORD = 10;
                        (input)="email.set($any($event.target).value); saved.set(false)"></label>
               @if (emailChanged()) {
                 <label class="st-f"><span>{{ 'Current password' | t }}</span>
-                  <input class="st-in" type="password" [value]="emailPw()" autocomplete="current-password"
+                  <input class="st-in" type="password" [value]="emailPw()" autocomplete="current-password" readonly (focus)="$any($event.target).readOnly = false"
                          (input)="emailPw.set($any($event.target).value)"></label>
               }
             </div>
@@ -148,7 +148,8 @@ const MIN_PASSWORD = 10;
           <input type="email" class="pf-hidden" [value]="p.email" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
           <div class="st-grid pf-grid3">
             <label class="st-f"><span>{{ 'Current password' | t }}</span>
-              <input class="st-in" type="password" autocomplete="current-password" [value]="pwNow()" (input)="pwNow.set($any($event.target).value); pwMsg.set('')"></label>
+              <!-- Read-only until it is focused, so the browser does not fill the saved password in by itself. -->
+              <input class="st-in" type="password" autocomplete="current-password" readonly (focus)="$any($event.target).readOnly = false" [value]="pwNow()" (input)="pwNow.set($any($event.target).value); pwMsg.set('')"></label>
             <label class="st-f"><span>{{ 'New password' | t }}</span>
               <input class="st-in" type="password" autocomplete="new-password" [value]="pwNew()" (input)="pwNew.set($any($event.target).value); pwMsg.set('')"></label>
             <label class="st-f"><span>{{ 'Repeat the new password' | t }}</span>
