@@ -202,16 +202,24 @@ const LAST_TAB: Record<string, string> = {};
                     <div class="st-tile"><span>{{ 'Imports' | t }}</span><b>{{ m.imports }}</b><small>{{ fmt('{n} sources sent', { n: m.files.length }) }}</small></div>
                     @if (c['built']?.secs) { <div class="st-tile"><span>{{ 'Build time' | t }}</span><b>{{ c['built'].secs }} s</b><small>{{ shortDate(c['built'].at) }}</small></div> }
                   </div>
-                  <div class="dmv-tree">
+                  <div class="dmv-tree" role="tree">
                     <div class="dmv-treehead"><b>{{ 'Part tree' | t }}</b>
-                      @if (tree().length) { <span class="st-sub">{{ 'click to isolate' | t }}</span> }</div>
-                    @for (n of m.nodes; track n.path) {
-                      <button class="dmv-node" [style.--layout-depth]="n.depth" [attr.data-leaf]="n.leaf ? 1 : null" [attr.data-on]="focus() === n.path ? 1 : null"
-                              [disabled]="!tree().length" (click)="focus.set(focus() === n.path ? null : n.path)" [title]="n.path">
-                        <span class="dmv-nodeico" aria-hidden="true"></span>
-                        <span class="dmv-nodename">{{ n.name }}</span>
-                        @if (n.size) { <span class="dmv-nodesize">{{ n.size }}</span> }
-                      </button>
+                      @if (tree().length) { <span class="st-sub">{{ 'click to isolate' | t }}</span> }
+                      @if (m.groups) { <button class="st-more dmv-treeall" (click)="shutAll(m.nodes)">{{ (partsShut().size ? 'Expand all' : 'Collapse all') | t }}</button> }</div>
+                    @for (n of shownNodes(m.nodes); track n.path) {
+                      <div class="dmv-noderow" role="treeitem" [attr.aria-expanded]="n.leaf ? null : !partsShut().has(n.path)" [style.--layout-depth]="n.depth">
+                        <!-- a group folds like a folder in the code tree; the name still isolates it -->
+                        @if (!n.leaf) {
+                          <button class="dmv-twist" (click)="foldPart(n.path)" [attr.aria-label]="(partsShut().has(n.path) ? 'Expand' : 'Collapse') | t">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="partsShut().has(n.path) ? 'M9 6l6 6-6 6' : 'M6 9l6 6 6-6'" /></svg></button>
+                        } @else if (m.groups) { <span class="dmv-twist" aria-hidden="true"></span> }
+                        <button class="dmv-node" [attr.data-leaf]="n.leaf ? 1 : null" [attr.data-on]="focus() === n.path ? 1 : null"
+                                [disabled]="!tree().length" (click)="focus.set(focus() === n.path ? null : n.path)" [title]="n.path">
+                          <span class="dmv-nodeico" aria-hidden="true"></span>
+                          <span class="dmv-nodename">{{ n.name }}</span>
+                          @if (n.size) { <span class="dmv-nodesize">{{ n.size }}</span> }
+                        </button>
+                      </div>
                     } @empty { <p class="st-hint">{{ 'No parts were listed.' | t }}</p> }
                   </div>
                   @if (c['uses']?.length) {
@@ -731,6 +739,8 @@ export class DmViewer {
   // the model's tree and what is isolated in it
   tree = signal<BodyNode[]>([]);
   focus = signal<string | null>(null);
+  /** The groups folded shut in the part tree, by path. */
+  partsShut = signal<Set<string>>(new Set());
   // the product's pictures
   shot = signal<string | null>(null);
   broken = signal<Set<string>>(new Set());
@@ -743,7 +753,7 @@ export class DmViewer {
       untracked(() => {
         this.data.set(null); this.err.set(null);
         this.tq.set(''); this.tDomain.set(''); this.tStrength.set('');
-        this.tree.set([]); this.focus.set(null); this.shot.set(null); this.broken.set(new Set()); this.pcbView.set(''); this.sheetView.set(''); this.bomQ.set('');
+        this.tree.set([]); this.focus.set(null); this.partsShut.set(new Set()); this.shot.set(null); this.broken.set(new Set()); this.pcbView.set(''); this.sheetView.set(''); this.bomQ.set('');
         if (sid) this.api.snapshot(sid).subscribe({
           next: d => { if (this.store.viewing() === sid) this.data.set(d); },
           error: e => this.err.set(e?.status === 404 ? t('It was taken back, or the line was deleted.') : (e?.error?.detail || t('could not read it'))),
@@ -824,6 +834,17 @@ export class DmViewer {
   // ---------------------------------------------------------------- model
   viewerSrc = computed(() => { const d = this.data(); return d ? { kind: 'tcv' as const, url: this.blob(d, 'viewer') } : null; });
   leafName(path: string) { return path.split('/').pop() || path; }
+  /** The part tree's rows with what is inside a shut group left out. */
+  shownNodes<N extends { path: string }>(nodes: N[]): N[] {
+    const shut = this.partsShut();
+    if (!shut.size) return nodes;
+    return nodes.filter(n => { const p = n.path.split('/'); return !p.some((_, i) => i < p.length - 1 && shut.has(p.slice(0, i + 1).join('/'))); });
+  }
+  foldPart(path: string) { this.partsShut.update(s => { const n = new Set(s); if (n.has(path)) n.delete(path); else n.add(path); return n; }); }
+  /** Every group shut, or - when any is shut - all open again. */
+  shutAll(nodes: { path: string; leaf: boolean }[]) {
+    this.partsShut.set(this.partsShut().size ? new Set() : new Set(nodes.filter(n => !n.leaf).map(n => n.path)));
+  }
   model = computed(() => {
     const d = this.data();
     const c = d?.data ?? {};

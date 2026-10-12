@@ -181,7 +181,8 @@ export class DmCode {
   copied = signal(false);
   html = signal<SafeHtml | null>(null);
   lineCount = signal(0);
-  treeW = signal(240);
+  /** The tree's width, as it was last dragged to - kept in this browser for every DM. */
+  treeW = signal(DmCode.savedW());
   dragging = signal(false);
   cur = computed(() => this.files()[Math.min(this.at(), this.files().length - 1)] ?? null);
   gutter = computed(() => `${Math.max(2, String(this.lineCount()).length) + 2.2}ch`);
@@ -244,9 +245,17 @@ export class DmCode {
     el.setPointerCapture(e.pointerId);
     this.dragging.set(true);
     const move = (m: PointerEvent) => this.treeW.set(Math.max(160, Math.min(520, w0 + m.clientX - x0)));
-    const up = () => { this.dragging.set(false); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+    const up = () => {
+      this.dragging.set(false); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up);
+      try { localStorage.setItem(DmCode.W_KEY, String(Math.round(this.treeW()))); } catch { /* no storage: it is only this once */ }
+    };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
+  }
+
+  private static readonly W_KEY = 'redline.dm.codeTree';
+  private static savedW(): number {
+    try { const w = Number(localStorage.getItem(DmCode.W_KEY)); return w >= 160 && w <= 520 ? w : 240; } catch { return 240; }
   }
 
   private async paint(f: CodeFile | null) {

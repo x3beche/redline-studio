@@ -590,7 +590,7 @@
       </span>
     </span>
     @if (releasing() && activeModel()) {
-      <app-releases [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
+      <app-releases animate.leave="tcv-leave" [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
     }
 
     <!-- The code view's switch: in the viewer's toolbar, just left of the
@@ -1429,5 +1429,5 @@
 
 <!-- What a note changed (rooms/changes.ts), over everything. -->
 @if (changesOf(); as r) {
-  <app-changes [rid]="r.id" [title]="r.summary || r.comment" (closed)="changesOf.set(null)" />
+  <app-changes animate.leave="tcv-leave" [rid]="r.id" [title]="r.summary || r.comment" (closed)="changesOf.set(null)" />
 }

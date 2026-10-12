@@ -788,90 +788,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       }
       }
     }
-    <!-- ================= one product, in full ================= -->
-    @if (detail(); as d) {
-      <div class="mf-modal" animate.leave="tcv-leave" (click)="closeDetail()">
-        <div class="mf-detail" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()">
-          <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
-            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
-          <div class="mf-dgal">
-            <div class="mf-dimg">@if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
-              @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
-            @if (gallery().length > 1) {
-              <div class="mf-thumbs">@for (u of gallery(); track u) {
-                <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
-            }
-          </div>
-          <div class="mf-dinfo">
-            <span class="mf-dseller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">
-              <span>{{ sellerName(d) }}</span>
-              @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <span class="dim">· {{ d.maker.name }}</span> }
-              <button class="st-more" (click)="closeDetail(); openMaker(d.maker.id)">{{ 'Open the maker' | t }}</button></span>
-            <h2 class="mf-dname">{{ d.name }}</h2>
-            <div class="mf-dmeta">
-              @if (d.sku) { <span class="mono">{{ fmt('Code {c}', { c: d.sku }) }}</span> }
-              @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
-              @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
-              @if (dStock()[d.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }
-            </div>
-            <div class="mf-dprice">
-              @if (d.price) {
-                <b>{{ moneyIn(d.price.amount, d.price.currency) }}</b>
-                @if (moneyAlt(d.price.amount, d.price.currency); as alt) { <small class="dim" [title]="moneyTip(d.price.amount, d.price.currency)">{{ alt }}</small> }
-                @if (d.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (d.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
-                @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ moneyIn(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
-                @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(d.price.gross, d.price.currency) }) }}</small> }
-              } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
-            </div>
-            <div class="mf-dstock">
-              @if (d.stock) { <span class="mf-stock mf-stock-inline" [attr.data-s]="d.stock">{{ stockName(d) }}</span>
-                @if (d.stock_text) { <span class="dim">"{{ d.stock_text }}"</span> } }
-              @else { <span class="dim">{{ 'The page did not say whether it is in stock.' | t }}</span> }
-              @if (d.price?.at || d.read_at) { <span class="dim">· {{ fmt('read {w}', { w: ago(d.read_at || d.price?.at) }) }}</span> }
-            </div>
-            <dl class="mf-dates">
-              <div><dt>{{ 'Added to the catalog' | t }}</dt><dd>{{ stamp(d.added_at) }}</dd></div>
-              <div><dt>{{ 'Price read' | t }}</dt><dd>{{ stamp(d.price?.at) }}</dd></div>
-              <div><dt>{{ 'Page read' | t }}</dt><dd>{{ stamp(d.read_at) }}</dd></div>
-              <div><dt>{{ "Seller's update" | t }}</dt><dd>{{ d.updated ? stamp(d.updated) : ('not given' | t) }}</dd></div>
-            </dl>
-            <div class="mf-dacts">
-              @if (d.url) { <a class="tcv-btn tcv-btn-accent" [href]="d.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
-              <!-- To a person in Chat, as a card that opens it (dm.ts). -->
-              <rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-btn tcv-dm-sendbtn" />
-              @if (can()) {
-                <button class="tcv-btn" (click)="openStock(d.id)">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
-                <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>
-                <button class="tcv-btn tst-del" (click)="deleteFromDetail(d)">{{ 'Delete' | t }}</button>
-              }
-            </div>
-            @if (stockFor() === d.id) {
-              <div class="mf-stockform mf-ctl mf-dstockform">
-                <ng-container *ngTemplateOutlet="stockFields" />
-                <button class="tcv-btn tcv-btn-accent" (click)="addToStock(d.maker.id, [d.id])" [disabled]="saving()">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
-                <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
-              </div>
-            }
-            @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
-            @if (specList(d).length) {
-              <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
-            }
-            @if (d.history?.length) {
-              <span class="mf-label">{{ 'Price and stock, as read' | t }}</span>
-              <table class="st-table mf-dhist">
-                <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
-                <tbody>@for (h of histRows(d); track h.at) {
-                  <tr><td>{{ stamp(h.at) }}@if (h.seen) { <span class="dim"> – {{ stamp(h.seen) }}</span> }</td>
-                    <td class="r" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
-                    <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
-                    <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
-                }</tbody>
-              </table>
-            }
-          </div>
-        </div>
-      </div>
-    }
     <!-- the selection, floating over the grid: the grid's (a box drawn, Ctrl/Shift-clicks) or the maker table's ticks -->
     <wb-selbar [count]="layout() === 'grid' ? gsel().size : 0" (clear)="clearSel()">
       <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
@@ -884,6 +800,91 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       </wb-selbar>
     }
   </section>
+  <!-- ================= one product, in full: over the whole page, so outside the
+     section (its container-type would hold a fixed box to the middle column) ================= -->
+  @if (detail(); as d) {
+    <div class="mf-modal tcv-m-veil" animate.leave="tcv-leave" (click)="closeDetail()">
+      <div class="mf-detail tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()">
+        <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
+          <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
+        <div class="mf-dgal">
+          <div class="mf-dimg">@if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+            @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
+          @if (gallery().length > 1) {
+            <div class="mf-thumbs">@for (u of gallery(); track u) {
+              <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+          }
+        </div>
+        <div class="mf-dinfo">
+          <span class="mf-dseller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">
+            <span>{{ sellerName(d) }}</span>
+            @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <span class="dim">· {{ d.maker.name }}</span> }
+            <button class="st-more" (click)="closeDetail(); openMaker(d.maker.id)">{{ 'Open the maker' | t }}</button></span>
+          <h2 class="mf-dname">{{ d.name }}</h2>
+          <div class="mf-dmeta">
+            @if (d.sku) { <span class="mono">{{ fmt('Code {c}', { c: d.sku }) }}</span> }
+            @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
+            @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
+            @if (dStock()[d.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }
+          </div>
+          <div class="mf-dprice">
+            @if (d.price) {
+              <b>{{ moneyIn(d.price.amount, d.price.currency) }}</b>
+              @if (moneyAlt(d.price.amount, d.price.currency); as alt) { <small class="dim" [title]="moneyTip(d.price.amount, d.price.currency)">{{ alt }}</small> }
+              @if (d.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (d.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
+              @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ moneyIn(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
+              @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(d.price.gross, d.price.currency) }) }}</small> }
+            } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
+          </div>
+          <div class="mf-dstock">
+            @if (d.stock) { <span class="mf-stock mf-stock-inline" [attr.data-s]="d.stock">{{ stockName(d) }}</span>
+              @if (d.stock_text) { <span class="dim">"{{ d.stock_text }}"</span> } }
+            @else { <span class="dim">{{ 'The page did not say whether it is in stock.' | t }}</span> }
+            @if (d.price?.at || d.read_at) { <span class="dim">· {{ fmt('read {w}', { w: ago(d.read_at || d.price?.at) }) }}</span> }
+          </div>
+          <dl class="mf-dates">
+            <div><dt>{{ 'Added to the catalog' | t }}</dt><dd>{{ stamp(d.added_at) }}</dd></div>
+            <div><dt>{{ 'Price read' | t }}</dt><dd>{{ stamp(d.price?.at) }}</dd></div>
+            <div><dt>{{ 'Page read' | t }}</dt><dd>{{ stamp(d.read_at) }}</dd></div>
+            <div><dt>{{ "Seller's update" | t }}</dt><dd>{{ d.updated ? stamp(d.updated) : ('not given' | t) }}</dd></div>
+          </dl>
+          <div class="mf-dacts">
+            @if (d.url) { <a class="tcv-btn tcv-btn-accent" [href]="d.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
+            <!-- To a person in Chat, as a card that opens it (dm.ts). -->
+            <rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-btn tcv-dm-sendbtn" />
+            @if (can()) {
+              <button class="tcv-btn" (click)="openStock(d.id)">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
+              <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>
+              <button class="tcv-btn tst-del" (click)="deleteFromDetail(d)">{{ 'Delete' | t }}</button>
+            }
+          </div>
+          @if (stockFor() === d.id) {
+            <div class="mf-stockform mf-ctl mf-dstockform">
+              <ng-container *ngTemplateOutlet="stockFields" />
+              <button class="tcv-btn tcv-btn-accent" (click)="addToStock(d.maker.id, [d.id])" [disabled]="saving()">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
+              <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
+            </div>
+          }
+          @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
+          @if (specList(d).length) {
+            <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
+          }
+          @if (d.history?.length) {
+            <span class="mf-label">{{ 'Price and stock, as read' | t }}</span>
+            <table class="st-table mf-dhist">
+              <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
+              <tbody>@for (h of histRows(d); track h.at) {
+                <tr><td>{{ stamp(h.at) }}@if (h.seen) { <span class="dim"> – {{ stamp(h.seen) }}</span> }</td>
+                  <td class="r" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
+                  <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
+                  <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
+              }</tbody>
+            </table>
+          }
+        </div>
+      </div>
+    </div>
+  }
 </div>
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-p>

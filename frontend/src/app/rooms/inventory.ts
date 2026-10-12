@@ -9,7 +9,6 @@ import { Confirm } from '../confirm';
 import { DmSendButton } from '../dm';
 import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
-import { Marquee } from '../marquee';
 import { SelectOption, UiSelect } from '../ui-select';
 import { TimeChart, TimeData, fmt as chartFmt } from './charts';
 import { CountUp } from '../count';
@@ -219,7 +218,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [EmptyState, Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar, Marquee],
+  imports: [EmptyState, Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -261,8 +260,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
     </div>
   </aside>
 
-  <section class="tcv-notes-main tst inv" wbMarquee [marqueeOn]="all().length > 0" [marqueeFromItems]="layout() === 'table'"
-           marqueeSkip="thead, .st-card, .mf-gbar, .mf-modal" [marqueeBase]="picked()" (wbMarquee)="picked.set($event)">
+  <section class="tcv-notes-main tst inv">
 
     <!-- ================= the overview ================= -->
     <header class="tst-head tsh-head mf-homehead">
@@ -396,14 +394,14 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
                     @if (g.low) { <span class="st-tag" data-tone="warn">{{ fmt('{n} low', { n: g.low }) }}</span> }
                     <span class="inv-growv mono">{{ g.valueLine }}</span></span></td></tr>
                 @for (i of g.items; track i.id) {
-                  <tr [attr.data-key]="i.id" (click)="itemClick($event, i)" (contextmenu)="openMenu($event, i)" [attr.data-low]="i.low ? 1 : null" [attr.data-sel]="picked().has(i.id) ? 1 : null">
+                  <tr (click)="openItem(i.id)" (contextmenu)="openMenu($event, i)" [attr.data-low]="i.low ? 1 : null" [attr.data-sel]="picked().has(i.id) ? 1 : null">
                     <td class="inv-ck" (click)="$event.stopPropagation()"><button class="inv-tick" role="checkbox" [attr.aria-checked]="picked().has(i.id)" (click)="pick(i.id, !picked().has(i.id))" [attr.aria-label]="'Select' | t">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.check" /></svg></button></td>
                     <td class="inv-thumbc">@if (pic(i); as src) { <img class="inv-thumb" [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
                       @else if (i.facts.colour_hex) { <span class="inv-thumb inv-thumbsw" [style.background]="i.facts.colour_hex"></span> }
                       @else { <span class="inv-thumb inv-thumb0"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(i.type)" /></svg></span> }</td>
                     <td class="inv-name"><b>{{ i.name }}</b>@if (i.catalog) { <span class="inv-mark" [title]="'Linked to the Product Catalog' | t">CAT</span> }</td>
-                    <td class="dim inv-c-type">{{ typeLine(i) }}</td>
+                    <td class="inv-c-type"><span class="mf-chip inv-tchip"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(i.type)" /></svg>{{ typeLine(i) }}</span></td>
                     <td class="r mono inv-q" [attr.data-low]="i.low ? 1 : null">{{ qty(i.quantity) }} <span class="dim">{{ i.unit }}</span></td>
                     <td class="give-s">{{ i.location || '–' }}</td>
                     <td class="dim">{{ i.category || '–' }}</td>
@@ -437,189 +435,188 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
       </section>
     } @else { <wb-skel kind="cards" [count]="10" [min]="200" /> }
 
-    <!-- ================= one item, in full ================= -->
-    @if (iid()) {
-      <div class="mf-modal" animate.leave="tcv-leave" (click)="closeItem()">
-        <div class="mf-detail inv-detail" role="dialog" aria-modal="true" [attr.aria-label]="item()?.name || ''" (click)="$event.stopPropagation()">
-          <button class="tcv-cc-ib mf-x" (click)="closeItem()" [title]="'Close' | t">
-            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
-          @if (item(); as it) {
-            <div class="mf-dgal">
-              <div class="mf-dimg">
-                @if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
-                @else if (it.facts.colour_hex) { <ng-container *ngTemplateOutlet="spoolT; context: { $implicit: it }" /> }
-                @else { <svg class="mf-noimg inv-bigico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(it.type)" /></svg> }
-              </div>
-              @if (gallery().length > 1) {
-                <div class="mf-thumbs">@for (u of gallery(); track u) {
-                  <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
-              }
-              @if (factRows(it).length) {
-                <span class="mf-label">{{ 'Properties' | t }}</span>
-                <table class="mf-dspecs"><tbody>@for (r of factRows(it); track r[0]) {
-                  <tr><th>{{ r[0] | t }}</th><td>@if (r[0] === 'Colour' && it.facts.colour_hex) { <i class="inv-sw" [style.background]="it.facts.colour_hex"></i> }{{ r[1] }}</td></tr> }</tbody></table>
-              }
-            </div>
-            <div class="mf-dinfo">
-              <div class="inv-dtype">
-                <span class="inv-dtico"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(it.type)" /></svg></span>
-                @if (can()) {
-                  <wb-select class="inv-dsel" label="Type" [options]="typeSetOpts(it)" [value]="it.type_set" (pick)="setType(it, $event)"
-                             [title]="it.type_auto ? ('Worked out from its name, category and part number. Choose one to set it by hand.' | t) : ''" />
-                  @if (it.type === 'electronic') {
-                    <wb-select class="inv-dsel" label="Component kind" [options]="subOpts()" [value]="it.subtype" (pick)="patch(it, { subtype: $event })" />
-                  }
-                } @else { <span>{{ typeLine(it) }}</span> }
-                @if (it.type_auto && !can()) { <span class="st-sub" [title]="'Worked out from its name, category and part number. Choose one to set it by hand.' | t">{{ 'worked out' | t }}</span> }
-              </div>
-              @if (editing() && can()) {
-                <input class="tst-in inv-dname-in" [value]="it.name" (change)="save(it, 'name', $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" [attr.aria-label]="'Name' | t">
-              } @else { <h2 class="mf-dname">{{ it.name }}</h2> }
-              <div class="mf-dmeta">
-                @if (it.category) { <span class="mf-chip">{{ it.category }}</span> }
-                @if (it.location) { <span class="mf-chip inv-loc">{{ it.location }}</span> }
-                @if (it.lcsc) { <a class="mf-link mono" [href]="lcscUrl(it.lcsc)" target="_blank" rel="noopener noreferrer">{{ it.lcsc }}</a>
-                  <button class="st-more inv-go" (click)="toPart(it.lcsc)" [title]="'Open it in the PCB room\\'s parts' | t">{{ 'Parts drawer' | t }}</button> }
-                @if (it.mpn) { <span class="mono">{{ it.mpn }}</span> }
-                @if (it.manufacturer) { <span>{{ it.manufacturer }}</span> }
-                @for (tg of it.tags; track tg) { <span class="st-tag">#{{ tg }}</span> }
-              </div>
-
-              <!-- the quantity, and changing it with a reason -->
-              <div class="inv-qrow">
-                <div class="inv-qbig" [attr.data-low]="it.low ? 1 : null" [attr.data-out]="it.quantity <= 0 ? 1 : null">
-                  <b>{{ qty(it.quantity) }}</b><span>{{ it.unit }}</span>
-                  @if (it.quantity <= 0) { <span class="st-tag" data-tone="danger">{{ 'out of stock' | t }}</span> }
-                  @else if (it.low) { <span class="st-tag" data-tone="warn">{{ fmt('low - minimum {n}', { n: qty(it.min_stock) }) }}</span> }
-                </div>
-                @if (it.facts.weight_g != null) {
-                  <div class="inv-dspool">
-                    <span>{{ weight(it.facts.weight_g) }} · {{ spoolLine(it) }}</span>
-                    <span class="inv-bar"><i [style.width.%]="it.facts.current_pct ?? 0"></i></span>
-                  </div>
-                }
-              </div>
-              @if (can()) {
-                <div class="inv-adjust">
-                  <button class="tcv-btn inv-pm" (click)="adjust(it, -1)" [disabled]="busy()" [title]="'Take this many' | t">−</button>
-                  <input #stepBox class="tst-in inv-step" [value]="step()" (input)="step.set($any($event.target).value)" inputmode="decimal"
-                         [attr.aria-label]="'How many' | t" (keydown.enter)="adjust(it, 1)">
-                  <button class="tcv-btn inv-pm" (click)="adjust(it, 1)" [disabled]="busy()" [title]="'Add this many' | t">+</button>
-                  <input #reasonBox class="tst-in inv-reason" [placeholder]="'Why - e.g. used 4 for the fan board' | t" [value]="reason()"
-                         (input)="reason.set($any($event.target).value)" (keydown.enter)="adjust(it, -1)" [attr.aria-label]="'Reason' | t">
-                </div>
-                <span class="st-sub inv-hint">{{ 'Enter in the reason takes; in the amount adds.' | t }}</span>
-              }
-
-              <dl class="mf-dates inv-dates">
-                <div><dt>{{ 'Added' | t }}</dt><dd>{{ stamp(it.created_at) }}<span class="dim"> · {{ it.by.name || ('someone' | t) }}</span></dd></div>
-                <div><dt>{{ 'Last change' | t }}</dt><dd>{{ stamp(it.updated_at) }}<span class="dim"> · {{ it.updated_by.name || ('someone' | t) }}</span></dd></div>
-                <div><dt>{{ 'Minimum' | t }}</dt><dd>{{ it.min_stock == null ? ('none' | t) : qty(it.min_stock) + ' ' + it.unit }}</dd></div>
-                <div><dt>{{ 'Value' | t }}</dt><dd>{{ it.value != null ? money(it.value, it.currency) + ' (' + money(it.price!, it.currency) + ' / ' + it.unit + ')' : '–' }}</dd></div>
-              </dl>
-
-              <div class="mf-dacts">
-                @if (it.catalog?.url) { <a class="tcv-btn tcv-btn-accent" [href]="it.catalog!.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
-                <rl-dm-send-btn kind="inventory" [id]="it.id" [label]="it.name" cls="tcv-btn tcv-dm-sendbtn" />
-                <button class="tcv-btn" (click)="exportItems([it])" [title]="'Save it as a file to send to someone' | t">{{ 'Export' | t }}</button>
-                @if (can()) {
-                  <button class="tcv-btn" [class.on]="editing()" (click)="editing.set(!editing())">{{ (editing() ? 'Done' : 'Edit') | t }}</button>
-                  <button class="tcv-btn tst-del" (click)="remove(it)">{{ 'Delete' | t }}</button>
-                }
-              </div>
-
-              @if (editing() && can()) {
-                <!-- every field, in place -->
-                <div class="inv-fields">
-                  <label><span>{{ 'Unit' | t }}</span>
-                    <input class="tst-in" list="inv-units" [value]="it.unit" (change)="save(it, 'unit', $any($event.target).value)"></label>
-                  <label><span>{{ 'Location' | t }}</span>
-                    <input class="tst-in" list="inv-locs" [value]="it.location" [placeholder]="'Shelf, bin, box' | t" (change)="save(it, 'location', $any($event.target).value)"></label>
-                  <label><span>{{ 'Category' | t }}</span>
-                    <input class="tst-in" list="inv-cats" [value]="it.category" (change)="save(it, 'category', $any($event.target).value)"></label>
-                  <label><span>{{ 'Minimum' | t }}</span>
-                    <input class="tst-in" inputmode="decimal" [value]="it.min_stock ?? ''" [placeholder]="'none' | t" (change)="saveNum(it, 'min_stock', $any($event.target).value)"></label>
-                  <label><span>{{ 'MPN' | t }}</span>
-                    <input class="tst-in mono" [value]="it.mpn" (change)="save(it, 'mpn', $any($event.target).value)"></label>
-                  <label><span>{{ 'LCSC' | t }}</span>
-                    <input class="tst-in mono" [value]="it.lcsc" placeholder="C25744" (change)="save(it, 'lcsc', $any($event.target).value)"></label>
-                  <label><span>{{ 'Manufacturer' | t }}</span>
-                    <input class="tst-in" [value]="it.manufacturer" (change)="save(it, 'manufacturer', $any($event.target).value)"></label>
-                  <label><span>{{ 'For (board or model)' | t }}</span>
-                    <input class="tst-in" [value]="it.board" (change)="save(it, 'board', $any($event.target).value)"></label>
-                  <label><span>{{ 'Unit price' | t }}</span>
-                    <span class="inv-price">
-                      <input class="tst-in" inputmode="decimal" [value]="it.price ?? ''" (change)="saveNum(it, 'price', $any($event.target).value)">
-                      <input class="tst-in inv-cur" list="inv-curs" [value]="it.currency" placeholder="TRY" (change)="save(it, 'currency', $any($event.target).value)">
-                    </span></label>
-                  <label><span>{{ 'Tags' | t }}</span>
-                    <input class="tst-in" [value]="it.tags.join(', ')" [placeholder]="'comma separated' | t" (change)="save(it, 'tags', $any($event.target).value)"></label>
-                  <label class="inv-full"><span>{{ 'Notes' | t }}</span>
-                    <textarea class="tst-in inv-notes" rows="2" [value]="it.notes" (change)="save(it, 'notes', $any($event.target).value)"></textarea></label>
-                </div>
-              } @else if (it.notes) { <p class="mf-ddesc">{{ it.notes }}</p> }
-
-              <!-- what it is elsewhere in the app -->
-              <div class="inv-links">
-                <span class="mf-label">{{ 'Product Catalog' | t }}</span>
-                @if (it.catalog; as c) {
-                  <span class="inv-link">
-                    <button class="st-more inv-go" (click)="toCatalog(c)">{{ c.manufacturer_name || c.manufacturer }}{{ c.product_name ? ' / ' + c.product_name : '' }}</button>
-                    @if (c.url) { <a class="mf-link" [href]="c.url" target="_blank" rel="noopener noreferrer">{{ 'Page' | t }}</a> }
-                    @if (can()) { <button class="st-more inv-unlink" (click)="unlinkCatalog(it)" [title]="'Remove the link' | t">×</button> }</span>
-                } @else if (can()) {
-                  <span class="inv-linker mf-ctl">
-                    <wb-select class="inv-linksel" label="Manufacturer" placeholder="Link a catalog product…" [options]="makerOpts()" [value]="linkMaker()" (pick)="pickMaker($event)" />
-                    @if (linkMaker()) {
-                      <input class="tst-in" list="inv-products" [placeholder]="'Product name or code' | t" (change)="linkProduct(it, $any($event.target).value)">
-                      <datalist id="inv-products">@for (p of linkProducts(); track p.id) { <option [value]="p.name + (p.sku ? ' · ' + p.sku : '')"></option> }</datalist>
-                    }
-                  </span>
-                } @else { <span class="st-sub">{{ 'Not linked to a catalog product.' | t }}</span> }
-              </div>
-
-              <!-- what happened to it -->
-              @if (moves(); as m) {
-                <span class="mf-label">{{ 'On hand over time' | t }}</span>
-                <app-time-chart class="inv-chart" [data]="m" kind="area" [stacked]="false" [legend]="false" [height]="130" [f]="chartFmt.count" />
-              }
-              <span class="mf-label">{{ fmt('Change log - {n} entries, newest first', { n: it.log?.length ?? 0 }) }}</span>
-              <div class="st-table-wrap inv-logwrap">
-                <table class="st-table inv-log">
-                  <thead><tr><th>{{ 'When' | t }}</th><th>{{ 'What' | t }}</th><th class="r">{{ 'Change' | t }}</th><th class="r">{{ 'After' | t }}</th>
-                    <th>{{ 'Reason' | t }}</th><th>{{ 'By' | t }}</th></tr></thead>
-                  <tbody>
-                    @for (l of it.log ?? []; track l.id) {
-                      <tr>
-                        <td class="dim nowrap">{{ when(l.at) }}</td>
-                        <td>{{ kindName(l.kind) | t }}@if (l.fields?.length) { <span class="dim"> · {{ l.fields!.join(', ') }}</span> }</td>
-                        <td class="r mono" [attr.data-sign]="l.delta == null ? null : l.delta < 0 ? '-' : '+'">{{ l.delta == null ? '' : (l.delta > 0 ? '+' : '') + qty(l.delta) }}</td>
-                        <td class="r mono">{{ l.after == null ? '' : qty(l.after) }}</td>
-                        <td class="give">{{ l.reason || changeLine(l) }}</td>
-                        <td class="dim">{{ l.by.name || ('someone' | t) }}</td>
-                      </tr>
-                    } @empty { <tr><td colspan="6" class="dim">{{ 'Nothing yet.' | t }}</td></tr> }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          } @else if (itemError(); as e) {
-            <div class="st-banner tst-banner inv-derr" role="alert"><span>{{ e }}</span><button class="tcv-btn" (click)="closeItem()">{{ 'Close' | t }}</button></div>
-          } @else { <div class="inv-derr"><wb-skel kind="text" [count]="6" /></div> }
-        </div>
-      </div>
-    }
     <!-- the table's ticked rows, floating over the list -->
     <wb-selbar [count]="picked().size" (clear)="clearPicked()">
       <button class="tcv-btn" (click)="exportItems(selectedItems())">{{ 'Export' | t }}</button>
       @if (can()) { <button class="tcv-btn tst-del" (click)="removeSelected()">{{ 'Delete' | t }}</button> }
     </wb-selbar>
   </section>
+  <!-- ================= one item, in full: over the whole page (see the catalog's) ================= -->
+  @if (iid()) {
+    <div class="mf-modal tcv-m-veil inv" animate.leave="tcv-leave" (click)="closeItem()">
+      <div class="mf-detail tcv-m-box inv-detail" role="dialog" aria-modal="true" [attr.aria-label]="item()?.name || ''" (click)="$event.stopPropagation()">
+        <button class="tcv-cc-ib mf-x" (click)="closeItem()" [title]="'Close' | t">
+          <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
+        @if (item(); as it) {
+          <div class="mf-dgal">
+            <div class="mf-dimg">
+              @if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+              @else if (it.facts.colour_hex) { <ng-container *ngTemplateOutlet="spoolT; context: { $implicit: it }" /> }
+              @else { <svg class="mf-noimg inv-bigico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(it.type)" /></svg> }
+            </div>
+            @if (gallery().length > 1) {
+              <div class="mf-thumbs">@for (u of gallery(); track u) {
+                <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+            }
+            @if (factRows(it).length) {
+              <span class="mf-label">{{ 'Properties' | t }}</span>
+              <table class="mf-dspecs"><tbody>@for (r of factRows(it); track r[0]) {
+                <tr><th>{{ r[0] | t }}</th><td>@if (r[0] === 'Colour' && it.facts.colour_hex) { <i class="inv-sw" [style.background]="it.facts.colour_hex"></i> }{{ r[1] }}</td></tr> }</tbody></table>
+            }
+          </div>
+          <div class="mf-dinfo">
+            <div class="inv-dtype">
+              <span class="inv-dtico"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(it.type)" /></svg></span>
+              @if (can()) {
+                <wb-select class="inv-dsel" label="Type" [options]="typeSetOpts(it)" [value]="it.type_set" (pick)="setType(it, $event)"
+                           [title]="it.type_auto ? ('Worked out from its name, category and part number. Choose one to set it by hand.' | t) : ''" />
+                @if (it.type === 'electronic') {
+                  <wb-select class="inv-dsel" label="Component kind" [options]="subOpts()" [value]="it.subtype" (pick)="patch(it, { subtype: $event })" />
+                }
+              } @else { <span>{{ typeLine(it) }}</span> }
+              @if (it.type_auto && !can()) { <span class="st-sub" [title]="'Worked out from its name, category and part number. Choose one to set it by hand.' | t">{{ 'worked out' | t }}</span> }
+            </div>
+            @if (editing() && can()) {
+              <input class="tst-in inv-dname-in" [value]="it.name" (change)="save(it, 'name', $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" [attr.aria-label]="'Name' | t">
+            } @else { <h2 class="mf-dname">{{ it.name }}</h2> }
+            <div class="mf-dmeta">
+              @if (it.category) { <span class="mf-chip">{{ it.category }}</span> }
+              @if (it.location) { <span class="mf-chip inv-loc">{{ it.location }}</span> }
+              @if (it.lcsc) { <a class="mf-link mono" [href]="lcscUrl(it.lcsc)" target="_blank" rel="noopener noreferrer">{{ it.lcsc }}</a>
+                <button class="st-more inv-go" (click)="toPart(it.lcsc)" [title]="'Open it in the PCB room\\'s parts' | t">{{ 'Parts drawer' | t }}</button> }
+              @if (it.mpn) { <span class="mono">{{ it.mpn }}</span> }
+              @if (it.manufacturer) { <span>{{ it.manufacturer }}</span> }
+              @for (tg of it.tags; track tg) { <span class="st-tag">#{{ tg }}</span> }
+            </div>
+
+            <!-- the quantity, and changing it with a reason -->
+            <div class="inv-qrow">
+              <div class="inv-qbig" [attr.data-low]="it.low ? 1 : null" [attr.data-out]="it.quantity <= 0 ? 1 : null">
+                <b>{{ qty(it.quantity) }}</b><span>{{ it.unit }}</span>
+                @if (it.quantity <= 0) { <span class="st-tag" data-tone="danger">{{ 'out of stock' | t }}</span> }
+                @else if (it.low) { <span class="st-tag" data-tone="warn">{{ fmt('low - minimum {n}', { n: qty(it.min_stock) }) }}</span> }
+              </div>
+              @if (it.facts.weight_g != null) {
+                <div class="inv-dspool">
+                  <span>{{ weight(it.facts.weight_g) }} · {{ spoolLine(it) }}</span>
+                  <span class="inv-bar"><i [style.width.%]="it.facts.current_pct ?? 0"></i></span>
+                </div>
+              }
+            </div>
+            @if (can()) {
+              <div class="inv-adjust">
+                <button class="tcv-btn inv-pm" (click)="adjust(it, -1)" [disabled]="busy()" [title]="'Take this many' | t">−</button>
+                <input #stepBox class="tst-in inv-step" [value]="step()" (input)="step.set($any($event.target).value)" inputmode="decimal"
+                       [attr.aria-label]="'How many' | t" (keydown.enter)="adjust(it, 1)">
+                <button class="tcv-btn inv-pm" (click)="adjust(it, 1)" [disabled]="busy()" [title]="'Add this many' | t">+</button>
+                <input #reasonBox class="tst-in inv-reason" [placeholder]="'Why - e.g. used 4 for the fan board' | t" [value]="reason()"
+                       (input)="reason.set($any($event.target).value)" (keydown.enter)="adjust(it, -1)" [attr.aria-label]="'Reason' | t">
+              </div>
+              <span class="st-sub inv-hint">{{ 'Enter in the reason takes; in the amount adds.' | t }}</span>
+            }
+
+            <dl class="mf-dates inv-dates">
+              <div><dt>{{ 'Added' | t }}</dt><dd>{{ stamp(it.created_at) }}<span class="dim"> · {{ it.by.name || ('someone' | t) }}</span></dd></div>
+              <div><dt>{{ 'Last change' | t }}</dt><dd>{{ stamp(it.updated_at) }}<span class="dim"> · {{ it.updated_by.name || ('someone' | t) }}</span></dd></div>
+              <div><dt>{{ 'Minimum' | t }}</dt><dd>{{ it.min_stock == null ? ('none' | t) : qty(it.min_stock) + ' ' + it.unit }}</dd></div>
+              <div><dt>{{ 'Value' | t }}</dt><dd>{{ it.value != null ? money(it.value, it.currency) + ' (' + money(it.price!, it.currency) + ' / ' + it.unit + ')' : '–' }}</dd></div>
+            </dl>
+
+            <div class="mf-dacts">
+              @if (it.catalog?.url) { <a class="tcv-btn tcv-btn-accent" [href]="it.catalog!.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
+              <rl-dm-send-btn kind="inventory" [id]="it.id" [label]="it.name" cls="tcv-btn tcv-dm-sendbtn" />
+              <button class="tcv-btn" (click)="exportItems([it])" [title]="'Save it as a file to send to someone' | t">{{ 'Export' | t }}</button>
+              @if (can()) {
+                <button class="tcv-btn" [class.on]="editing()" (click)="editing.set(!editing())">{{ (editing() ? 'Done' : 'Edit') | t }}</button>
+                <button class="tcv-btn tst-del" (click)="remove(it)">{{ 'Delete' | t }}</button>
+              }
+            </div>
+
+            @if (editing() && can()) {
+              <!-- every field, in place -->
+              <div class="inv-fields">
+                <label><span>{{ 'Unit' | t }}</span>
+                  <input class="tst-in" list="inv-units" [value]="it.unit" (change)="save(it, 'unit', $any($event.target).value)"></label>
+                <label><span>{{ 'Location' | t }}</span>
+                  <input class="tst-in" list="inv-locs" [value]="it.location" [placeholder]="'Shelf, bin, box' | t" (change)="save(it, 'location', $any($event.target).value)"></label>
+                <label><span>{{ 'Category' | t }}</span>
+                  <input class="tst-in" list="inv-cats" [value]="it.category" (change)="save(it, 'category', $any($event.target).value)"></label>
+                <label><span>{{ 'Minimum' | t }}</span>
+                  <input class="tst-in" inputmode="decimal" [value]="it.min_stock ?? ''" [placeholder]="'none' | t" (change)="saveNum(it, 'min_stock', $any($event.target).value)"></label>
+                <label><span>{{ 'MPN' | t }}</span>
+                  <input class="tst-in mono" [value]="it.mpn" (change)="save(it, 'mpn', $any($event.target).value)"></label>
+                <label><span>{{ 'LCSC' | t }}</span>
+                  <input class="tst-in mono" [value]="it.lcsc" placeholder="C25744" (change)="save(it, 'lcsc', $any($event.target).value)"></label>
+                <label><span>{{ 'Manufacturer' | t }}</span>
+                  <input class="tst-in" [value]="it.manufacturer" (change)="save(it, 'manufacturer', $any($event.target).value)"></label>
+                <label><span>{{ 'For (board or model)' | t }}</span>
+                  <input class="tst-in" [value]="it.board" (change)="save(it, 'board', $any($event.target).value)"></label>
+                <label><span>{{ 'Unit price' | t }}</span>
+                  <span class="inv-price">
+                    <input class="tst-in" inputmode="decimal" [value]="it.price ?? ''" (change)="saveNum(it, 'price', $any($event.target).value)">
+                    <input class="tst-in inv-cur" list="inv-curs" [value]="it.currency" placeholder="TRY" (change)="save(it, 'currency', $any($event.target).value)">
+                  </span></label>
+                <label><span>{{ 'Tags' | t }}</span>
+                  <input class="tst-in" [value]="it.tags.join(', ')" [placeholder]="'comma separated' | t" (change)="save(it, 'tags', $any($event.target).value)"></label>
+                <label class="inv-full"><span>{{ 'Notes' | t }}</span>
+                  <textarea class="tst-in inv-notes" rows="2" [value]="it.notes" (change)="save(it, 'notes', $any($event.target).value)"></textarea></label>
+              </div>
+            } @else if (it.notes) { <p class="mf-ddesc">{{ it.notes }}</p> }
+
+            <!-- what it is elsewhere in the app -->
+            <div class="inv-links">
+              <span class="mf-label">{{ 'Product Catalog' | t }}</span>
+              @if (it.catalog; as c) {
+                <span class="inv-link">
+                  <button class="st-more inv-go" (click)="toCatalog(c)">{{ c.manufacturer_name || c.manufacturer }}{{ c.product_name ? ' / ' + c.product_name : '' }}</button>
+                  @if (c.url) { <a class="mf-link" [href]="c.url" target="_blank" rel="noopener noreferrer">{{ 'Page' | t }}</a> }
+                  @if (can()) { <button class="st-more inv-unlink" (click)="unlinkCatalog(it)" [title]="'Remove the link' | t">×</button> }</span>
+              } @else if (can()) {
+                <span class="inv-linker mf-ctl">
+                  <wb-select class="inv-linksel" label="Manufacturer" placeholder="Link a catalog product…" [options]="makerOpts()" [value]="linkMaker()" (pick)="pickMaker($event)" />
+                  @if (linkMaker()) {
+                    <input class="tst-in" list="inv-products" [placeholder]="'Product name or code' | t" (change)="linkProduct(it, $any($event.target).value)">
+                    <datalist id="inv-products">@for (p of linkProducts(); track p.id) { <option [value]="p.name + (p.sku ? ' · ' + p.sku : '')"></option> }</datalist>
+                  }
+                </span>
+              } @else { <span class="st-sub">{{ 'Not linked to a catalog product.' | t }}</span> }
+            </div>
+
+            <!-- what happened to it -->
+            @if (moves(); as m) {
+              <span class="mf-label">{{ 'On hand over time' | t }}</span>
+              <app-time-chart class="inv-chart" [data]="m" kind="area" [stacked]="false" [legend]="false" [height]="130" [f]="chartFmt.count" />
+            }
+            <span class="mf-label">{{ fmt('Change log - {n} entries, newest first', { n: it.log?.length ?? 0 }) }}</span>
+            <div class="st-table-wrap inv-logwrap">
+              <table class="st-table inv-log">
+                <thead><tr><th>{{ 'When' | t }}</th><th>{{ 'What' | t }}</th><th class="r">{{ 'Change' | t }}</th><th class="r">{{ 'After' | t }}</th>
+                  <th>{{ 'Reason' | t }}</th><th>{{ 'By' | t }}</th></tr></thead>
+                <tbody>
+                  @for (l of it.log ?? []; track l.id) {
+                    <tr>
+                      <td class="dim nowrap">{{ when(l.at) }}</td>
+                      <td>{{ kindName(l.kind) | t }}@if (l.fields?.length) { <span class="dim"> · {{ l.fields!.join(', ') }}</span> }</td>
+                      <td class="r mono" [attr.data-sign]="l.delta == null ? null : l.delta < 0 ? '-' : '+'">{{ l.delta == null ? '' : (l.delta > 0 ? '+' : '') + qty(l.delta) }}</td>
+                      <td class="r mono">{{ l.after == null ? '' : qty(l.after) }}</td>
+                      <td class="give">{{ l.reason || changeLine(l) }}</td>
+                      <td class="dim">{{ l.by.name || ('someone' | t) }}</td>
+                    </tr>
+                  } @empty { <tr><td colspan="6" class="dim">{{ 'Nothing yet.' | t }}</td></tr> }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        } @else if (itemError(); as e) {
+          <div class="st-banner tst-banner inv-derr" role="alert"><span>{{ e }}</span><button class="tcv-btn" (click)="closeItem()">{{ 'Close' | t }}</button></div>
+        } @else { <div class="inv-derr"><wb-skel kind="text" [count]="6" /></div> }
+      </div>
+    </div>
+  }
 </div>
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-i>
-  <button class="mf-card inv-card" [attr.data-fam]="family(i.type)" [attr.data-key]="i.id" [attr.data-on]="picked().has(i.id) ? 1 : null"
-          [attr.aria-pressed]="picked().has(i.id)" (click)="itemClick($event, i)" (contextmenu)="openMenu($event, i)" [title]="i.name">
+  <button class="mf-card inv-card" [attr.data-fam]="family(i.type)" (click)="openItem(i.id)" (contextmenu)="openMenu($event, i)" [title]="i.name">
     <span class="mf-card-img inv-cimg">
       @if (pic(i); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
       @else if (i.facts.colour_hex) { <ng-container *ngTemplateOutlet="spoolT; context: { $implicit: i }" /> }
@@ -862,11 +859,6 @@ export class RoomInventory implements OnDestroy {
   }
   pick(id: string, on: boolean) { const s = new Set(this.picked()); if (on) s.add(id); else s.delete(id); this.picked.set(s); }
   clearPicked() { this.picked.set(new Set()); }
-  /** Ctrl/Shift-click picks it, as a box drawn over it does (marquee.ts); a plain click opens it. */
-  itemClick(e: MouseEvent, i: Item) {
-    if (e.ctrlKey || e.metaKey || e.shiftKey) { this.pick(i.id, !this.picked().has(i.id)); return; }
-    this.openItem(i.id);
-  }
   pickAll(on: boolean) { this.picked.set(on ? new Set(this.shown().map(i => i.id)) : new Set()); }
   allPicked = computed(() => this.shown().length > 0 && this.shown().every(i => this.picked().has(i.id)));
   selectedItems = computed(() => this.all().filter(i => this.picked().has(i.id)));
@@ -1227,7 +1219,6 @@ export class RoomInventory implements OnDestroy {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape') {
       if (this.iid() && !document.querySelector('.wb-sel-pop')) { this.closeItem(); return; }
-      if (this.picked().size && !typing && !ContextMenu.isOpen()) { this.clearPicked(); return; }
     }
     if (e.key === '/' && !typing && !this.iid()) { e.preventDefault(); this.search()?.nativeElement.focus(); }
   }

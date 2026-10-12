@@ -214,9 +214,10 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
 .mf-pf-price .wb-select { flex: 0 1 auto; }
 .mf-pf-qty { flex: 0 0 60px; }
 
-/* one product in full */
+/* one product in full, over the whole page; the veil is the container its
+   @container rules measure, now that it sits outside the section */
 .mf-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px;
-  background: rgba(0, 0, 0, .45); }
+  background: rgba(0, 0, 0, .45); container-type: inline-size; }
 .mf-detail { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px;
   width: min(1080px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 18px; box-sizing: border-box;
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }

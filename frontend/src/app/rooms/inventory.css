@@ -130,6 +130,9 @@ td.inv-name { max-width: 0; width: 26%; overflow: hidden; text-overflow: ellipsi
 .inv-mark { display: inline-block; margin-left: 6px; padding: 0 4px; font-size: 9.5px; line-height: 14px; color: var(--ink-dim);
   border: 1px solid var(--line); border-radius: 3px; vertical-align: 1px; }
 td.inv-c-type { white-space: nowrap; }
+/* its type as the catalog shows one: a chip, with the icon its group has */
+.inv-tchip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; box-sizing: border-box; padding-left: 4px; }
+.inv-tchip svg { width: 12px; height: 12px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .st-table td[data-sign="-"] { color: var(--warn); }
 .st-table td[data-sign="+"] { color: var(--ok); }
 .st-table td.inv-q[data-low] { color: var(--warn); }

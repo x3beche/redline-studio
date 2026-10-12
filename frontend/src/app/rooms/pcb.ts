@@ -66,7 +66,7 @@ type BoardView = Pane | 'split' | 'focus';
        (rooms/import-board.ts, backend/imports). Over the room, so it can
        be reached with no board open. -->
   @if (importing()) {
-    <app-import-board [initialProject]="here() ? projectOf(here()!) : ''"
+    <app-import-board animate.leave="tcv-leave" [initialProject]="here() ? projectOf(here()!) : ''"
                       (closed)="importing.set(false)" (opened)="importing.set(false)" />
   }
   <!-- The 3D room's layout, because it is the app's one layout: the
@@ -356,7 +356,7 @@ type BoardView = Pane | 'split' | 'focus';
         </p>
       } @else {
       @if (releasing() && here(); as b) {
-        <app-releases [project]="projectOf(b)" (closed)="releasing.set(false)" />
+        <app-releases animate.leave="tcv-leave" [project]="projectOf(b)" (closed)="releasing.set(false)" />
       }
       @if (ide() && here(); as b) {
         <app-code-view kind="board" [id]="b._id" [title]="b.title || b._id" [line]="ideLine()" (closed)="ide.set(false)" />
