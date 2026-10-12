@@ -10,6 +10,7 @@ import { CatalogStock, InventoryApi, qty } from './inventory';
 import { RouteOrder, routeLine } from '../route-order';
 import { DmSendButton } from '../dm';
 import { SelectOption, UiSelect, plainOptions } from '../ui-select';
+import { Marquee } from '../marquee';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -237,7 +238,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect],
+  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'menu.set(null)', '(document:scroll)': 'menu.set(null)', '(window:resize)': 'menu.set(null)' },
   template: `
@@ -290,7 +291,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     </div>
   </aside>
 
-  <section class="tcv-notes-main tst mf">
+  <section class="tcv-notes-main tst mf" wbMarquee [marqueeOn]="layout() === 'grid' && (view() === 'maker' || (view() === 'home' && sub() === 'products'))"
+           [marqueeBase]="gsel()" (wbMarquee)="gsel.set($event)">
     @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
 
     @if (view() === 'run') {
@@ -524,7 +526,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </div>
         }
         @if (m.products?.length && layout() === 'grid') {
-          <div class="mf-grid">
+          <ng-container *ngTemplateOutlet="selBar" />
+          <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
+              >
             @for (p of found().slice(0, shownRows()); track p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: asItem(p, m) }" /> }
             @empty { <p class="st-hint mf-pad">{{ 'Nothing matches.' | t }}</p> }
           </div>
@@ -618,7 +622,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         </div>
         @if (grid(); as g) {
           @if (layout() === 'grid') {
-            <div class="mf-grid">
+            <ng-container *ngTemplateOutlet="selBar" />
+            <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
+                >
               @for (p of g.items; track p.maker.id + p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: p }" /> }
             </div>
           } @else {
@@ -882,7 +888,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 }
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-p>
-  <button class="mf-card" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
+  <button class="mf-card" [attr.data-key]="keyOf(p)" [attr.data-on]="gsel().has(keyOf(p)) ? 1 : null" [attr.aria-pressed]="gsel().has(keyOf(p))"
+          (click)="cardClick($event, p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
     <span class="mf-card-img">
       @if (img(p); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
       @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }
@@ -900,10 +907,28 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
   </button>
 </ng-template>
 <ng-template #layoutT>
+  @if (layout() === 'grid') {
+    <div class="st-seg mf-cols" role="group" [attr.aria-label]="'Cards per row' | t">
+      <button type="button" (click)="setCols(-1)" [disabled]="cols() === 2" [title]="'Bigger cards' | t" aria-label="−">−</button>
+      <button type="button" class="mf-cols-n" (click)="setCols(0)" [title]="'Cards per row - click for automatic' | t">{{ cols() ? fmt('{n} per row', { n: cols() }) : ('Auto' | t) }}</button>
+      <button type="button" (click)="setCols(1)" [disabled]="cols() === 10" [title]="'Smaller cards' | t" aria-label="+">+</button>
+    </div>
+  }
   <div class="st-seg mf-layout" role="radiogroup" [attr.aria-label]="'Layout' | t">
     <button [class.on]="layout() === 'grid'" (click)="layout.set('grid')" [title]="'Grid' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.grid" /></svg>{{ 'Grid' | t }}</button>
     <button [class.on]="layout() === 'table'" (click)="layout.set('table')" [title]="'Table' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.rows" /></svg>{{ 'Table' | t }}</button>
   </div>
+</ng-template>
+<ng-template #selBar>
+  @if (gsel().size) {
+    <div class="mf-selbar" role="toolbar" [attr.aria-label]="'Selection' | t">
+      <b>{{ fmt('{n} selected', { n: gsel().size }) }}</b>
+      <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
+      @if (can()) { <button class="tcv-btn tst-del" (click)="deleteSelected()" [disabled]="saving()">{{ 'Delete' | t }}</button> }
+      <button class="tcv-btn" (click)="clearSel()">{{ 'Clear' | t }}</button>
+      <span class="st-sub">{{ 'Drag on an empty spot to select; Ctrl or Shift adds' | t }}</span>
+    </div>
+  }
 </ng-template>
 <ng-template #stockFields>
           <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Quantity' | t">
@@ -1238,6 +1263,49 @@ export class RoomMfr implements OnDestroy {
     this.closeDetail();
     this.openMaker(d.maker.id);
     this.openProduct(d);
+  }
+  /** Products picked on the grid - by drawing a box over them (marquee.ts) or
+   *  Ctrl/Shift-clicking - as "makerId:productId". */
+  gsel = signal<Set<string>>(new Set());
+  clearSel() { this.gsel.set(new Set()); }
+  keyOf(p: GridItem) { return p.maker.id + ':' + p.id; }
+  cardClick(e: MouseEvent, p: GridItem) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      const k = this.keyOf(p);
+      this.gsel.update(s => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+      return;
+    }
+    this.openDetail(p);
+  }
+  selectAllShown() {
+    const keys = [...document.querySelectorAll<HTMLElement>('.mf-grid [data-key]')].map(el => el.dataset['key']!);
+    this.gsel.set(new Set(keys));
+  }
+  deleteSelected() {
+    const by = new Map<string, string[]>();
+    for (const k of this.gsel()) { const i = k.indexOf(':'); by.set(k.slice(0, i), [...(by.get(k.slice(0, i)) ?? []), k.slice(i + 1)]); }
+    const n = this.gsel().size;
+    this.sure(n === 1 ? t('Delete this product?') : this.fmt('Delete {n} products?', { n }), '').then(async ok => {
+      if (!ok) return;
+      this.saving.set(true);
+      try {
+        for (const [mid, ids] of by) {
+          const r = await new Promise<{ manufacturer: Maker }>((res, rej) => this.api.deleteProducts(mid, ids).subscribe({ next: res, error: rej }));
+          this.replace(r.manufacturer);
+        }
+        this.gsel.set(new Set());
+      } catch (e) { this.failed('Could not delete it.')(e as HttpErrorResponse); }
+      this.saving.set(false);
+      this.read();
+    });
+  }
+  /** Cards per row on the grid, 0 = as many as fit - kept in this browser. */
+  cols = signal<number>((() => { try { return Number(localStorage.getItem('redline.catalog.cols')) || 0; } catch { return 0; } })());
+  setCols(d: number) {
+    const now = this.cols() || Math.max(2, Math.round((document.querySelector('.mf-grid')?.clientWidth ?? 1100) / 240));
+    const v = d === 0 ? 0 : Math.max(2, Math.min(10, now + d));
+    this.cols.set(v);
+    try { localStorage.setItem('redline.catalog.cols', String(v)); } catch { /* private window */ }
   }
   /** The right-click menu: where, and on which product. */
   menu = signal<{ x: number; y: number; p: GridItem } | null>(null);
@@ -1691,6 +1759,8 @@ export class RoomMfr implements OnDestroy {
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape' && this.menu()) { this.menu.set(null); return; }
+    if (e.key === 'Escape' && this.gsel().size && !this.detail()) { this.gsel.set(new Set()); return; }
+    if (e.key === 'Delete' && this.gsel().size && !this.menu() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }
     if (e.key === 'Delete' && this.menu() && this.can()) { const p = this.menu()!.p; this.menu.set(null); this.deleteFromDetail(p); return; }
     if (e.key === 'Escape' && this.detail() && !typing) { this.closeDetail(); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); (this.gridSearch() ?? this.search()).nativeElement.focus(); }

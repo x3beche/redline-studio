@@ -163,6 +163,16 @@ section > .mf-stockform { padding: 6px 10px; border-bottom: 1px solid var(--line
 
 .mf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; align-content: start; }
 .mf-catalog .mf-grid { padding: 8px 10px; }
+.mf-grid[data-cols] { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+.mf-card[data-on] { border-color: var(--marquee); box-shadow: 0 0 0 1px var(--marquee); }
+.mf-card[data-on] .mf-card-img::after { content: '✓'; position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; display: grid;
+  place-items: center; font-size: 12px; color: var(--ink-on-accent); background: var(--marquee); border-radius: 4px; }
+.mf-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 10px; padding: 6px 10px;
+  background: var(--surface-2); border: 1px solid var(--marquee); border-radius: 5px; font-size: 12px; }
+.mf-selbar b { font-weight: 600; }
+.mf-cols { margin-right: 6px; }
+.mf-cols button { min-width: 28px; justify-content: center; font-variant-numeric: tabular-nums; }
+.mf-cols .mf-cols-n { min-width: 74px; }
 .mf-card { display: flex; flex-direction: column; min-width: 0; padding: 0; font: inherit; color: inherit; text-align: left;
   background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; cursor: pointer; }
 .mf-card:hover, .mf-card:focus-visible { border-color: var(--accent); outline: none; }
