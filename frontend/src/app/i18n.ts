@@ -541,6 +541,8 @@ const TR: Record<string, string> = {
   'Not yet. Send to agent puts a line in a room\'s thread with the command that fetches it.': 'Henüz değil. Ajana gönder, bir odanın akışına dosyayı getiren komutla birlikte bir satır ekler.',
   'Note saved': 'Not kaydedildi',
   'Nothing matches': 'Eşleşen bir şey yok',
+  'Filter': 'Süz',
+  'Choose': 'Seç',
   'Nothing uploaded yet': 'Henüz bir şey yüklenmedi',
   'Only the first entries are listed.': 'Yalnızca ilk girdiler listelendi.',
   'Open in 3D Drawing': '3B Çizim\'de aç',

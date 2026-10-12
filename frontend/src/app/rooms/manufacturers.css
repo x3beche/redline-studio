@@ -143,6 +143,12 @@ section > .mf-stockform { padding: 6px 10px; border-bottom: 1px solid var(--line
 .mf-gbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; background: var(--surface-2);
   border: 1px solid var(--line); border-radius: 4px; }
 .mf-gbar > .tst-sel { flex: 0 1 170px; min-width: 110px; box-sizing: border-box; height: var(--mf-h); }
+.mf-gbar > .mf-gsel { flex: 0 1 170px; min-width: 110px; height: var(--mf-h); }
+.mf-gbar > .mf-gsort { flex-basis: 160px; }
+.mf-stocktog { display: inline-flex; align-items: center; gap: 7px; flex: none; height: var(--mf-h); padding: 0 4px; font: inherit;
+  font-size: 12px; color: var(--ink-dim); background: none; border: 0; cursor: pointer; white-space: nowrap; }
+.mf-stocktog[aria-checked="true"] { color: var(--ink); }
+.mf-stocktog:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .mf-gfind { flex: 1 1 300px; min-width: 200px; font-size: 13px; }
 .mf-gbar .tst-in { background: var(--surface); }
 .mf-range { display: inline-flex; align-items: center; gap: 4px; flex: none; }

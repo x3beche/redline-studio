@@ -9,6 +9,7 @@ import { Confirm } from '../confirm';
 import { CatalogStock, InventoryApi, qty } from './inventory';
 import { RouteOrder, routeLine } from '../route-order';
 import { DmSendButton } from '../dm';
+import { SelectOption, UiSelect } from '../ui-select';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -236,7 +237,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton],
+  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'menu.set(null)', '(document:scroll)': 'menu.set(null)', '(window:resize)': 'menu.set(null)' },
   template: `
@@ -610,27 +611,17 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <div class="mf-gbar mf-ctl">
           <input #gridSearch class="tst-in mf-gfind" type="search" [placeholder]="'Search every product: name, code, size, material, seller' | t" [value]="pq()"
                  (input)="pq.set($any($event.target).value); gpages.set(1)" (keydown.escape)="pq.set('')" [attr.aria-label]="'Search products' | t">
-          <select class="tst-sel" [value]="cat()" (change)="cat.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Category' | t">
-            <option value="">{{ 'All categories' | t }}</option>
-            @for (c of grid()?.categories ?? []; track c[0]) { <option [value]="c[0]" [selected]="c[0] === cat()">{{ c[0] }} ({{ c[1] }})</option> }
-          </select>
-          <select class="tst-sel" [value]="gmaker()" (change)="gmaker.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Maker' | t">
-            <option value="">{{ 'All makers' | t }}</option>
-            @for (k of grid()?.makers ?? []; track k.id) { <option [value]="k.id" [selected]="k.id === gmaker()">{{ k.name }} ({{ k.count }})</option> }
-          </select>
-          <select class="tst-sel" [value]="gseller()" (change)="gseller.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Seller' | t">
-            <option value="">{{ 'All sellers' | t }}</option>
-            @for (k of grid()?.sellers ?? []; track k[0]) { <option [value]="k[0]" [selected]="k[0] === gseller()">{{ k[0] }} ({{ k[1] }})</option> }
-          </select>
+          <wb-select class="mf-gsel" label="Category" [options]="catOpts()" [value]="cat()" (pick)="cat.set($event); gpages.set(1)" />
+          <wb-select class="mf-gsel" label="Maker" [options]="makerOpts()" [value]="gmaker()" (pick)="gmaker.set($event); gpages.set(1)" />
+          <wb-select class="mf-gsel" label="Seller" [options]="sellerOpts()" [value]="gseller()" (pick)="gseller.set($event); gpages.set(1)" />
           <span class="mf-range">
             <input class="tst-in" inputmode="decimal" [placeholder]="'Min price' | t" [value]="gmin()" (change)="gmin.set($any($event.target).value.trim()); gpages.set(1)" [attr.aria-label]="'Min price' | t">
             <span class="dim">–</span>
             <input class="tst-in" inputmode="decimal" [placeholder]="'Max price' | t" [value]="gmax()" (change)="gmax.set($any($event.target).value.trim()); gpages.set(1)" [attr.aria-label]="'Max price' | t">
           </span>
-          <label class="mf-check"><input type="checkbox" [checked]="gstock()" (change)="gstock.set($any($event.target).checked); gpages.set(1)"> {{ 'In stock' | t }}</label>
-          <select class="tst-sel" [value]="gsort()" (change)="gsort.set($any($event.target).value)" [attr.aria-label]="'Sort' | t">
-            @for (o of sorts; track o.id) { <option [value]="o.id" [selected]="o.id === gsort()">{{ o.label | t }}</option> }
-          </select>
+          <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gstock()" (click)="gstock.set(!gstock()); gpages.set(1)">
+            <span class="tcv-switch" [attr.data-on]="gstock() ? 1 : null" aria-hidden="true"></span>{{ 'In stock' | t }}</button>
+          <wb-select class="mf-gsel mf-gsort" label="Sort" [options]="sortOpts()" [value]="gsort()" (pick)="gsort.set($event)" />
           @if (filtered()) { <button class="tcv-btn" (click)="clearFilters()">{{ 'Clear' | t }}</button> }
           <span class="st-right st-sub mf-gcount">{{ grid() ? fmt('{n} of {m}', { n: num(grid()!.total), m: num(grid()!.all) }) : '' }}</span>
           <ng-container *ngTemplateOutlet="layoutT" />
@@ -972,6 +963,14 @@ export class RoomMfr implements OnDestroy {
   readonly sorts = [{ id: 'new', label: 'Newest' }, { id: 'price_asc', label: 'Price: low to high' },
                     { id: 'price_desc', label: 'Price: high to low' }, { id: 'name', label: 'Name' }, { id: 'match', label: 'Best match' }];
   readonly currencies = CURRENCIES;
+  /** The grid bar's drop-downs (ui-select.ts): every choice with its count. */
+  catOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All categories') },
+    ...(this.grid()?.categories ?? []).map(c => ({ value: c[0], label: c[0], hint: c[1] }))]);
+  makerOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All makers') },
+    ...(this.grid()?.makers ?? []).map(k => ({ value: k.id, label: k.name, hint: k.count }))]);
+  sellerOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All sellers') },
+    ...(this.grid()?.sellers ?? []).map(k => ({ value: k[0], label: k[0], hint: k[1] }))]);
+  sortOpts = computed<SelectOption[]>(() => this.sorts.map(o => ({ value: o.id, label: t(o.label) })));
   filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock()));
   /** The product open in full (?p=, its maker ?pm=), the picture shown big, what the Inventory holds of its maker's. */
   detail = signal<GridItem | null>(null);
