@@ -705,4 +705,4 @@ def test_retitle_keeps_the_title_when_the_model_does_not_answer(env):
     state["title"] = RuntimeError("down")
     with pytest.raises(HTTPException) as e:
         run(cc_chat.retitle("c1"))
-    assert e.value.status_code == 503 and db.coll.rows["c1"]["title"] == "Old"
+    assert e.value.status_code == 502 and db.coll.rows["c1"]["title"] == "Old"

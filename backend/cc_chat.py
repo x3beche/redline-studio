@@ -82,6 +82,9 @@ DEFAULT_TITLE = "New conversation"
 TITLE_WORDS = 6
 TITLE_CHARS = 60
 TITLE_TIMEOUT = 20.0             # seconds the summary model gets to name it
+# Room for the title after whatever thinking a model does anyway: Haiku on
+# Command Code spent all of 40 on it and answered with nothing.
+TITLE_TOKENS = 400
 MAX_BULK = 200
 TRASH_DAYS = 30                  # a deleted conversation can be restored for this long
 TRASH_TTL = "cc_trash_ttl"       # the index that drops it afterwards
@@ -450,7 +453,7 @@ async def make_title(first: str, answer: str = "", whole: str = "") -> tuple[str
             d = await asyncio.wait_for(llm.complete(
                 [{"role": "system", "content": RETITLE_PROMPT if whole else TITLE_PROMPT},
                  {"role": "user", "content": prompt}],
-                job="summary", max_tokens=40, temperature=0.2), TITLE_TIMEOUT)
+                job="summary", max_tokens=TITLE_TOKENS, temperature=0.2), TITLE_TIMEOUT)
             got = clean_title(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
             if got:
                 return got, {**(d.get("usage") or {}), "provider": d.get("provider") or prov,
@@ -871,11 +874,21 @@ async def retitle(cid: str) -> dict:
     whole = gist(doc.get("messages") or [])
     if not whole:
         raise HTTPException(400, "there is nothing in it to name it by")
-    title, used = await make_title("", whole=whole)
-    if not used:
-        raise HTTPException(503, "the summary model did not answer - see Settings > LLM settings")
-    await llm.record(db, provider=used.pop("provider"), model=used.pop("model"),
-                     surface="chat", kind="cc-title", used=used)
+    prov, model = llm.route("summary")
+    try:
+        d = await asyncio.wait_for(llm.complete(
+            [{"role": "system", "content": RETITLE_PROMPT}, {"role": "user", "content": whole}],
+            job="summary", max_tokens=TITLE_TOKENS, temperature=0.2), TITLE_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, f"the summary model ({model}) took longer than {TITLE_TIMEOUT:g} s - try again")
+    except Exception as exc:                           # noqa: BLE001 - said as it is
+        print(f"cc {cid}: retitle failed: {type(exc).__name__}: {exc}", flush=True)
+        raise HTTPException(502, f"the summary model ({model}) did not answer: {exc}") from exc
+    title = clean_title(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    if not title:
+        raise HTTPException(502, f"the summary model ({model}) gave no title - try again or pick another in Settings > LLM settings")
+    await llm.record(db, provider=d.get("provider") or prov, model=d.get("model") or model,
+                     surface="chat", kind="cc-title", used=d.get("usage") or {})
     if await rename(db, cid, title) is None:
         raise HTTPException(404, cid)
     return {"title": title}

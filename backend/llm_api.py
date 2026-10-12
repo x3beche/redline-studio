@@ -87,7 +87,7 @@ async def test(body: TestIn) -> dict:
     t0 = time.monotonic()
     try:
         d = await llm.complete([{"role": "user", "content": "Reply with exactly: OK"}],
-                               provider=body.provider, model=body.model, max_tokens=16,
+                               provider=body.provider, model=body.model, max_tokens=200,
                                temperature=0, timeout=60)
     except Exception as exc:                           # noqa: BLE001
         return {"ok": False, "error": str(exc)[:400], "ms": round((time.monotonic() - t0) * 1000)}
