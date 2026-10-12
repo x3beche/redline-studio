@@ -2075,6 +2075,8 @@ const TR: Record<string, string> = {
   'Read a taste palette': 'Tadım paleti oku',
   'Parts drawer': 'Parça çekmecesi',
   'Room notes': 'Oda notları',
+  'In the Trash - restore it from the Chat list to open it': 'Çöp kutusunda - açmak için Chat listesinden geri getir',
+  'in the Trash': 'çöp kutusunda',
   'A new note (N)': 'Yeni not (N)',
   'Send to an agent': 'Bir ajana gönder',
   'First line is the title - #tags, @controller, - [ ] to-dos…': 'İlk satır başlık - #etiketler, @kontrolcü, - [ ] yapılacaklar…',

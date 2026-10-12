@@ -57,7 +57,7 @@ const BEHAVES: Record<ToolLevel, { badge: string; tone: string; empty: string }>
 /** One tool's page (GET /api/cc/tools/{name}): what the model is told and
  *  takes, and how it has been used in this workspace's conversations. */
 interface ToolUse { at: string; chat: string; title: string; say: string; vars: Record<string, string | number>;
-  status: string; ms?: number | null; by: string }
+  status: string; ms?: number | null; by: string; trashed?: boolean }
 interface ToolPage extends CcTool {
   model_text: string; running: string; failed: string;
   params: { name: string; type: string; about: string; required: boolean }[];
@@ -199,10 +199,11 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
         @if (st.recent.length) {
           <ul class="ct-uses">
             @for (u of st.recent; track u.at + u.chat) {
-              <li><button type="button" class="ct-use" (click)="openChat.emit(u.chat)">
+              <li><button type="button" class="ct-use" [disabled]="u.trashed" (click)="!u.trashed && openChat.emit(u.chat)"
+                          [title]="(u.trashed ? 'In the Trash - restore it from the Chat list to open it' : '') | t">
                 <span class="ct-use-when mono">{{ ago(u.at) }}</span>
                 <span class="ct-use-say">{{ say(u) }}</span>
-                <span class="ct-use-chat">{{ u.title || ('Untitled' | t) }} · {{ u.by }}</span>
+                <span class="ct-use-chat">{{ u.title || ('Untitled' | t) }} · {{ u.by }}@if (u.trashed) { · {{ 'in the Trash' | t }} }</span>
                 <span class="st-badge" [attr.data-tone]="u.status === 'done' ? 'ok' : u.status === 'error' ? 'danger' : 'warn'">{{ u.status | t }}</span>
                 <span class="ct-use-ms mono">{{ dur(u.ms ?? null) }}</span>
               </button></li>

@@ -88,6 +88,9 @@ TRASH_TTL = "cc_trash_ttl"       # the index that drops it afterwards
 # Mongo's {field: None} matches a missing field, too: every conversation
 # kept before there was a trash is a live one.
 LIVE = {"deleted_at": None}
+# The tools' use is counted in every conversation, the ones in the Trash too:
+# a tool that was used was used, whatever became of the conversation after.
+COUNTED: dict = {}
 TRASHED = {"deleted_at": {"$ne": None}}
 CHAT_CONTEXT = 4_000_000         # characters of mentioned context one conversation may hold
 MAX_QUEUE = 10                   # lines waiting for the answer being written, per conversation
@@ -1275,7 +1278,7 @@ async def list_tools() -> dict:
     from . import chat_tools
     me = (actors.current() or {}).get("id")
     uses = {d["_id"]: d["n"] async for d in _db()[COLL].aggregate([
-        {"$match": {**LIVE, "messages.steps.0": {"$exists": True}}},
+        {"$match": {**COUNTED, "messages.steps.0": {"$exists": True}}},
         {"$unwind": "$messages"}, {"$unwind": "$messages.steps"},
         {"$group": {"_id": "$messages.steps.tool", "n": {"$sum": 1}}}])}
     return {"tools": [{**t, "uses": uses.get(t["name"], 0)}
@@ -1318,7 +1321,7 @@ async def tools_usage() -> dict:
     days = {(day0 + timedelta(days=i)).isoformat(): {} for i in range(STATS_DAYS)}
     per = {n: {"uses": 0, "done": 0, "week": 0} for n in names}
     mine = 0
-    async for doc in _db()[COLL].find(dict(LIVE), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
+    async for doc in _db()[COLL].find(dict(COUNTED), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
         asker: dict = {}
         for m in doc.get("messages") or []:
             if m.get("role") == "user":
@@ -1366,7 +1369,7 @@ async def tool_page(name: str) -> dict:
     days = {(day0 + timedelta(days=i)).isoformat(): [0, 0] for i in range(STATS_DAYS)}
     uses, outcomes, people, chats, times, recent = 0, {}, {}, set(), [], []
     week = mine_n = 0
-    cur = _db()[COLL].find(dict(LIVE), {"title": 1, "messages.role": 1, "messages.by": 1, "messages.steps": 1})
+    cur = _db()[COLL].find(dict(COUNTED), {"title": 1, "deleted_at": 1, "messages.role": 1, "messages.by": 1, "messages.steps": 1})
     async for doc in cur:
         asker: dict = {}
         for m in doc.get("messages") or []:
@@ -1395,6 +1398,7 @@ async def tool_page(name: str) -> dict:
                 except ValueError:
                     pass
                 recent.append({"at": at, "chat": doc["_id"], "title": doc.get("title") or "", "say": st.get("say") or "",
+                               "trashed": bool(doc.get("deleted_at")),
                                "vars": st.get("vars") or {}, "status": status, "ms": st.get("ms"), "by": who})
     times.sort()
     recent.sort(key=lambda r: r["at"], reverse=True)
