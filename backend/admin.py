@@ -353,8 +353,10 @@ async def delete_user(user_id: str, with_data: bool = False) -> dict:
 
 # The overview's periods: the activity chart's buckets (cc_chat.USAGE_SPANS).
 _SPANS = {"day": 3600, "week": 86400, "month": 86400}
-# What a person does that is not a change: being let in.
-_SIGN_INS = ("sign-in", "switch")
+# What a person does that is not a change: signing in. Switching between
+# accounts already signed in on a browser is neither, so it counts as nothing.
+_SIGN_INS = ("sign-in",)
+_NOT_COUNTED = ("switch",)
 # The trail's lines that are not anybody's doing: a page opened for an agent.
 _NOT_ACTIONS = ("page-session",)
 # Folders at the top that are not projects: the shared parts library.
@@ -464,7 +466,7 @@ async def overview(span: str = "week") -> dict:
     feed: list[dict] = []
     async for a in raw["audit"].find({"at": {"$gte": since}}, {"at": 1, "actor": 1, "action": 1, "target": 1}):
         act, who = a.get("action"), a.get("actor") or {}
-        if act in _NOT_ACTIONS:
+        if act in _NOT_ACTIONS or act in _NOT_COUNTED:
             continue
         when = _at(a.get("at"))
         if who.get("type") != "user":
