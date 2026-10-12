@@ -33,7 +33,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="lcsc_search", package="drawer", level="read", order=20,
+    name="lcsc_search", package="pcb", level="read", order=20,
     about="Searches LCSC's catalogue: candidates with maker, package, stock and price.",
     label="Search LCSC",
     description="Search LCSC's catalogue for a part by MPN or words. Returns candidates with their LCSC "

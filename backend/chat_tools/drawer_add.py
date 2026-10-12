@@ -39,7 +39,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="drawer_add", package="drawer", level="change", order=30,
+    name="drawer_add", package="pcb", level="change", order=30,
     about="Adds an LCSC part to the drawer, footprint and 3D model included.",
     label="Add to the drawer",
     description="Add an LCSC part to this workspace's parts drawer (its footprint and 3D model are "

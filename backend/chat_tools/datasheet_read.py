@@ -103,7 +103,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="datasheet_read", package="drawer", level="read", order=50,
+    name="datasheet_read", package="pcb", level="read", order=50,
     about="Reads datasheet pages as text, finds a phrase in it, or looks at a page.",
     label="Read a datasheet",
     description="Read a part's datasheet (by LCSC number) as text: `pages` like '1-3' or '2,5' (at most 4 "

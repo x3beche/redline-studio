@@ -50,7 +50,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="drawer_search", package="drawer", level="read", order=10,
+    name="drawer_search", package="pcb", level="read", order=10,
     about="Finds parts already in the drawer by MPN, LCSC number or words.",
     label="Search the drawer",
     description="Find parts already kept in this workspace's parts drawer, by manufacturer part number "

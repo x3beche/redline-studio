@@ -2028,7 +2028,7 @@ const TR: Record<string, string> = {
   'Open the package': 'Paketi aç',
   'The parts drawer, LCSC\'s catalogue and the parts\' datasheets.': 'Parça çekmecesi, LCSC kataloğu ve parçaların datasheet\'leri.',
   'The 3D room\'s models.': '3D odasının modelleri.',
-  'The PCB room\'s boards.': 'PCB odasının kartları.',
+  'The PCB room\'s boards, its parts drawer, LCSC\'s catalogue and the parts\' datasheets.': 'PCB odasının kartları, parça çekmecesi, LCSC kataloğu ve parçaların datasheet\'leri.',
   'The Firmware room\'s builds.': 'Firmware odasının derlemeleri.',
   'The Files room.': 'Files odası.',
   'The person\'s design taste, kept as palettes.': 'Kişinin tasarım tadımı, paletler halinde.',

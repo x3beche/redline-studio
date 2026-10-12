@@ -100,9 +100,9 @@ class Package:
 
 
 PACKAGES = (
-    Package("drawer", "Parts drawer", "The parts drawer, LCSC's catalogue and the parts' datasheets."),
+    # The rooms first, in the top bar's order.
     Package("3d", "3D", "The 3D room's models."),
-    Package("pcb", "PCB", "The PCB room's boards."),
+    Package("pcb", "PCB", "The PCB room's boards, its parts drawer, LCSC's catalogue and the parts' datasheets."),
     Package("firmware", "Firmware", "The Firmware room's builds."),
     Package("files", "Files", "The Files room."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),

@@ -33,7 +33,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="datasheet_get", package="drawer", level="change", order=40,
+    name="datasheet_get", package="pcb", level="change", order=40,
     about="Takes a part's datasheet from the drawer, or fetches it from LCSC and keeps it.",
     label="Get a datasheet",
     description="Get a part's datasheet PDF by LCSC number: the copy already kept, or fetched from LCSC "

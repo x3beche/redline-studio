@@ -62,7 +62,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="drawer_list", package="drawer", level="read", order=12,
+    name="drawer_list", package="pcb", level="read", order=12,
     label="List the drawer",
     about="Lists the parts in the drawer, by category or only those with a datasheet.",
     description="List the parts kept in this workspace's parts drawer, a page at a time, with each "
