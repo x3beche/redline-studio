@@ -30,8 +30,17 @@ img { display: block; max-width: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
 .brand svg { width: 20px; height: 20px; fill: currentColor; }
 .links { display: flex; gap: 26px; white-space: nowrap; font-size: 15px; color: var(--dim); }
-.links a:hover { color: var(--ink); }
-.nav-r { display: flex; justify-content: flex-end; align-items: center; gap: 28px; font-size: 15px; white-space: nowrap; }
+.links a:hover, .more summary:hover, .more[open] summary { color: var(--ink); }
+.more { position: relative; }
+.more summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg); }
+.more-menu { position: absolute; top: calc(100% + 14px); right: 0; min-width: 170px; display: flex; flex-direction: column; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 32px #0008; }
+.more-menu a { padding: 8px 10px; border-radius: 5px; color: var(--dim); }
+.more-menu a:hover { color: var(--ink); background: var(--panel-2); }
+.nav-r { display: flex; justify-content: flex-end; align-items: center; gap: 28px; font-size: 15px; white-space: nowrap; padding-left: 24px; }
 .btn { display: inline-flex; align-items: center; height: 42px; padding: 0 20px; border-radius: 999px;
        font: 500 15px 'Switzer', system-ui, sans-serif; background: var(--ink); color: #09090b; }
 .btn:hover { background: #fff; }

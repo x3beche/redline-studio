@@ -65,11 +65,18 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   selector: 'app-landing',
   imports: [SignIn, Snap],
   styleUrl: './landing.css',
-  host: { '(document:keydown.escape)': 'close()' },
+  host: { '(document:keydown.escape)': 'close()', '(document:click)': 'shutMore($event)' },
   template: `
 <nav class="nav">
   <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Redline</a>
-  <div class="links">@for (l of links; track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }</div>
+  <!-- Five sections in the bar, the rest under More: the bar never runs into Sign in. -->
+  <div class="links">@for (l of links.slice(0, 5); track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }
+    <details class="more" #more>
+      <summary>More</summary>
+      <div class="more-menu">@for (l of links.slice(5); track l.id) {
+        <a [href]="'#' + l.id" (click)="go($event, l.id); more.open = false">{{ l.name }}</a> }</div>
+    </details>
+  </div>
   <div class="nav-r"><button type="button" class="t" (click)="open.set(true)">Sign in</button><a class="btn" [href]="ask">Request access</a></div>
 </nav>
 
@@ -397,6 +404,12 @@ export class Landing implements AfterViewInit, OnDestroy {
   veil(e: MouseEvent) { if (e.target === e.currentTarget) this.close(); }
 
   /** In-page links scroll the page itself, not the address. */
+  /** The nav's More menu closes on a click anywhere else. */
+  shutMore(e: Event) {
+    const d = this.host.nativeElement.querySelector('details.more') as HTMLDetailsElement | null;
+    if (d?.open && !d.contains(e.target as Node)) d.open = false;
+  }
+
   go(e: Event, id: string) {
     e.preventDefault();
     this.host.nativeElement.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' });
