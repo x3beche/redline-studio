@@ -94,7 +94,7 @@
 .ct-legend b { font-weight: 500; color: var(--ink); }
 .ct-bars.tall { height: 110px; }
 /* The uses chart fills its card: the bars take what the legend leaves. */
-.ct-uses { display: flex; flex-direction: column; gap: 6px; overflow: hidden !important; }
+.ct-uses { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 12px !important; overflow: hidden !important; }
 .ct-uses > .ct-bars.tall { flex: 1; height: auto; min-height: 80px; }
 .ct-uses .ct-legend { flex: none; max-height: 52px; overflow-y: auto; }
 .ct-by { gap: 8px; }

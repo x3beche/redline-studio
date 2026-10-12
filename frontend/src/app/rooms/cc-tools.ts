@@ -237,11 +237,11 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
         <section class="st-card">
           <div class="st-card-head"><h3>{{ 'Uses by package' | t }}</h3>
             <span class="st-sub mono">{{ sum14(u) }}</span>
-            <div class="st-right st-seg" role="group" [attr.aria-label]="'Period' | t">
+            <div class="st-right"><div class="st-seg" role="group" [attr.aria-label]="'Period' | t">
               @for (sp of spans; track sp.id) {
                 <button type="button" [class.on]="period() === sp.id" [attr.aria-pressed]="period() === sp.id" (click)="setSpan(sp.id)">{{ sp.label | t }}</button>
               }
-            </div></div>
+            </div></div></div>
           <div class="st-card-body ct-uses">
             <div class="ct-bars tall">
               @for (d of u.days; track d.day) {
