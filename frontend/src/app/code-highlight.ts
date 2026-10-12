@@ -63,3 +63,35 @@ export function highlightIn(root: HTMLElement): void {
     }
   }).catch(() => { /* plain code is fine */ });
 }
+
+/** A text coloured as HTML, in `lang` (or guessed among the same few), cut
+ *  into lines: each line's spans closed at its end and opened again on the
+ *  next, so a line-numbered view can put every line in a row of its own.
+ *  Plain (escaped) lines when highlighting fails or the text is too big. */
+export async function highlightLines(text: string, lang = ''): Promise<string[]> {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (text.length > 400_000) return text.split('\n').map(esc);
+  let html: string;
+  try {
+    const hljs = await load();
+    html = lang && hljs.getLanguage(lang)
+      ? hljs.highlight(text, { language: lang, ignoreIllegals: true }).value
+      : hljs.highlightAuto(text, SUBSET).value;
+  } catch {
+    return text.split('\n').map(esc);
+  }
+  const lines: string[] = [];
+  const open: string[] = [];
+  let cur = '';
+  for (const piece of html.split(/(<span[^>]*>|<\/span>|\n)/)) {
+    if (!piece) continue;
+    if (piece === '\n') {
+      lines.push(cur + '</span>'.repeat(open.length));
+      cur = open.join('');
+    } else if (piece.startsWith('<span')) { open.push(piece); cur += piece; }
+    else if (piece === '</span>') { open.pop(); cur += piece; }
+    else cur += piece;
+  }
+  lines.push(cur + '</span>'.repeat(open.length));
+  return lines;
+}

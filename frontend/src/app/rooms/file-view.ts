@@ -151,14 +151,18 @@ export function decodeText(buf: ArrayBuffer): string {
 export class FileView implements OnDestroy {
   file = input.required<StoredFile>();
   canEdit = input(false);
+  /** Its bytes from elsewhere than Files (a thing sent in the Chat, dm-viewer.ts): the picture, video, sound, PDF or 3D file. */
+  src = input<string>('');
+  /** A drawing (an SVG layout) may be fitted larger than its own size; a photo is not blown up past 100%. */
+  upscale = input(false);
   act = output<'add' | 'open-model'>();
   private api = inject(FilesApi);
   private stage = viewChild<ElementRef<HTMLDivElement>>('stage');
   private code = viewChild<ElementRef<HTMLDivElement>>('code');
 
-  url = computed(() => inlineUrl(this.file().id));
+  url = computed(() => this.src() || inlineUrl(this.file().id));
   meshUrl = computed(() => meshUrl(this.file().id));
-  dl = computed(() => downloadUrl(this.file().id));
+  dl = computed(() => this.src() ? this.src() + '?download=1' : downloadUrl(this.file().id));
   icon = computed(() => iconOf(this.file()));
   fmt = size;
 
@@ -181,7 +185,7 @@ export class FileView implements OnDestroy {
   private box = signal({ w: 1, h: 1 });
   private fitScale = computed(() => {
     const n = this.natural(), b = this.box();
-    return n ? Math.min(1, (b.w - 32) / n.w, (b.h - 32) / n.h) : 1;
+    return n ? Math.min(this.upscale() ? 8 : 1, (b.w - 32) / n.w, (b.h - 32) / n.h) : 1;
   });
   scale = computed(() => this.zoom() ?? this.fitScale());
   pct = computed(() => Math.round(this.scale() * 100));

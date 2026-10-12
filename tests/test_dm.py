@@ -342,6 +342,8 @@ def test_a_file_is_sent_as_its_bytes(db, monkeypatch):
     sid = a.post(f"/api/dm/chats/{cid}/messages", json={"items": [{"kind": "file", "id": "f0"}]}).json()["items"][0]["snap"]
     blobs["g1"] = b"changed later"                                # the original changes: what was sent does not
     assert b.get(f"/api/dm/items/{sid}/blob/file").content == b"hello,world\n"
+    shown = b.get(f"/api/dm/items/{sid}").json()["data"]
+    assert shown["preview"] == "table" and shown["text"] == "hello,world\n"      # the viewer shows it as the Files tab would
     assert c.get(f"/api/dm/items/{sid}/blob/file").status_code == 404
     put(db, space("u-bora"), "files", {"_id": "fx", "name": "bom.csv", "folder": ""})
     got = b.post(f"/api/dm/items/{sid}/add").json()
@@ -427,3 +429,27 @@ def test_a_line_from_before_snapshots_gets_one_when_read(db):
     assert card["snap"] and card["add"] and not card["own"]
     assert b.get(f"/api/dm/items/{card['snap']}").json()["data"]["items"][0]["text"] == "x"
     assert b.post(f"/api/dm/items/{card['snap']}/add").status_code == 200
+
+
+def test_a_board_is_sent_with_its_figures_never_as_raw_text():
+    """The viewer draws tiles, checks, rules and the BOM from these, not from the agents' context lines."""
+    d = {"layout": {"placed": 3, "size_mm": [40, 30], "holes": [{"ref": "H1"}]},
+         "route": {"tracks": 20, "vias": 2, "length_mm": 120.5, "zones": 1, "unrouted": 0, "engine": "freerouting"},
+         "drc": {"error_count": 1, "warning_count": 2, "errors": {"clearance": 1}, "warnings": {"silk_overlap": 2},
+                 "examples": ["Clearance - Pad 1 of U1 / Track"]},
+         "schematic": {"parts": 3, "wires": 9, "symbols": 2, "sheets": [{"name": "Power", "parts": 3, "refs": ["U1"]}],
+                       "erc": {"error_count": 0, "warning_count": 0, "errors": {}, "warnings": {}}},
+         "rules": {"classes": [{"name": "Default", "track": 0.25, "clearance": 0.15, "via": 0.6, "drill": 0.3, "nets": []}],
+                   "board": {"layers": 2, "min_track": 0.15}, "pours": [{"net": "GND", "layers": ["F.Cu"]}]},
+         "component": {"version": 4, "summary": {"thickness": 1.6}}}
+    graph = {"counts": {"components": 3, "nets": 2}, "nets": [{"name": "GND", "nodes": [1, 2, 3]}, {"name": "NC", "nodes": [1]}],
+             "bom": [{"designator": "R1, R2", "comment": "10k", "footprint": "0402", "lcsc": "C25744"}]}
+    f = dm._board_facts(d, graph)
+    assert f["layout"] == {"placed": 3, "size_mm": [40, 30], "holes": 1, "at": None}
+    assert f["drc"]["errors"] == {"clearance": 1} and f["drc"]["examples"] == ["Clearance - Pad 1 of U1 / Track"]
+    assert f["erc"]["error_count"] == 0 and f["schematic"]["sheets"] == [{"key": None, "name": "Power", "parts": 3}]
+    assert f["rules"]["classes"][0]["name"] == "Default" and f["rules"]["board"]["layers"] == 2
+    assert f["nets"][0] == {"name": "GND", "pins": 3} and f["single"] == ["NC"] and f["net_count"] == 2
+    assert f["bom"] == [{"ref": "R1, R2", "value": "10k", "footprint": "0402", "lcsc": "C25744"}]
+    assert f["thickness"] == 1.6 and f["version"] == 4
+    assert dm._board_facts({}, None)["version"] is None                       # a board never laid out or built

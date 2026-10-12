@@ -24,7 +24,8 @@ import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 import { ConfirmHost } from './confirm';
-import { DmSend, DmStore, DmViewer } from './dm';
+import { DmSend, DmStore } from './dm';
+import { DmViewer } from './rooms/dm-viewer';
 import { Avatar } from './avatar';
 
 @Component({

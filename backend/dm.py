@@ -786,7 +786,7 @@ async def _snap_taste(db, ref):
 
 async def _snap_note(db, ref):
     d = await db["notes"].find_one({"_id": ref})
-    return (_plain(d, ("title", "text", "tags")), {}, "") if d else None
+    return (_plain(d, ("title", "text", "tags", "created_at", "updated_at")), {}, "") if d else None
 
 
 async def _snap_product(db, ref):
@@ -806,7 +806,17 @@ INV_FIELDS = ("name", "quantity", "unit", "location", "category", "mpn", "lcsc",
 
 async def _snap_inventory(db, ref):
     d = await db["inventory"].find_one({"_id": ref})
-    return (_plain(d, INV_FIELDS), {}, "") if d else None
+    if not d:
+        return None
+    # What it is, and - for the viewer only - its minimum, its link and how
+    # its quantity went (the log); "Add to my stock" takes INV_FIELDS alone.
+    out = _plain(d, INV_FIELDS + ("min_stock", "type", "subtype", "created_at", "updated_at"))
+    cat = d.get("catalog") or {}
+    if cat:
+        out["catalog"] = _plain(cat, ("manufacturer_name", "product_name", "sku", "url"))
+    out["log"] = [{**_plain(x, ("at", "kind", "delta", "after", "reason")), "by": (x.get("by") or {}).get("name") or ""}
+                  for x in (d.get("log") or [])[-60:]]
+    return out, {}, ""
 
 
 async def _snap_file(db, ref):
@@ -820,10 +830,24 @@ async def _snap_file(db, ref):
         _, data = await files.get(db, ref)
     except KeyError:
         return None
-    meta = _plain(d, ("name", "kind", "bytes", "content_type", "note"))
-    if d.get("kind") in ("text", "table", "bom", "pick-place") and len(data) <= 200_000:
+    meta = _plain(d, ("name", "kind", "bytes", "content_type", "note", "created_at"))
+    preview = files.preview_of(d.get("name") or "", d.get("kind") or "", d.get("content_type") or "")
+    meta["preview"] = preview
+    low = (d.get("name") or "").lower()
+    if (d.get("kind") in ("text", "table", "bom", "pick-place") or preview in ("text", "markdown")
+            or low.endswith((".csv", ".tsv"))) and len(data) <= 400_000:
         meta["text"] = files._decode(data)
-    return meta, {"file": (data, {"type": d.get("content_type") or "application/octet-stream"})}, ""
+    blobs = {"file": (data, {"type": d.get("content_type") or "application/octet-stream"})}
+    if preview == "step":
+        # Its 3D, as the Files tab shows a STEP: the kept mesh, or one made now (a few seconds at most).
+        from . import filemesh
+        try:
+            got = await filemesh.cached(db, d) or await filemesh.mesh(db, d, 15)
+        except Exception:                              # noqa: BLE001 - sent without its 3D
+            got = None
+        if got and len(got[1]) <= MAX_BLOB:
+            blobs["mesh"] = (got[1], {"type": "model/gltf-binary", "gzip": True})
+    return meta, blobs, ""
 
 
 async def _snap_model(db, ref):
@@ -846,6 +870,18 @@ async def _snap_model(db, ref):
         todo += [u.get("id") for u in x.get("uses") or [] if u.get("kind") == "model" and u.get("id")]
     data = {"title": d.get("title") or d.get("name") or ref, "id": ref, "version": d.get("version"),
             "lines": got["lines"], "models": sources}
+    # Its figures, for the viewer's tiles: the build, its sizes, what it uses.
+    built = d.get("built") or {}
+    if built:
+        data["built"] = {"version": built.get("version"), "at": built.get("at"), "secs": d.get("build_secs")}
+    data["uses"] = [{"kind": u.get("kind"), "id": u.get("id")} for u in (d.get("uses") or [])[:60] if u.get("id")]
+    try:
+        sizes = await cc_context._viewer_sizes(db, ref, (d.get("artifacts") or {}).get("viewer") or {})
+    except Exception:                                  # noqa: BLE001 - sizes are a nicety
+        sizes = None
+    if sizes and sizes.get("overall"):
+        data["sizes"] = {"overall": sizes["overall"].get("size_mm"),
+                         "parts": [{"part": x.get("part"), "size": x.get("size_mm")} for x in (sizes.get("parts") or [])[:200]]}
     blobs, note = {}, ""
     meta = (d.get("artifacts") or {}).get("viewer")
     if meta:
@@ -867,29 +903,139 @@ async def _snap_board(db, ref):
         return None
     d = got["doc"]
     blobs, note = {}, ""
-    try:
-        svg = await store.get_artifact(db, ref, "layout", "boards")
+    # Its pictures: the layout from the top (and the bottom), and the schematic.
+    for art, label in (("layout", "layout"), ("bottom", "bottom"), ("schematic_svg", "schematic")):
+        try:
+            svg = await store.get_artifact(db, ref, art, "boards")
+        except Exception:                              # noqa: BLE001 - not laid out (or drawn) yet
+            continue
         if len(svg) <= MAX_BLOB:
-            blobs["layout"] = (svg, {"type": "image/svg+xml"})
-        else:
+            blobs[label] = (svg, {"type": "image/svg+xml"})
+        elif label == "layout":
             note = "layout too big to send"
-    except Exception:                                  # noqa: BLE001 - not laid out yet
-        pass
-    return {"title": d.get("title") or ref, "id": ref, "lines": [t for _, t in got["lines"]][:400]}, blobs, note
+    # The schematic's own sheets, as the PCB tab draws them.
+    for sh in ((d.get("schematic") or {}).get("sheets") or [])[:12]:
+        key = str(sh.get("key") or "")
+        if not re.fullmatch(r"[\w.-]+", key):
+            continue
+        try:
+            svg = await store.get_artifact(db, ref, f"schematic_sheet_{key}", "boards")
+        except Exception:                              # noqa: BLE001 - not drawn
+            continue
+        if len(svg) <= MAX_BLOB:
+            blobs[f"sheet-{key}"] = (svg, {"type": "image/svg+xml"})
+    # Its 3D (the PCB tab's GLB), packed: a board's runs to 20 MB and more as it is.
+    try:
+        glb = await store.get_artifact(db, ref, "model3d", "boards")
+    except Exception:                                  # noqa: BLE001 - no 3D yet
+        glb = None
+    if glb:
+        import gzip
+        packed = await asyncio.to_thread(gzip.compress, glb, 6)
+        if len(packed) <= MAX_BLOB:
+            blobs["board3d"] = (packed, {"type": "model/gltf-binary", "gzip": True})
+    return {"title": d.get("title") or ref, "id": ref, "lines": [t for _, t in got["lines"]][:400],
+            "facts": _board_facts(d, got.get("graph")), **await _board_source(db, ref)}, blobs, note
+
+
+async def _board_source(db, ref) -> dict:
+    """The board's atopile source, for the viewer's Code tab (board_parts leaves it out)."""
+    from . import ato
+    d = await db[ato.BOARDS].find_one({"_id": ref}, {"source": 1})
+    src = (d or {}).get("source") or ""
+    return {"sources": {f"{ref}.ato": src}} if src and len(src) <= 400_000 else {}
+
+
+def _board_facts(d: dict, graph: dict | None) -> dict:
+    """A board's figures, for the viewer's tiles and its BOM: size, parts,
+    routing, checks, the netlist's counts and largest nets, and the BOM."""
+    lay, route, drc = d.get("layout") or {}, d.get("route") or {}, d.get("drc") or {}
+    sch = d.get("schematic") or {}
+    erc = sch.get("erc") or {}
+    comp = d.get("component") or {}
+    rules = d.get("rules") or {}
+    out: dict = {"version": comp.get("version"), "folder": d.get("folder") or "", "kind": d.get("kind") or "",
+                 "saved_at": d.get("saved_at"), "imported": bool(d.get("imported"))}
+    if (comp.get("summary") or {}).get("thickness"):
+        out["thickness"] = comp["summary"]["thickness"]
+    if lay:
+        out["layout"] = {"placed": lay.get("placed"), "size_mm": lay.get("size_mm"), "holes": len(lay.get("holes") or []),
+                         "at": lay.get("at")}
+    if route:
+        out["route"] = {k: route.get(k) for k in ("tracks", "vias", "length_mm", "zones", "unrouted", "engine", "route_s")}
+    if drc:
+        out["drc"] = {k: drc.get(k) for k in ("error_count", "warning_count", "unconnected", "errors", "warnings",
+                                              "in_footprints", "at")}
+        out["drc"]["examples"] = [str(x)[:300] for x in (drc.get("examples") or [])[:20]]
+    if sch:
+        out["schematic"] = {k: sch.get(k) for k in ("parts", "wires", "labels", "symbols", "no_connects")}
+        out["schematic"]["sheets"] = [{"key": x.get("key"), "name": x.get("name"), "parts": x.get("parts")} for x in sch.get("sheets") or []]
+    if erc:
+        out["erc"] = {k: erc.get(k) for k in ("error_count", "warning_count", "errors", "warnings")}
+        out["erc"]["examples"] = [str(x)[:300] for x in (erc.get("examples") or [])[:20]]
+    if rules:
+        out["rules"] = {"classes": [{k: c.get(k) for k in ("name", "track", "clearance", "via", "drill", "nets", "patterns")}
+                                    for c in (rules.get("classes") or [])[:40]],
+                        "board": rules.get("board") or {},
+                        "pours": [{k: x.get(k) for k in ("net", "layers", "clearance")} for x in (rules.get("pours") or [])[:10]],
+                        "pairs": len(rules.get("pairs") or [])}
+    if graph:
+        nets = graph.get("nets") or []
+        out["counts"] = graph.get("counts") or {}
+        out["nets"] = [{"name": n.get("name"), "pins": len(n.get("nodes") or [])}
+                       for n in sorted(nets, key=lambda n: -len(n.get("nodes") or []))[:24]]
+        out["net_count"] = len(nets)
+        out["single"] = [n.get("name") for n in nets if len(n.get("nodes") or []) == 1][:200]
+        bom = graph.get("bom") or []
+        out["bom"] = ([{"ref": b.get("designator"), "value": b.get("comment"), "footprint": b.get("footprint"),
+                        "lcsc": b.get("lcsc") or ""} for b in bom] if bom else
+                      [{"ref": c.get("ref"), "value": c.get("value"), "footprint": c.get("footprint"),
+                        "lcsc": c.get("part") or ""} for c in graph.get("components") or []])[:600]
+    return out
 
 
 async def _snap_firmware(db, ref):
+    from . import firmware
     d = await db["firmware"].find_one({"_id": ref})
-    return (_plain(d, ("title", "name", "board", "mcu", "mcu_title", "platform", "framework", "pio_board")), {}, "") \
-        if d else None
+    if not d:
+        return None
+    out = _plain(d, ("title", "name", "board", "board_title", "mcu", "mcu_title", "mcu_part", "sheet_name", "platform",
+                     "framework", "pio_board", "version", "updated_at"))
+    b = d.get("build") or {}
+    if b:
+        out["build"] = {k: b.get(k) for k in ("state", "at", "seconds", "version", "error_count", "warning_count",
+                                              "flash", "ram")}
+    if isinstance(d.get("pins"), dict):
+        out["pins"] = dict(list(d["pins"].items())[:120])
+    # Its files, and their text when it is small enough to send along.
+    try:
+        tree = await firmware.tree(db, ref)
+        texts = await firmware.contents(db, ref)
+    except Exception:                                  # noqa: BLE001 - sent without its files
+        tree, texts = [], {}
+    out["files"] = [{"path": f["path"], "bytes": f.get("bytes") or 0, "generated": f.get("generated") or False}
+                    for f in tree[:200]]
+    if sum(len(x) for x in texts.values()) <= 400_000:
+        out["sources"] = texts
+    return out, {}, ""
 
 
 async def _snap_project(db, ref):
     ref = ref.strip("/")
     pre = "^" + re.escape(ref) + "/"
-    models = [{"id": x["_id"], "title": x.get("title") or x["_id"]}
-              async for x in db["models"].find({"$or": [{"folder": ref}, {"_id": {"$regex": pre}}]}, {"title": 1}).sort("_id", 1)]
-    boards = [{"id": x["_id"], "title": x.get("title") or x["_id"]} async for x in db["boards"].find({"folder": ref}, {"title": 1})]
+    # Each model and board with its state, for the viewer's tiles and table.
+    models = [{"id": x["_id"], "title": x.get("title") or x["_id"], "version": x.get("version"),
+               "built": (x.get("built") or {}).get("version"), "stale": bool(x.get("stale")), "error": bool(x.get("error")),
+               "uses": len(x.get("uses") or []), "updated_at": x.get("updated_at")}
+              async for x in db["models"].find({"$or": [{"folder": ref}, {"_id": {"$regex": pre}}]},
+                                                {"title": 1, "version": 1, "built.version": 1, "stale": 1, "error": 1, "uses": 1,
+                                                 "updated_at": 1}).sort("_id", 1)]
+    boards = [{"id": x["_id"], "title": x.get("title") or x["_id"], "version": (x.get("component") or {}).get("version"),
+               "size_mm": (x.get("layout") or {}).get("size_mm"), "parts": (x.get("layout") or {}).get("placed"),
+               "drc": (x.get("drc") or {}).get("error_count"), "folder": x.get("folder")}
+              async for x in db["boards"].find({"$or": [{"folder": ref}, {"folder": {"$regex": pre[:-1] + "(/|$)"}}]},
+                                               {"title": 1, "component.version": 1, "layout.size_mm": 1,
+                                                                 "layout.placed": 1, "drc.error_count": 1, "folder": 1})]
     if not (models or boards or await db["folders"].find_one({"_id": ref})):
         return None
     return {"name": ref, "models": models[:300], "boards": boards[:300]}, {}, ""
@@ -918,9 +1064,35 @@ async def _snap(sid: str) -> tuple[dict, dict]:
 async def item_data(sid: str) -> dict:
     """What was sent, as it was sent."""
     _, d = await _snap(sid)
+    data = d.get("data") or {}
+    if d["kind"] == "file" and "preview" not in data:
+        # How the Files tab would show it - worked out on reading, so a file sent before says it too.
+        from . import files
+        typ = ((d.get("blobs") or {}).get("file") or {}).get("type") or data.get("content_type") or ""
+        data = {**data, "preview": files.preview_of(data.get("name") or d["label"], data.get("kind") or "", typ)}
+    if d["kind"] == "file" and data.get("preview") in ("archive", "table") and "text" not in data:
+        # What is inside an archive, a spreadsheet's rows: read from the bytes sent, never unpacked to disk.
+        data = {**data, **await _file_inside(d, data)}
     return {"snap": d["_id"], "kind": d["kind"], "label": d["label"], "facts": d.get("facts") or [], "by": d.get("by"),
-            "at": d.get("at"), "add": d["kind"] in ADDABLE, "data": d.get("data") or {},
+            "at": d.get("at"), "add": d["kind"] in ADDABLE, "data": data,
             "blobs": {k: {"bytes": v.get("bytes"), "type": v.get("type")} for k, v in (d.get("blobs") or {}).items()}}
+
+
+async def _file_inside(d: dict, data: dict) -> dict:
+    from . import files
+    b = (d.get("blobs") or {}).get("file")
+    if not b:
+        return {}
+    raw = await _blob_get(b["id"])
+    name = data.get("name") or d["label"]
+    try:
+        if data.get("preview") == "archive":
+            got = files.entries_of(name, raw)
+            return {"entries": {**got, "entries": (got.get("entries") or [])[:1000]}}
+        got = files.table_of(name, raw)
+        return {"table": {**got, "rows": (got.get("rows") or [])[:500]}}
+    except Exception:                                  # noqa: BLE001 - shown as a file to download
+        return {}
 
 
 @router.get("/items/{sid}/blob/{label}")

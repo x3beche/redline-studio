@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, effect, input, signal, untracked, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, effect, input, output, signal, untracked, viewChild } from '@angular/core';
 import {
   AmbientLight, Box3, BufferAttribute, BufferGeometry, Color, DirectionalLight, DoubleSide, Group, HemisphereLight,
   LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D,
@@ -30,6 +30,10 @@ function sharedRenderer(): WebGLRenderer {
 export interface BodySource { kind: 'glb' | 'tcv'; url: string }
 
 /** The footprint, in the component frame (`/api/parts/{C}/body-spec`). */
+/** One node of a 3D room payload's tree, as the viewer read it: its path
+ *  (names joined by /), its name, how deep it sits, and whether it is a shape. */
+export interface BodyNode { path: string; name: string; depth: number; leaf: boolean }
+
 export interface BodySpec {
   pads?: { x: number; y: number; w: number; h: number; rot?: number; shape?: string; drill?: number | null }[];
   lcsc_box?: { x: number[]; y: number[]; z: number[]; size: number[] } | null;
@@ -85,6 +89,12 @@ export interface BodySpec {
 export class PartBodyView implements AfterViewInit, OnDestroy {
   src = input<BodySource | null>(null);
   spec = input<BodySpec | null>(null);
+  /** Shown on its own, with no piece of board under it (a whole model, not a part's body). */
+  plain = input(false);
+  /** A node of the tree (its path) to show, the rest faded; null shows all. */
+  focus = input<string | null>(null);
+  /** The tree of what was loaded (a 3D room payload's groups and shapes). */
+  tree = output<BodyNode[]>();
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   note = signal('Loading the model…');
@@ -117,6 +127,10 @@ export class PartBodyView implements AfterViewInit, OnDestroy {
     effect(() => {
       this.spec();
       untracked(() => { if (this.shown) this.place(); });
+    });
+    effect(() => {
+      const f = this.focus();
+      untracked(() => this.fade(f));
     });
   }
 
@@ -234,6 +248,7 @@ export class PartBodyView implements AfterViewInit, OnDestroy {
     this.body.add(object);
     this.shown = { src, object };
     this.place();
+    this.fade(this.focus());
     this.note.set('');
     this.host().nativeElement.dataset['shown'] = src.url;
   }
@@ -243,7 +258,7 @@ export class PartBodyView implements AfterViewInit, OnDestroy {
   private place() {
     const s = this.shown;
     if (!s) return;
-    let seated = s.src.kind === 'tcv';
+    let seated = s.src.kind === 'tcv' && !this.plain();
     if (s.src.kind === 'glb') {
       s.object.position.set(0, 0, 0);
       s.object.updateMatrixWorld(true);
@@ -337,15 +352,25 @@ export class PartBodyView implements AfterViewInit, OnDestroy {
       o.position.set(loc[0][0], loc[0][1], loc[0][2]);
       o.quaternion.copy(new Quaternion(loc[1][0], loc[1][1], loc[1][2], loc[1][3]));
     };
-    const walk = (node: any): Object3D => {
+    const nodes: BodyNode[] = [];
+    const walk = (node: any, path = '', depth = 0): Object3D => {
       const g = new Group();
+      g.userData['path'] = path;
       place(g, node.loc);
       for (const part of node.parts ?? []) {
-        if (part.parts) { g.add(walk(part)); continue; }
+        const name = String(part.name ?? '');
+        const sub = path ? path + '/' + name : name;
+        if (part.parts) {
+          nodes.push({ path: sub, name, depth, leaf: false });
+          g.add(walk(part, sub, depth + 1));
+          continue;
+        }
         if (part.type !== 'shapes') continue;
         const shape = part.shape?.ref != null ? instances[part.shape.ref] : part.shape;
         if (!shape) continue;
+        nodes.push({ path: sub, name, depth, leaf: true });
         const leaf = new Group();
+        leaf.userData['path'] = sub;
         place(leaf, part.loc);
         const state = part.state ?? [1, 1];
         if (state[0] === 1 && shape.triangles) {
@@ -370,7 +395,33 @@ export class PartBodyView implements AfterViewInit, OnDestroy {
       }
       return g;
     };
-    return walk(data?.shapes ?? {});
+    const root = data?.shapes ?? {};
+    const object = walk(root, '', 0);
+    // The root's own name says nothing the title does not: its children are the tree.
+    this.tree.emit(nodes);
+    return object;
+  }
+
+  /** Only `focus` (a node's path) and what is under it at full strength; the rest faint. */
+  private fade(focus: string | null) {
+    const s = this.shown;
+    if (!s) return;
+    s.object.traverse(o => {
+      const m = o as Mesh;
+      const mat = m.material as (MeshStandardMaterial | LineBasicMaterial | undefined);
+      if (!mat || Array.isArray(mat)) return;
+      if (mat.userData['opacity'] === undefined) {
+        mat.userData['opacity'] = mat.opacity; mat.userData['transparent'] = mat.transparent;
+      }
+      let p: Object3D | null = o, path = '';
+      while (p && !(path = p.userData['path'] ?? '')) p = p.parent;
+      const on = !focus || path === focus || path.startsWith(focus + '/');
+      mat.opacity = on ? mat.userData['opacity'] : 0.07;
+      mat.transparent = on ? mat.userData['transparent'] : true;
+      mat.depthWrite = on;
+      mat.needsUpdate = true;
+    });
+    this.draw();
   }
 
   /** The body and the piece of board in shot from the current side. */
