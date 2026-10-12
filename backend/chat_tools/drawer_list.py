@@ -61,7 +61,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
     return Result(text=text, say=say, vars=v, summary=summary)
 
 
-TOOL = Tool(
+# One action of the drawer tool (drawer.py), not a tool of its own.
+PART = Tool(
     name="drawer_list", level="read", order=12,
     label="List the drawer",
     about="Lists the parts in the drawer, by category or only those with a datasheet.",

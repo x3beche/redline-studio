@@ -74,6 +74,13 @@ class Tool:
     about: str = ""                  # its one line there (an English key of i18n.ts)
     default: bool = True             # on for someone who never chose
     order: int = 100
+    actions: dict = field(default_factory=dict)   # a group's tools, by its `action` input (group() below)
+
+    def sentence(self, which: str, args: dict) -> str:
+        """Its running/failed sentence for this call - a group's is the one
+        of the action asked for."""
+        part = self.actions.get(str(args.get("action") or ""))
+        return getattr(part or self, which)
 
     def spec(self) -> dict:
         """As a model is told about it (OpenAI's shape; llm.py turns it
@@ -103,6 +110,49 @@ def tools() -> dict[str, Tool]:
                 found.append(t)
         _TOOLS = {t.name: t for t in sorted(found, key=lambda t: (t.order, t.name))}
     return _TOOLS
+
+
+def group(name: str, label: str, about: str, intro: str, actions: dict[str, Tool], order: int,
+          default: bool = True) -> Tool:
+    """Several tools as one, the one to call picked by `action`: one switch
+    on the Tools panel, one tool for the model. Each part keeps its own
+    handler, input and sentences; their inputs are merged (the first one
+    to name an input describes it) and the group's level is the strongest
+    of theirs."""
+    props: dict = {"action": {"type": "string", "enum": list(actions), "description": "What to do: " + ", ".join(actions)}}
+    said: dict[str, dict[str, list[str]]] = {}
+    for a, t in actions.items():
+        for k, v in ((t.schema or {}).get("properties") or {}).items():
+            props.setdefault(k, dict(v))
+            said.setdefault(k, {}).setdefault(v.get("description") or "", []).append(a)
+    for k, ways in said.items():             # one input, several meanings: each said with its actions
+        if len(ways) > 1:
+            props[k]["description"] = "; ".join(f"{'/'.join(acts)}: {d}" for d, acts in ways.items())
+    level = max((t.level for t in actions.values()), key=LEVELS.index)
+    text = intro + " Pick `action`:\n" + "\n".join(
+        f"- {a}: {t.description}" + (f" Needs: {', '.join(t.schema.get('required') or [])}."
+                                      if (t.schema or {}).get("required") else "")
+        for a, t in actions.items())
+
+    async def run(ctx: Ctx, args: dict) -> Result:
+        a = str(args.get("action") or "")
+        part = actions.get(a)
+        if part is None:
+            raise ToolError(f"say which action: one of {', '.join(actions)}")
+        need = [k for k in (part.schema or {}).get("required") or [] if args.get(k) in (None, "")]
+        if need:
+            raise ToolError(f"{a} needs {', '.join(need)}")
+        return await part.run(ctx, {k: v for k, v in args.items() if k != "action"})
+
+    return Tool(name=name, label=label, about=about, description=text, level=level, order=order, default=default,
+                schema={"type": "object", "properties": props, "required": ["action"]},
+                running=label, failed=f"Could not use the {label[0].lower()}{label[1:]}", actions=dict(actions), run=run)
+
+
+def renamed() -> dict[str, str]:
+    """Tools that are now an action of a group: their old name to the
+    group's, so the uses kept under the old name count for it."""
+    return {part.name: t.name for t in tools().values() for part in t.actions.values()}
 
 
 async def prefs(db, uid: str | None) -> dict[str, bool]:
@@ -148,15 +198,15 @@ def size(n: int) -> str:
 
 SYSTEM_NOTE = (
     "You have tools for electronic parts and for this workspace. When asked about a specific part (an IC, a MOSFET, a "
-    "connector...), do not answer its electrical values from memory: first look for it in the "
-    "drawer (drawer_search); if it is not there, find it on LCSC (lcsc_search) and add it "
-    "(drawer_add) when it is the right one; then get its datasheet (datasheet_get, always before "
-    "reading: it says where the datasheet came from) and read the pages that matter (datasheet_read, "
+    "connector...), do not answer its electrical values from memory: use the drawer tool - first look "
+    "for it in the drawer (action search); if it is not there, find it on LCSC (action lcsc) and add it "
+    "(action add) when it is the right one; then get its datasheet (action datasheet_get, always before "
+    "reading: it says where the datasheet came from) and read the pages that matter (action datasheet_read, "
     "by page or with a query; a scanned page as a picture) before quoting a value. Cite the "
     "datasheet page for every value you quote, e.g. (datasheet p. 2). Use the tools only when "
     "they help the question, and only those you have; say plainly when a datasheet does not give "
     "a value. To see what the drawer holds - which parts, which of them have a datasheet kept - "
-    "list it (drawer_list) rather than guessing. For numbers an engineering formula gives (a trace "
+    "list it (action list) rather than guessing. For numbers an engineering formula gives (a trace "
     "width, a via's current, a resistor, a divider, a filter...), compute them with the Basic Tools "
     "calculators (basic_tool: first `task` to find one, then `id` and `input` to run it) and name the "
     "calculator, rather than working them out in your head. For this workspace's own things - its boards "

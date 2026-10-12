@@ -29,10 +29,17 @@ const SWATCH = 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z';
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
-  basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
+  basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, drawer: DRAWER, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
   room_note: NOTE,
 };
-export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
+/** A group's step shows its action's icon: the drawer's `lcsc` is LCSC's search. */
+const ACTION_ICON: Record<string, string> = {
+  'drawer.search': DRAWER, 'drawer.list': DRAWER, 'drawer.add': DRAWER, 'drawer.lcsc': SEARCH,
+  'drawer.datasheet_get': SHEET, 'drawer.datasheet_read': SHEET,
+};
+export function toolIcon(name: string, action?: unknown) {
+  return ACTION_ICON[`${name}.${action}`] ?? TOOL_ICON[name] ?? WRENCH;
+}
 
 /** How each level behaves, said once on its card: the tone of its badge. */
 const BEHAVES: Record<ToolLevel, { badge: string; tone: string; empty: string }> = {

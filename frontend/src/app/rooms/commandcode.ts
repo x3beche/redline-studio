@@ -957,7 +957,7 @@ type Ask = { text: string; label: string; go: () => void };
         <summary>
           @if (s.status === 'running') { <span class="tcv-cc-spin" aria-hidden="true"></span> }
           @else if (s.status === 'error' || s.status === 'denied') { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.alert }" /> }
-          @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: toolIcon(s.tool) }" /> }
+          @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: toolIcon(s.tool, s.args?.action) }" /> }
           <span class="tcv-cc-steptext">{{ stepLine(s) }}</span>
           @if (stepNote(s); as n) { <span class="tcv-cc-stepnote">{{ n | t }}</span> }
           @if (s.ms != null && s.ms >= 500 && s.status !== 'running') { <span class="tcv-cc-dim">{{ secs(s.ms) }}</span> }
@@ -2633,7 +2633,7 @@ export class RoomCommandCode implements OnDestroy {
       return n;
     });
   }
-  toolIcon(name: string) { return toolIconOf(name); }
+  toolIcon(name: string, action?: unknown) { return toolIconOf(name, action); }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   /** The step's sentence: translated, then its holes filled. */
   stepLine(s: CcStep): string {

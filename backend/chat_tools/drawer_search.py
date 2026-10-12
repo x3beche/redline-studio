@@ -33,7 +33,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
     shown = hits[:LIMIT]
     if not shown:
         return Result(text=f"Nothing in the drawer matches {q!r} ({len(rows)} parts in it). "
-                           "Try lcsc_search to find it on LCSC.",
+                           "Try the drawer's lcsc action to find it on LCSC.",
                       say="Nothing in the drawer for “{query}”", vars={"query": q}, summary="no match")
     lines = [f"{h['lcsc']}  {h['mpn'] or '?'}  {h['maker'] or ''}  {h['package'] or ''}  [{h['drawer']}]"
              f"  datasheet {'kept' if h['datasheet_kept'] else 'not fetched yet'}"
@@ -49,7 +49,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   vars={"n": len(hits), "query": q}, summary=summary)
 
 
-TOOL = Tool(
+# One action of the drawer tool (drawer.py), not a tool of its own.
+PART = Tool(
     name="drawer_search", level="read", order=10,
     about="Finds parts already in the drawer by MPN, LCSC number or words.",
     label="Search the drawer",

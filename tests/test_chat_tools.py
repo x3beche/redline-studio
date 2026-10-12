@@ -65,15 +65,15 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     seed_chat(raw)
     keep_datasheet()
     tool_model(monkeypatch, state, [
-        ("Let me check the datasheet.", [("datasheet_get", {"lcsc": "C29780637"})]),
-        ("", [("datasheet_read", {"lcsc": "C29780637", "query": "RDS(on)"})]),
+        ("Let me check the datasheet.", [("drawer", {"action": "datasheet_get", "lcsc": "C29780637"})]),
+        ("", [("drawer", {"action": "datasheet_read", "lcsc": "C29780637", "query": "RDS(on)"})]),
         ("RDS(on) is 0.044 Ω (datasheet p. 2).", []),
     ])
     evs = events(cc_chat.say("c1", cc_chat.SayIn(text="IRL540N RDS(on)?", client="tab1")))
     (last,) = answers(raw)
     assert last["content"] == "Let me check the datasheet.\n\nRDS(on) is 0.044 Ω (datasheet p. 2)."
     steps = last["steps"]
-    assert [s["tool"] for s in steps] == ["datasheet_get", "datasheet_read"]
+    assert [s["tool"] for s in steps] == ["drawer", "drawer"]
     assert all(s["status"] == "done" for s in steps)
     assert steps[0]["say"] == "Datasheet: from the drawer · {pages} pages" and steps[0]["vars"]["pages"] == 3
     assert steps[1]["say"] == "Searched the datasheet for “{query}” · pages {pages}" and steps[1]["vars"]["pages"] == "2"
@@ -82,8 +82,8 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     # The tools went out, with the note; each round got the last one's results.
     r = state["rounds"]
     assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items() if t.default}
-    assert "drawer_search" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
-    assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "datasheet_get"
+    assert "(action search)" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
+    assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "drawer"
     assert r[1]["messages"][-1]["role"] == "tool" and "3 pages" in r[1]["messages"][-1]["content"]
     assert "0.044" in r[2]["messages"][-1]["content"] and "page 2 of 3" in r[2]["messages"][-1]["content"]
     # Usage of every round counted together.
@@ -96,7 +96,7 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
 def test_a_failing_tool_is_said_to_the_model_and_shown_as_an_error(env, monkeypatch):
     raw, state = env
     seed_chat(raw)
-    tool_model(monkeypatch, state, [("", [("datasheet_read", {"lcsc": "nope"})]), ("Sorry.", [])])
+    tool_model(monkeypatch, state, [("", [("drawer", {"action": "datasheet_read", "lcsc": "nope"})]), ("Sorry.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     (step,) = answers(raw)[-1]["steps"]
     assert step["status"] == "error" and "not an LCSC part number" in step["error"]
@@ -109,7 +109,7 @@ def test_the_rounds_are_bounded(env, monkeypatch):
     raw, state = env
     seed_chat(raw)
     monkeypatch.setattr(ccgen, "MAX_ROUNDS", 2)
-    tool_model(monkeypatch, state, [("", [("drawer_search", {"query": "x"})])])     # asks for ever
+    tool_model(monkeypatch, state, [("", [("drawer", {"action": "search", "query": "x"})])])     # asks for ever
     monkeypatch.setattr(lcsc, "known", lambda db: _rows([]))
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     last = answers(raw)[-1]
@@ -156,12 +156,12 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     real = raw.__class__.__getitem__
     monkeypatch.setattr(raw.__class__, "__getitem__",
                         lambda self, n: Prefs() if n == chat_tools.PREFS else real(self, n))
-    got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"drawer_add": False, "datasheet_get": False})))
+    got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"basic_tool": False, "bom_cost": False})))
     on = {t["name"]: t["on"] for t in got["tools"]}
-    assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": False,
-                  "datasheet_get": False, "datasheet_read": True, "basic_tool": True, "board_read": True,
-                  "model_read": True, "bom_cost": True, "firmware_build": True, "file_read": True,
-                  "taste_read": True, "room_note": False}
+    assert on == {"drawer": True, "basic_tool": False, "board_read": True, "model_read": True, "bom_cost": False,
+                  "firmware_build": True, "file_read": True, "taste_read": True, "room_note": False}
+    with pytest.raises(Exception):                            # an action of the drawer is not a switch of its own
+        run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"drawer_add": False})))
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -169,14 +169,12 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
         run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"rm_rf": True})))
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
-    assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search",
-                                                                "datasheet_read", "basic_tool", "board_read",
-                                                                "model_read", "bom_cost", "firmware_build",
-                                                                "file_read", "taste_read"}
+    assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer", "board_read", "model_read",
+                                                                "firmware_build", "file_read", "taste_read"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
-    assert state["rounds"][-1]["tools"] is None and "drawer_search" not in state["rounds"][-1]["messages"][0]["content"]
+    assert state["rounds"][-1]["tools"] is None and "(action search)" not in state["rounds"][-1]["messages"][0]["content"]
 
 
 def test_a_delete_level_tool_waits_for_a_yes(env, monkeypatch):
@@ -260,13 +258,13 @@ def test_drawer_search_finds_by_mpn_and_says_whether_a_datasheet_is_kept(monkeyp
             {"lcsc": "C111607", "name": "LQFP-48", "mpn": "STM32F103C8T6", "maker": "ST", "group": "ICs",
              "branch": "MCUs"}]
     monkeypatch.setattr(lcsc, "known", lambda db: _rows(rows))
-    tool = chat_tools.tools()["drawer_search"]
+    tool = _part("drawer_search")
     got = run(tool.run(Ctx(db=Db()), {"query": "irl540n"}))
     assert got.say == "Found {mpn} in the drawer ({lcsc})" and got.vars == {"mpn": "IRL540N", "lcsc": "C29780637",
                                                                            "query": "irl540n"}
     assert "datasheet kept" in got.text
     none = run(tool.run(Ctx(db=Db()), {"query": "ne555"}))
-    assert none.say == "Nothing in the drawer for “{query}”" and "lcsc_search" in none.text
+    assert none.say == "Nothing in the drawer for “{query}”" and "lcsc action" in none.text
 
 
 def test_lcsc_search_lists_candidates_and_marks_what_is_in_the_drawer(monkeypatch):
@@ -276,7 +274,7 @@ def test_lcsc_search_lists_candidates_and_marks_what_is_in_the_drawer(monkeypatc
                 {"lcsc": "C2900", "mpn": "IRL540N", "maker": "UMW", "package": "TO-220", "stock": None, "price": None}]
     monkeypatch.setattr(lcsc, "search", search)
     db = Db({lcsc.PARTS: Parts([{"_id": "C29780637", "name": "x"}])})
-    got = run(chat_tools.tools()["lcsc_search"].run(Ctx(db=db), {"query": "IRL540N"}))
+    got = run(_part("lcsc_search").run(Ctx(db=db), {"query": "IRL540N"}))
     assert got.vars["n"] == 2 and "(in the drawer)" in got.text.splitlines()[1]
     assert "(in the drawer)" not in got.text.splitlines()[2]
 
@@ -286,7 +284,7 @@ def test_lcsc_refusing_is_a_tool_error(monkeypatch):
         raise lcsc.Refused("cooling off for 9 minutes")
     monkeypatch.setattr(lcsc, "search", search)
     with pytest.raises(ToolError, match="not being asked right now"):
-        run(chat_tools.tools()["lcsc_search"].run(Ctx(db=Db()), {"query": "x"}))
+        run(_part("lcsc_search").run(Ctx(db=Db()), {"query": "x"}))
 
 
 def test_drawer_add_takes_the_pages_path_and_leaves_a_kept_part_alone(monkeypatch):
@@ -305,7 +303,7 @@ def test_drawer_add_takes_the_pages_path_and_leaves_a_kept_part_alone(monkeypatc
     monkeypatch.setattr(lcsc, "_component", component)
     monkeypatch.setattr(lcsc, "fetch", fetch)
     monkeypatch.setattr(lcsc, "categorise", categorise)
-    tool = chat_tools.tools()["drawer_add"]
+    tool = _part("drawer_add")
     assert tool.level == "change"
     got = run(tool.run(Ctx(db=Db()), {"lcsc": "c29780637"}))
     assert calls == [("component", "C29780637"), ("fetch", "C29780637"), ("categorise", "C29780637")]
@@ -318,7 +316,7 @@ def test_drawer_add_takes_the_pages_path_and_leaves_a_kept_part_alone(monkeypatc
 
 def test_datasheet_get_says_kept_or_fetched(monkeypatch):
     keep_datasheet()
-    tool = chat_tools.tools()["datasheet_get"]
+    tool = _part("datasheet_get")
     got = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637"}))
     assert got.say == "Datasheet: from the drawer · {pages} pages" and got.vars["pages"] == 3
 
@@ -331,7 +329,7 @@ def test_datasheet_get_says_kept_or_fetched(monkeypatch):
 
 def test_datasheet_read_by_page_by_query_and_as_a_picture():
     keep_datasheet()
-    tool = chat_tools.tools()["datasheet_read"]
+    tool = _part("datasheet_read")
     got = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637"}))
     assert got.vars["pages"] == "1–3" and got.say == "Read datasheet pages {pages}"
     one = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637", "pages": "2"}))
@@ -515,7 +513,7 @@ def test_history_replays_an_earlier_answers_tools_as_calls_and_results():
 def test_history_in_anthropics_shape_pairs_each_tool_use_with_its_result():
     h = cc_chat.history([_asked(), _answered(), {**_asked("summarize it"), "id": "q2"}], tools=ALL)
     body = llm._to_anthropic(h, 100, None, "claude-haiku-5-5",
-                             tools=[chat_tools.tools()[n].spec() for n in sorted(ALL)])
+                             tools=[_part(n).spec() for n in sorted(ALL)])
     turns = body["messages"]
     assert [t["role"] for t in turns] == ["user", "assistant", "user", "assistant", "user", "assistant", "user"]
     uses = [b["id"] for t in turns if t["role"] == "assistant" and isinstance(t["content"], list)
@@ -567,7 +565,7 @@ def test_the_next_line_is_answered_knowing_what_the_tools_gave(env, monkeypatch)
     keep_datasheet()
     monkeypatch.setattr(lcsc, "known", lambda db: _rows([{"lcsc": "C29780637", "name": "TO-220", "mpn": "IRL540N",
                                                          "maker": "UMW", "group": "Discretes", "branch": "Transistors"}]))
-    tool_model(monkeypatch, state, [("", [("drawer_search", {"query": "C29780637"})]), ("It is there.", [])])
+    tool_model(monkeypatch, state, [("", [("drawer", {"action": "search", "query": "C29780637"})]), ("It is there.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="C29780637?", client="tab1")))
     (step,) = answers(raw)[-1]["steps"]
     assert "IRL540N" in step["result"] and len(step["result"]) <= chat_tools.RECALL
@@ -576,16 +574,16 @@ def test_the_next_line_is_answered_knowing_what_the_tools_gave(env, monkeypatch)
     events(cc_chat.say("c1", cc_chat.SayIn(text="thanks", client="tab1")))
     sent = state["rounds"][0]["messages"]
     calls = [m for m in sent if m.get("tool_calls")]
-    assert calls and calls[0]["tool_calls"][0]["function"]["name"] == "drawer_search"
+    assert calls and calls[0]["tool_calls"][0]["function"]["name"] == "drawer"
     assert any(m["role"] == "tool" and "IRL540N" in m["content"] for m in sent)
     assert "do not take back" in sent[0]["content"]
     assert sent[-1] == {"role": "user", "content": "thanks"} or sent[-1]["content"].endswith("thanks")
 
 
 def test_the_note_names_the_tools_and_their_number():
-    on = [chat_tools.tools()[n] for n in ("drawer_search", "datasheet_read")]
+    on = [chat_tools.tools()[n] for n in ("drawer", "taste_read")]
     n = chat_tools.note(on)
-    assert "exactly these 2: drawer_search, datasheet_read" in n and "not a tool" in n
+    assert "exactly these 2: drawer, taste_read" in n and "not a tool" in n
 
 
 # ---- drawer_list -----------------------------------------------------------------
@@ -596,7 +594,7 @@ def test_drawer_list_lists_filters_and_pages(monkeypatch):
             {"lcsc": "C111607", "mpn": "STM32F103C8T6", "maker": "ST", "group": "ICs", "branch": "MCUs"},
             {"lcsc": "C2", "mpn": "BSS138", "maker": "onsemi", "group": "Discretes", "branch": "Transistors"}]
     monkeypatch.setattr(lcsc, "known", lambda db: _rows([dict(r) for r in rows]))
-    tool = chat_tools.tools()["drawer_list"]
+    tool = _part("drawer_list")
     assert tool.level == "read" and tool.default
     got = run(tool.run(Ctx(db=Db()), {}))
     assert got.say == "Listed {n} drawer parts" and got.vars["n"] == 3
@@ -627,16 +625,14 @@ def test_a_tools_page_counts_its_uses(env):
                                                           step("datasheet_read", "done", 900, 1))], title="One")
     seed_chat(raw, "c2", [line("u2", "user", "?"), answer("a2", step("drawer_search", "error", 5, 30),
                                                           step("drawer_search", "done", 40, 200))], title="Two")
-    page = run(cc_chat.tool_page("drawer_search"))
-    assert page["params"][0]["name"] == "query" and page["params"][0]["required"]
+    page = run(cc_chat.tool_page("drawer"))                   # its actions' uses under their old names count
+    assert page["params"][0]["name"] == "action" and page["params"][0]["required"]
     assert page["running"] and page["model_text"]
     st = page["stats"]
-    assert (st["uses"], st["chats"], st["week"]) == (3, 2, 2)
-    assert st["outcomes"] == {"done": 2, "error": 1}
-    assert st["ms"]["median"] == 40
-    assert st["people"] == [{"name": ME["name"], "n": 3}]
-    assert [r["chat"] for r in st["recent"]] == ["c1", "c2", "c2"]
-    assert len(st["days"]) == cc_chat.STATS_DAYS and sum(d["n"] for d in st["days"]) == 3
+    assert (st["uses"], st["chats"]) == (4, 2)
+    assert st["outcomes"] == {"done": 3, "error": 1}
+    assert st["people"] == [{"name": ME["name"], "n": 4}]
+    assert len(st["days"]) == cc_chat.STATS_DAYS and sum(d["n"] for d in st["days"]) == 4
     assert sum(d["bad"] for d in st["days"]) == 1
     with pytest.raises(Exception):
         run(cc_chat.tool_page("rm_rf"))
@@ -651,9 +647,9 @@ def test_tools_usage_sums_every_tool(env):
              {"tool": "datasheet_read", "status": "done", "at": at}, {"tool": "gone_tool", "status": "done", "at": at}]
     seed_chat(raw, "c1", [line("u1", "user", "?"), {**line("a1", "assistant", "ok"), "steps": steps}])
     got = run(cc_chat.tools_usage())
-    assert got["tools"]["drawer_search"] == {"uses": 2, "done": 1, "week": 2}
-    assert got["tools"]["datasheet_read"]["uses"] == 1 and "gone_tool" not in got["tools"]
-    assert got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
+    assert got["tools"]["drawer"] == {"uses": 3, "done": 2, "week": 3}     # the drawer's actions, by their old names
+    assert "drawer_search" not in got["tools"] and "gone_tool" not in got["tools"]
+    assert got["days"][-1]["by"] == {"drawer": 3}
     assert len(got["days"]) == cc_chat.STATS_DAYS
 
 
@@ -661,6 +657,11 @@ def test_tools_usage_sums_every_tool(env):
 
 def _tool(name):
     return chat_tools.tools()[name]
+
+
+def _part(name):
+    """A tool that is now an action of a group (the drawer's), by its old name."""
+    return next(p for t in chat_tools.tools().values() for p in t.actions.values() if p.name == name)
 
 
 GRAPH = {"built_at": "2026-10-08", "counts": {"components": 3, "nets": 3},

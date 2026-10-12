@@ -38,13 +38,14 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   summary=f"{name} · {group} › {branch}" + (" · 3D" if has_3d else ""))
 
 
-TOOL = Tool(
+# One action of the drawer tool (drawer.py), not a tool of its own.
+PART = Tool(
     name="drawer_add", level="change", order=30,
     about="Adds an LCSC part to the drawer, footprint and 3D model included.",
     label="Add to the drawer",
     description="Add an LCSC part to this workspace's parts drawer (its footprint and 3D model are "
                 "downloaded), so boards can use it and its datasheet sits with it. Use the LCSC number "
-                "from lcsc_search. A part already there is left as it is.",
+                "from the lcsc action. A part already there is left as it is.",
     schema={"type": "object", "properties": {
         "lcsc": {"type": "string", "description": "The LCSC part number, like C111607"}},
         "required": ["lcsc"]},

@@ -384,7 +384,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
         args = {}
     step = {"id": secrets.token_hex(4), "tool": call.get("name") or "?", "level": tool.level if tool else "read",
             "status": "running", "pos": len(out["text"]), "args": args, "vars": _vars(args),
-            "say": tool.running if tool else "Unknown tool {tool}", "at": _iso()}
+            "say": tool.sentence("running", args) if tool else "Unknown tool {tool}", "at": _iso()}
     if not tool:
         step["vars"]["tool"] = step["tool"]
     out["steps"].append(step)
@@ -398,7 +398,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
         end(status="error", error="no such tool")
         return f"Error: there is no tool {call.get('name')!r}.", True
     if out.get("limit"):
-        end(status="error", error="step limit reached", say=tool.failed)
+        end(status="error", error="step limit reached", say=tool.sentence("failed", args))
         return LIMIT_NOTE, True
     if tool.level == "delete":
         end(status="ask")
@@ -417,7 +417,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
     try:
         res = await asyncio.wait_for(tool.run(ctx, args), TOOL_TIMEOUT)
     except asyncio.TimeoutError:
-        end(status="error", error=f"took over {int(TOOL_TIMEOUT)} s", say=tool.failed,
+        end(status="error", error=f"took over {int(TOOL_TIMEOUT)} s", say=tool.sentence("failed", args),
             ms=round((time.monotonic() - t0) * 1000))
         return f"Error: {tool.name} took too long.", True
     except asyncio.CancelledError:
@@ -426,7 +426,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
         why = str(exc)[:400] or type(exc).__name__
         if not isinstance(exc, chat_tools.ToolError):
             print(traceback.format_exc()[-1500:], file=sys.stderr)
-        end(status="error", error=why, say=tool.failed, ms=round((time.monotonic() - t0) * 1000))
+        end(status="error", error=why, say=tool.sentence("failed", args), ms=round((time.monotonic() - t0) * 1000))
         return f"Error: {why}", True
     end(status="done", say=res.say, vars={**step["vars"], **_vars(res.vars)},
         summary=(res.summary or "")[:chat_tools.MAX_SUMMARY], ms=round((time.monotonic() - t0) * 1000))

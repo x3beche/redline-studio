@@ -1252,6 +1252,8 @@ async def list_tools() -> dict:
         {"$match": {**LIVE, "messages.steps.0": {"$exists": True}}},
         {"$unwind": "$messages"}, {"$unwind": "$messages.steps"},
         {"$group": {"_id": "$messages.steps.tool", "n": {"$sum": 1}}}])}
+    for old, now in chat_tools.renamed().items():          # an action of a group now: its uses count for the group
+        uses[now] = uses.get(now, 0) + uses.pop(old, 0)
     return {"tools": [{**t, "uses": uses.get(t["name"], 0)}
                       for t in chat_tools.chosen(await chat_tools.prefs(_db(), me))]}
 
@@ -1291,6 +1293,7 @@ async def tools_usage() -> dict:
     names = list(chat_tools.tools())
     days = {(day0 + timedelta(days=i)).isoformat(): {} for i in range(STATS_DAYS)}
     per = {n: {"uses": 0, "done": 0, "week": 0} for n in names}
+    renamed = chat_tools.renamed()
     mine = 0
     async for doc in _db()[COLL].find(dict(LIVE), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
         asker: dict = {}
@@ -1299,7 +1302,7 @@ async def tools_usage() -> dict:
                 asker = m.get("by") or {}
                 continue
             for st in m.get("steps") or []:
-                n = st.get("tool")
+                n = renamed.get(st.get("tool"), st.get("tool"))
                 if n not in per:
                     continue
                 per[n]["uses"] += 1
@@ -1340,6 +1343,7 @@ async def tool_page(name: str) -> dict:
     days = {(day0 + timedelta(days=i)).isoformat(): [0, 0] for i in range(STATS_DAYS)}
     uses, outcomes, people, chats, times, recent = 0, {}, {}, set(), [], []
     week = mine_n = 0
+    renamed = chat_tools.renamed()
     cur = _db()[COLL].find(dict(LIVE), {"title": 1, "messages.role": 1, "messages.by": 1, "messages.steps": 1})
     async for doc in cur:
         asker: dict = {}
@@ -1348,7 +1352,7 @@ async def tool_page(name: str) -> dict:
                 asker = m.get("by") or {}
                 continue
             for st in m.get("steps") or []:
-                if st.get("tool") != name:
+                if renamed.get(st.get("tool"), st.get("tool")) != name:
                     continue
                 uses += 1
                 chats.add(doc["_id"])

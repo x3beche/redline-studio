@@ -102,7 +102,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
     return Result(text=text, say="Read datasheet pages {pages}", vars=v, summary=first)
 
 
-TOOL = Tool(
+# One action of the drawer tool (drawer.py), not a tool of its own.
+PART = Tool(
     name="datasheet_read", level="read", order=50,
     about="Reads datasheet pages as text, finds a phrase in it, or looks at a page.",
     label="Read a datasheet",
