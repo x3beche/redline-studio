@@ -132,7 +132,9 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   summary=_first(got))
 
 
-TOOL = Tool(
+# Not offered to the Chat for now: the person wants the Chat's tools to be
+# about this workspace's own things first. `TOOL = PARKED` brings it back.
+PARKED = Tool(
     name="basic_tool", level="read", order=55,
     label="Basic Tools calculators",
     about="Finds the right calculator in the Tools tab and computes with it.",

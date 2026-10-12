@@ -79,7 +79,9 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   summary=summary)
 
 
-TOOL = Tool(
+# Not offered to the Chat for now: the person wants the Chat's tools to be
+# about this workspace's own things first. `TOOL = PARKED` brings it back.
+PARKED = Tool(
     name="bom_cost", level="read", order=64,
     label="BOM cost",
     about="Prices a board's BOM at a quantity, with stock and the lines that cannot be bought.",

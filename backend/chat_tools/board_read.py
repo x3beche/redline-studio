@@ -62,7 +62,7 @@ def _overview(s: dict) -> list[str]:
     if b:
         out.append(f"BOM: {b.get('lines')} distinct parts, {b.get('priced')} priced, one-off price "
                    f"${b.get('cost_usd')} per board ({b.get('basic')} JLC Basic, {b.get('extended')} Extended, "
-                   f"{b.get('unpartnumbered')} without a part number) - bom_cost gives the price at a quantity")
+                   f"{b.get('unpartnumbered')} without a part number)")
     return out
 
 

@@ -156,10 +156,10 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     real = raw.__class__.__getitem__
     monkeypatch.setattr(raw.__class__, "__getitem__",
                         lambda self, n: Prefs() if n == chat_tools.PREFS else real(self, n))
-    got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"basic_tool": False, "bom_cost": False})))
+    got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"file_read": False, "taste_read": False})))
     on = {t["name"]: t["on"] for t in got["tools"]}
-    assert on == {"drawer": True, "basic_tool": False, "board_read": True, "model_read": True, "bom_cost": False,
-                  "firmware_build": True, "file_read": True, "taste_read": True, "room_note": False}
+    assert on == {"drawer": True, "board_read": True, "model_read": True, "firmware_build": True,
+                  "file_read": False, "taste_read": False, "room_note": False}
     with pytest.raises(Exception):                            # an action of the drawer is not a switch of its own
         run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"drawer_add": False})))
     listed = run(cc_chat.list_tools())["tools"]
@@ -170,7 +170,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer", "board_read", "model_read",
-                                                                "firmware_build", "file_read", "taste_read"}
+                                                                "firmware_build"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
@@ -659,6 +659,9 @@ def _tool(name):
     return chat_tools.tools()[name]
 
 
+from backend.chat_tools import basic_tool as basic_tool_tool, bom_cost as bom_cost_tool   # noqa: E402 - parked tools
+
+
 def _part(name):
     """A tool that is now an action of a group (the drawer's), by its old name."""
     return next(p for t in chat_tools.tools().values() for p in t.actions.values() if p.name == name)
@@ -787,7 +790,7 @@ def test_bom_cost_prices_flags_and_cuts(env, monkeypatch):
     monkeypatch.setattr(bom_cost, "cached_offer", lambda p: offers.get(p))
     monkeypatch.setattr(bom_cost, "record_stock", lambda p: None)
     db = cc_chat._db()
-    tool = _tool("bom_cost")
+    tool = bom_cost_tool.PARKED                                # parked: not offered to the Chat now
     got = run(tool.run(Ctx(db=db), {"board": "ctrl", "qty": 100}))
     assert got.say == "BOM cost of {board} for {qty} boards: {total}" and got.vars["qty"] == 100
     assert got.vars["per_board"] == "$3.00" and got.vars["total"] == "$300.20"
@@ -960,7 +963,7 @@ def test_basic_tool_finds_then_computes_with_the_tools_own_code(monkeypatch):
     monkeypatch.setattr(tool_router, "pick", pick)
     monkeypatch.setattr(tools_api, "_record", record)
     monkeypatch.setattr(tools_api, "run_kit", run_kit)
-    tool = _tool("basic_tool")
+    tool = basic_tool_tool.PARKED                              # parked: not offered to the Chat now
     found = run(tool.run(Ctx(db=Db()), {"task": "trace width for 1 A"}))
     assert found.say == "Found calculators for “{task}”: {names}" and "Trace Width" in found.vars["names"]
     assert "- amps (number, A, default '1')" in found.text and "id: via-thermal" in found.text
@@ -1011,4 +1014,4 @@ def test_a_kit_tool_runs_in_node_when_the_tools_image_is_missing(monkeypatch):
 
 
 def test_the_note_tells_how_to_use_the_workspace_tools():
-    assert "basic_tool" in chat_tools.SYSTEM_NOTE and "board_read" in chat_tools.SYSTEM_NOTE
+    assert "board_read" in chat_tools.SYSTEM_NOTE and "basic_tool" not in chat_tools.SYSTEM_NOTE
