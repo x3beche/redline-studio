@@ -37,7 +37,7 @@ def test_the_conversation_draws_the_window_not_every_line():
 def test_a_new_conversation_starts_at_its_last_twenty():
     body = CC[CC.index("  open(id: string"):]
     assert "this.win.reset();" in body[:300]
-    new = CC[CC.index("this.api.create().subscribe"):]
+    new = CC[CC.index("this.api.create("):]
     assert "this.win.reset();" in new[:300]
 
 

@@ -101,7 +101,20 @@ JOBS = {
     "suggest": {"label": "Next-question suggestion",
                 "about": "after an answer and a quiet while, the question you are likely to ask next, shown in the empty composer",
                 "default": CHEAP, "switch": True, "delay": 60},
+    # The example questions on an empty Chat, written from the person's own
+    # workspace (backend/chat_ideas.py). `ideas`: the job has settings of
+    # its own - on/off, how often the questions are written again, how
+    # many, and whether recent conversations' titles are read (IDEAS_*).
+    "chat_suggestions": {"label": "Chat example questions",
+                         "about": "the example questions on an empty Chat, written from your own projects",
+                         "default": CHEAP, "ideas": True},
 }
+
+# The example questions' settings: how often they are written again (the
+# choices, in seconds), how many, and what a job without saved ones uses.
+IDEAS_EVERY = (3600, 21600, 86400, 604800)
+IDEAS_COUNT = (3, 12)
+IDEAS_DEFAULT = {"on": True, "every": 86400, "count": 6, "chats": True}
 
 # The bounds of a job's `delay`, in seconds.
 DELAY_MIN, DELAY_MAX = 5, 600
@@ -112,7 +125,7 @@ DELAY_MIN, DELAY_MAX = 5, 600
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
          "part-category": "part_category", "suggest": "suggest", "taste": "taste",
-         "manufacturer": "manufacturer"}
+         "manufacturer": "manufacturer", "chat-suggestions": "chat_suggestions"}
 KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 
@@ -180,6 +193,49 @@ def job_switch(job: str) -> dict:
     return {"on": bool(got.get("on")), "delay": delay}
 
 
+def job_ideas(job: str) -> dict:
+    """The example questions' settings: what was saved, each field checked,
+    else its default."""
+    got = _conf["jobs"].get(job) or {}
+    out = dict(IDEAS_DEFAULT)
+    if isinstance(got.get("on"), bool):
+        out["on"] = got["on"]
+    if got.get("every") in IDEAS_EVERY and not isinstance(got.get("every"), bool):
+        out["every"] = got["every"]
+    n = got.get("count")
+    if isinstance(n, int) and not isinstance(n, bool) and IDEAS_COUNT[0] <= n <= IDEAS_COUNT[1]:
+        out["count"] = n
+    if isinstance(got.get("chats"), bool):
+        out["chats"] = got["chats"]
+    return out
+
+
+def _ideas_entry(j: str, r: dict) -> dict:
+    """The example questions' fields of a change, checked; what it leaves
+    out is kept as saved."""
+    was = job_ideas(j)
+    label = JOBS[j]["label"]
+    out = {}
+    for f in ("on", "chats"):
+        v = r.get(f)
+        if v is None:
+            v = was[f]
+        if not isinstance(v, bool):
+            raise ValueError(f"{label}: {f} is on or off")
+        out[f] = v
+    every = r.get("every")
+    every = was["every"] if every is None else every
+    if isinstance(every, bool) or every not in IDEAS_EVERY:
+        raise ValueError(f"{label}: written again every hour, 6 hours, day or week")
+    out["every"] = every
+    n = r.get("count")
+    n = was["count"] if n is None else n
+    if isinstance(n, bool) or not isinstance(n, int) or not IDEAS_COUNT[0] <= n <= IDEAS_COUNT[1]:
+        raise ValueError(f"{label}: {IDEAS_COUNT[0]}-{IDEAS_COUNT[1]} questions")
+    out["count"] = n
+    return out
+
+
 def public() -> dict:
     """What the page may see: whether each key is set, never the key."""
     provs = {}
@@ -194,6 +250,9 @@ def public() -> dict:
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
         if info.get("switch"):
             jobs[j].update(job_switch(j), switch=True, delay_range=[DELAY_MIN, DELAY_MAX])
+        if info.get("ideas"):
+            jobs[j].update(job_ideas(j), ideas=True, every_options=list(IDEAS_EVERY),
+                           count_range=list(IDEAS_COUNT))
     return {"providers": provs, "jobs": jobs,
             "cheap": {"provider": CHEAP[0], "model": CHEAP[1]},
             "registry": registry()}
@@ -238,6 +297,8 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
                 entry["on"] = bool(on)
             if delay is not None:
                 entry["delay"] = delay
+        if JOBS[j].get("ideas"):
+            entry.update(_ideas_entry(j, r or {}))
         sets[f"jobs.{j}"] = entry
     update: dict = {}
     if sets:

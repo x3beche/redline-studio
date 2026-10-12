@@ -147,3 +147,12 @@ def test_agents_work_they_do_not_manage():
 def test_a_refusal_says_who_can():
     msg = access.refusal("reviewer", "run")
     assert "reviewer" in msg and "editor" in msg
+
+
+def test_the_chat_example_questions():
+    """Looking at them is anyone's; writing them again costs a model call,
+    so it is for whoever may start a conversation (backend/chat_ideas.py)."""
+    assert access.action("GET", "/api/cc/ideas") == "view"
+    act = access.action("POST", "/api/cc/ideas/refresh")
+    assert act == "draw"
+    assert access.allowed("reviewer", act) and not access.allowed("viewer", act)

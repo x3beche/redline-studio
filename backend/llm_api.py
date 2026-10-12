@@ -32,6 +32,11 @@ class Route(BaseModel):
     # before it runs. Left out: unchanged.
     on: bool | None = None
     delay: int | None = None
+    # The example questions' (llm.JOBS "ideas"): how often they are written
+    # again (seconds), how many, and whether conversation titles are read.
+    every: int | None = None
+    count: int | None = None
+    chats: bool | None = None
 
 
 class SettingsIn(BaseModel):
@@ -48,7 +53,10 @@ async def put_settings(body: SettingsIn) -> dict:
         raise HTTPException(400, str(exc)) from exc
     changed = [f"key {p} {'set' if v else 'cleared'}" for p, v in (body.keys or {}).items()]
     changed += [f"{j} -> {r.provider}/{r.model}" + (f" on={r.on}" if r.on is not None else "")
-                + (f" delay={r.delay}s" if r.delay is not None else "") for j, r in (body.jobs or {}).items()]
+                + (f" delay={r.delay}s" if r.delay is not None else "")
+                + (f" every={r.every}s" if r.every is not None else "")
+                + (f" count={r.count}" if r.count is not None else "")
+                + (f" chats={r.chats}" if r.chats is not None else "") for j, r in (body.jobs or {}).items()]
     if changed:
         llm._models_cache.clear()                     # a new key may see other models
         await actors.audit(_db(), "settings", "llm", {"changed": changed})

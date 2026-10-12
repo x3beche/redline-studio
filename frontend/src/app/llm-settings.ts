@@ -27,6 +27,11 @@ interface JobInfo {
   /** A job with an on/off of its own (the next-question suggestion): whether
    *  it runs, and the seconds of quiet before it does (backend/llm.py). */
   switch?: boolean; on?: boolean; delay?: number; delay_range?: [number, number];
+  /** The empty Chat's example questions (backend/chat_ideas.py): how often
+   *  they are written again (seconds), how many, and whether the titles of
+   *  one's recent conversations are read for them. */
+  ideas?: boolean; every?: number; count?: number; chats?: boolean;
+  every_options?: number[]; count_range?: [number, number];
 }
 /** The next-question suggestion's waits on offer, in seconds. */
 const DELAYS = [15, 30, 60, 120, 300];
@@ -386,6 +391,39 @@ export class LlmUsagePanel {
                 <span class="st-job-wait">{{ (job.on ? 'one short call per finished answer, only after that quiet' : 'off: no calls, nothing is shown') | t }}</span>
               </div>
             }
+            @if (job.ideas) {
+              <div class="st-job-switch">
+                <label class="st-job-on">
+                  <button type="button" class="tcv-switch" [attr.data-on]="job.on ? 1 : null" [attr.aria-pressed]="!!job.on"
+                          [disabled]="!canEdit || busy()" (click)="setSwitch(j, { on: !job.on })"
+                          [attr.aria-label]="job.label | t"></button>
+                  <span>{{ (job.on ? 'On' : 'Off') | t }}</span>
+                </label>
+                <span class="st-job-wait">{{ 'written again every' | t }}</span>
+                <div class="st-seg">
+                  @for (s of job.every_options || []; track s) {
+                    <button [class.on]="s === job.every" [disabled]="!canEdit || busy() || !job.on || s === job.every"
+                            (click)="setSwitch(j, { every: s })">{{ everyLabel(s) | t }}</button>
+                  }
+                </div>
+                <span class="st-job-wait">{{ 'questions' | t }}</span>
+                <div class="st-seg" role="group" [attr.aria-label]="'questions' | t">
+                  <button [disabled]="!canEdit || busy() || !job.on || (job.count ?? 0) <= countRange(job)[0]"
+                          (click)="setSwitch(j, { count: job.count! - 1 })" [title]="'Fewer' | t">−</button>
+                  <button class="on st-job-count" disabled>{{ job.count }}</button>
+                  <button [disabled]="!canEdit || busy() || !job.on || (job.count ?? 0) >= countRange(job)[1]"
+                          (click)="setSwitch(j, { count: job.count! + 1 })" [title]="'More' | t">+</button>
+                </div>
+                <label class="st-job-on">
+                  <button type="button" class="tcv-switch" [attr.data-on]="job.chats ? 1 : null" [attr.aria-pressed]="!!job.chats"
+                          [disabled]="!canEdit || busy() || !job.on" (click)="setSwitch(j, { chats: !job.chats })"
+                          [attr.aria-label]="'read recent conversation titles' | t"></button>
+                  <span>{{ 'read recent conversation titles' | t }}</span>
+                </label>
+                <span class="st-job-wait">{{ (job.on ? 'one short call per person and language, in the background, when the set is older than that'
+                                                     : 'off: no calls, the hand-written examples are shown') | t }}</span>
+              </div>
+            }
             @if (tests()[j]; as r) {
               <div class="st-job-test" [class.st-ok]="r.ok" [class.st-err]="!r.ok">{{ r.ok ? '✓ ' + r.answer + ' · ' + r.ms + ' ms' : '✕ ' + r.error }}</div>
             }
@@ -556,7 +594,13 @@ export class LlmSettingsPanel {
   delayLabel(s: number) { return s % 60 === 0 ? (s / 60) + ' ' + t('min') : s + ' ' + t('s'); }
 
   /** The switched job's on/off or its wait, saved with its provider and model. */
-  setSwitch(j: string, change: { on?: boolean; delay?: number }) {
+  /** The example questions' intervals, named. */
+  everyLabel(s: number) {
+    return s >= 604800 ? '1 week' : s >= 86400 ? '1 day' : s >= 3600 ? (s / 3600) + ' h' : s + ' s';
+  }
+  countRange(job: JobInfo): [number, number] { return job.count_range ?? [3, 12]; }
+
+  setSwitch(j: string, change: { on?: boolean; delay?: number; every?: number; count?: number; chats?: boolean }) {
     const job = this.data()!.jobs[j];
     const msg = change.on === undefined ? t('Saved.') : change.on ? t('Turned on.') : t('Turned off.');
     this.patchJob(j, change);

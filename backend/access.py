@@ -196,6 +196,9 @@ _RULES: list[tuple[str, str, str]] = [
     # the next question, suggested after an answer: for whoever may write
     # the line it suggests - it costs a model call (backend/suggest.py)
     ("POST", "/api/suggest", "draw"),
+    # the empty Chat's example questions written again now: a model call,
+    # for whoever may start a conversation (backend/chat_ideas.py)
+    ("POST", "/api/cc/ideas/refresh", "draw"),
     # a ```task block in a chat, queued with its button: queueing a note
     # (backend/tasks.py), so it is the same right as queueing one
     ("POST", "/api/chat/{}/task/{}/queue", "run"),

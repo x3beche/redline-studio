@@ -4097,7 +4097,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 @keyframes tcv-cc-dot { 0%, 80%, 100% { opacity: .25; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
 
 /* ---- an empty conversation ---------------------------------------------- */
-.tcv-cc-hello { margin: auto 0; padding: 12px 0; text-align: center; }
+/* Higher than the middle: the composer sits below it, as in a conversation. */
+.tcv-cc-hello { margin: clamp(12px, 9vh, 120px) 0 auto; padding: 12px 0; text-align: center; }
 .tcv-cc-hello-mark { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
   margin-bottom: 10px; color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; }
 .tcv-cc-hello-mark .tcv-cc-ico { width: 24px; height: 24px; }
@@ -4112,6 +4113,11 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
 .tcv-cc-starter-area .tcv-cc-ico { width: 14px; height: 14px; }
 .tcv-cc-starter-text { color: var(--ink); }
+/* Where the example questions come from, and writing them again. */
+.tcv-cc-ideashead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 0 -10px;
+  font-size: 11px; color: var(--ink-dim); text-align: left; }
+.tcv-cc-ideashead .tcv-cc-textbtn { display: inline-flex; align-items: center; gap: 5px; }
+.tcv-cc-ideashead .tcv-cc-ico { width: 13px; height: 13px; }
 
 /* ---- the composer ------------------------------------------------------- */
 .tcv-cc-alert { flex: none; display: flex; align-items: center; gap: 8px; max-width: 780px; width: calc(100% - 40px);

@@ -7,7 +7,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Segment, TaskBlock, plain, splitTasks, toHtml } from '../markdown';
 import { TaskBlockView, TaskState } from './task-block';
 import { Auth } from '../auth';
-import { T, t } from '../i18n';
+import { LANG, T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { LogWindow } from './log-window';
@@ -182,6 +182,9 @@ export class CcApi {
   }
   removeMessage(id: string, mid: string) { return this.http.delete<CcChat>(`/api/cc/chats/${id}/messages/${mid}`); }
   models(provider: string) { return this.http.get<LlmModel[]>(`/api/llm/models?provider=${provider}`); }
+  /** The empty Chat's example questions, written from one's own work (backend/chat_ideas.py). */
+  ideas(lang: string) { return this.http.get<CcIdeas>(`/api/cc/ideas?lang=${lang}`); }
+  refreshIdeas(lang: string) { return this.http.post<CcIdeas>(`/api/cc/ideas/refresh?lang=${lang}`, {}); }
   /** What `@` offers: this workspace's models, boards, files, notes, drawn notes and parts. */
   mentions(q: string, kind = '', limit = 30) {
     return this.http.get<CcMention[]>(`/api/cc/mentions?q=${encodeURIComponent(q)}&limit=${limit}` + (kind ? `&kind=${kind}` : ''));
@@ -329,8 +332,24 @@ const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
   taste: { icon: I.taste, name: 'Taste palette' }, manufacturer: { icon: I.factory, name: 'Manufacturer' },
 };
 
+/** The empty Chat's example questions (backend/chat_ideas.py): written by a
+ *  model from one's own work and kept, or none yet (`default`) - then the
+ *  hand-written STARTERS. `start`: the model a conversation begins with. */
+export interface CcIdeas {
+  items: { kind: string; text: string }[]; source: 'llm' | 'default'; on: boolean; at: string | null;
+  refreshing: boolean; every: number; count: number; error?: string | null;
+  start: { provider: string; model: string };
+}
+/** A written question's kind, as the card's icon and label. */
+const IDEA_KIND: Record<string, { icon: string; area: string }> = {
+  pcb: { icon: I.pcb, area: 'PCB' }, firmware: { icon: I.chip, area: 'Firmware' }, cad: { icon: I.cad, area: '3D/CAD' },
+  notes: { icon: I.note, area: 'Notes' }, taste: { icon: I.taste, area: 'Taste' },
+  manufacturers: { icon: I.factory, area: 'Manufacturers' }, general: { icon: I.chat, area: 'General' },
+};
+type Starter = { icon: string; area: string; text: string; own?: boolean };
+
 /** Where to begin, for an empty conversation: the work this app is for. */
-const STARTERS: { icon: string; area: string; text: string }[] = [
+const STARTERS: Starter[] = [
   { icon: I.pcb, area: 'PCB', text: 'What protection should a 5 V / 3 A USB-C power input have (TVS, fuse, reverse polarity)? Give part examples.' },
   { icon: I.pcb, area: 'PCB', text: 'How wide should a 2 A trace be on 1 oz copper, and how many vias does the same current need?' },
   { icon: I.chip, area: 'Firmware', text: 'Write a non-blocking debounce for 4 buttons on an STM32 (HAL) that tells a short press from a long one.' },
@@ -826,107 +845,25 @@ type Ask = { text: string; label: string; go: () => void };
           <button class="tcv-cc-ib" (click)="error.set(null)" [title]="'Close' | t">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button></div>
       }
-      @if (auth.can('draw')) {
-        <div class="tcv-cc-composer" [class.focus]="focused()" [class.editing]="editing()"
-             [class.tcv-att-over]="att.over()" (dragover)="att.dragOver($event)" (dragleave)="att.dragLeave($event)"
-             (drop)="att.drop($event)">
-          @if (editing()) {
-            <div class="tcv-cc-editbar">
-              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.edit }" />
-              <span>{{ 'Editing your message - what came after it will be replaced.' | t }}</span>
-              <span class="grow"></span>
-              <button class="tcv-cc-textbtn" (click)="cancelEdit()">{{ 'Cancel' | t }}</button>
-            </div>
-          }
-          @if (picked().length || att.items().length || att.error()) {
-            <div class="tcv-cc-picked">
-              <rl-attach-chips [att]="att" />
-              @for (mm of picked(); track mm.kind + mm.id) {
-                <span class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [title]="mentionTip(mm)">
-                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
-                  <span>{{ mm.label }}</span>
-                  <button class="tcv-cc-mx" (click)="unpick(mm)" [title]="'Remove' | t">
-                    <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
-                </span>
-              }
-              @if (picturesAsText()) {
-                <span class="tcv-cc-dim tcv-cc-mnote">{{ 'This model does not read images - pictures go as a description.' | t }}</span>
-              }
-            </div>
-          }
-          @if (mentionPop()) {
-            <div class="tcv-cc-mpop" role="listbox" (mousedown)="$event.preventDefault()">
-              <div class="tcv-cc-mhead">
-                <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" />
-                <span>{{ mentionQ() || ('Mention a model, board, file, note, palette or part' | t) }}</span>
-              </div>
-              <div class="tcv-cc-mlist">
-                @for (r of mentionRows(); track r.kind + r.id; let k = $index) {
-                  <button role="option" [class.on]="k === mentionIdx()" [attr.aria-selected]="k === mentionIdx()"
-                          (mouseenter)="mentionIdx.set(k)" (click)="pickMention(r)">
-                    <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(r.kind) }" />
-                    <span class="tcv-cc-modelname">{{ r.label }}</span>
-                    <span class="tcv-cc-dim tcv-cc-msub">{{ r.sub }}</span>
-                    <span class="tcv-cc-tag">{{ kindName(r.kind) | t }}</span>
-                  </button>
-                } @empty {
-                  <p class="tcv-cc-dim tcv-cc-pad">{{ mentionBusy() ? ('Loading…' | t) : ('Nothing to mention matches.' | t) }}</p>
-                }
-              </div>
-              <div class="tcv-cc-mfoot tcv-cc-dim"><kbd>↑↓</kbd> {{ 'choose' | t }} · <kbd>↵</kbd> {{ 'add' | t }} · <kbd>Esc</kbd> {{ 'close' | t }}</div>
-            </div>
-          }
-          <textarea #box rows="1" [value]="text()" [class.tcv-sg-ghost]="!!sg.text()"
-                    [placeholder]="sg.text() || ((busy() ? 'Write the next one - it is sent when the answer ends… (@ to mention)' : 'Write to the model… (@ to mention)') | t)"
-                    (input)="typed($any($event.target)); grow()" (keydown)="key($event)" (click)="typed($any($event.target))"
-                    (paste)="att.paste($event)"
-                    (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
-          <div class="tcv-cc-compbar">
-            <app-model-picker [models]="models()" [selected]="model()" [providers]="providers" [provider]="provider()"
-                              [title]="('Model' | t) + ': ' + provName() + ' · ' + model()" [(open)]="modelPop"
-                              (pick)="pickModel($event)" (providerPick)="pickProvider($event)" />
-            <button class="tcv-cc-ib" data-act="mention" (click)="startMention()" [title]="('Mention' | t) + ' (@)'">
-              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" /></button>
-            <button class="tcv-cc-ib" data-act="attach" (click)="pickFile.click()"
-                    [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
-              <ng-container *ngTemplateOutlet="ico; context: { $implicit: CLIP }" /></button>
-            <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
-            @if (meter(); as mt) {
-              <span class="tcv-cc-meter" [attr.data-state]="mt.state" [title]="mt.title">
-                <span class="tcv-cc-meterbar"><i [style.width.%]="mt.pct"></i></span>
-                <span>{{ mt.text }}</span>
-              </span>
-            }
-            <span class="tcv-cc-hint">
-              <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
-            </span>
-            <rl-suggest-chip [sg]="sg" />
-            <span class="grow"></span>
-            @if (busy()) {
-              @if ((text().trim() || att.ready().length) && !editing()) {
-                <button class="tcv-cc-queuebtn" data-act="queue" (click)="send()"
-                        [title]="('Queue' | t) + ' (Enter) - ' + ('sent when the answer ends' | t)">{{ 'Queue' | t }}</button>
-              }
-              @if (live() || stoppable()) {
-                <button class="tcv-cc-send stop" (click)="stop()" [title]="('Stop' | t) + ' (Esc)'">
-                  <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
-              }
-            } @else {
-              <button class="tcv-cc-send" [disabled]="(!text().trim() && !att.ready().length) || att.busy()" (click)="send()"
-                      [title]="(att.busy() ? ('Uploading…' | t) : ((editing() ? 'Send again' : 'Send') | t)) + ' (Enter)'">
-                <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.send }" /></button>
-            }
-          </div>
-        </div>
-      }
+      @if (auth.can('draw')) { <ng-container *ngTemplateOutlet="composerT" /> }
     } @else {
-      <div class="tcv-cc-log tcv-cc-scroll">
+      <!-- No conversation open: the hello, and the composer where it is in a
+           conversation - what is sent there starts a new one (send()). -->
+      <div class="tcv-cc-log tcv-cc-scroll" [class.tcv-att-over]="att.over()"
+           (dragover)="auth.can('draw') && att.dragOver($event)" (dragleave)="att.dragLeave($event)"
+           (drop)="auth.can('draw') && att.drop($event)">
         <div class="tcv-cc-col">
           <button class="tcv-cc-ib tcv-cc-burger tcv-cc-burger-intro" (click)="drawer.set(true)">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.menu }" /> {{ 'Conversations' | t }}</button>
           <ng-container *ngTemplateOutlet="hello" />
         </div>
       </div>
+      @if (error(); as e) {
+        <div class="tcv-cc-alert" role="alert"><span>{{ e }}</span>
+          <button class="tcv-cc-ib" (click)="error.set(null)" [title]="'Close' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button></div>
+      }
+      @if (auth.can('draw')) { <ng-container *ngTemplateOutlet="composerT" /> }
     }
     @if (toast(); as tt) {
       <div class="tcv-cc-toast" role="status">
@@ -995,17 +932,122 @@ type Ask = { text: string; label: string; go: () => void };
   </div>
 </ng-template>
 
+<!-- The composer: the same in a conversation and on the empty Chat, where
+     sending starts a new conversation. -->
+<ng-template #composerT>
+  <div class="tcv-cc-composer" [class.focus]="focused()" [class.editing]="editing()"
+       [class.tcv-att-over]="att.over()" (dragover)="att.dragOver($event)" (dragleave)="att.dragLeave($event)"
+       (drop)="att.drop($event)">
+    @if (editing()) {
+      <div class="tcv-cc-editbar">
+        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.edit }" />
+        <span>{{ 'Editing your message - what came after it will be replaced.' | t }}</span>
+        <span class="grow"></span>
+        <button class="tcv-cc-textbtn" (click)="cancelEdit()">{{ 'Cancel' | t }}</button>
+      </div>
+    }
+    @if (picked().length || att.items().length || att.error()) {
+      <div class="tcv-cc-picked">
+        <rl-attach-chips [att]="att" />
+        @for (mm of picked(); track mm.kind + mm.id) {
+          <span class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [title]="mentionTip(mm)">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
+            <span>{{ mm.label }}</span>
+            <button class="tcv-cc-mx" (click)="unpick(mm)" [title]="'Remove' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
+          </span>
+        }
+        @if (picturesAsText()) {
+          <span class="tcv-cc-dim tcv-cc-mnote">{{ 'This model does not read images - pictures go as a description.' | t }}</span>
+        }
+      </div>
+    }
+    @if (mentionPop()) {
+      <div class="tcv-cc-mpop" role="listbox" (mousedown)="$event.preventDefault()">
+        <div class="tcv-cc-mhead">
+          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" />
+          <span>{{ mentionQ() || ('Mention a model, board, file, note, palette or part' | t) }}</span>
+        </div>
+        <div class="tcv-cc-mlist">
+          @for (r of mentionRows(); track r.kind + r.id; let k = $index) {
+            <button role="option" [class.on]="k === mentionIdx()" [attr.aria-selected]="k === mentionIdx()"
+                    (mouseenter)="mentionIdx.set(k)" (click)="pickMention(r)">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(r.kind) }" />
+              <span class="tcv-cc-modelname">{{ r.label }}</span>
+              <span class="tcv-cc-dim tcv-cc-msub">{{ r.sub }}</span>
+              <span class="tcv-cc-tag">{{ kindName(r.kind) | t }}</span>
+            </button>
+          } @empty {
+            <p class="tcv-cc-dim tcv-cc-pad">{{ mentionBusy() ? ('Loading…' | t) : ('Nothing to mention matches.' | t) }}</p>
+          }
+        </div>
+        <div class="tcv-cc-mfoot tcv-cc-dim"><kbd>↑↓</kbd> {{ 'choose' | t }} · <kbd>↵</kbd> {{ 'add' | t }} · <kbd>Esc</kbd> {{ 'close' | t }}</div>
+      </div>
+    }
+    <textarea #box rows="1" [value]="text()" [class.tcv-sg-ghost]="!!sg.text()"
+              [placeholder]="sg.text() || ((busy() ? 'Write the next one - it is sent when the answer ends… (@ to mention)' : 'Write to the model… (@ to mention)') | t)"
+              (input)="typed($any($event.target)); grow()" (keydown)="key($event)" (click)="typed($any($event.target))"
+              (paste)="att.paste($event)"
+              (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
+    <div class="tcv-cc-compbar">
+      <app-model-picker [models]="models()" [selected]="model()" [providers]="providers" [provider]="provider()"
+                        [title]="('Model' | t) + ': ' + provName() + ' · ' + model()" [(open)]="modelPop"
+                        (pick)="pickModel($event)" (providerPick)="pickProvider($event)" />
+      <button class="tcv-cc-ib" data-act="mention" (click)="startMention()" [title]="('Mention' | t) + ' (@)'">
+        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" /></button>
+      <button class="tcv-cc-ib" data-act="attach" (click)="pickFile.click()"
+              [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
+        <ng-container *ngTemplateOutlet="ico; context: { $implicit: CLIP }" /></button>
+      <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
+      @if (meter(); as mt) {
+        <span class="tcv-cc-meter" [attr.data-state]="mt.state" [title]="mt.title">
+          <span class="tcv-cc-meterbar"><i [style.width.%]="mt.pct"></i></span>
+          <span>{{ mt.text }}</span>
+        </span>
+      }
+      <span class="tcv-cc-hint">
+        <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
+      </span>
+      <rl-suggest-chip [sg]="sg" />
+      <span class="grow"></span>
+      @if (busy()) {
+        @if ((text().trim() || att.ready().length) && !editing()) {
+          <button class="tcv-cc-queuebtn" data-act="queue" (click)="send()"
+                  [title]="('Queue' | t) + ' (Enter) - ' + ('sent when the answer ends' | t)">{{ 'Queue' | t }}</button>
+        }
+        @if (live() || stoppable()) {
+          <button class="tcv-cc-send stop" (click)="stop()" [title]="('Stop' | t) + ' (Esc)'">
+            <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
+        }
+      } @else {
+        <button class="tcv-cc-send" [disabled]="(!text().trim() && !att.ready().length) || att.busy()" (click)="send()"
+                [title]="(att.busy() ? ('Uploading…' | t) : ((editing() ? 'Send again' : 'Send') | t)) + ' (Enter)'">
+          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.send }" /></button>
+      }
+    </div>
+  </div>
+</ng-template>
+
 <ng-template #hello>
   <div class="tcv-cc-hello">
     <div class="tcv-cc-hello-mark"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chat }" /></div>
     <h2>{{ 'What are we building today?' | t }}</h2>
     <p>{{ 'Ask about a board, firmware or a model. Your conversations are private to your account.' | t }}</p>
     @if (auth.can('draw')) {
+      @if (ideas()?.on) {
+        <div class="tcv-cc-ideashead">
+          <span>{{ (starters()[0]?.own ? 'From your projects' : 'Examples') | t }}@if (ideas()?.at && starters()[0]?.own) { · {{ ago(ideas()!.at!) }} }</span>
+          <button class="tcv-cc-textbtn" data-act="ideas-refresh" (click)="refreshIdeas()" [disabled]="ideasBusy()"
+                  [title]="'Write new example questions from your projects' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.regen }" />
+            {{ (ideasBusy() || ideas()?.refreshing ? 'Writing…' : 'Refresh') | t }}</button>
+        </div>
+      }
       <div class="tcv-cc-starters">
-        @for (s of starters; track s.text) {
-          <button class="tcv-cc-starter" (click)="starter(s.text)">
+        @for (s of starters(); track s.text) {
+          <button class="tcv-cc-starter" (click)="starter(s.text, s.own)">
             <span class="tcv-cc-starter-area"><ng-container *ngTemplateOutlet="ico; context: { $implicit: s.icon }" /> {{ s.area | t }}</span>
-            <span class="tcv-cc-starter-text">{{ s.text | t }}</span>
+            <span class="tcv-cc-starter-text">{{ s.own ? s.text : (s.text | t) }}</span>
           </button>
         }
       </div>
@@ -1030,7 +1072,15 @@ export class RoomCommandCode implements OnDestroy {
   private logEl = viewChild<ElementRef<HTMLDivElement>>('log');
 
   readonly providers = PROVIDERS;
-  readonly starters = STARTERS;
+  /** The example questions: written from one's own work when there are
+   *  some (backend/chat_ideas.py), else the hand-written ones. */
+  ideas = signal<CcIdeas | null>(null);
+  ideasBusy = signal(false);
+  starters = computed<Starter[]>(() => {
+    const d = this.ideas();
+    if (!d?.on || d.source !== 'llm' || !d.items.length) return STARTERS;
+    return d.items.map(x => ({ ...(IDEA_KIND[x.kind] ?? IDEA_KIND['general']), text: x.text, own: true }));
+  });
   readonly I = I;
   private readonly mac = /Mac|iPhone|iPad/.test(navigator.platform);
   readonly mod = this.mac ? '⌘+' : 'Ctrl+';
@@ -1247,6 +1297,8 @@ export class RoomCommandCode implements OnDestroy {
 
   constructor() {
     this.refresh(true);
+    // The example questions, again when the page's language changes.
+    effect(() => { LANG(); untracked(() => { clearTimeout(this.ideasTimer); this.loadIdeas(); }); });
     effect(() => {
       const p = this.provider();
       untracked(() => this.loadModels(p));
@@ -1354,6 +1406,7 @@ export class RoomCommandCode implements OnDestroy {
 
   ngOnDestroy() {
     clearInterval(this.timer);
+    clearTimeout(this.ideasTimer);
     clearInterval(this.clockTimer);
     this.gone = true;
     this.connectLive(null);
@@ -1440,12 +1493,12 @@ export class RoomCommandCode implements OnDestroy {
     });
   }
 
-  newChat(then?: (c: CcChat) => void) {
+  newChat(then?: (c: CcChat) => void, route?: { provider: string; model: string }, failed?: () => void) {
     if (!this.auth.can('draw')) return;
     this.sel.thread.set(null);
     this.toolsOpen.set(false);
     if (this.tab() !== 'list') this.showTab('list');
-    this.api.create().subscribe({
+    this.api.create(route?.provider, route?.model || undefined).subscribe({
       next: c => {
         this.chats.update(l => [c, ...l]);
         this.openId.set(c.id);
@@ -1459,14 +1512,66 @@ export class RoomCommandCode implements OnDestroy {
         this.cancelEdit(false);
         then ? then(c) : this.focusSoon();
       },
-      error: e => this.error.set(this.msg(e)),
+      error: e => { this.error.set(this.msg(e)); failed?.(); },
     });
   }
 
-  starter(text: string) {
-    const go = () => { this.text.set(t(text)); this.send(); };
-    this.chat() ? go() : this.newChat(() => go());
+  /** An example card: sent as if typed - in the open conversation, or in a
+   *  new one started by sending (send()). */
+  starter(text: string, own = false) {
+    this.setText(own ? text : t(text));
+    void this.send();
   }
+
+  /** The example questions for the empty Chat, in the page's language. A
+   *  set still being written is looked for again a few times. */
+  loadIdeas(tries = 4) {
+    const lang = LANG();
+    this.api.ideas(lang).subscribe({
+      next: d => {
+        if (LANG() !== lang) return;
+        this.ideas.set(d);
+        // No conversation open yet: its model, for the composer on the empty Chat.
+        if (!this.chat() && !this.model()) { this.provider.set(d.start.provider); this.model.set(d.start.model); }
+        if (d.refreshing && tries > 0) this.ideasTimer = setTimeout(() => this.loadIdeas(tries - 1), 8000);
+      },
+      error: () => {},
+    });
+  }
+  private ideasTimer: ReturnType<typeof setTimeout> | undefined;
+
+  refreshIdeas() {
+    if (this.ideasBusy()) return;
+    this.ideasBusy.set(true);
+    const lang = LANG();
+    this.api.refreshIdeas(lang).subscribe({
+      next: d => { this.ideasBusy.set(false); if (LANG() === lang) this.ideas.set(d);
+                   if (d.error && d.source !== 'llm') this.showToast(t('Could not write new examples - the last ones stay.')); },
+      error: e => { this.ideasBusy.set(false); this.showToast(this.msg(e)); },
+    });
+  }
+
+  /** "5 min ago", "3 h ago", "2 d ago". */
+  ago(at: string): string {
+    const s = Math.max(0, (Date.now() - Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(at) ? at : at + 'Z')) / 1000);
+    return s < 60 ? t('just now') : s < 3600 ? Math.round(s / 60) + ' ' + t('min ago')
+      : s < 86400 ? Math.round(s / 3600) + ' ' + t('h ago') : Math.round(s / 86400) + ' ' + t('d ago');
+  }
+
+  /** Sent from the empty Chat: a new conversation with the model chosen
+   *  there, then the line - the same as New and then send. */
+  private startAndSend() {
+    if (!this.auth.can('draw') || this.starting) return;
+    const provider = this.provider(), model = this.model();
+    this.starting = true;
+    this.newChat(() => {
+      this.starting = false;
+      this.provider.set(provider);
+      this.model.set(model);
+      void this.send();
+    }, { provider, model }, () => { this.starting = false; });
+  }
+  private starting = false;
 
   /** Someone else may be talking in it: read it again when it grew. */
   poll() {
@@ -1833,7 +1938,9 @@ export class RoomCommandCode implements OnDestroy {
     const c = this.chat();
     let text = this.text().trim();
     const files = this.att.ready();
-    if (!c || (!text && !files.length) || !this.model() || this.att.busy()) return;
+    if ((!text && !files.length) || !this.model() || this.att.busy()) return;
+    // Written on the empty Chat: a new conversation first, then this line in it.
+    if (!c) { this.startAndSend(); return; }
     if (files.length) {
       // The uploaded pictures go as @-mentions of their files, as if picked by hand.
       this.picked.update(l => [...l, ...files.filter(p => !l.some(x => x.kind === 'file' && x.id === p.id))
