@@ -299,7 +299,7 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: 'Circuit board', snap: 'pcb', crops: [[573, 171, 905, 641]], min: 0, lbl: 'PCB Design · the iot-fan board, routed by TraceMaker',
       lead: 'Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.',
       facts: [['Size', '95.5 × 58.7 mm', '91 parts, 48 different'], ['Copper', '1,014 tracks', '179 vias · 2.87 m'], ['Parts cost', '$20.51', 'a board, ordering 10 · ERC 0']] },
-    { name: 'Firmware', snap: 'fw', crops: [[571, 462, 430, 360], [571, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
+    { name: 'Firmware', snap: 'fw', crops: [[571, 462, 430, 430]], min: 0.85, lbl: 'Firmware · src/main.cpp',
       lead: 'Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.',
       facts: [['Chip', 'ESP32-WROOM-32', 'Arduino on PlatformIO'], ['Pins', '39', 'from the schematic'], ['Build', '0 errors · 8.4 s', 'flash 24.6% · RAM 7.0%']] },
   ];
