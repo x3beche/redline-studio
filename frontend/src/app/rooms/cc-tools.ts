@@ -269,14 +269,24 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
           </div>
         </section>
         <section class="st-card">
-          <div class="st-card-head"><h3>{{ 'By tool' | t }}</h3></div>
-          <div class="st-card-body ct-by">
-            @for (tl of byUse(u); track tl.name) {
-              <button type="button" class="ct-who ct-who-btn" (click)="show(tl.name)">
-                <span>{{ tl.label | t }}</span>
-                <span class="st-meter"><i [style.width.%]="100 * (u.tools[tl.name]?.uses ?? 0) / peakTool(u)" [style.background]="color(tl.name)"></i></span>
-                <b class="mono">{{ u.tools[tl.name]?.uses ?? 0 }}</b></button>
-            }
+          <div class="st-card-head"><h3>{{ 'By package' | t }}</h3></div>
+          <!-- The chart's packages in its colours, over its period; a package opens to its tools. -->
+          <div class="st-card-body ct-by" [class.ct-loading]="usageLoading()">
+            @for (g of byPkg(u); track g.id) {
+              <button type="button" class="ct-pk" [class.dim]="!g.n" [attr.aria-expanded]="opened().has(g.id)" (click)="togglePkg(g.id)">
+                <svg class="ct-pk-chev" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
+                <i [style.background]="g.color"></i><span>{{ g.label | t }}</span>
+                <span class="st-meter"><i [style.width.%]="100 * g.n / g.peak" [style.background]="g.color"></i></span>
+                <b class="mono" [wbCount]="g.n"></b><small class="mono">{{ g.share }}</small></button>
+              @if (opened().has(g.id)) {
+                @for (tl of g.tools; track tl.name) {
+                  <button type="button" class="ct-pk ct-pk-tool ct-who-btn" [class.dim]="!tl.n" (click)="show(tl.name)">
+                    <span>{{ tl.label | t }}</span>
+                    <span class="st-meter"><i [style.width.%]="100 * tl.n / g.peak" [style.background]="g.color"></i></span>
+                    <b class="mono">{{ tl.n }}</b><small class="mono">{{ tl.share }}</small></button>
+                }
+              }
+            } @empty { <div class="ct-empty">{{ 'No tool uses in this period' | t }}</div> }
           </div>
         </section>
       </div>
@@ -433,6 +443,7 @@ export class CcToolsView {
 
   usage = signal<ToolsUsage | null>(null);
   /** The uses chart's period: a day by hour, a week or a month by day, a year by month - kept in this browser. */
+  readonly chevron = CHEVRON;
   readonly spans = [{ id: 'day', label: 'Day' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' }];
   period = signal<string>((() => { try { return localStorage.getItem('redline.tools.span') || 'week'; } catch { return 'week'; } })());
   setSpan(s: string) {
@@ -499,10 +510,29 @@ export class CcToolsView {
   dayTotal(d: { by: Record<string, number> }) { return Object.values(d.by).reduce((a, x) => a + x, 0); }
   sum14(u: ToolsUsage) { return u.days.reduce((a, d) => a + this.dayTotal(d), 0); }
   peak14(u: ToolsUsage) { return Math.max(1, ...u.days.map(d => this.dayTotal(d))); }
-  peakTool(u: ToolsUsage) { return Math.max(1, ...Object.values(u.tools).map(x => x.uses)); }
-  /** The tools the overview names: those on or ever used - not two hundred calculators nobody turned on. */
-  charted(u: ToolsUsage) { return this.tools().filter(x => x.on || (u.tools[x.name]?.uses ?? 0) > 0); }
-  byUse(u: ToolsUsage) { return this.charted(u).sort((a, b) => (u.tools[b.name]?.uses ?? 0) - (u.tools[a.name]?.uses ?? 0)); }
+  /** The list beside the chart: its packages over its period, most used
+   *  first, then the ones with a tool on but no use; each with its share and
+   *  its tools (those on or used in the period), most used first. */
+  byPkg(u: ToolsUsage) {
+    const by: Record<string, number> = {};
+    for (const d of u.days) for (const [k, n] of Object.entries(d.by)) by[k] = (by[k] ?? 0) + n;
+    const all = this.sum14(u), pct = (n: number) => all ? (n && n < all / 200 ? '<1' : Math.round(100 * n / all)) + '%' : '';
+    const rows = this.groups().map(g => {
+      const tools = g.tools.filter(x => x.on || by[x.name]).map(x => ({ name: x.name, label: x.label, n: by[x.name] ?? 0 }))
+        .sort((a, b) => b.n - a.n).map(x => ({ ...x, share: pct(x.n) }));
+      const n = tools.reduce((a, x) => a + x.n, 0);
+      return { id: g.id, label: g.name, color: this.pkgColor(g.id), n, share: pct(n), tools, peak: 1 };
+    }).filter(g => g.tools.length).sort((a, b) => b.n - a.n);
+    const peak = Math.max(1, ...rows.map(g => g.n));
+    return rows.map(g => ({ ...g, peak }));
+  }
+  /** The packages opened in that list: none at first, kept while the period changes. */
+  opened = signal<Set<string>>(new Set());
+  togglePkg(id: string) {
+    const s = new Set(this.opened());
+    if (!s.delete(id)) s.add(id);
+    this.opened.set(s);
+  }
 
   /** A tile's width in a 12-column grid: up to `most` to a row, and the
    *  last row's tiles share the whole row - never an empty cell. */

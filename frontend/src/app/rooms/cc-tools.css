@@ -97,7 +97,6 @@
 .ct-uses { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 12px !important; overflow: hidden !important; }
 .ct-uses > .ct-bars.tall { flex: 1; height: auto; min-height: 80px; }
 .ct-uses .ct-legend { flex: none; max-height: 52px; overflow-y: auto; }
-.ct-by { gap: 8px; }
 .ct-who-btn { width: 100%; padding: 0; text-align: left; background: none; border: 0; cursor: pointer; }
 .ct-who-btn:hover span:first-child { color: var(--ink-bright); text-decoration: underline; }
 .ct-bars-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-dim); }
@@ -166,3 +165,24 @@
   animation-delay: calc(var(--tcv-i, 0) * 18ms); }
 @keyframes ct-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .ct-uses .ct-stack, .ct-spin { animation: none; } }
+
+/* The list beside the uses chart: a package a row in the chart's colour -
+   chevron, swatch, name, meter, uses, share - opening to its tools, indented
+   under the name. */
+.ct-by { display: flex; flex-direction: column; gap: 2px; padding-top: 10px !important; transition: opacity .2s; }
+.ct-by.ct-loading { opacity: .4; }
+.ct-pk { display: grid; grid-template-columns: 12px 9px minmax(0, 1fr) minmax(60px, 1.3fr) 40px 34px; align-items: center; gap: 8px;
+  width: 100%; padding: 4px 6px; text-align: left; font: inherit; font-size: 11.5px; color: var(--ink);
+  background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ct-pk:hover { background: var(--hover); }
+.ct-pk > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-pk > i { width: 9px; height: 9px; border-radius: 2px; }
+.ct-pk .st-meter { margin: 0; }
+.ct-pk b { text-align: right; font-weight: 500; font-size: 11px; }
+.ct-pk small { text-align: right; font-size: 10px; color: var(--ink-dim); }
+.ct-pk.dim > span:first-of-type, .ct-pk.dim b { color: var(--ink-dim); }
+.ct-pk-chev { width: 12px; height: 12px; fill: none; stroke: var(--ink-dim); stroke-width: 2; transition: transform .12s; }
+.ct-pk[aria-expanded="true"] .ct-pk-chev { transform: rotate(90deg); }
+.ct-pk-tool { grid-template-columns: minmax(0, 1fr) minmax(60px, 1.3fr) 40px 34px; padding-left: 43px; color: var(--ink); }
+.ct-pk-tool .st-meter i { opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .ct-pk-chev, .ct-by { transition: none; } }

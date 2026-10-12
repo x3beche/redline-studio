@@ -179,7 +179,9 @@ def test_an_alert_is_written_once_a_month_per_level(monkeypatch):
     rate = {"llm_usd": 9, "kwh": 0, "proxy_gb": 0}
     metered(monkeypatch, rate)
     run(costs.put(db, {"budgets": {"llm": {"amount": 100, "currency": "USD"}}}))
-    db.activity.docs.clear(); db.audit.docs.clear()            # the save checked today's month
+    # The save checked today's month, whatever today is - October 2026 is the
+    # month below too, so forget its alerts, the database's as well as _seen.
+    db.activity.docs.clear(); db.audit.docs.clear(); db.alerts.docs.clear(); budgets._seen.clear()
     day = lambda d: datetime(2026, 9, d, tzinfo=UTC)  # noqa: E731
     run(budgets.status(db, now=day(5)))                     # 36: nothing
     assert not db.activity.docs
