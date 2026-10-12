@@ -525,27 +525,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
   `],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
-@if (!fw() && !loading()) {
-  <div class="fw-empty">
-    @if (list().length) {
-      <p>{{ 'Pick a firmware - a .fw in the catalog, under its board - or one of these:' | t }}</p>
-      @for (f of list(); track f.id) {
-        <button class="tcv-chip" (click)="pick(f.id)">{{ f.title }} <span style="color: var(--ink-dim)">· {{ f.board_title || f.board }}</span></button>
-      }
-    } @else {
-      <p>{{ 'No firmware yet. A firmware is made from one of a board\\'s chips: open the board in PCB Design, its schematic\\'s MCU sheet has "Create firmware".' | t }}</p>
-    }
-    @if (mcusHere().length) {
-      <p>{{ 'On' | t }} <b>{{ picked.board() }}</b>:</p>
-      @for (m of mcusHere(); track m.ref) {
-        <button class="tcv-btn tcv-btn-accent px-2 py-0.5" [disabled]="!auth.can('edit') || making()"
-                (click)="create(picked.board()!, m.ref)">{{ 'Create firmware' | t }} · {{ m.ref }} {{ m.title }}</button>
-      }
-    }
-    @if (note()) { <p style="color: var(--warn)">{{ note() }}</p> }
-  </div>
-} @else {
-  <app-room-frame room="firmware" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames()"
+  <app-room-frame room="firmware" [class.tcv-nomodel]="!fw()" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames()"
                   (tabChange)="setSide($any($event))" [log]="log()">
 
     <!-- THE TOOLBAR: which view, then build, flash and the serial
@@ -590,10 +570,12 @@ export class FwCode implements AfterViewInit, OnDestroy {
     <!-- THE TABS -->
     <div side class="fw-pane">
       @if (!fw()) {
+        @if (loading()) {
         <div class="fw-skel" aria-busy="true">
           <span class="sk sk-big"></span><span class="sk" style="width: 80%"></span><span class="sk" style="width: 65%"></span>
           <span class="sk" style="width: 90%"></span><span class="sk" style="width: 55%"></span><span class="sk" style="width: 75%"></span>
         </div>
+        }
       } @else if (side() === 'first' && view() !== 'code') {
         <!-- PINS: every pin on a signal net, its GPIO, and whether the code uses it. -->
         @let f = fw()!;
@@ -739,6 +721,28 @@ export class FwCode implements AfterViewInit, OnDestroy {
 
     <!-- THE VIEW -->
     <div view class="fw-view">
+      @if (!fw() && !loading()) {
+      <!-- No firmware yet: the room keeps its frame, toolbar faded and log
+           below, as the 3D room does before its first model. -->
+      <div class="fw-empty">
+        @if (list().length) {
+          <p>{{ 'Pick a firmware - a .fw in the catalog, under its board - or one of these:' | t }}</p>
+          @for (f of list(); track f.id) {
+            <button class="tcv-chip" (click)="pick(f.id)">{{ f.title }} <span style="color: var(--ink-dim)">· {{ f.board_title || f.board }}</span></button>
+          }
+        } @else {
+          <p>{{ 'No firmware yet. A firmware is made from one of a board\\'s chips: open the board in PCB Design, its schematic\\'s MCU sheet has "Create firmware".' | t }}</p>
+        }
+        @if (mcusHere().length) {
+          <p>{{ 'On' | t }} <b>{{ picked.board() }}</b>:</p>
+          @for (m of mcusHere(); track m.ref) {
+            <button class="tcv-btn tcv-btn-accent px-2 py-0.5" [disabled]="!auth.can('edit') || making()"
+                    (click)="create(picked.board()!, m.ref)">{{ 'Create firmware' | t }} · {{ m.ref }} {{ m.title }}</button>
+          }
+        }
+        @if (note()) { <p style="color: var(--warn)">{{ note() }}</p> }
+      </div>
+      }
       @if (fw(); as f) {
         @if (view() === 'schematic') {
           @if (sheetUrl(); as url) {
@@ -823,7 +827,6 @@ export class FwCode implements AfterViewInit, OnDestroy {
       }
     </ng-container>
   </app-room-frame>
-}
 @if (flashOpen()) {
   <!-- FLASHING: Connect -> Flashing -> Verifying -> Done, in this browser. -->
   <div class="fl-scrim" (click)="closeFlash()"></div>
