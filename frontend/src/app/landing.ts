@@ -268,7 +268,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 <footer>
   <div class="grid">
     <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Workbench</a>
-    <div class="col"><h4>Product</h4>@for (l of links; track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }</div>
+    <div class="col prod"><h4>Product</h4><div class="links">@for (l of links; track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }</div></div>
     <div class="col"><h4>Access</h4><a [href]="ask">Request access</a><a href="/" (click)="$event.preventDefault(); open.set(true)">Sign in</a></div>
     <div class="col"><h4>Contact</h4><a href="mailto:info@medipol.dev">info@medipol.dev</a></div>
     <div class="fine"><span>© 2026 Workbench</span><span>Istanbul</span></div>

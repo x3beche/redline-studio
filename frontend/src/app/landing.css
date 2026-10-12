@@ -193,8 +193,10 @@ section { padding-top: 160px; }
 
 footer { padding: 72px var(--side) 36px; border-top: 1px solid var(--line); }
 footer .grid { row-gap: 64px; }
-footer .brand { grid-column: 1 / 7; align-self: start; }
+footer .brand { grid-column: 1 / 4; align-self: start; }
 footer .col { grid-column: span 2; font-size: 15px; }
+footer .col.prod { grid-column: span 5; }
+footer .col.prod .links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; }
 footer .col h4 { margin: 0 0 18px; font-size: 13px; font-weight: 500; color: var(--faint); }
 footer .col a { display: block; margin-bottom: 8px; color: #d4d4d8; }
 footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--faint); font-size: 13px; padding-top: 24px; border-top: 1px solid var(--line); }
@@ -249,6 +251,7 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
   .end h2 { margin-bottom: 28px; }
   footer .brand { grid-column: 1 / -1; }
   footer .col { grid-column: span 6; }
+  footer .col.prod { grid-column: 1 / -1; }
   footer .fine { flex-direction: column; gap: 6px; }
 }
 
