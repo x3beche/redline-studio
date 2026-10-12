@@ -46,6 +46,9 @@ TITLE_H = 36.0
 PAD_L, PAD_R, PAD_T, PAD_B = 13.0, 4.0, 8.0, 12.0
 # The isometric view's cell is never smaller than this.
 ISO_MIN = 45.0
+# mm a view may overrun its box and still fit: an automatic drawing's boxes
+# are exactly what their views need, and the layout editor keeps them rounded.
+FIT_SLACK = 0.5
 # A Unicode font, for names in Turkish and the like (fonts-dejavu-core in
 # docker/draw); Helvetica where it is not installed.
 DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans{}.ttf"
@@ -213,7 +216,7 @@ def spec_cells(spec: dict, size: dict, sheet: str, landscape: bool):
         for b, w, h in auto:
             vw, vh = size[b["view"]]
             pl, pr, pt, pb = pads(b.get("dims", True))
-            if vw * k + pl + pr > w or vh * k + pt + pb > h:
+            if vw * k + pl + pr > w + FIT_SLACK or vh * k + pt + pb > h + FIT_SLACK:
                 ok = False
                 break
         if ok:

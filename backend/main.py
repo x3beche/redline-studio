@@ -3274,13 +3274,16 @@ async def model_drawing(model_id: str, download: bool = False):
 
 
 @app.get("/api/models/{model_id:path}/drawing.png")
-async def model_drawing_preview(model_id: str):
+async def model_drawing_preview(model_id: str, size: str = ""):
     """A small picture of the model's technical drawing - the 3D room's
     preview - only if the drawing is already made: 404 otherwise, and
     nothing is made here (drawing.pdf makes it). The page asks for it by
-    the drawing's key (?k=, from drawing/status), so it is kept for good."""
+    the drawing's key (?k=, from drawing/status), so it is kept for good.
+    ?size=sheet is the sheet large enough to lay the layout editor's boxes
+    over, made from the drawing the first time it is asked for."""
     try:
-        png = await release.model_drawing_preview(db(), model_id)
+        png = await (release.model_drawing_sheet(db(), model_id) if size == "sheet"
+                     else release.model_drawing_preview(db(), model_id))
     except KeyError as exc:
         raise HTTPException(404, model_id) from exc
     if png is None:

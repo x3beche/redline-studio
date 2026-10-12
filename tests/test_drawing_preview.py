@@ -79,6 +79,24 @@ def test_a_made_drawing_gives_its_picture(kept):
         asyncio.run(main.model_drawing_preview("p/base"))
 
 
+
+def test_the_sheet_for_the_layout_editor_is_made_once_from_the_drawing(kept, monkeypatch):
+    made = []
+
+    async def raster(pdf, out):
+        made.append(pdf.name)
+        out.write_bytes(b"BIG")
+    monkeypatch.setattr(release, "_rasterise", raster)
+    # No drawing yet: nothing to show, and nothing made.
+    with pytest.raises(HTTPException):
+        asyncio.run(main.model_drawing_preview("p/lid", size="sheet"))
+    assert made == []
+    (kept / f"{stem()}.pdf").write_bytes(b"%PDF")
+    for _ in range(2):
+        res = asyncio.run(main.model_drawing_preview("p/lid", size="sheet"))
+        assert res.body == b"BIG"
+    assert made == [f"{stem()}.pdf"]
+
 def test_the_status_is_per_model_and_per_step(kept):
     st = asyncio.run(release.drawing_status(DB, "p/lid"))
     assert st["state"] == "none" and st["step"]["sha"] == SHA[:12] and st["built"]["version"] == 7

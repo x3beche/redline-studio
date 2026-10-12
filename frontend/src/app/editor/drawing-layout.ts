@@ -68,6 +68,7 @@ const PAD = { dims: [13, 4, 8, 12], plain: [4, 4, 8, 4] } as const;
 const GRID = 5;                        // mm a dragged box snaps to
 const MIN_MM = 20;                     // a box's least side
 const GAP = 5;                         // mm between boxes an arrangement leaves
+const FIT_SLACK = 0.5;                 // mm a view may overrun its box and still fit (techdraw.py FIT_SLACK)
 const VIEWS: ViewKey[] = ['front', 'back', 'top', 'bottom', 'left', 'right', 'iso'];
 const NAMES: Record<ViewKey, string> = { front: 'Front', back: 'Back', top: 'Top', bottom: 'Bottom', left: 'Left',
                                          right: 'Right', iso: 'Isometric' };
@@ -517,7 +518,7 @@ export class DrawingLayout implements OnInit, OnDestroy {
     // Only a drawing that says where its boxes were: one made before it did
     // was laid out otherwise, and under these boxes it would mislead.
     if (!d?.made?.preview || !d.key || !d.made.boxes?.length || this.dirty() || this.busy()) return '';
-    return `/api/models/${d.id}/drawing.png?k=${d.key}`;
+    return `/api/models/${d.id}/drawing.png?k=${d.key}&size=sheet`;
   });
   unmatched = computed(() => this.made()?.unmatched ?? []);
 
@@ -597,7 +598,9 @@ export class DrawingLayout implements OnInit, OnDestroy {
         if (!e) return true;
         const { w, h } = this.boxMm(b, paper);
         const [pl, pr, pt, pb] = b.dims ? PAD.dims : PAD.plain;
-        return e[0] * k + pl + pr <= w && e[1] * k + pt + pb <= h;
+        // Half a millimetre to spare: the boxes of an automatic drawing are
+        // exactly as large as their views need, and come back rounded.
+        return e[0] * k + pl + pr <= w + FIT_SLACK && e[1] * k + pt + pb <= h + FIT_SLACK;
       });
       if (ok) return [a, d];
     }

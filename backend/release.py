@@ -213,6 +213,57 @@ async def model_drawing_preview(db, model_id: str) -> bytes | None:
     return png.read_bytes() if png.exists() and _kept(meta, layout=lay).exists() else None
 
 
+
+# The sheet sharp enough to lay boxes over (the layout editor's underlay):
+# made from the kept PDF the first time it is asked for, in the drawing
+# image (PyMuPDF), and kept beside it. The preview is too small for that.
+SHEET_W = 1600                                    # px
+_SHEET_ONE = asyncio.Semaphore(1)
+
+
+async def model_drawing_sheet(db, model_id: str) -> bytes | None:
+    """A large PNG of a model's drawing if the drawing is made, else None."""
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "drawing_layout.spec": 1})
+    if not doc:
+        raise KeyError(model_id)
+    meta = (doc.get("artifacts") or {}).get("step")
+    if not meta:
+        return None
+    lay = _layout_key(doc)
+    pdf, big = _kept(meta, layout=lay), _kept(meta, ".sheet.png", lay)
+    if not pdf.exists():
+        return None
+    if not big.exists():
+        async with _SHEET_ONE:
+            if not big.exists():
+                await _rasterise(pdf, big)
+    return big.read_bytes() if big.exists() else None
+
+
+async def _rasterise(pdf: Path, out: Path) -> None:
+    work = Path(tempfile.mkdtemp(prefix="redline-sheet-"))
+    try:
+        os.chmod(work, 0o777)
+        shutil.copy(pdf, work / "drawing.pdf")
+        code = ("import fitz\n"
+                "d = fitz.open('/work/drawing.pdf'); p = d[0]; z = %d / p.rect.width\n"
+                "p.get_pixmap(matrix=fitz.Matrix(z, z), colorspace=fitz.csGRAY, alpha=False).save('/work/sheet.png')\n"
+                % SHEET_W)
+        argv = ["docker", "run", "--rm", *limits.box(), "--network", "none",
+                "--user", f"{os.getuid()}:{os.getgid()}", "-v", f"{work}:/work",
+                "--entrypoint", "python3", DRAW_IMAGE, "-c", code]
+        proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.DEVNULL,
+                                                    stderr=asyncio.subprocess.DEVNULL)
+        try:
+            await asyncio.wait_for(proc.wait(), 60)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return
+        if (work / "sheet.png").exists():
+            shutil.move(str(work / "sheet.png"), out)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
 def _layout_key(doc: dict) -> str:
     return drawlayout.digest((doc.get("drawing_layout") or {}).get("spec"))
 
