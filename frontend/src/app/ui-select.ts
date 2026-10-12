@@ -189,12 +189,15 @@ export class UiSelect {
   }
 
   boxKey(e: KeyboardEvent) {
-    if (!this.open() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); this.show(); return; }
+    // Keys it uses stop here: a room's own shortcuts on the document (arrows
+    // through files or palettes, Escape closing a dialog) are not for it.
+    if (!this.open() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); e.stopPropagation(); this.show(); return; }
     if (this.open()) this.listKey(e);
   }
 
   listKey(e: KeyboardEvent) {
     const n = this.shown().length;
+    if (['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) e.stopPropagation();
     if (e.key === 'ArrowDown') { e.preventDefault(); this.hot.set(n ? (this.hot() + 1) % n : 0); this.scrollHot(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); this.hot.set(n ? (this.hot() - 1 + n) % n : 0); this.scrollHot(); }
     else if (e.key === 'Enter') { e.preventDefault(); const o = this.shown()[this.hot()]; if (o) this.choose(o); }
