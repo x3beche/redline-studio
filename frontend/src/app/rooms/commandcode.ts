@@ -335,7 +335,7 @@ const I = {
   stop: 'M7 7h10v10H7z',
   menu: 'M4 6h16 M4 12h16 M4 18h16',
   download: 'M12 4v11 M7 10l5 5 5-5 M5 20h14',
-  select: 'M4 4h16v16H4z M8 12l3 3 5-6',
+  select: 'M3.5 6.5l2 2 3.5-4 M3.5 16.5l2 2 3.5-4 M12 7h8.5 M12 17h8.5',
   x: 'M6 6l12 12 M18 6L6 18',
   bot: 'M5 8h14v10H5z M12 8V5 M9 12.5h.01 M15 12.5h.01 M9.5 15.5h5 M3 12v3 M21 12v3',
   chat: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
@@ -480,8 +480,9 @@ type Ask = { text: string; label: string; go: () => void };
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
         }
         @if (auth.can('draw') && shownChats().length) {
-          <button class="tcv-cc-ib tcv-cc-sm" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
+          <button class="tcv-cc-selbtn" data-act="select" [class.on]="selecting()" [attr.aria-pressed]="selecting()" (click)="toggleSelecting()"
+                  [title]="'Select several' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" />{{ (selecting() ? 'Done' : 'Select') | t }}</button>
         }
       </div>
       @if (q().trim() && tab() === 'list') {
