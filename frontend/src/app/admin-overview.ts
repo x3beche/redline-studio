@@ -43,7 +43,7 @@ const DID: Record<string, string> = {
   'edit': 'made an edit to', 'settings': 'changed the settings of', 'user-add': 'added the account',
   'user-edit': 'edited the account', 'user-delete': 'deleted the account', 'password': 'changed the password',
   'token': 'made the token', 'token-delete': 'deleted the token', 'release': 'released', 'convert': 'converted',
-  'queue-task': 'queued a task in',
+  'queue-task': 'queued a task in', 'remember': 'stayed signed in on',
 };
 /** The chart's series as the page names them (the server's names are its own). */
 const SERIES: Record<string, string> = { 'Changes': 'Changes made', 'Agents': 'Agent actions' };

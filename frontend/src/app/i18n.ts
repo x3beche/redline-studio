@@ -1625,6 +1625,7 @@ const TR: Record<string, string> = {
   'added the account': 'hesap ekledi:', 'edited the account': 'hesabı düzenledi:', 'deleted the account': 'hesabı sildi:',
   'changed the password': 'parolayı değiştirdi', 'made the token': 'anahtar oluşturdu:', 'deleted the token': 'anahtarı sildi:',
   'released': 'yayınladı:', 'converted': 'dönüştürdü:', 'queued a task in': 'görev sıraya koydu:',
+  'stayed signed in on': 'oturumu açık tuttu:',
   // ...laid out as Analytics is (admin-overview.ts, rooms/dash.ts)
   'Range': 'Aralık', 'no auto refresh': 'otomatik yenileme yok', 'refreshing…': 'yenileniyor…', 'next in': 'sonraki',
   'refresh on its own': 'kendiliğinden yenile', 'everything in this range, as JSON': 'bu aralıktaki her şey, JSON olarak',
