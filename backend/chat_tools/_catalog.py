@@ -135,8 +135,22 @@ PRICE = re.compile(r"fiyat|price|preis|prix|prezzo|precio|tutar|ücret|ucret", r
 
 
 def price(p: dict) -> str:
-    """A price the page gave, kept among the specs (there is no price field)."""
+    """Its price: the product's own (read from its page, or given by hand,
+    with when), else one kept among its specs by an older reading."""
+    if (p.get("price") or {}).get("amount") is not None:
+        when = (p["price"].get("at") or "")[:10]
+        return "price: " + mf.cf.price_label(p["price"]) + (f" (as of {when})" if when else "")
     return next((f"{k}: {v}" for k, v in (p.get("specs") or {}).items() if PRICE.search(k)), "")
+
+
+def stock(p: dict) -> str:
+    """What the seller's site said of its stock."""
+    if not p.get("stock"):
+        return ""
+    s = "in stock on the site" if p["stock"] == "in" else "out of stock on the site"
+    if p.get("stock_qty") is not None and p["stock"] == "in":
+        s += f" ({p['stock_qty']} left)"
+    return s
 
 
 def line(p: dict) -> str:
@@ -148,6 +162,10 @@ def line(p: dict) -> str:
         bits.append(f"category {p['category']}")
     if price(p):
         bits.append(price(p))
+    if stock(p):
+        bits.append(stock(p))
+    if (p.get("seller") or {}).get("domain"):
+        bits.append(f"sold on {p['seller']['domain']}")
     s = "  ".join(bits)
     specs = "; ".join(f"{k}: {v}" for k, v in list((p.get("specs") or {}).items())[:8] if not PRICE.search(k))
     if specs:

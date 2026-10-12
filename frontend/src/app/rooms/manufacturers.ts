@@ -26,14 +26,38 @@ import { CatalogStock, InventoryApi, qty } from './inventory';
 export type ProxyChoice = 'off' | 'fallback' | 'always' | 'jina' | 'jina_fallback';
 export type MfrStatus = 'queued' | 'crawling' | 'asking' | 'merging' | 'done' | 'failed' | 'cancelled';
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
+/** A price as the catalog keeps it (backend/catalog_facts.py): `vat` excl when the page said "+ KDV",
+ *  `gross` the same price with VAT when the page gave both, `at` when it was read (or typed). */
+export interface Price { amount: number; currency: string; vat: 'incl' | 'excl' | null; text?: string; at?: string | null; gross?: number }
+/** One reading of a product's price and stock (the last 10 are kept): a new row when either changed. */
+export interface PriceRow { at: string; amount?: number; currency?: string; vat?: 'incl' | 'excl' | null; stock?: 'in' | 'out'; qty?: number; seen?: string }
 export interface Product {
   id: string; name: string; category: string; description: string; specs: Record<string, string>;
   sku: string; url: string; image: string;
+  /** More pictures of it, the main one first. */
+  images?: string[];
+  price?: Price; list_price?: { amount: number; currency: string; text?: string };
+  /** What the seller's site said of its stock, how many when it said, and its words ("Son 3 adet"). */
+  stock?: 'in' | 'out'; stock_qty?: number; stock_text?: string;
+  /** The site it is sold on (its page's), and when: added to the catalog, last read from its page, the seller's own date. */
+  seller?: { domain: string; host?: string; name?: string };
+  added_at?: string; read_at?: string; updated?: string; history?: PriceRow[];
   /** Added by hand ('manual'), or changed by hand (`edited`): kept through a full exploration. */
   source?: 'manual'; edited?: boolean;
 }
-/** What the Add a product form sends: specs as "name: value" lines. */
-export interface ProductFields { name: string; category: string; sku: string; description: string; specs: string; url: string; image: string }
+/** A product with its maker, as the catalog's grid lists them (GET /api/manufacturers/products). */
+export interface GridItem extends Product { maker: { id: string; name: string; domain: string } }
+export interface GridAnswer {
+  items: GridItem[]; total: number; page: number; size: number; all: number;
+  categories: [string, number][]; makers: { id: string; name: string; domain: string; count: number }[];
+  sellers: [string, number][]; price: { min: number | null; max: number | null; currencies: string[] };
+}
+export interface GridQuery { q: string; cat: string; maker: string; seller: string; min: string; max: string; stock: string; sort: string; size: number }
+/** What the Add a product form sends: specs as "name: value" lines; the price as typed, its currency and VAT. */
+export interface ProductFields {
+  name: string; category: string; sku: string; description: string; specs: string; url: string; image: string;
+  price: string; currency: string; vat: '' | 'incl' | 'excl'; stock: '' | 'in' | 'out'; stock_qty: string;
+}
 export type RunKind = 'site' | 'page';
 export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null; kept_pages?: number; kind?: RunKind }
 export interface Maker {
@@ -122,6 +146,12 @@ export class MfrApi {
     return this.http.post<{ deleted: number; manufacturer: Maker }>(`/api/manufacturers/${id}/products/delete`, { ids });
   }
   deleteJob(id: string) { return this.http.delete(`/api/manufacturers/jobs/${id}`); }
+  /** Every maker's products for the grid: filtered, sorted, the first `size`. */
+  products(f: GridQuery) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v !== '' && v != null) q.set(k, String(v));
+    return this.http.get<GridAnswer>(`/api/manufacturers/products?${q}`);
+  }
   proxy() { return this.http.get<ProxyState>('/api/manufacturers/proxy'); }
   jobs(limit = 30) { return this.http.get<MfrJob[]>(`/api/manufacturers/jobs?limit=${limit}`); }
   job(id: string) { return this.http.get<MfrJob>(`/api/manufacturers/jobs/${id}`); }
@@ -199,8 +229,14 @@ const I = {
   edit: 'M4 20h4L19.5 8.5l-4-4L4 16z M13.5 6.5l4 4',
   trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
   stock: 'M3 8l9-5 9 5v12H3z M3 8h18 M12 11v6 M9 14h6',
+  photo: 'M4 6h16v12H4z M4 15l4.5-4.5 3.5 3.5 2.5-2.5L20 17 M15.5 9.5h.01',
+  close: 'M6 6l12 12 M18 6L6 18',
+  grid: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
+  rows: 'M4 6h16 M4 12h16 M4 18h16',
 };
-const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '' };
+const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '',
+                                    price: '', currency: 'TRY', vat: '', stock: '', stock_qty: '' };
+export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
@@ -452,6 +488,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
               <button class="tcv-btn" (click)="pickAll(false)">{{ 'Clear' | t }}</button></span>
           }
           <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span>
+          <ng-container *ngTemplateOutlet="layoutT" />
           @if (can()) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
         @if (editing() !== null) {
           <div class="mf-pform mf-ctl">
@@ -462,6 +499,20 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
             <input class="tst-in" [placeholder]="'Image address (optional)' | t" [value]="pf().image" (input)="pfSet('image', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Image address' | t">
             <input class="tst-in mf-pf-desc" [placeholder]="'Description (optional)' | t" [value]="pf().description" (input)="pfSet('description', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Description' | t">
             <textarea class="tst-in mf-pf-specs" rows="3" [placeholder]="'Specs, one per line - Length: 20 mm' | t" [value]="pf().specs" (input)="pfSet('specs', $event)" [attr.aria-label]="'Specs' | t"></textarea>
+            <div class="mf-pf-price">
+              <input class="tst-in mf-pf-amount" inputmode="decimal" [placeholder]="'Price, e.g. 362,60' | t" [value]="pf().price" (input)="pfSet('price', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Price' | t">
+              <select class="tst-sel" [value]="pf().currency" (change)="pfSet('currency', $event)" [attr.aria-label]="'Currency' | t">
+                @for (c of currencies; track c) { <option [value]="c" [selected]="c === pf().currency">{{ c }}</option> }</select>
+              <select class="tst-sel" [value]="pf().vat" (change)="pfSet('vat', $event)" [attr.aria-label]="'VAT' | t">
+                <option value="" [selected]="!pf().vat">{{ 'VAT not said' | t }}</option>
+                <option value="excl" [selected]="pf().vat === 'excl'">{{ '+VAT (excluded)' | t }}</option>
+                <option value="incl" [selected]="pf().vat === 'incl'">{{ 'VAT included' | t }}</option></select>
+              <select class="tst-sel" [value]="pf().stock" (change)="pfSet('stock', $event)" [attr.aria-label]="'Stock on the site' | t">
+                <option value="" [selected]="!pf().stock">{{ 'Stock not said' | t }}</option>
+                <option value="in" [selected]="pf().stock === 'in'">{{ 'In stock' | t }}</option>
+                <option value="out" [selected]="pf().stock === 'out'">{{ 'Out of stock' | t }}</option></select>
+              <input class="tst-in mf-pf-qty" inputmode="numeric" [placeholder]="'Qty' | t" [value]="pf().stock_qty" (input)="pfSet('stock_qty', $event)" [attr.aria-label]="'How many the seller has' | t" [title]="'How many the seller has' | t">
+            </div>
             <div class="mf-pf-acts">
               <button class="tcv-btn tcv-btn-accent" (click)="saveProduct(m)" [disabled]="!pf().name.trim() || saving()">{{ (editing() ? 'Save' : 'Add') | t }}</button>
               <button class="tcv-btn" (click)="editing.set(null)">{{ 'Cancel' | t }}</button>
@@ -473,28 +524,31 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
           <div class="mf-stockform mf-ctl">
             <span class="mf-stocklabel">{{ fmt('Add {n} products to stock', { n: picked_().size }) }}</span>
             <ng-container *ngTemplateOutlet="stockFields" />
-            <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m, pickedIds())" [disabled]="saving()">{{ 'Add to stock' | t }}</button>
+            <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m.id, pickedIds())" [disabled]="saving()">{{ 'Add to stock' | t }}</button>
             <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
           </div>
         }
-        <ng-template #stockFields>
-          <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Quantity' | t">
-          <input class="tst-in mf-sf-unit" list="inv-units-mf" [value]="sf().unit" (input)="sfSet('unit', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Unit' | t">
-          <input class="tst-in mf-sf-loc" [placeholder]="'Location' | t" [value]="sf().location" (input)="sfSet('location', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Location' | t">
-          <input class="tst-in mf-sf-note" [placeholder]="'Note for the log (optional)' | t" [value]="sf().note" (input)="sfSet('note', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Note' | t">
-          <datalist id="inv-units-mf">@for (u of units; track u) { <option [value]="u"></option> }</datalist>
-        </ng-template>
-        @if (m.products?.length) {
+        @if (m.products?.length && layout() === 'grid') {
+          <div class="mf-grid">
+            @for (p of found().slice(0, shownRows()); track p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: asItem(p, m) }" /> }
+            @empty { <p class="st-hint mf-pad">{{ 'Nothing matches.' | t }}</p> }
+          </div>
+          @if (found().length > shownRows()) {
+            <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
+          }
+        } @else if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
               <thead><tr>@if (can()) { <th class="mf-selcol"><input type="checkbox" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th> }
-                <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
+                <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pprice r">{{ 'Price' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
               <tbody>
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
-                    <td class="mf-pname" [title]="p.name">{{ p.name }}@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
+                    <td class="r mf-pprice" [title]="p.price?.text || ''">@if (p.price) { <b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
+                      @if (p.stock) { <br><span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }</td>
                     <td class="dim mf-pcat" [title]="p.category">{{ p.category || '–' }}</td>
                     <td class="mf-specs" [title]="specLine(p)">@for (s of specs(p); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }@if (!specs(p).length) { <span class="dim">–</span> }</td>
                     <td class="mf-desc dim" [title]="p.description">{{ p.description || '–' }}</td>
@@ -512,16 +566,16 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                       }</td>
                   </tr>
                   @if (stockFor() === p.id) {
-                    <tr class="mf-stockrow"><td [attr.colspan]="can() ? 7 : 6">
+                    <tr class="mf-stockrow"><td [attr.colspan]="can() ? 8 : 7">
                       <div class="mf-stockform mf-ctl">
                         <span class="mf-stocklabel">{{ stock()[p.id] ? fmt('Top up {name} in stock', { name: p.name }) : fmt('Add {name} to stock', { name: p.name }) }}</span>
                         <ng-container *ngTemplateOutlet="stockFields" />
-                        <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m, [p.id])" [disabled]="saving()">{{ (stock()[p.id] ? 'Top up' : 'Add to stock') | t }}</button>
+                        <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m.id, [p.id])" [disabled]="saving()">{{ (stock()[p.id] ? 'Top up' : 'Add to stock') | t }}</button>
                         <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
                       </div>
                     </td></tr>
                   }
-                } @empty { <tr><td [attr.colspan]="can() ? 7 : 6" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+                } @empty { <tr><td [attr.colspan]="can() ? 8 : 7" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
               </tbody>
             </table>
           </div>
@@ -534,13 +588,85 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
       </section>
 
     } @else {
-      <!-- ================= the overview, and adding one ================= -->
-      <header class="tst-head tsh-head">
+      <!-- ================= the overview: every product as a grid, or the sites and adding one ================= -->
+      <header class="tst-head tsh-head mf-homehead">
         <div class="tst-title">
           <h2>{{ 'Product Catalog' | t }}</h2>
-          <span class="st-sub">{{ 'Makers whose catalogs you keep, read from their own sites. Chat looks here when you need a part from a maker.' | t }}</span>
+          <span class="st-sub">{{ fmt('{n} products from {m} sites. Chat looks here when you need a part.', { n: num(totalProducts()), m: all().length }) }}</span>
+        </div>
+        <div class="tst-acts">
+          <div class="st-seg" role="tablist" [attr.aria-label]="'Product Catalog' | t">
+            <button [class.on]="sub() === 'products'" (click)="sub.set('products')">{{ 'All products' | t }}</button>
+            <button [class.on]="sub() === 'sites'" (click)="sub.set('sites')">{{ fmt('Sites ({n})', { n: all().length }) }}</button>
+          </div>
+          @if (can()) { <button class="tcv-btn" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }
         </div>
       </header>
+      @if (sub() === 'products') {
+        <div class="mf-gbar mf-ctl">
+          <input #gridSearch class="tst-in mf-gfind" type="search" [placeholder]="'Search every product: name, code, size, material, seller' | t" [value]="pq()"
+                 (input)="pq.set($any($event.target).value); gpages.set(1)" (keydown.escape)="pq.set('')" [attr.aria-label]="'Search products' | t">
+          <select class="tst-sel" [value]="cat()" (change)="cat.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Category' | t">
+            <option value="">{{ 'All categories' | t }}</option>
+            @for (c of grid()?.categories ?? []; track c[0]) { <option [value]="c[0]" [selected]="c[0] === cat()">{{ c[0] }} ({{ c[1] }})</option> }
+          </select>
+          <select class="tst-sel" [value]="gmaker()" (change)="gmaker.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Maker' | t">
+            <option value="">{{ 'All makers' | t }}</option>
+            @for (k of grid()?.makers ?? []; track k.id) { <option [value]="k.id" [selected]="k.id === gmaker()">{{ k.name }} ({{ k.count }})</option> }
+          </select>
+          <select class="tst-sel" [value]="gseller()" (change)="gseller.set($any($event.target).value); gpages.set(1)" [attr.aria-label]="'Seller' | t">
+            <option value="">{{ 'All sellers' | t }}</option>
+            @for (k of grid()?.sellers ?? []; track k[0]) { <option [value]="k[0]" [selected]="k[0] === gseller()">{{ k[0] }} ({{ k[1] }})</option> }
+          </select>
+          <span class="mf-range">
+            <input class="tst-in" inputmode="decimal" [placeholder]="'Min price' | t" [value]="gmin()" (change)="gmin.set($any($event.target).value.trim()); gpages.set(1)" [attr.aria-label]="'Min price' | t">
+            <span class="dim">–</span>
+            <input class="tst-in" inputmode="decimal" [placeholder]="'Max price' | t" [value]="gmax()" (change)="gmax.set($any($event.target).value.trim()); gpages.set(1)" [attr.aria-label]="'Max price' | t">
+          </span>
+          <label class="mf-check"><input type="checkbox" [checked]="gstock()" (change)="gstock.set($any($event.target).checked); gpages.set(1)"> {{ 'In stock' | t }}</label>
+          <select class="tst-sel" [value]="gsort()" (change)="gsort.set($any($event.target).value)" [attr.aria-label]="'Sort' | t">
+            @for (o of sorts; track o.id) { <option [value]="o.id" [selected]="o.id === gsort()">{{ o.label | t }}</option> }
+          </select>
+          @if (filtered()) { <button class="tcv-btn" (click)="clearFilters()">{{ 'Clear' | t }}</button> }
+          <span class="st-right st-sub mf-gcount">{{ grid() ? fmt('{n} of {m}', { n: num(grid()!.total), m: num(grid()!.all) }) : '' }}</span>
+          <ng-container *ngTemplateOutlet="layoutT" />
+        </div>
+        @if (grid(); as g) {
+          @if (layout() === 'grid') {
+            <div class="mf-grid">
+              @for (p of g.items; track p.maker.id + p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: p }" /> }
+            </div>
+          } @else {
+            <div class="st-table-wrap mf-gtable-wrap">
+              <table class="st-table mf-gtable">
+                <thead><tr><th class="mf-gthumb"></th><th>{{ 'Product' | t }}</th><th>{{ 'Seller' | t }}</th><th class="r">{{ 'Price' | t }}</th>
+                  <th>{{ 'Stock' | t }}</th><th>{{ 'Category' | t }}</th><th>{{ 'Code' | t }}</th><th class="r">{{ 'Read' | t }}</th></tr></thead>
+                <tbody>
+                  @for (p of g.items; track p.maker.id + p.id) {
+                    <tr class="mf-prow" (click)="openDetail(p)">
+                      <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
+                      <td class="give"><b>{{ p.name }}</b></td>
+                      <td class="dim">{{ sellerName(p) }}</td>
+                      <td class="r">@if (p.price) { <b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
+                      <td>@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
+                      <td class="dim">{{ p.category || '–' }}</td>
+                      <td class="mono dim">{{ p.sku || '–' }}</td>
+                      <td class="r dim">{{ ago(p.read_at || p.price?.at || p.added_at) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          @if (!g.items.length) {
+            <p class="st-hint mf-gempty">{{ (g.all ? 'No product matches - try fewer words or clear the filters.' : 'No products yet: add a site, or read a product page into the catalog.') | t }}
+              @if (!g.all && can()) { <button class="st-more" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }</p>
+          }
+          @if (g.total > g.items.length) {
+            <button class="st-more mf-morerows" (click)="gpages.set(gpages() + 1)">{{ fmt('Show {n} more', { n: g.total - g.items.length }) }}</button>
+          }
+        } @else { <p class="st-hint">{{ 'Loading…' | t }}</p> }
+      } @else {
       <div class="st-tiles mf-htiles">
         <div class="st-tile" [attr.data-tone]="all().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b>{{ all().length }}</b>
           <small>{{ fmt('{n} explored', { n: exploredCount() }) }}</small></div>
@@ -670,9 +796,124 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
           </ol>
         </section>
       }
+      }
+    }
+    <!-- ================= one product, in full ================= -->
+    @if (detail(); as d) {
+      <div class="mf-modal" (click)="closeDetail()">
+        <div class="mf-detail" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()">
+          <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
+            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
+          <div class="mf-dgal">
+            <div class="mf-dimg">@if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+              @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
+            @if (gallery().length > 1) {
+              <div class="mf-thumbs">@for (u of gallery(); track u) {
+                <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+            }
+          </div>
+          <div class="mf-dinfo">
+            <span class="mf-dseller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">
+              <span>{{ sellerName(d) }}</span>
+              @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <span class="dim">· {{ d.maker.name }}</span> }
+              <button class="st-more" (click)="closeDetail(); openMaker(d.maker.id)">{{ 'Open the maker' | t }}</button></span>
+            <h2 class="mf-dname">{{ d.name }}</h2>
+            <div class="mf-dmeta">
+              @if (d.sku) { <span class="mono">{{ fmt('Code {c}', { c: d.sku }) }}</span> }
+              @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
+              @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
+              @if (dStock()[d.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }
+            </div>
+            <div class="mf-dprice">
+              @if (d.price) {
+                <b>{{ money2(d.price.amount, d.price.currency) }}</b>
+                @if (d.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (d.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
+                @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ money2(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
+                @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: money2(d.price.gross, d.price.currency) }) }}</small> }
+              } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
+            </div>
+            <div class="mf-dstock">
+              @if (d.stock) { <span class="mf-stock mf-stock-inline" [attr.data-s]="d.stock">{{ stockName(d) }}</span>
+                @if (d.stock_text) { <span class="dim">"{{ d.stock_text }}"</span> } }
+              @else { <span class="dim">{{ 'The page did not say whether it is in stock.' | t }}</span> }
+              @if (d.price?.at || d.read_at) { <span class="dim">· {{ fmt('read {w}', { w: ago(d.read_at || d.price?.at) }) }}</span> }
+            </div>
+            <dl class="mf-dates">
+              <div><dt>{{ 'Added to the catalog' | t }}</dt><dd>{{ stamp(d.added_at) }}</dd></div>
+              <div><dt>{{ 'Price read' | t }}</dt><dd>{{ stamp(d.price?.at) }}</dd></div>
+              <div><dt>{{ 'Page read' | t }}</dt><dd>{{ stamp(d.read_at) }}</dd></div>
+              <div><dt>{{ "Seller's update" | t }}</dt><dd>{{ d.updated ? stamp(d.updated) : ('not given' | t) }}</dd></div>
+            </dl>
+            <div class="mf-dacts">
+              @if (d.url) { <a class="tcv-btn tcv-btn-accent" [href]="d.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
+              @if (can()) {
+                <button class="tcv-btn" (click)="openStock(d.id)">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
+                <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>
+                <button class="tcv-btn tst-del" (click)="deleteFromDetail(d)">{{ 'Delete' | t }}</button>
+              }
+            </div>
+            @if (stockFor() === d.id) {
+              <div class="mf-stockform mf-ctl mf-dstockform">
+                <ng-container *ngTemplateOutlet="stockFields" />
+                <button class="tcv-btn tcv-btn-accent" (click)="addToStock(d.maker.id, [d.id])" [disabled]="saving()">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
+                <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
+              </div>
+            }
+            @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
+            @if (specList(d).length) {
+              <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
+            }
+            @if (d.history?.length) {
+              <span class="mf-label">{{ 'Price and stock, as read' | t }}</span>
+              <table class="st-table mf-dhist">
+                <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
+                <tbody>@for (h of histRows(d); track h.at) {
+                  <tr><td>{{ stamp(h.at) }}@if (h.seen) { <span class="dim"> – {{ stamp(h.seen) }}</span> }</td>
+                    <td class="r">{{ h.amount != null ? money2(h.amount, h.currency || '') : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
+                    <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
+                    <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
+                }</tbody>
+              </table>
+            }
+          </div>
+        </div>
+      </div>
     }
   </section>
-</div>`,
+</div>
+<!-- ================= shared pieces ================= -->
+<ng-template #cardT let-p>
+  <button class="mf-card" (click)="openDetail(p)" [title]="p.name">
+    <span class="mf-card-img">
+      @if (img(p); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+      @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }
+      @if (p.stock) { <span class="mf-stock" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }
+    </span>
+    <span class="mf-card-body">
+      <span class="mf-card-name">{{ p.name }}</span>
+      @if (p.price) {
+        <span class="mf-card-price"><b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
+          @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ money2(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }</span>
+      } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}</span> }
+      <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
+      <span class="mf-card-foot">@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
+    </span>
+  </button>
+</ng-template>
+<ng-template #layoutT>
+  <div class="st-seg mf-layout" role="radiogroup" [attr.aria-label]="'Layout' | t">
+    <button [class.on]="layout() === 'grid'" (click)="layout.set('grid')" [title]="'Grid' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.grid" /></svg>{{ 'Grid' | t }}</button>
+    <button [class.on]="layout() === 'table'" (click)="layout.set('table')" [title]="'Table' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.rows" /></svg>{{ 'Table' | t }}</button>
+  </div>
+</ng-template>
+<ng-template #stockFields>
+          <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Quantity' | t">
+          <input class="tst-in mf-sf-unit" list="inv-units-mf" [value]="sf().unit" (input)="sfSet('unit', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Unit' | t">
+          <input class="tst-in mf-sf-loc" [placeholder]="'Location' | t" [value]="sf().location" (input)="sfSet('location', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Location' | t">
+          <input class="tst-in mf-sf-note" [placeholder]="'Note for the log (optional)' | t" [value]="sf().note" (input)="sfSet('note', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Note' | t">
+          <datalist id="inv-units-mf">@for (u of units; track u) { <option [value]="u"></option> }</datalist>
+        </ng-template>
+`,
 })
 export class RoomMfr implements OnDestroy {
   private api = inject(MfrApi);
@@ -681,6 +922,7 @@ export class RoomMfr implements OnDestroy {
   private auth = inject(Auth);
   private prefs = inject(Prefs);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
+  private gridSearch = viewChild<ElementRef<HTMLInputElement>>('gridSearch');
   private addUrlBox = viewChild<ElementRef<HTMLInputElement>>('addUrlBox');
 
   readonly choices = PROXY_CHOICES;
@@ -696,6 +938,30 @@ export class RoomMfr implements OnDestroy {
   pq = signal(this.url.get('q') ?? '');
   cat = signal(this.url.get('cat') ?? '');
   listQ = signal('');
+  /** The overview: every product (the grid, the default), or the sites and adding one. */
+  sub = signal<'products' | 'sites'>(this.url.get('sub') === 'sites' ? 'sites' : 'products');
+  /** Cards or rows - the overview's and a maker's catalog alike. */
+  layout = signal<'grid' | 'table'>(this.url.get('view') === 'table' ? 'table' : 'grid');
+  gmaker = signal(this.url.get('maker') ?? '');
+  gseller = signal(this.url.get('seller') ?? '');
+  gmin = signal(this.url.get('min') ?? '');
+  gmax = signal(this.url.get('max') ?? '');
+  gstock = signal(this.url.get('stock') === 'in');
+  gsort = signal(this.url.get('sort') ?? 'new');
+  gpages = signal(1);
+  grid = signal<GridAnswer | null>(null);
+  private gtimer?: ReturnType<typeof setTimeout>;
+  private gseq = 0;
+  readonly sorts = [{ id: 'new', label: 'Newest' }, { id: 'price_asc', label: 'Price: low to high' },
+                    { id: 'price_desc', label: 'Price: high to low' }, { id: 'name', label: 'Name' }, { id: 'match', label: 'Best match' }];
+  readonly currencies = CURRENCIES;
+  filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock()));
+  /** The product open in full (?p=, its maker ?pm=), the picture shown big, what the Inventory holds of its maker's. */
+  detail = signal<GridItem | null>(null);
+  shot = signal<string | null>(null);
+  dStock = signal<Record<string, CatalogStock>>({});
+  /** Pictures that did not load: the placeholder instead. */
+  broken = signal<Set<string>>(new Set());
 
   all = signal<Maker[]>([]);
   maker = signal<Maker | null>(null);
@@ -749,15 +1015,36 @@ export class RoomMfr implements OnDestroy {
     this.read();
     if (this.view() === 'run' && this.rid()) this.showRun(this.rid()!);
     else if (this.view() === 'maker' && this.mid()) this.openMaker(this.mid()!, true);
+    // A product that was open in full, after F5.
+    const pid = this.url.get('p'), pm = this.url.get('pm');
+    if (pid && pm) this.api.get(pm).subscribe({ next: m => { const p = (m.products ?? []).find(x => x.id === pid); if (p) this.openDetail(this.asItem(p, m)); }, error: () => {} });
+    // The overview's grid: read again when what it shows changes (a breath after typing).
+    effect(() => {
+      if (this.view() !== 'home' || this.sub() !== 'products') return;
+      const f: GridQuery = { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(),
+                             max: this.gmax(), stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages() };
+      untracked(() => { clearTimeout(this.gtimer); this.gtimer = setTimeout(() => this.loadGrid(f), this.grid() ? 180 : 0); });
+    });
     // The address follows the page, so F5 comes back here.
     effect(() => {
       const v = this.view(), m = this.mid(), r = this.rid(), q = this.pq(), c = this.cat();
+      const home = v === 'home', grid = home && this.sub() === 'products', d = this.detail();
       const url = new URL(location.href);
       const set = (k: string, val: string | null) => val ? url.searchParams.set(k, val) : url.searchParams.delete(k);
       set('m', v === 'maker' ? m : null);
       set('run', v === 'run' ? r : null);
-      set('q', v === 'maker' ? q : null);
-      set('cat', v === 'maker' ? c : null);
+      set('q', v === 'maker' || grid ? q : null);
+      set('cat', v === 'maker' || grid ? c : null);
+      set('sub', home && this.sub() === 'sites' ? 'sites' : null);
+      set('maker', grid ? this.gmaker() : null);
+      set('seller', grid ? this.gseller() : null);
+      set('min', grid ? this.gmin() : null);
+      set('max', grid ? this.gmax() : null);
+      set('stock', grid && this.gstock() ? 'in' : null);
+      set('sort', grid && this.gsort() !== 'new' ? this.gsort() : null);
+      set('view', v !== 'run' && this.layout() === 'table' ? 'table' : null);
+      set('p', d ? d.id : null);
+      set('pm', d ? d.maker.id : null);
       if (url.href !== location.href) history.replaceState(null, '', url);
     });
     // A manufacturer's own fetching choice, once it is open.
@@ -787,6 +1074,7 @@ export class RoomMfr implements OnDestroy {
 
   private read() {
     this.api.list('').subscribe({ next: ms => this.all.set(ms), error: () => {} });
+    if (this.view() === 'home' && this.sub() === 'products') this.loadGrid();
     const m = this.maker();
     if (m && this.view() === 'maker') { this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} }); this.readStock(m.id); }
   }
@@ -804,17 +1092,23 @@ export class RoomMfr implements OnDestroy {
     const v = (e.target as HTMLInputElement).value;
     this.sf.update(f => ({ ...f, [k]: v }));
   }
-  stockEnter(m: Maker) { const f = this.stockFor(); if (f) this.addToStock(m, f === '*' ? this.pickedIds() : [f]); }
-  addToStock(m: Maker, ids: string[]) {
+  stockEnter() {
+    const f = this.stockFor(), d = this.detail();
+    if (!f) return;
+    if (d && f === d.id) this.addToStock(d.maker.id, [f]);
+    else if (this.mid()) this.addToStock(this.mid()!, f === '*' ? this.pickedIds() : [f]);
+  }
+  addToStock(mid: string, ids: string[]) {
     const f = this.sf(), q = Number(f.quantity.trim().replace(',', '.'));
     if (!ids.length || this.saving()) return;
     if (!f.quantity.trim() || !Number.isFinite(q) || q < 0) { this.say(t('The quantity is not a number.')); return; }
-    const body = { manufacturer: m.id, quantity: q, unit: f.unit.trim() || 'pcs', location: f.location.trim(), note: f.note.trim() };
+    const body = { manufacturer: mid, quantity: q, unit: f.unit.trim() || 'pcs', location: f.location.trim(), note: f.note.trim() };
     this.saving.set(true);
     const done = (added: number, merged: number, bad: string[]) => {
       this.saving.set(false);
       this.stockFor.set(null);
-      this.readStock(m.id);
+      this.readStock(mid);
+      if (this.detail()?.maker.id === mid) this.inv.stock(mid).subscribe({ next: st => this.dStock.set(st), error: () => {} });
       this.say(ids.length === 1 && !bad.length
         ? (merged ? t('Topped up in the Inventory: an item there is already that product.') : t('Added to the Inventory.'))
         : this.fmt('{a} added to stock, {m} topped up', { a: added, m: merged }) + (bad.length ? ' · ' + bad.join('; ') : ''));
@@ -893,10 +1187,110 @@ export class RoomMfr implements OnDestroy {
       error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not open it.')); this.goHome(); },
     });
   }
-  goHome() { this.stopFollowing(); this.view.set('home'); this.maker.set(null); this.mid.set(null); }
+  goHome() {
+    this.stopFollowing();
+    if (this.view() !== 'home') { this.pq.set(''); this.cat.set(''); }
+    this.view.set('home'); this.maker.set(null); this.mid.set(null);
+  }
   goAdd() {
     this.goHome();
+    this.sub.set('sites');
     setTimeout(() => this.addUrlBox()?.nativeElement.focus(), 50);
+  }
+
+  // ---- the grid of every product, and one product in full
+
+  loadGrid(f?: GridQuery) {
+    f ??= { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(), max: this.gmax(),
+            stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages() };
+    const n = ++this.gseq;
+    this.api.products(f).subscribe({ next: g => { if (n === this.gseq) this.grid.set(g); }, error: () => { if (n === this.gseq && !this.grid()) this.grid.set(null); } });
+  }
+  clearFilters() {
+    this.pq.set(''); this.cat.set(''); this.gmaker.set(''); this.gseller.set(''); this.gmin.set(''); this.gmax.set('');
+    this.gstock.set(false); this.gpages.set(1);
+  }
+  asItem(p: Product, m: Pick<Maker, 'id' | 'name' | 'domain'>): GridItem {
+    return { ...p, maker: { id: m.id, name: m.name, domain: m.domain } };
+  }
+  openDetail(p: GridItem) {
+    this.detail.set(p);
+    this.shot.set(null);
+    this.stockFor.set(null);
+    this.dStock.set({});
+    this.inv.stock(p.maker.id).subscribe({ next: st => { if (this.detail()?.maker.id === p.maker.id) this.dStock.set(st); }, error: () => {} });
+  }
+  closeDetail() { this.detail.set(null); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
+  editFromDetail(d: GridItem) {
+    this.closeDetail();
+    this.openMaker(d.maker.id);
+    this.openProduct(d);
+  }
+  deleteFromDetail(d: GridItem) {
+    this.sure(t('Delete this product?'), d.name).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
+      next: r => { this.closeDetail(); this.replace(r.manufacturer); this.read(); },
+      error: this.failed('Could not delete it.'),
+    }));
+  }
+  /** Its pictures, the main one first; those that did not load left out. */
+  pics(p: Product): string[] {
+    const b = this.broken();
+    return [...new Set([p.image, ...(p.images ?? [])].filter(u => !!u && !b.has(u)))];
+  }
+  img(p: Product): string | null { return this.pics(p)[0] ?? null; }
+  gallery = computed(() => { const d = this.detail(); return d ? this.pics(d).slice(0, 12) : []; });
+  bigImg = computed(() => { const s = this.shot(), g = this.gallery(); return s && g.includes(s) ? s : g[0] ?? null; });
+  broke(src: string) { if (!this.broken().has(src)) this.broken.update(s => new Set(s).add(src)); }
+  /** The seller's site: its own little icon (loaded from it, like the pictures). */
+  fav(p: GridItem): string {
+    const h = p.seller?.host || p.seller?.domain || p.maker?.domain;
+    return h ? `https://${h.startsWith('www.') || h.split('.').length > 2 ? h : 'www.' + h}/favicon.ico` : '';
+  }
+  sellerName(p: GridItem) { return p.seller?.name || p.seller?.domain || p.maker?.domain || p.maker?.name || ''; }
+  stockName(p: { stock?: 'in' | 'out'; stock_qty?: number }) {
+    if (p.stock === 'out') return t('Out of stock');
+    return p.stock_qty != null ? this.fmt('{n} left', { n: p.stock_qty }) : t('In stock');
+  }
+  readAgo(p: Product) {
+    const r = p.read_at || p.price?.at;
+    return r ? this.fmt('read {w}', { w: this.ago(r) }) : p.added_at ? this.fmt('added {w}', { w: this.ago(p.added_at) }) : '';
+  }
+  specList(p: Product) { return Object.entries(p.specs ?? {}); }
+  /** The readings newest first, each with how much the price moved from the one before. */
+  histRows(p: Product) {
+    const h = p.history ?? [];
+    return h.map((x, i) => {
+      const prev = h[i - 1];
+      const change = prev?.amount && x.amount != null && prev.currency === x.currency ? (x.amount - prev.amount) / prev.amount * 100 : 0;
+      return { ...x, change: Math.abs(change) < 0.05 ? 0 : change };
+    }).reverse();
+  }
+  money2(v: number, cur: string) {
+    const loc = LANG() === 'tr' ? 'tr-TR' : 'en-US';
+    try {
+      if (cur) return new Intl.NumberFormat(loc, { style: 'currency', currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+    } catch { /* not a currency the browser knows */ }
+    return new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + (cur ? ' ' + cur : '');
+  }
+  /** How long ago: "just now", "5 min ago", "2 h ago", "3 d ago", else the date. */
+  ago(iso: string | null | undefined): string {
+    if (!iso) return '–';
+    const ms = Date.parse(iso);
+    if (Number.isNaN(ms)) return iso;
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    if (s < 60) return t('just now');
+    if (s < 3600) return this.fmt('{n} min ago', { n: Math.floor(s / 60) });
+    if (s < 86400) return this.fmt('{n} h ago', { n: Math.floor(s / 3600) });
+    if (s < 30 * 86400) return this.fmt('{n} d ago', { n: Math.floor(s / 86400) });
+    return when(iso);
+  }
+  /** A date in full: 12 Oct 2026 14:05 - or as the seller wrote it. */
+  stamp(iso: string | null | undefined): string {
+    if (!iso) return '–';
+    const ms = Date.parse(iso);
+    if (Number.isNaN(ms)) return iso;
+    const loc = LANG() === 'tr' ? 'tr-TR' : 'en-GB';
+    return new Date(ms).toLocaleString(loc, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' · ' + this.ago(iso);
   }
 
   rename(m: Maker, name: string) {
@@ -1019,7 +1413,9 @@ export class RoomMfr implements OnDestroy {
   openProduct(p: Product | null) {
     this.editing.set(p ? p.id : '');
     this.pf.set(p ? { name: p.name, category: p.category, sku: p.sku, description: p.description, url: p.url, image: p.image,
-                      specs: Object.entries(p.specs ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n') } : { ...NO_PRODUCT });
+                      specs: Object.entries(p.specs ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
+                      price: p.price ? String(Math.round(p.price.amount * 100) / 100) : '', currency: p.price?.currency || 'TRY', vat: p.price?.vat ?? '',
+                      stock: p.stock ?? '', stock_qty: p.stock_qty != null ? String(p.stock_qty) : '' } : { ...NO_PRODUCT });
   }
   pfSet(k: keyof ProductFields, e: Event) {
     const v = (e.target as HTMLInputElement).value;
@@ -1254,7 +1650,8 @@ export class RoomMfr implements OnDestroy {
 
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
-    if (e.key === '/' && !typing) { e.preventDefault(); this.search().nativeElement.focus(); }
+    if (e.key === 'Escape' && this.detail() && !typing) { this.closeDetail(); return; }
+    if (e.key === '/' && !typing) { e.preventDefault(); (this.gridSearch() ?? this.search()).nativeElement.focus(); }
   }
 
   ngOnDestroy() {

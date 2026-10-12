@@ -158,8 +158,9 @@ def test_a_shop_page_makes_its_maker_and_waits_for_the_products(ws):
     assert got.vars["product"] == FILAMENT and got.vars["name"] == "robo90.com" and got.vars["run"] == j["_id"]
     assert got.vars["link"] == f"/?ws=catalog&m={m['_id']}&run={j['_id']}"
     assert "A new manufacturer was made" in got.text and f"[{p['id']}] {FILAMENT}" in got.text
-    assert "code R90-PLA-GRI" in got.text and "Fiyat: 449,90 TL" in got.text and "1 added" in got.text
-    assert "449,90 TL" in got.summary
+    assert "code R90-PLA-GRI" in got.text and "price: 449.90 TRY (as of" in got.text and "1 added" in got.text
+    assert "449.90 TRY" in got.summary and "sold on robo90.com" in got.text
+    assert p["price"]["amount"] == 449.9 and p["price"]["currency"] == "TRY" and p["seller"]["domain"] == "robo90.com"
     # only that page (and its robots.txt) was fetched
     assert web["seen"] == ["https://www.robo90.com/robots.txt", PAGE]
 
@@ -219,6 +220,9 @@ def test_a_run_longer_than_the_wait_goes_on_in_the_background(ws, monkeypatch):
 def test_a_run_that_finds_nothing_fails_and_says_why(ws, monkeypatch):
     db, _, _ = ws
     fake_model(monkeypatch, empty=True)
+    web = ws[1]                                       # a page that is not a product's (a product's page gives its own)
+    web["site"] = lambda req: httpx.Response(200, text="<html><title>Hakkımızda</title><body><p>Biz bir firmayız.</p>"
+                                             "</body></html>", headers={"content-type": "text/html"})
     with pytest.raises(ToolError, match="found no products on the page.*made for the site and is kept"):
         call(db, "catalog_read_page", {"urls": [PAGE]})
     assert len(makers(db)) == 1
@@ -285,6 +289,22 @@ def test_products_by_hand_added_edited_and_removed(ws):
         call(db, "catalog_edit_product", {"manufacturer": mid, "product": "petg", "set": {"sku": "R90-PLA-GRI"}})
     with pytest.raises(ToolError, match="2 products of Robo90 match 'pla'"):
         call(db, "catalog_edit_product", {"manufacturer": mid, "product": "pla", "set": {"category": "x"}})
+
+    # a price and the seller's stock: given, changed, remembered, and read back by manufacturer_search
+    got = call(db, "catalog_add_product", {"manufacturer": mid, "products": [
+        {"name": "Kırmızı PLA", "code": "R90-PLA-KRM", "price": "362,60 TL + KDV", "stock": "Son 3 adet"}]})
+    krm = next(p for p in run(mf.get(db, mid))["products"] if p["sku"] == "R90-PLA-KRM")
+    assert (krm["price"]["amount"], krm["price"]["currency"], krm["price"]["vat"]) == (362.6, "TRY", "excl")
+    assert krm["stock"] == "in" and krm["stock_qty"] == 3 and "price: 362.60 TRY + VAT" in got.text
+    call(db, "catalog_edit_product", {"manufacturer": mid, "product": krm["id"], "set": {"price": 399, "stock": "out"}})
+    krm = next(p for p in run(mf.get(db, mid))["products"] if p["id"] == krm["id"])
+    assert krm["price"]["amount"] == 399 and krm["price"]["currency"] == "TRY" and krm["price"]["vat"] == "excl"
+    assert [h["amount"] for h in krm["history"]] == [362.6, 399] and krm["stock"] == "out"
+    with pytest.raises(ToolError, match="not a price"):
+        call(db, "catalog_edit_product", {"manufacturer": mid, "product": krm["id"], "set": {"price": "sorunuz"}})
+    found = call(db, "manufacturer_search", {"query": "kırmızı"})
+    assert "price 399.00 TRY + VAT" in found.text and "out of stock on the site" in found.text
+    call(db, "catalog_remove_product", {"manufacturer": mid, "products": [krm["id"]]})
 
     # remove (asked first in a real answer: its level)
     got = call(db, "catalog_remove_product", {"manufacturer": "robo90", "products": ["Siyah PETG", gri["id"]]})

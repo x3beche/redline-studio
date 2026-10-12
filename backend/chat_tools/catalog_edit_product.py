@@ -37,10 +37,12 @@ async def run(ctx: Ctx, args: dict) -> Result:
 TOOL = Tool(
     name="catalog_edit_product", package="mfr", level="change", order=72, default=False,
     label="Edit a catalog product",
-    about="Changes a product in a maker's catalog: its name, code, category, description, specs, page or picture.",
+    about="Changes a product in a maker's catalog: its name, code, category, description, specs, price, stock, page or picture.",
     description="Change one product in the Product Catalog. `manufacturer`: the maker's id or name; `product`: the "
                 "product's id (manufacturer_search gives them) or its name or code; `set`: only the fields to "
-                "change (name, category, sku, description, specs, url, image). `specs` given are added to the "
+                "change (name, category, sku, description, specs, url, image, price, currency, vat, list_price, "
+                "stock, stock_qty - a new price is remembered in the product's price history; price \"\" takes it "
+                "away). `specs` given are added to the "
                 "product's specs (a spec of the same name replaced) unless `replace_specs` is true. Use it only "
                 "when the person asks to correct or change a product.",
     schema={"type": "object", "properties": {

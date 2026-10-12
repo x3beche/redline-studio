@@ -25,6 +25,14 @@ PRODUCT_PROPS = {
               "additionalProperties": {"type": "string"}},
     "url": {"type": "string", "description": "Its page (http(s))"},
     "image": {"type": "string", "description": "Its picture's address (http(s))"},
+    "price": {"type": "string", "description": "Its price: a number (362.60), or as the seller writes it "
+                                                           "(\"362,60 TL + KDV\"); \"\" takes it away"},
+    "currency": {"type": "string", "description": "The price's currency: TRY, USD, EUR... (TL is TRY)"},
+    "vat": {"type": "string", "enum": ["incl", "excl", ""], "description": "Whether the price includes VAT (KDV dahil: "
+                                                                           "incl; + KDV / KDV hariç: excl)"},
+    "list_price": {"type": "string", "description": "The price before a discount, when there is one"},
+    "stock": {"type": "string", "description": "The seller's stock: \"in\", \"out\", or its words (\"Son 3 adet\")"},
+    "stock_qty": {"type": "integer", "description": "How many the seller has, when it says"},
 }
 
 
@@ -36,9 +44,11 @@ def fields(raw: dict, patch: bool = False) -> dict:
     f = {k: raw[k] for k in PRODUCT_PROPS if k in raw and raw[k] is not None}
     if raw.get("code") is not None and "sku" not in f:
         f["sku"] = raw["code"]
-    for k in ("name", "category", "sku", "description", "url", "image"):
+    for k in ("name", "category", "sku", "description", "url", "image", "currency", "vat"):
         if k in f and not isinstance(f[k], str):
             f[k] = str(f[k])
+    if isinstance(f.get("price"), str) and not f["price"].strip() and not patch:
+        f.pop("price")
     if isinstance(f.get("specs"), dict):
         f["specs"] = {str(k): (", ".join(map(str, v)) if isinstance(v, list) else str(v))
                       for k, v in f["specs"].items() if v is not None}
@@ -119,8 +129,9 @@ TOOL = Tool(
                 "the person gives (or that you read). `manufacturer`: the maker's id or words of its name "
                 "(manufacturer_search lists them); or `site`: the maker's website - the maker kept for that site "
                 "is used, or a new one is made for it (named `maker_name`, else from the host). Each product needs "
-                "a name; give its code/SKU, category, a short description, specs as {name: value} (a price the "
-                "person gives goes there too, e.g. \"Price\": \"499 TRY\"), its page and picture when known. A "
+                "a name; give its code/SKU, category, a short description, specs as {name: value}, its price "
+                "(`price` with `currency` and `vat`: incl or excl - \"+ KDV\" is excl), the seller's stock, its page "
+                "and picture when known. A "
                 "product with the same code (or, without one, the same name) as one already in the catalog is not "
                 "added again - the answer says so; change that one with catalog_edit_product. To read a product "
                 "page from the web instead, use catalog_read_page.",

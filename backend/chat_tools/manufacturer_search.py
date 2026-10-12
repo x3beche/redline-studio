@@ -86,7 +86,9 @@ TOOL = Tool(
     about="Lists the saved manufacturers, reads one's catalog, or searches their products by words and category.",
     description="The manufacturers this workspace keeps (the Manufacturers tab): makers whose websites were explored, "
                 "each with a summary, the person's notes on when to use them, categories and a product catalog "
-                "(name, category, description, specs such as dimensions and materials, code, product page). "
+                "(name, category, description, specs such as dimensions and materials, code, product page, and - when "
+                "its page showed them - its price with currency and VAT, the seller's stock and the site it is sold on, "
+                "with the date they were read). "
                 "Without arguments it lists them. With `manufacturer` (an id or words of its name) it reads that "
                 "one's whole catalog. With `query` (words) and/or `category` it searches the products - across "
                 "all manufacturers, or only that one's when `manufacturer` is given too. Catalogs keep the site's "

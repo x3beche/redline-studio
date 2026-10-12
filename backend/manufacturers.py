@@ -65,6 +65,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from . import access, actors, llm
+from . import catalog_facts as cf
 from .taste import CHARS_PER_TOKEN, Stopped, Tracker, _closed, _pid_alive, _seconds
 
 router = APIRouter(prefix="/api/manufacturers")
@@ -240,7 +241,9 @@ _BLOCK = {"p", "div", "section", "article", "header", "footer", "main", "aside",
 class _Page(HTMLParser):
     """What a page says, read without running anything on it: its title,
     description, text (a table's cells kept apart by |), links with their
-    words, and pictures with theirs."""
+    words, and pictures with theirs - the lazy-loaded ones too (data-src,
+    srcset...) - and, for catalog_facts, its structured data: the JSON-LD
+    blocks, the meta tags, microdata, the H1 and the canonical address."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -249,13 +252,34 @@ class _Page(HTMLParser):
         self.links: list[tuple[str, str]] = []
         self.images: list[tuple[str, str]] = []
         self.base: str | None = None
+        self.ld: list[str] = []
+        self.micro: dict[str, str] = {}
+        self.micro_products = 0
+        self.og_images: list[str] = []
+        self.canonical = ""
+        self.h1 = ""
         self._text: list[str] = []
         self._skip = 0
         self._in_title = False
         self._a: list | None = None
+        self._ld: list[str] | None = None
+        self._h1: list[str] | None = None
+        self._iprop: str | None = None
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v or "") for k, v in attrs}
+        if tag == "script" and "ld+json" in a.get("type", "").lower():
+            self._ld = []
+        if a.get("itemtype") and re.search(r"schema\.org/(Product|IndividualProduct|ProductModel)\b", a["itemtype"]):
+            self.micro_products += 1
+        prop = a.get("itemprop", "").strip()
+        if prop and prop.lower() in _MICRO:
+            val = a.get("content") or (a.get("href") if tag in ("link", "a") else "") or (
+                _best_src(a) if tag == "img" else "")
+            if val:
+                self.micro.setdefault(prop.lower(), val)
+            elif tag not in ("meta", "link", "img"):
+                self._iprop = prop.lower()
         if tag in _SKIP_TAGS:
             self._skip += 1
             return
@@ -265,15 +289,31 @@ class _Page(HTMLParser):
             self.base = a["href"]
         elif tag == "meta":
             key = (a.get("name") or a.get("property") or "").lower()
-            if key in ("description", "og:title", "og:image", "og:description", "keywords", "og:site_name"):
+            if key in ("og:image", "og:image:secure_url", "og:image:url") and a.get("content"):
+                self.og_images.append(a["content"])
+            if key and (key in ("description", "keywords") or key.startswith(("og:", "product:", "article:", "twitter:"))):
                 self.meta.setdefault(key, a.get("content") or "")
+        elif tag == "link":
+            rel = a.get("rel", "").lower().split()
+            if "canonical" in rel and a.get("href") and not self.canonical:
+                self.canonical = a["href"]
+            elif "image_src" in rel and a.get("href"):
+                self.og_images.append(a["href"])
         elif tag == "a" and a.get("href"):
             self._a = [a["href"], []]
             self._text.append(" ")
+            if cf.IMG_EXT.search(a["href"].split("#")[0]):             # a picture's zoom: <a href="...-B.jpg">
+                self.images.append((a["href"], a.get("title") or a.get("data-title") or ""))
         elif tag == "img":
-            src = a.get("data-src") or a.get("data-original") or a.get("data-lazy") or a.get("src") or ""
-            if src and not src.startswith("data:"):
+            src = _best_src(a)
+            if src:
                 self.images.append((src, a.get("alt") or a.get("title") or ""))
+        elif tag == "source":
+            src = _largest(a.get("srcset") or a.get("data-srcset") or "")
+            if src:
+                self.images.append((src, a.get("title") or ""))
+        elif tag == "h1" and not self.h1:
+            self._h1 = []
         elif tag in ("td", "th"):
             self._text.append(" | ")
         if tag in _BLOCK:
@@ -285,11 +325,17 @@ class _Page(HTMLParser):
             self._skip = max(0, self._skip - 1)
 
     def handle_endtag(self, tag):
+        if tag == "script" and self._ld is not None:
+            self.ld.append("".join(self._ld))
+            self._ld = None
         if tag in _SKIP_TAGS:
             self._skip = max(0, self._skip - 1)
             return
         if tag == "title":
             self._in_title = False
+        elif tag == "h1" and self._h1 is not None:
+            self.h1 = re.sub(r"\s+", " ", "".join(self._h1)).strip()
+            self._h1 = None
         elif tag == "a" and self._a is not None:
             self.links.append((self._a[0], _clean(" ".join(self._a[1]), 120)))
             self._a = None
@@ -298,11 +344,19 @@ class _Page(HTMLParser):
             self._text.append("\n")
 
     def handle_data(self, data):
+        if self._ld is not None:
+            self._ld.append(data)
+            return
         if self._skip:
             return
         if self._in_title:
             self.title += data
             return
+        if self._iprop and data.strip():
+            self.micro.setdefault(self._iprop, data.strip()[:200])
+            self._iprop = None
+        if self._h1 is not None:
+            self._h1.append(data)
         self._text.append(data)
         if self._a is not None:
             self._a[1].append(data)
@@ -316,6 +370,40 @@ class _Page(HTMLParser):
             if ln and (not lines or lines[-1] != ln):
                 lines.append(ln)
         return "\n".join(lines)
+
+
+_MICRO = {"price", "pricecurrency", "lowprice", "sku", "mpn", "availability", "image", "name", "brand"}
+_PLACEHOLDER = re.compile(r"(^data:|blank\.|spacer|placeholder|loading|lazy[-_]?load|transparent|1x1|pixel\.)", re.I)
+
+
+def _largest(srcset: str) -> str:
+    """The largest picture a srcset names ("a.jpg 320w, b.jpg 1024w" -> b.jpg)."""
+    best, size = "", -1.0
+    for part in str(srcset or "").split(","):
+        bits = part.strip().split()
+        if not bits or bits[0].startswith("data:"):
+            continue
+        m = re.match(r"([\d.]+)([wx])$", bits[1]) if len(bits) > 1 else None
+        n = float(m.group(1)) * (1 if m.group(2) == "w" else 1000) if m else 0.0
+        if n > size:
+            best, size = bits[0], n
+    return best
+
+
+def _best_src(a: dict) -> str:
+    """An <img>'s real picture: the zoom or full one when named, the largest
+    of a srcset, the lazy one (data-src...) before a placeholder src."""
+    for k in ("data-zoom-image", "data-zoom", "data-large_image", "data-large", "data-full", "data-original"):
+        if a.get(k) and not _PLACEHOLDER.search(a[k]):
+            return a[k]
+    for k in ("srcset", "data-srcset", "data-lazy-srcset"):
+        got = _largest(a.get(k) or "")
+        if got and not _PLACEHOLDER.search(got):
+            return got
+    for k in ("data-src", "data-lazy", "data-lazy-src", "data-echo", "data-img", "data-image", "src"):
+        if a.get(k) and not _PLACEHOLDER.search(a[k]):
+            return a[k]
+    return ""
 
 
 def _charset_of(content_type: str | None, head: bytes) -> str | None:
@@ -362,18 +450,40 @@ def parse_page(html: str, url: str) -> dict:
         u = normalise(href, base)
         if u:
             links.append((u, words))
-    images = []
-    for src, alt in p.images:
-        u = normalise(src, base)
-        if u and not re.search(r"(logo|icon|sprite|flag|banner|spacer|pixel|blank)", u, re.I):
-            images.append((u, _clean(alt, 120)))
+    images: list[tuple[str, str]] = []
+    have: set[str] = set()
     og = normalise(p.meta.get("og:image") or "", base) if p.meta.get("og:image") else None
-    if og:
-        images.insert(0, (og, "og:image"))
-    return {"title": _clean(p.title or p.meta.get("og:title"), 200),
+    for src, alt in ([(og, "og:image")] if og else []) + p.images:
+        u = normalise(src, base)
+        if u and u not in have and not re.search(r"(logo|icon|sprite|flag|banner|spacer|pixel|blank)", u, re.I):
+            have.add(u)
+            images.append((u, _clean(alt, 120)))
+    page = {"title": _clean(p.title or p.meta.get("og:title"), 200),
             "description": _clean(p.meta.get("description") or p.meta.get("og:description"), 400),
             "site_name": _clean(p.meta.get("og:site_name"), 120),
-            "text": p.text(), "links": links, "images": images[:40]}
+            "text": p.text(), "links": links, "images": images[:60], "url": url}
+    raw = {"ld": p.ld, "meta": p.meta, "micro": p.micro, "micro_products": p.micro_products, "h1": p.h1,
+           "canonical": normalise(p.canonical, base) if p.canonical else "",
+           "og_images": [u for u in (normalise(x, base) for x in p.og_images) if u]}
+    try:
+        page["facts"] = cf.facts(page, raw)
+    except Exception:                                   # noqa: BLE001 - a page whose data cannot be read is still read
+        log.exception("reading the structured data of %s", url)
+    del page["url"]
+    return page
+
+
+def facts_of(p: dict) -> dict:
+    """What a page says about its products (catalog_facts): read with its
+    HTML when it was parsed here, from its text and pictures otherwise (a
+    page Jina read, or one an earlier run kept)."""
+    if not isinstance(p.get("facts"), dict):
+        try:
+            p["facts"] = cf.facts(p)
+        except Exception:                               # noqa: BLE001
+            log.exception("reading the products of %s", p.get("url"))
+            p["facts"] = {"kind": "other", "main": None, "related_at": None, "items": 0, "canonical": ""}
+    return p["facts"]
 
 
 # ---- which links first -------------------------------------------------------
@@ -977,18 +1087,46 @@ def _boiler(pages: list[dict]) -> set[str]:
 
 
 def page_block(p: dict, boiler: set[str], first: bool = False, most: int = PAGE_CHARS) -> str:
-    lines = [ln for ln in p["text"].split("\n") if first or ln not in boiler]
+    """A page as the model reads it: its address, title, kind (catalog_facts:
+    one product's page, or a list), its text - a product page's without the
+    related-product blocks after its own part - and its pictures, the
+    product's own first."""
+    f = facts_of(p)
+    whole = p["text"]
+    cut = f.get("related_at") if f.get("kind") == "product" else None
+    if cut:
+        whole = whole[:cut]
+    lines = [ln for ln in whole.split("\n") if first or ln not in boiler]
     text = "\n".join(lines)
     if len(text) > most:
         text = text[:most] + "\n[... rest of the page left out]"
+    elif cut:
+        text += "\n[... the blocks of other products after it (related, recommended) left out]"
     head = [f"=== PAGE {p['url']}", f"Title: {p['title']}"]
     if p.get("description"):
         head.append(f"Description: {p['description']}")
-    imgs = [f"- {u}" + (f"  ({a})" if a else "") for u, a in p.get("images", [])[:8]]
+    if cf.hint(f):
+        head.append(cf.hint(f))
+    own = (f.get("main") or {}).get("images") or []
+    rest = [(u, a) for u, a in p.get("images", []) if u not in own]
+    many = 20 if f.get("kind") == "list" else 8
+    imgs = [f"- {u}  (this product's)" for u in own[:6]] + [
+        f"- {u}" + (f"  ({a})" if a else "") for u, a in rest[:max(2, many - len(own[:6]))]
+        if not (f.get("kind") == "product" and own)]
     out = "\n".join(head) + "\n" + text
     if imgs:
         out += "\nImages on the page:\n" + "\n".join(imgs)
     return out
+
+
+def _own(p: dict) -> dict:
+    """A product's page without the blocks of other products after its own part."""
+    f = facts_of(p)
+    cut = f.get("related_at") if f.get("kind") == "product" else None
+    if not cut:
+        return p
+    return {**p, "text": p["text"][:cut] + "\n[... the blocks of other products after it (related, recommended) left out]",
+            "facts": {**f, "related_at": None}}
 
 
 def _parts(p: dict, size: int = PART_CHARS) -> list[dict]:
@@ -1022,7 +1160,7 @@ def chunks(pages: list[dict], whole: bool = False) -> list[str]:
     if whole:
         out: list[str] = []
         cur = ""
-        for p in [x for page in pages for x in _parts(page)]:
+        for p in [x for page in pages for x in _parts(_own(page))]:
             b = page_block(p, set(), first=True, most=PART_CHARS)
             if cur and len(cur) + len(b) > CHUNK_CHARS:
                 out.append(cur)
@@ -1064,12 +1202,21 @@ EXTRACT_PROMPT = (
     " \"products\": [{\"name\": the product's name as the site writes it, \"category\": its category, "
     "\"description\": one or two sentences, \"specs\": {name: value} - dimensions, sizes, materials, loads, "
     "standards, finishes, as the page gives them, \"sku\": its code or part number if the page shows one, "
-    "\"url\": the page that shows it, \"image\": its picture}]}\n\n"
+    "\"url\": the page that shows it, \"image\": its picture, \"images\": [more pictures of it], "
+    "\"price\": {\"amount\": a number, \"currency\": \"TRY\", \"USD\", \"EUR\"..., \"vat\": \"incl\", \"excl\" or null, "
+    "\"text\": the price as the page writes it}, \"list_price\": the struck-through price before a discount (the same "
+    "shape), \"stock\": \"in\", \"out\" or null, \"stock_qty\": how many are left when the page says}]}\n\n"
     "Rules:\n"
     "- Only products these pages show; a product family or series listed as one product on the site counts as one. "
-    "Do not invent products, specs, codes or links.\n"
-    "- \"url\" and \"image\" must be addresses that appear in the pages above (a PAGE line or an image line); "
-    "leave them out when there is none.\n"
+    "Do not invent products, specs, codes, prices or links.\n"
+    "- A page marked \"Kind: the page of ONE product\" yields that one product only - never the related, "
+    "recommended, similar or recently viewed products shown on it. A page marked \"Kind: a list of products\" "
+    "yields every product it lists.\n"
+    "- Prices: the price the page shows for the product, as a number (Turkish pages write 1.234,56 TL: that is "
+    "1234.56 TRY); \"+ KDV\" or \"KDV hariç\" means VAT is excluded (\"excl\"), \"KDV dahil\" included (\"incl\"). "
+    "Leave price out when the page shows none.\n"
+    "- \"url\", \"image\" and \"images\" must be addresses that appear in the pages above (a PAGE line or an image "
+    "line); leave them out when there is none.\n"
     "- Keep the site's own language for names, categories and specs (Turkish stays Turkish); the company "
     "description may be in the same language.\n"
     "- Leave a field out rather than guessing. Navigation, news, contact and campaign pages are not products.\n"
@@ -1078,8 +1225,9 @@ EXTRACT_PROMPT = (
 ONLY_PROMPT = (
     "These pages were picked by hand, not crawled: read them to the end. A page may be a list, a table or a category "
     "of products - write down every product it lists, each as its own entry, even when the list gives only a name, "
-    "a code or a size; keep each entry short when there are many. The site may be a distributor's: the company is "
-    "the one whose products these are when the page says so."
+    "a code or a size; keep each entry short when there are many. A page of one product gives that product alone, "
+    "with its price, stock and pictures. The site may be a distributor's or a shop's: the company is the one whose "
+    "products these are when the page says so."
 )
 
 
@@ -1108,10 +1256,48 @@ def _url_in(u, site_urls: set[str] | None) -> str:
     return u[:500]
 
 
+HISTORY = 10                    # price and stock readings kept on a product
+
+
+def _seller(url: str, name: str = "") -> dict | None:
+    """The site a product is sold on: its domain, its host, the shop's name when the page gave one."""
+    h = _host(url) if url else ""
+    if not h:
+        return None
+    out = {"domain": registrable(h), "host": h}
+    if name:
+        out["name"] = _clean(name, 120)
+    return out
+
+
+def _history(rows) -> list[dict]:
+    out = []
+    for h in rows if isinstance(rows, list) else []:
+        if not isinstance(h, dict) or not isinstance(h.get("at"), str):
+            continue
+        e = {"at": h["at"][:40]}
+        a = cf.amount(h.get("amount"))
+        if a is not None:
+            e.update(amount=a, currency=cf.currency_of(h.get("currency")), vat=cf.vat_of(h.get("vat")))
+        if h.get("stock") in ("in", "out"):
+            e["stock"] = h["stock"]
+        if isinstance(h.get("qty"), int) and not isinstance(h.get("qty"), bool):
+            e["qty"] = h["qty"]
+        if isinstance(h.get("seen"), str):
+            e["seen"] = h["seen"][:40]
+        if len(e) > 1:
+            out.append(e)
+    return out[-HISTORY:]
+
+
 def clean_product(raw: dict, known: set[str] | None = None) -> dict | None:
     """One product made whole, or None when it has no name. `known`, when
     given, holds the addresses the pages had: a url or image not among
-    them is dropped (the model made it up)."""
+    them is dropped (the model made it up). Its price ({amount, currency,
+    vat, text, at}, catalog_facts.parse_price - from a number, a text like
+    "362,60 TL + KDV" or such a dict), list price and stock ("in", "out",
+    how many) when there are any; the dates and the readings it had are
+    carried through (an edit, an import)."""
     if not isinstance(raw, dict):
         return None
     name = _clean(raw.get("name") or raw.get("title"), 200)
@@ -1134,6 +1320,46 @@ def clean_product(raw: dict, known: set[str] | None = None) -> dict | None:
            "sku": _clean(raw.get("sku") or raw.get("code"), 80),
            "url": _url_in(raw.get("url"), known), "image": _url_in(raw.get("image"), known)}
     out["id"] = hashlib.sha1(fold(f"{out['sku']}|{out['name']}|{out['url']}").encode()).hexdigest()[:10]
+    ims: list[str] = []
+    for u in raw.get("images") if isinstance(raw.get("images"), list) else []:
+        v = _url_in(u.get("url") if isinstance(u, dict) else u if isinstance(u, str) else "", known)
+        if v and v not in ims:
+            ims.append(v)
+    if not out["image"] and ims:
+        out["image"] = ims[0]
+    if out["image"] and out["image"] not in ims:
+        ims.insert(0, out["image"])
+    if len(ims) > 1:
+        out["images"] = ims[:12]
+    price = cf.parse_price(raw.get("price"), raw.get("currency") or "", raw.get("vat"))
+    if price:
+        out["price"] = price
+    lp = cf.parse_price(raw.get("list_price"), (price or {}).get("currency") or raw.get("currency") or "")
+    if lp and (not price or lp["amount"] > price["amount"]):
+        out["list_price"] = {k: lp[k] for k in ("amount", "currency", "text")}
+    stock, qty, words = cf.parse_stock(raw.get("stock"))
+    try:
+        if raw.get("stock_qty") not in (None, "") and not isinstance(raw.get("stock_qty"), bool):
+            qty = max(0, int(float(str(raw["stock_qty"]).replace(",", "."))))
+            stock = stock or ("in" if qty else "out")
+    except ValueError:
+        pass
+    if stock:
+        out["stock"] = stock
+        if qty is not None:
+            out["stock_qty"] = qty
+        words = _clean(raw.get("stock_text"), 60) or words
+        if words:
+            out["stock_text"] = words
+    for k in ("added_at", "read_at", "updated"):
+        if isinstance(raw.get(k), str) and raw[k].strip():
+            out[k] = _clean(raw[k], 40)
+    sel = raw.get("seller")
+    if isinstance(sel, dict) and sel.get("domain"):
+        out["seller"] = {k: _clean(sel[k], 120) for k in ("domain", "host", "name") if sel.get(k)}
+    hist = _history(raw.get("history"))
+    if hist:
+        out["history"] = hist
     return out
 
 
@@ -1153,8 +1379,9 @@ def merge_products(lists: list[list[dict]], most: int = MAX_PRODUCTS) -> tuple[l
             if k in by:
                 dups += 1
                 have = by[k]
-                for f in ("category", "description", "sku", "url", "image"):
-                    if not have.get(f) and p.get(f):
+                for f in ("category", "description", "sku", "url", "image", "images", "price", "list_price", "stock",
+                          "stock_qty", "stock_text", "updated", "seller", "read_at", "added_at", "history"):
+                    if have.get(f) in (None, "", [], {}) and p.get(f) not in (None, "", [], {}):
                         have[f] = p[f]
                 for sk, sv in p.get("specs", {}).items():
                     if len(have["specs"]) < MAX_SPECS:
@@ -1162,6 +1389,234 @@ def merge_products(lists: list[list[dict]], most: int = MAX_PRODUCTS) -> tuple[l
             elif len(by) < most:
                 by[k] = {**p, "specs": dict(p.get("specs") or {})}
     return list(by.values()), dups
+
+
+def _reading(p: dict, at: str) -> dict | None:
+    """A product's price and stock as read at `at`: a row of its history."""
+    pr = p.get("price") or {}
+    if pr.get("amount") is None and not p.get("stock"):
+        return None
+    e: dict = {"at": at}
+    if pr.get("amount") is not None:
+        e.update(amount=pr["amount"], currency=pr.get("currency") or "", vat=pr.get("vat"))
+    if p.get("stock"):
+        e["stock"] = p["stock"]
+    if p.get("stock_qty") is not None:
+        e["qty"] = p["stock_qty"]
+    return e
+
+
+def remember(hist, entry: dict | None) -> list[dict]:
+    """The readings with `entry` after them: a new row when the price or
+    the stock changed, else the last row seen again (`seen`); the last
+    HISTORY rows."""
+    h = [dict(x) for x in hist or [] if isinstance(x, dict)]
+    if entry:
+        last = h[-1] if h else None
+        if last and all(last.get(k) == entry.get(k) for k in ("amount", "currency", "vat", "stock", "qty")):
+            last["seen"] = entry["at"]
+        else:
+            h.append(entry)
+    return h[-HISTORY:]
+
+
+_SAID = ("price", "list_price", "stock", "stock_qty", "stock_text", "updated")
+
+
+def _refresh(old: dict, new: dict, at: str, keep_old: bool) -> dict:
+    """A product read again: what it is - name, specs... - the old one's when
+    `keep_old` (a page read adds; a product changed by hand stays as it
+    was made), else the new one's; what the page says now - price, stock,
+    the seller's date - always the new one's when it says it; its id, its
+    first date and its readings carried on."""
+    base, other = (old, new) if keep_old else (new, old)
+    p = {**base, "specs": dict(base.get("specs") or {})}
+    for f in ("name", "category", "description", "sku", "url", "image"):
+        if not p.get(f) and other.get(f):
+            p[f] = other[f]
+    for sk, sv in (other.get("specs") or {}).items():
+        if len(p["specs"]) < MAX_SPECS:
+            p["specs"].setdefault(sk, sv)
+    if new.get("images"):
+        p["images"] = new["images"]
+    if not keep_old and new.get("image"):
+        p["image"] = new["image"]
+    if new.get("price") or new.get("stock"):
+        for f in _SAID:
+            if new.get(f) not in (None, ""):
+                p[f] = new[f]
+            elif f in ("stock_qty", "stock_text") and new.get("stock"):
+                p.pop(f, None)
+            elif f in old:
+                p[f] = old[f]
+    if new.get("seller") or old.get("seller"):
+        p["seller"] = new.get("seller") or old.get("seller")
+    for f in ("id", "source", "added_by", "edited", "edited_by", "edited_at"):
+        if f in old:
+            p[f] = old[f]
+        else:
+            p.pop(f, None)
+    p["added_at"] = old.get("added_at") or at
+    p["read_at"] = at
+    hist = remember(old.get("history"), _reading(new, at))
+    if hist:
+        p["history"] = hist
+    return p
+
+
+def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False) -> tuple[list[dict], int]:
+    """A run's products into the catalog `have`: (catalog, how many are
+    new). The same product (by its code, else its name) is read again -
+    its id, its first date and its readings kept, its price and stock
+    brought up to date (_refresh); a new one starts its readings. A page
+    read adds (`replace` off: nothing is dropped); a full exploration
+    replaces the catalog with what it found, keeping what was added or
+    changed by hand."""
+    index: dict[str, dict] = {}
+    for p in have:
+        index.setdefault(product_key(p), p)
+    fresh: dict[str, dict] = {}
+    added = 0
+    for p in found:
+        k = product_key(p)
+        if k in fresh:
+            continue
+        old = index.get(k)
+        if old is None:
+            q = {**p, "added_at": p.get("added_at") or at, "read_at": p.get("read_at") or at}
+            hist = remember(q.get("history"), _reading(q, at))
+            if hist:
+                q["history"] = hist
+            added += 1
+        else:
+            q = _refresh(old, p, at, keep_old=(not replace) or by_hand(old))
+        fresh[k] = q
+    if replace:
+        out = [p for p in have if by_hand(p) and product_key(p) not in fresh]
+        out += list(fresh.values())
+    else:
+        out = [fresh.pop(product_key(p), p) for p in have]
+        out += list(fresh.values())
+    return out[:MAX_PRODUCTS], added
+
+
+def _words_of(s: str) -> set[str]:
+    return {w for w in re.split(r"[^a-z0-9]+", fold(s)) if len(w) > 1}
+
+
+def _is_main(prod: dict, page: dict, f: dict) -> bool:
+    """Whether the model's `prod` is the product whose page `page` is."""
+    m = f["main"]
+    if prod.get("sku") and m.get("sku") and fold(prod["sku"]).strip() == fold(m["sku"]).strip():
+        return True
+    if cf._same_name(prod.get("name") or "", m.get("name") or ""):
+        return True
+    here = {u for u in (page.get("url"), f.get("canonical"), m.get("url")) if u}
+    if prod.get("url") in here and not (prod.get("sku") and m.get("sku")):
+        a, b = _words_of(prod.get("name") or ""), _words_of(m.get("name") or "")
+        return bool(a and b) and len(a & b) / len(a | b) >= 0.6
+    return False
+
+
+def _with_facts(prod: dict, page: dict, f: dict) -> dict:
+    """The model's reading of a product's page, with what the page itself
+    says of it (its structured data): its price, stock, code, pictures,
+    the page and its date win."""
+    m = f["main"]
+    p = {**prod}
+    if m.get("price"):
+        p["price"] = dict(m["price"])
+    if m.get("list_price"):
+        p["list_price"] = {k: m["list_price"].get(k) for k in ("amount", "currency", "text")}
+    if m.get("stock"):
+        p["stock"] = m["stock"]
+        p.pop("stock_qty", None)
+        p.pop("stock_text", None)
+        if m.get("qty") is not None:
+            p["stock_qty"] = m["qty"]
+        if m.get("stock_text"):
+            p["stock_text"] = m["stock_text"]
+    p["sku"] = p.get("sku") or _clean(m.get("sku"), 80)
+    for k in ("description", "category"):
+        if not p.get(k) and m.get(k):
+            p[k] = _clean(m[k], 600 if k == "description" else 120)
+    if m.get("images"):
+        extra = [u for u in (prod.get("images") or []) if u not in m["images"]]
+        p["images"] = (m["images"] + extra)[:12]
+        p["image"] = m["images"][0]
+    if m.get("url"):
+        p["url"] = m["url"][:500]
+    if m.get("updated"):
+        p["updated"] = _clean(m["updated"], 40)
+    if m.get("brand") and len(p.get("specs") or {}) < MAX_SPECS and not any(
+            fold(k) in ("marka", "brand") for k in (p.get("specs") or {})):
+        label = "Marka" if re.search(r"[ığüşöçİĞÜŞÖÇ]", (page.get("text") or "")[:5000]) else "Brand"
+        p["specs"] = {**(p.get("specs") or {}), label: _clean(m["brand"], 200)}
+    p["seller"] = _seller(page.get("url") or "", page.get("site_name") or "") or p.get("seller")
+    return p
+
+
+def _from_facts(page: dict, f: dict) -> dict | None:
+    """A product's page the model said nothing of: its product as the page's structured data gives it."""
+    m = f["main"]
+    p = clean_product({"name": m.get("name"), "sku": m.get("sku"), "description": m.get("description"),
+                       "category": m.get("category"), "url": m.get("url"), "image": m.get("image"),
+                       "images": m.get("images"), "price": m.get("price"), "list_price": m.get("list_price"),
+                       "stock": m.get("stock"), "stock_qty": m.get("qty"), "stock_text": m.get("stock_text"),
+                       "updated": m.get("updated")})
+    if p:
+        p["seller"] = _seller(page.get("url") or "", page.get("site_name") or "")
+    return p
+
+
+def by_page(site: dict, products: list[dict]) -> list[dict]:
+    """The model's products checked against what the pages say of
+    themselves (catalog_facts). A product's page gives its main product
+    - with the page's own price, stock, code and pictures - and, when
+    every page read was a product's page (a page given by hand, without
+    `follow`), nothing else: the related products shown on it are left
+    out. A product's page the model missed gives its product all the
+    same. Other pages' products stay as the model read them."""
+    pages = site.get("pages") or []
+    mains = [(pg, f) for pg, f in ((pg, facts_of(pg)) for pg in pages)
+             if f.get("kind") == "product" and (f.get("main") or {}).get("name")]
+    alone = bool(site.get("only")) and bool(pages) and len(mains) == len(pages)
+    used: dict[int, int] = {}
+    out: list[dict] = []
+    for prod in products:
+        i = next((n for n, (pg, f) in enumerate(mains) if _is_main(prod, pg, f)), None)
+        if i is None:
+            if not alone:
+                out.append(prod)
+            continue
+        if i in used:
+            have = out[used[i]]
+            for k, v in prod.items():
+                if have.get(k) in (None, "", [], {}) and v not in (None, "", [], {}):
+                    have[k] = v
+            continue
+        used[i] = len(out)
+        out.append(_with_facts(prod, *mains[i]))
+    for n, (pg, f) in enumerate(mains):
+        if n not in used:
+            p = _from_facts(pg, f)
+            if p:
+                out.append(p)
+    return out
+
+
+def stamp(products: list[dict], at: str, page_url: str = "") -> list[dict]:
+    """A run's products: when they were read, and on which site (the
+    product's page's, else the run's first page's)."""
+    for p in products:
+        p["read_at"] = at
+        if p.get("price"):
+            p["price"] = {**p["price"], "at": at}
+        if not p.get("seller"):
+            sel = _seller(p.get("url") or page_url)
+            if sel:
+                p["seller"] = sel
+    return products
 
 
 def parse_answer(raw: str, known: set[str] | None = None) -> dict:
@@ -1211,6 +1666,10 @@ async def extract(db, site: dict, track: Tracker) -> dict:
         known.add(p["url"])
         known.update(u for u, _ in p.get("images", []))
         known.update(u for u, _ in p.get("links", []))
+        main = facts_of(p).get("main") or {}
+        known.update(main.get("images") or [])
+        if main.get("url"):
+            known.add(main["url"])
     prov, model = llm.route(JOB)
     pname = llm.PROVIDERS.get(prov, {}).get("name", prov)
     track.add(chunks=len(parts), chars=sum(len(c) for c in parts))
@@ -1288,6 +1747,10 @@ async def extract(db, site: dict, track: Tracker) -> dict:
     await track.phase("merging")
     await track.step("merge", kind="merge", found=sum(len(x) for x in lists))
     products, dups = merge_products(lists)
+    # what the pages say of themselves: a product's page gives its product (and its price, stock, pictures) only
+    products = stamp(by_page(site, products), _now(), (site["pages"][0]["url"] if site.get("pages") else ""))
+    products, more = merge_products([products])
+    dups += more
     # the categories the products name, after the ones the company says
     cats = list(dict.fromkeys(company["categories"] + [p["category"] for p in products if p["category"]]))[:80]
     company["categories"] = cats
@@ -1392,9 +1855,18 @@ def manual_product(fields: dict) -> dict:
             if not u:
                 raise ValueError(f"the {what} address must be an http(s) address")
             raw[k] = u
+    if raw.get("price") not in (None, "") and not isinstance(raw.get("price"), dict) \
+            and not cf.parse_price(raw["price"], raw.get("currency") or "", raw.get("vat")):
+        raise ValueError(f"the price {str(raw['price'])[:40]!r} is not a price - give a number, like 362,60")
+    if raw.get("list_price") not in (None, "") and not cf.parse_price(raw["list_price"], raw.get("currency") or ""):
+        raise ValueError(f"the list price {str(raw['list_price'])[:40]!r} is not a price")
     p = clean_product(raw)
     if not p:
         raise ValueError("give the product a name")
+    if p.get("price") and not p["price"].get("at"):
+        p["price"]["at"] = _now()
+    if not p.get("seller") and p.get("url"):
+        p["seller"] = _seller(p["url"])
     return p
 
 
@@ -1416,6 +1888,9 @@ async def add_product(db, mid: str, fields: dict, by: dict | None = None) -> dic
     who = by or actors.current()
     p.update(id="m" + secrets.token_hex(5), source="manual", added_by={"id": who.get("id"), "name": who.get("name")},
              added_at=_now())
+    hist = remember([], _reading(p, p["added_at"]))
+    if hist:
+        p["history"] = hist
     await db[COLL].update_one({"_id": mid}, {"$set": {"products": have + [p], "updated_at": _now()}})
     return p
 
@@ -1430,12 +1905,39 @@ async def edit_product(db, mid: str, pid: str, fields: dict, by: dict | None = N
     old = next((x for x in have if x.get("id") == pid), None)
     if not old:
         raise LookupError(f"no product {pid}")
-    p = manual_product({**old, **{k: v for k, v in fields.items() if v is not None}})
+    f = {k: v for k, v in fields.items() if v is not None}
+    was = old.get("price") or {}
+    if any(k in f for k in ("price", "currency", "vat")):
+        # A price changed by hand: the number given (or the one kept), in the currency and VAT given (or kept).
+        val = f.get("price", was.get("amount") if was else None)
+        if isinstance(val, dict):
+            val = val.get("amount", val.get("text"))
+        if val in (None, ""):
+            f["price"] = ""
+        else:
+            pr = cf.parse_price(val, f.get("currency") or was.get("currency") or "", f.get("vat") or None)
+            if not pr:
+                raise ValueError(f"the price {str(val)[:40]!r} is not a price - give a number, like 362,60")
+            if pr["vat"] is None and "vat" not in f:
+                pr["vat"] = was.get("vat")
+            same = was and pr["amount"] == was.get("amount") and pr["currency"] == (was.get("currency") or "") \
+                and pr["vat"] == was.get("vat")
+            f["price"] = {**pr, "text": was.get("text", "") if same else "", "at": was.get("at") if same else _now()}
+            if same and was.get("gross"):
+                f["price"]["gross"] = was["gross"]
+    if "stock" in f and (cf.parse_stock(f["stock"])[0] != old.get("stock") or not f["stock"]):
+        f.setdefault("stock_qty", "")                   # a stock changed by hand: the site's words and count go with it
+        f["stock_text"] = ""
+    p = manual_product({**old, **f})
     if _clashes(have, p, pid):
         raise Clash(f"\"{p['name']}\" is already in the catalog" + (f" (code {p['sku']})" if p["sku"] else ""))
     who = by or actors.current()
     keep = {k: old[k] for k in ("source", "added_by", "added_at") if k in old}
     p.update(id=pid, **keep, edited=True, edited_by={"id": who.get("id"), "name": who.get("name")}, edited_at=_now())
+    now = _reading(p, p["edited_at"])
+    then = _reading(old, "")
+    if now and (not then or any(now.get(k) != then.get(k) for k in ("amount", "currency", "vat", "stock", "qty"))):
+        p["history"] = remember(old.get("history"), now)
     await db[COLL].update_one({"_id": mid}, {"$set": {"products": [p if x.get("id") == pid else x for x in have],
                                                       "updated_at": _now()}})
     return p
@@ -1503,6 +2005,13 @@ def product_line(p: dict, specs: int = 8, stock: dict | None = None) -> str:
         bits.append(f"code {p['sku']}")
     if p.get("category"):
         bits.append(f"[{p['category']}]")
+    if p.get("price"):
+        bits.append("price " + cf.price_label(p["price"]) + (f" (read {p['price']['at'][:10]})" if p["price"].get("at") else ""))
+    if p.get("stock"):
+        bits.append(("in stock" if p["stock"] == "in" else "out of stock") + (
+            f": {p['stock_qty']} left" if p.get("stock_qty") is not None and p["stock"] == "in" else "") + " on the site")
+    if (p.get("seller") or {}).get("domain"):
+        bits.append(f"sold on {p['seller']['domain']}")
     line = " · ".join(bits)
     if p.get("description"):
         line += f" - {p['description']}"
@@ -1648,7 +2157,8 @@ async def _traffic(db, fetcher: Fetcher, track: Tracker) -> None:
 async def keep_pages(db, jid: str, mid: str, site: dict) -> int:
     """A run's pages as read, one row each, so its model step can be run again."""
     rows = [{"_id": f"{jid}:{i}", "job": jid, "manufacturer": mid, "n": i, "domain": site.get("domain"),
-             "page": {k: p.get(k) for k in ("url", "title", "text", "links", "images", "depth")}}
+             "page": {**{k: p.get(k) for k in ("url", "title", "text", "links", "images", "depth", "site_name")},
+                      "facts": facts_of(p)}}
             for i, p in enumerate(site.get("pages") or [])]
     if rows:
         await db[PAGES].insert_many(rows)
@@ -1724,9 +2234,8 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
             raise ExploreError("the manufacturer was deleted while it was explored")
         have = doc.get("products") or []
         if page_run:
-            # A page read by hand adds to the catalog: nothing in it is dropped.
-            merged, _ = merge_products([have, got["products"]])
-            added = len(merged) - len(have)
+            # A page read by hand adds to the catalog: nothing in it is dropped; a product read again is brought up to date.
+            merged, added = fold_in(have, got["products"], _now())
             sets = {"products": merged, "summary": doc.get("summary") or got["company"]["description"] or "",
                     "categories": list(dict.fromkeys((doc.get("categories") or []) + got["company"]["categories"]))[:80],
                     "docs": list({d["url"]: d for d in (doc.get("docs") or []) + (site.get("docs") or [])}.values())[:MAX_DOCS],
@@ -1737,8 +2246,9 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
                     "docs": site["docs"] or doc.get("docs") or [], "domain": site["domain"] or doc.get("domain"),
                     "explored_at": _now(), "updated_at": _now()}
             if got["products"] or not have:
-                # The site's catalog replaces the old one; what was added or changed by hand stays.
-                sets["products"], _ = merge_products([[p for p in have if by_hand(p)], got["products"]])
+                # The site's catalog replaces the old one; what was added or changed by hand stays,
+                # and a product found again keeps its id, its first date and its price readings.
+                sets["products"], _ = fold_in(have, got["products"], _now(), replace=True)
             if doc.get("name_auto") and got["company"]["name"]:
                 sets["name"] = got["company"]["name"][:120]
             added = None
@@ -1944,6 +2454,13 @@ class ProductIn(BaseModel):
     specs: dict[str, str] | list[str] | str | None = None
     url: str = Field(default="", max_length=500)
     image: str = Field(default="", max_length=500)
+    # its price: a number or a text ("362,60", "362,60 TL + KDV"), the currency (TRY, USD...), VAT incl/excl
+    price: float | str | dict | None = None
+    currency: str = Field(default="", max_length=8)
+    vat: str | None = Field(default=None, max_length=12)
+    list_price: float | str | None = None
+    stock: str | bool | int | None = None           # "in", "out", "" - or the site's words ("Son 3 adet")
+    stock_qty: int | str | None = None
 
 
 class ProductPatch(BaseModel):
@@ -1954,6 +2471,12 @@ class ProductPatch(BaseModel):
     specs: dict[str, str] | list[str] | str | None = None
     url: str | None = Field(default=None, max_length=500)
     image: str | None = Field(default=None, max_length=500)
+    price: float | str | dict | None = None          # "" takes the price away
+    currency: str | None = Field(default=None, max_length=8)
+    vat: str | None = Field(default=None, max_length=12)
+    list_price: float | str | None = None
+    stock: str | bool | int | None = None            # "" takes the stock away
+    stock_qty: int | str | None = None
 
 
 class ProductIds(BaseModel):
@@ -1997,6 +2520,100 @@ async def api_search(q: str = "", category: str = "", m: str = "", limit: int = 
     docs = [d for d in await listing(db) if not m or d["_id"] == m]
     rows = search(docs, q[:200], category[:120], max(1, min(limit, 200)))
     return [{"manufacturer": {"id": d["_id"], "name": d.get("name")}, "product": p} for d, p, _ in rows]
+
+
+SORTS = ("new", "price_asc", "price_desc", "name", "match")
+
+
+def _seller_of(d: dict, p: dict) -> dict:
+    return p.get("seller") or _seller(p.get("url") or "") or {"domain": d.get("domain") or "", "host": _host(d.get("url") or "")}
+
+
+def all_products(docs: list[dict], q: str = "", cat: str = "", maker: str = "", seller: str = "",
+                 lo: float | None = None, hi: float | None = None, stock: str = "", sort: str = "new") -> list[tuple[dict, dict]]:
+    """Every product of `docs` (the makers) for the catalog's grid: those
+    matching the words of `q` (every word, in its name, code, category,
+    specs, maker or seller), the category, the maker (its id), the seller
+    (its domain), the price range and the stock ("in": in stock on the
+    site; "out"); sorted newest first ("new": added, or read, last),
+    by price either way (no price last), by name, or by `q`'s match."""
+    words = [fold(w) for w in re.split(r"[\s,;/]+", q or "") if w]
+    c = fold(cat).strip()
+    rows = []
+    for d in docs:
+        if maker and d["_id"] != maker:
+            continue
+        for p in d.get("products") or []:
+            if c and fold(p.get("category") or "") != c:
+                continue
+            sel = _seller_of(d, p)
+            if seller and seller not in (sel.get("domain"), sel.get("host")):
+                continue
+            if stock in ("in", "out") and p.get("stock") != stock:
+                continue
+            amt = (p.get("price") or {}).get("amount")
+            if (lo is not None or hi is not None) and amt is None:
+                continue
+            if (lo is not None and amt < lo) or (hi is not None and amt > hi):
+                continue
+            rank = 0
+            if words:
+                hay = _phay(p) + " " + fold(f"{d.get('name')} {sel.get('domain')} {sel.get('name', '')}")
+                if not all(w in hay for w in words):
+                    continue
+                rank = sum(3 for w in words if w in fold(p.get("name") or ""))
+            rows.append((d, p, rank))
+    if sort == "price_asc":
+        rows.sort(key=lambda x: ((x[1].get("price") or {}).get("amount") is None, (x[1].get("price") or {}).get("amount") or 0))
+    elif sort == "price_desc":
+        rows.sort(key=lambda x: ((x[1].get("price") or {}).get("amount") is None, -((x[1].get("price") or {}).get("amount") or 0)))
+    elif sort == "name":
+        rows.sort(key=lambda x: fold(x[1].get("name") or ""))
+    elif sort == "match" and words:
+        rows.sort(key=lambda x: (-x[2], fold(x[1].get("name") or "")))
+    else:
+        rows.sort(key=lambda x: (x[1].get("added_at") or x[1].get("read_at") or x[0].get("explored_at") or x[0].get("created_at") or ""),
+                  reverse=True)
+    return [(d, p) for d, p, _ in rows]
+
+
+def grid_item(d: dict, p: dict) -> dict:
+    return {**p, "maker": {"id": d["_id"], "name": d.get("name") or "", "domain": d.get("domain") or ""},
+            "seller": _seller_of(d, p)}
+
+
+@router.get("/products")
+async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str = "", min: float | None = None,
+                       max: float | None = None, stock: str = "", sort: str = "new", page: int = 1, size: int = 60):
+    """The products of every maker, for the catalog's grid: filtered,
+    sorted, a page of them - and what the filters can choose from."""
+    docs = await listing(_db())
+    rows = all_products(docs, q[:200], cat[:120], maker[:40], seller[:200], min, max, stock,
+                        sort if sort in SORTS else "new")
+    size = max_(1, min_(size, 200))
+    page = max_(1, page)
+    every = [(d, p) for d in docs for p in d.get("products") or []]
+    cats: dict[str, int] = {}
+    sellers: dict[str, int] = {}
+    for d, p in every:
+        if p.get("category"):
+            cats[p["category"]] = cats.get(p["category"], 0) + 1
+        dom = _seller_of(d, p).get("domain") or ""
+        if dom:
+            sellers[dom] = sellers.get(dom, 0) + 1
+    amounts = [p["price"]["amount"] for _, p in every if (p.get("price") or {}).get("amount") is not None]
+    return {"items": [grid_item(d, p) for d, p in rows[(page - 1) * size: page * size]], "total": len(rows),
+            "page": page, "size": size, "all": len(every),
+            "categories": sorted(([k, v] for k, v in cats.items()), key=lambda x: fold(x[0])),
+            "makers": [{"id": d["_id"], "name": d.get("name") or "", "domain": d.get("domain") or "",
+                        "count": len(d.get("products") or [])} for d in docs],
+            "sellers": sorted(([k, v] for k, v in sellers.items()), key=lambda x: -x[1]),
+            "price": {"min": min_(amounts) if amounts else None, "max": max_(amounts) if amounts else None,
+                      "currencies": sorted({(p.get("price") or {}).get("currency") or "" for _, p in every
+                                            if p.get("price")} - {""})}}
+
+
+min_, max_ = min, max
 
 
 async def _start(mid: str, proxy: str | None, reuse: str | None = None, only: list[str] | None = None,
