@@ -3156,6 +3156,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   padding: 6px 8px; font-size: 11px; color: var(--ink); background: var(--tooltip-bg);
   border: 1px solid var(--line); border-radius: 5px;
 }
+/* A bare chart (a sidebar card) is too short to hold it: above, one line. */
+.tcv-ch-tip.tcv-ch-tip-up { top: auto; bottom: calc(100% + 4px); min-width: 0; white-space: nowrap; }
 .tcv-ch-tip-head { margin-bottom: 3px; color: var(--ink-dim); }
 .tcv-ch-tip-total { margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line); }
 .tcv-ch-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 2px; }

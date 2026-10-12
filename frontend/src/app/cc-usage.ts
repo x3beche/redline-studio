@@ -4,6 +4,7 @@ import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
 import { money as shown } from './money';
 import { CcTabWindow, TopBar } from './topbar';
+import { TimeChart, TimeData } from './rooms/charts';
 
 /** The Command Code account's figures (GET /api/llm/commandcode/account,
  *  backend/llm.py cc_account): the plan, the 5-hour and weekly usage
@@ -38,8 +39,6 @@ export interface CcAccount {
 }
 
 const EVERY_MS = 120_000;
-/** The providers with no usage of their own to show: their line is Workbench's own calls. */
-const OWN_LINE = [{ id: 'claude', name: 'Claude API' }, { id: 'opencode-go', name: 'OpenCode Go' }];
 
 @Injectable({ providedIn: 'root' })
 export class CcUsage {
@@ -262,90 +261,154 @@ export class CcTabUsage implements OnDestroy {
 
 }
 
-/** Pinned under the Chat room's list: the windows as small meters, when
- *  they reset and when the plan renews. Opens LLM settings. What it is
- *  given (the Tools line) goes under it, in the same frame. */
+/** Every provider together (GET /api/llm/summary, backend/llm_api.py): this
+ *  month, today, the last days by day, and how the Chat room's answers came. */
+export interface LlmSummary {
+  days: number; t0: number; step: number;
+  month: { calls: number; input: number; output: number; tokens: number; cost_usd: number | null;
+           unpriced_calls: number; providers: number };
+  today: { calls: number; tokens: number; cost_usd: number | null; answers: number };
+  answers: { n: number; tps_median: number | null; ttft_ms_median: number | null };
+  by_day: { day: string; calls: number; tokens: number; cost_usd: number | null }[];
+}
+
+/** A provider's quota window, for the one warning the card may show. */
+interface Quota { provider: string; label: string; w: CcWindow; reset: string }
+
+const MODELS_ICON = 'M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM10 10h4v4h-4z';
+const CHEVRON_R = 'M10 7l5 5-5 5';
+
+/** Pinned under the Chat room's list: one card for the models, whichever
+ *  provider answered - this month's tokens, calls and money, the last 14
+ *  days as small bars, today's answers and their median speed, and a
+ *  single warning when a provider's quota is nearly used up. Opens LLM
+ *  settings, where each provider has its own figures. What it is given
+ *  (the Tools card) goes under it, in the same frame. */
 @Component({
   selector: 'app-cc-usage-line',
-  imports: [T],
+  imports: [T, TimeChart],
   styles: [`
     :host { display: block; flex: none; }
     .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
-    /* One frame: the plan's windows, Workbench's own calls, the Tools line - rows split by hairlines. */
-    .ccl-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px;
-      background: var(--surface); overflow: hidden; }
+    /* One frame: the models, then the Tools card - split by a hairline. */
+    .ccl-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+    .ccl-card > :first-child, :host ::ng-deep .ccl-card > :first-child > button { border-radius: 4px 4px 0 0; }
+    :host ::ng-deep .ccl-card > :last-child, :host ::ng-deep .ccl-card > :last-child > button { border-radius: 0 0 4px 4px; }
     :host ::ng-deep .ccl-card > * + * { border-top: 1px solid var(--line); }
-    .ccl { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 6px 8px; text-align: left;
-      border: 0; border-radius: 0; background: none; color: var(--ink); cursor: pointer; }
+    .ccl { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 7px 8px 8px; text-align: left;
+      border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; }
     .ccl:hover, .ccl:focus-visible { background: var(--hover); outline: none; }
-    .ccl-own { padding: 5px 8px; }
-    .ccl-head { display: flex; width: 100%; align-items: baseline; gap: 6px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
+    .ccl-head { display: flex; width: 100%; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
     .ccl-head b { color: var(--ink); font-weight: 600; }
-    .ccl-head span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ccl-head em { margin-left: auto; font-style: normal; white-space: nowrap; }
-    .ccl-row { display: grid; width: 100%; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+    .ccl-head svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;
+      stroke-linecap: round; stroke-linejoin: round; }
+    .ccl-head svg:last-child { width: 12px; height: 12px; }
+    .ccl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%;
       font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
-    .ccl-row > b { font-weight: 600; color: var(--ink); }
-    .ccl-bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
-    .ccl-bar > i { display: block; height: 100%; background: var(--accent); }
-    .ccl-bar[data-tone="warn"] > i { background: var(--warn); }
-    .ccl-bar[data-tone="danger"] > i { background: var(--danger); }
-    .ccl-row[data-tone="warn"] > b { color: var(--warn); }
-    .ccl-row[data-tone="danger"] > b { color: var(--danger); }
-    .ccl-sub { font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ccl-stats > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ccl-stats > span:last-child:not(:first-child) { text-align: right; }
+    .ccl-stats b, .ccl-sub b { color: var(--ink); font-weight: 600; }
+    .ccl-chart { width: 100%; }
+    .ccl-sub { width: 100%; font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ccl-warn { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 10.5px; color: var(--warn); min-width: 0; }
+    .ccl-warn[data-tone="danger"] { color: var(--danger); }
+    .ccl-warn span { flex: none; white-space: nowrap; }
+    .ccl-warn i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .ccl-warn em { margin-left: auto; min-width: 0; font-style: normal; color: var(--ink-dim); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 768px) { .ccl { padding: 9px 10px 10px; } }
   `],
   template: `
 <div class="ccl-wrap"><div class="ccl-card">
-@if (cc.data(); as d) { @if (d.shared && (cc.weekly() || cc.fiveHour() || cc.monthly())) {
   <button class="ccl" type="button" (click)="openSettings()" [title]="tipText()">
-    <div class="ccl-head"><b>Command Code</b><span>{{ d.plan?.name || '' }}</span>
-      @if (d.plan?.period_end; as end) { <em>{{ (d.plan?.cancel_at_period_end ? 'ends' : 'renews') | t }} {{ inSpan(end, cc.now()) }}</em> }</div>
-    @for (r of rows(); track r.id) {
-      <div class="ccl-row" [attr.data-tone]="tone(r.w)"><span>{{ r.label | t }}</span>
-        <div class="ccl-bar" [attr.data-tone]="tone(r.w)"><i [style.width.%]="pct(r.w)"></i></div>
-        <b>{{ r.w.pct != null ? round(r.w.pct) + '%' : num(r.w.used) }}</b></div>
-    }
-    <div class="ccl-sub">
-      @if (cc.fiveHour(); as f) { {{ '5-hour' | t }} {{ 'resets' | t }} {{ inSpan(f.reset_at, cc.now()) }} }
-      @if (cc.weekly()) { · {{ 'weekly' | t }} {{ weeklyReset(d) }} }
+    <div class="ccl-head">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon" /></svg>
+      <b>{{ 'Models' | t }}</b><em>{{ 'this month' | t }}</em>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
     </div>
+    @if (sum(); as s) {
+      <div class="ccl-stats">
+        <span><b>{{ num(s.month.tokens) }}</b> tok</span>
+        <span><b>{{ s.month.calls.toLocaleString('en-US') }}</b> {{ 'calls' | t }}</span>
+        <!-- The money only when most calls were priced: a subscription's calls carry none, and a
+             sum of the few priced ones would read as the month's cost. -->
+        @if (s.month.cost_usd != null && s.month.unpriced_calls * 2 < s.month.calls) { <span><b>{{ shown(s.month.cost_usd) }}</b></span> }
+        @else { <span><b>{{ s.month.providers }}</b> {{ 'providers' | t }}</span> }
+      </div>
+      <app-time-chart class="ccl-chart" [data]="chart()!" [bare]="true" [height]="30" [legend]="false" [f]="tokFmt" />
+      <div class="ccl-sub">{{ 'Today' | t }} <b>{{ s.today.answers }}</b> {{ 'answers' | t }}
+        @if (s.answers.tps_median != null) { · <b>{{ s.answers.tps_median }}</b> tok/s }
+        @if (s.answers.ttft_ms_median != null) { · {{ 'first token' | t }} <b>{{ secs(s.answers.ttft_ms_median) }}</b> }
+      </div>
+    } @else {
+      <div class="ccl-sub">{{ (err() ? 'The usage did not load' : 'Loading…') | t }}</div>
+    }
+    @if (warn(); as q) {
+      <div class="ccl-warn" [attr.data-tone]="tone(q.w)"><i></i>
+        <span>{{ q.provider }} · {{ q.label | t }} <b>{{ round(q.w.pct!) }}%</b></span>
+        @if (q.reset) { <em>{{ q.reset }}</em> }</div>
+    }
   </button>
-} }
-@for (r of own(); track r.id) {
-  <!-- The Claude API and OpenCode Go share no usage: Workbench's own calls this month. -->
-  <button class="ccl ccl-own" type="button" (click)="openSettings()" [title]="r.title">
-    <div class="ccl-head"><b>{{ r.name }}</b><span>{{ r.sub }}</span><em>{{ r.value }}</em></div>
-  </button>
-}
 <ng-content /></div></div>`,
 })
 export class CcUsageLine implements OnDestroy {
   cc = polling();
   private prefs = inject(Prefs);
-  private ownU = inject(OwnUsage);
-  private ownTimer = (() => { const go = () => OWN_LINE.forEach(p => this.ownU.load(p.id)); go(); return setInterval(go, EVERY_MS); })();
-  ngOnDestroy() { clearInterval(this.ownTimer); }
-  /** A provider with a key and calls this month: one line each. */
-  own = computed(() => OWN_LINE.flatMap(p => {
-    const d = this.ownU.data()[p.id], m = d?.redline?.month;
-    if (!d?.set || !m?.calls) return [];
-    const tok = (m.input + m.output).toLocaleString('en-US');
-    return [{ id: p.id, name: p.name, value: m.cost_usd != null ? shown(m.cost_usd) : `${m.calls} ${t('calls')}`,
-              sub: `${num(m.input + m.output)} ${t('tokens')} ${t('this month')}`,
-              title: `${p.name} - ${t('Workbench\'s own calls this month')}: ${m.calls} ${t('calls')}, ${tok} ${t('tokens')}` }];
-  }));
+  private http = inject(HttpClient);
+  sum = signal<LlmSummary | null>(null);
+  err = signal(false);
+  private timer = (() => { const go = () => this.load(); go(); return setInterval(go, EVERY_MS); })();
+  ngOnDestroy() { clearInterval(this.timer); }
+  private load() {
+    this.http.get<LlmSummary>('/api/llm/summary', { params: { days: 14 } }).subscribe({
+      next: s => { this.sum.set(s); this.err.set(false); },
+      error: () => this.err.set(true),
+    });
+  }
+  readonly icon = MODELS_ICON;
+  readonly chevron = CHEVRON_R;
   readonly tone = tone;
-  readonly pct = pctOf;
   readonly num = num;
-  readonly inSpan = inSpan;
-  readonly localTime = localTime;
-  readonly weeklyReset = weeklyReset;
-  rows = computed(() => [
-    { id: 'weekly', label: 'weekly', w: this.cc.weekly() },
-    { id: 'five', label: '5-hour', w: this.cc.fiveHour() },
-    { id: 'monthly', label: 'monthly', w: this.cc.monthly() },
-  ].filter(r => r.w) as { id: string; label: string; w: CcWindow }[]);
-  tipText = computed(() => tip(this.cc.data(), this.cc.now()));
+  readonly shown = shown;
+  readonly tokFmt = (v: number) => num(v) + ' tok';
+  /** Tokens a day, every provider together. */
+  chart = computed<TimeData | null>(() => {
+    const s = this.sum();
+    return s ? { t0: s.t0, step: s.step, n: s.by_day.length, series: [{ name: t('Tokens'), values: s.by_day.map(d => d.tokens) }] } : null;
+  });
+  /** Every quota a provider shares, fullest first (Command Code's for now). */
+  private quotas = computed<Quota[]>(() => {
+    const d = this.cc.data(), now = this.cc.now();
+    const f = this.cc.fiveHour(), w = this.cc.weekly();
+    const at = (x: CcWindow | null) => x?.reset_at ? `${t('resets')} ${inSpan(x.reset_at, now)}` : '';
+    const all: Quota[] = [
+      { provider: 'Command Code', label: 'weekly', w: w!, reset: d?.weekly_kind === 'rolling' ? weeklyReset(d) : at(w) },
+      { provider: 'Command Code', label: '5-hour', w: f!, reset: at(f) },
+      { provider: 'Command Code', label: 'monthly', w: this.cc.monthly()!, reset: '' },
+    ];
+    return all.filter(q => q.w && q.w.pct != null).sort((a, b) => (b.w.pct ?? 0) - (a.w.pct ?? 0));
+  });
+  /** The tightest quota, when it is 75% used or more. */
+  warn = computed(() => { const q = this.quotas()[0]; return q && tone(q.w) ? q : null; });
+  tipText = computed(() => {
+    const s = this.sum(), lines: string[] = [];
+    if (s) {
+      const m = s.month;
+      lines.push(`${t('All providers, this month')}: ${m.calls.toLocaleString('en-US')} ${t('calls')}, `
+        + `${m.tokens.toLocaleString('en-US')} tok (${num(m.input)} ${t('in')}, ${num(m.output)} ${t('out')})`
+        + (m.cost_usd != null ? `, ${shown(m.cost_usd)}` : ''));
+      if (m.unpriced_calls) lines.push(`${m.unpriced_calls} ${t('calls without a price - the provider does not say')}`);
+      lines.push(`${t('Today')}: ${s.today.calls} ${t('calls')}, ${num(s.today.tokens)} tok, ${s.today.answers} ${t('answers')}`);
+      if (s.answers.n) lines.push(`${t('Answers in the last 14 days')}: ${s.answers.n}`
+        + (s.answers.tps_median != null ? ` · ${t('median')} ${s.answers.tps_median} tok/s` : '')
+        + (s.answers.ttft_ms_median != null ? ` · ${t('first token')} ${this.secs(s.answers.ttft_ms_median)}` : ''));
+    }
+    for (const q of this.quotas()) lines.push(`${q.provider} ${t(q.label)}: ${Math.round(q.w.pct!)}%${q.reset ? ' · ' + q.reset : ''}`);
+    lines.push(t('Each provider in LLM settings'));
+    return lines.join('\n');
+  });
   round(v: number) { return Math.round(v); }
+  secs(ms: number) { return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`; }
   openSettings() { this.prefs.open.set('llm'); }
 }

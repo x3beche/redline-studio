@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { TimeChart, TimeData } from './charts';
 import { LANG, T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
@@ -79,7 +80,7 @@ interface ToolPage extends CcTool {
 
 /** Every tool's uses (GET /api/cc/tools-usage), for the top of the list. */
 interface ToolsUsage {
-  tools: Record<string, { uses: number; done: number; week: number }>; mine: number;
+  tools: Record<string, { uses: number; done: number; week: number; week_done?: number }>; mine: number;
   days: { day: string; by: Record<string, number> }[];
 }
 
@@ -524,40 +525,90 @@ export class CcToolsView {
   example(tpl: string) { return t(tpl).replace(/\{(\w+)\}/g, '…'); }
 }
 
-/** The last row of the usage card in the conversation list: opens the tools
- *  above in the conversation's place. The card draws the frame. */
+/** The last part of the usage card in the conversation list: how many tools
+ *  are on, how they were used today and this week, how often they worked,
+ *  the week's most used one, and the week by day (GET /api/cc/tools-usage).
+ *  Opens the tools above in the conversation's place. The card draws the frame. */
 @Component({
   selector: 'app-cc-tools-line',
-  imports: [T],
+  imports: [T, TimeChart],
   styles: [`
     :host { display: block; flex: none; }
-    .ctl { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 5px 8px; text-align: left;
-      font-size: 11px; color: var(--ink-dim); border: 0; border-radius: 0; background: none;
-      cursor: pointer; }
+    .ctl { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 7px 8px 8px; text-align: left;
+      font: inherit; font-size: 11px; color: var(--ink-dim); border: 0; border-radius: 0; background: none; cursor: pointer; }
     .ctl:hover, .ctl:focus-visible { background: var(--hover); outline: none; }
     .ctl[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+    .ctl-head { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
     .ctl b { color: var(--ink); font-weight: 600; }
-    .ctl em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+    .ctl-head em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
     svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;
       stroke-linecap: round; stroke-linejoin: round; }
-    .ctl[aria-pressed="true"] svg:first-child { color: var(--accent); }
-    svg:last-child { width: 12px; height: 12px; }
-    @media (max-width: 768px) { .ctl { min-height: 36px; } }
+    .ctl[aria-pressed="true"] .ctl-head svg:first-child { color: var(--accent); }
+    .ctl-head svg:last-child { width: 12px; height: 12px; }
+    .ctl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%;
+      font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+    .ctl-stats > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ctl-stats > span:last-child { text-align: right; }
+    .ctl-chart { width: 100%; }
+    .ctl-sub { display: flex; gap: 6px; width: 100%; min-width: 0; font-size: 10.5px; }
+    .ctl-sub span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .ctl-sub em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
+    @media (max-width: 768px) { .ctl { padding: 9px 10px 10px; } }
   `],
   template: `
 <button class="ctl" type="button" (click)="toggle.emit()" [attr.aria-pressed]="open()"
         [title]="'Which tools the model may use with your lines' | t">
-  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="wrench" /></svg>
-  <b>{{ 'Tools' | t }}</b>
-  <em>{{ on() }}/{{ total() }}</em>
-  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
+  <div class="ctl-head">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="wrench" /></svg>
+    <b>{{ 'Tools' | t }}</b>
+    <em><b>{{ on() }}</b> / {{ total() }} {{ 'on' | t }}</em>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
+  </div>
+  @if (stats(); as s) {
+    <div class="ctl-stats">
+      <span><b>{{ s.today }}</b> {{ 'today' | t }}</span>
+      <span><b>{{ s.week }}</b> {{ 'this week' | t }}</span>
+      <span [title]="'Uses this week that worked' | t"><b>{{ s.ok == null ? '–' : s.ok + '%' }}</b> {{ 'worked' | t }}</span>
+    </div>
+    <app-time-chart class="ctl-chart" [data]="s.chart" [bare]="true" [height]="30" [legend]="false" />
+    <div class="ctl-sub">
+      @if (s.top; as top) {
+        <span>{{ 'Most used' | t }}: <b>{{ top.label | t }}</b></span><em>{{ top.week }}×</em>
+      } @else { <span>{{ 'No tool uses this week' | t }}</span> }
+    </div>
+  }
 </button>`,
 })
 export class CcToolsLine {
   on = input(0);
   total = input(0);
   open = input(false);
+  /** The tools, for their names. */
+  tools = input<CcTool[]>([]);
   toggle = output<void>();
   readonly wrench = WRENCH;
   readonly chevron = CHEVRON;
+  private http = inject(HttpClient);
+  private usage = signal<ToolsUsage | null>(null);
+  private timer = (() => { const go = () => this.load(); go(); return setInterval(go, 120_000); })();
+  constructor() { inject(DestroyRef).onDestroy(() => clearInterval(this.timer)); }
+  private load() {
+    this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: 'week' } })
+      .subscribe({ next: u => this.usage.set(u), error: () => {} });
+  }
+  stats = computed(() => {
+    const u = this.usage();
+    if (!u) return null;
+    const per = Object.entries(u.tools);
+    const total = (d: { by: Record<string, number> }) => Object.values(d.by).reduce((a, n) => a + n, 0);
+    const week = per.reduce((a, [, x]) => a + x.week, 0), worked = per.reduce((a, [, x]) => a + (x.week_done ?? 0), 0);
+    const best = per.filter(([, x]) => x.week > 0).sort((a, b) => b[1].week - a[1].week)[0];
+    const label = (n: string) => this.tools().find(x => x.name === n)?.label || n;
+    const days = u.days;
+    const t0 = days.length ? Math.round(new Date(days[0].day + 'T00:00:00').getTime() / 1000) : 0;
+    const chart: TimeData = { t0, step: 86400, n: days.length, series: [{ name: t('Tool uses'), values: days.map(total) }] };
+    return { today: days.length ? total(days[days.length - 1]) : 0, week, chart,
+             ok: week ? Math.round(100 * worked / week) : null,
+             top: best ? { label: label(best[0]), week: best[1].week } : null };
+  });
 }

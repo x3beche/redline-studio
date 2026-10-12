@@ -113,7 +113,7 @@ export const fmt = {
       }
     </svg>
     @if (at(); as a) {
-      <div class="tcv-ch-tip" [style.left.px]="a.x > w() / 2 ? null : a.x + 10"
+      <div class="tcv-ch-tip" [class.tcv-ch-tip-up]="bare()" [style.left.px]="a.x > w() / 2 ? null : a.x + 10"
            [style.right.px]="a.x > w() / 2 ? w() - a.x + 10 : null">
         <div class="tcv-ch-tip-head">{{ when(a.i) }}</div>
         @for (r of a.rows; track r.name) {
@@ -158,11 +158,17 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   sums = input(true);
   /** Buckets to mark as unusual. */
   marks = input<number[]>([]);
+  /** A sparkline-sized chart (a sidebar card): no axes, no labels, no
+   *  margins - only the marks, and the reading on hover above them. */
+  bare = input(false);
 
-  readonly R = 8; readonly T = 8; readonly B = 18;
+  get R(): number { return this.bare() ? 0 : 8; }
+  get T(): number { return this.bare() ? 2 : 8; }
+  get B(): number { return this.bare() ? 0 : 18; }
   /** The left margin: room for the longest y label ("250.0 Wh" did not fit
    *  in a fixed 46 px and lost its first digits), never less than 46. */
   private left = computed(() => {
+    if (this.bare()) return 0;
     const m = this.max(), f = this.f();
     const longest = Math.max(...[0, 0.25, 0.5, 0.75, 1].map(k => f(m * k).length));
     return Math.max(46, Math.round(longest * 6.2 + 12));
@@ -213,7 +219,7 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   markX(i: number) { return this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i); }
   private y(v: number) { return this.height() - this.B - (this.height() - this.B - this.T) * v / this.max(); }
 
-  yTicks = computed(() => [0, 0.25, 0.5, 0.75, 1].map(k => {
+  yTicks = computed(() => this.bare() ? [] : [0, 0.25, 0.5, 0.75, 1].map(k => {
     const v = this.max() * k;
     return { v, y: this.y(v), label: this.f()(v) };
   }));
@@ -223,7 +229,7 @@ export class TimeChart implements AfterViewInit, OnDestroy {
    *  labels one bucket apart where the series is short ("30 Sept1 Oct"),
    *  and on a narrow chart they piled on top of each other. The ones at
    *  the ends are anchored inward, so they are not cut off. */
-  xTicks = computed(() => xTickPlan(this.data().n, this.w(), this.L, this.R,
+  xTicks = computed(() => this.bare() ? [] : xTickPlan(this.data().n, this.w(), this.L, this.R,
     i => this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i), i => this.label(i)));
   bars = computed(() => {
     const out: { x: number; y: number; w: number; h: number; c: string; i: number }[] = [];

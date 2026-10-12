@@ -612,10 +612,10 @@ type Ask = { text: string; label: string; go: () => void };
       }
       }
     </div>
-    <!-- The Command Code account's usage windows, pinned under the list (cc-usage.ts): opens LLM settings. -->
+    <!-- The models' usage, every provider together, pinned under the list (cc-usage.ts): opens LLM settings. -->
     <app-cc-usage-line>
       <!-- The tools the model may use with my lines (cc-tools.ts): opens them where the conversation is. -->
-      <app-cc-tools-line [on]="toolsOn()" [total]="tools().length" [open]="toolsOpen()" (toggle)="showTools(!toolsOpen())" />
+      <app-cc-tools-line [on]="toolsOn()" [total]="tools().length" [tools]="tools()" [open]="toolsOpen()" (toggle)="showTools(!toolsOpen())" />
     </app-cc-usage-line>
   </aside>
   <div class="tcv-cc-scrim" (click)="drawer.set(false)"></div>

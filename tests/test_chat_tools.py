@@ -668,7 +668,7 @@ def test_tools_usage_sums_every_tool(env):
              {"tool": "datasheet_read", "status": "done", "at": at}, {"tool": "gone_tool", "status": "done", "at": at}]
     seed_chat(raw, "c1", [line("u1", "user", "?"), {**line("a1", "assistant", "ok"), "steps": steps}])
     got = run(cc_chat.tools_usage())
-    assert got["tools"]["drawer_search"] == {"uses": 2, "done": 1, "week": 2}
+    assert got["tools"]["drawer_search"] == {"uses": 2, "done": 1, "week": 2, "week_done": 1}
     assert got["tools"]["datasheet_read"]["uses"] == 1 and "gone_tool" not in got["tools"]
     assert got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
     assert len(got["days"]) == 7 and got["span"] == "week"

@@ -217,6 +217,104 @@ async def usage(provider: str = "all", days: int = 30) -> dict:
             "account": await _openrouter_account_new() if "openrouter" in provs else None}
 
 
+def _median(xs: list[float]) -> float | None:
+    if not xs:
+        return None
+    xs = sorted(xs)
+    m = len(xs) // 2
+    return xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2
+
+
+@router.get("/summary")
+async def summary(days: int = 14) -> dict:
+    """Every provider together, for the Chat room's Models card: this
+    calendar month's calls, tokens and money, today's, the tokens and calls
+    of each of the last `days` days (in the app's time zone), and how the
+    Chat room's answers came - how many today, and the median speed and
+    time to the first token over the days. This space's own, from the usage
+    log every call writes to (the app's providers only, as /usage counts -
+    not the agents' own transcripts) and the conversations' answers. No
+    provider is named: the per-provider figures are in LLM settings."""
+    import os
+    from datetime import datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
+
+    from . import cc_chat
+    from . import usage as _usage
+
+    days = max(7, min(days, 60))
+    tz = ZoneInfo(os.environ.get("REDLINE_TZ", "Europe/Istanbul"))
+    now = datetime.now(timezone.utc)
+    here = now.astimezone(tz)
+    today = here.date()
+    first = today - timedelta(days=days - 1)
+    day0 = datetime(first.year, first.month, first.day, tzinfo=tz)
+    month0 = here.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    since = min(day0, month0)
+    by_day = {(first + timedelta(days=i)).isoformat(): {"calls": 0, "tokens": 0, "cost_usd": None} for i in range(days)}
+    month = {"calls": 0, "input": 0, "output": 0, "cost_usd": None, "unpriced_calls": 0}
+    providers: set[str] = set()
+
+    def local(at) -> datetime | None:
+        try:
+            d = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            return None
+        return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(tz)
+
+    raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
+    cur = raw[_usage.CALLS].find(
+        {"$and": [{"provider": {"$in": list(llm.PROVIDERS)}, "at": {"$gte": since.astimezone(timezone.utc).isoformat()}},
+                  _usage.of_space()]},
+        {"_id": 0, "at": 1, "provider": 1, "input": 1, "output": 1, "cost_usd": 1})
+    async for r in cur:
+        at = local(r.get("at"))
+        if at is None:
+            continue
+        inp, out, usd = r.get("input") or 0, r.get("output") or 0, r.get("cost_usd")
+        if at >= month0:
+            month["calls"] += 1
+            month["input"] += inp
+            month["output"] += out
+            if r.get("provider"):
+                providers.add(r["provider"])
+            if usd is None:
+                month["unpriced_calls"] += 1
+            else:
+                month["cost_usd"] = (month["cost_usd"] or 0) + usd
+        b = by_day.get(at.date().isoformat())
+        if b is not None:
+            b["calls"] += 1
+            b["tokens"] += inp + out
+            if usd is not None:
+                b["cost_usd"] = (b["cost_usd"] or 0) + usd
+
+    answers_today, tps, ttft, answers = 0, [], [], 0
+    async for doc in _db()[cc_chat.COLL].find(dict(cc_chat.COUNTED), {"messages.role": 1, "messages.timing": 1}):
+        for m in doc.get("messages") or []:
+            tm = m.get("timing") if m.get("role") == "assistant" else None
+            if not isinstance(tm, dict):
+                continue
+            at = local(tm.get("finished_at"))
+            if at is None or at < day0:
+                continue
+            answers += 1
+            answers_today += at.date() == today
+            if isinstance(tm.get("tps"), (int, float)):
+                tps.append(float(tm["tps"]))
+            if isinstance(tm.get("ttft_ms"), (int, float)):
+                ttft.append(float(tm["ttft_ms"]))
+
+    t = by_day[today.isoformat()]
+    med_tps, med_ttft = _median(tps), _median(ttft)
+    return {"days": days, "t0": int(day0.timestamp()), "step": 86400,
+            "month": {**month, "tokens": month["input"] + month["output"], "providers": len(providers)},
+            "today": {"calls": t["calls"], "tokens": t["tokens"], "cost_usd": t["cost_usd"], "answers": answers_today},
+            "answers": {"n": answers, "tps_median": None if med_tps is None else round(med_tps, 1),
+                        "ttft_ms_median": None if med_ttft is None else round(med_ttft)},
+            "by_day": [{"day": k, **v} for k, v in by_day.items()]}
+
+
 async def _openrouter_account_new() -> dict | None:
     """The key's figures from llm.or_account, in the usage panel's old shape."""
     d = await llm.or_account()

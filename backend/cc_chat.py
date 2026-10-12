@@ -1453,7 +1453,7 @@ async def tools_usage(span: str = "week") -> dict:
     keys, key = _buckets(span, now)
     names = list(chat_tools.tools())
     days: dict[str, dict] = {k: {} for k in keys}
-    per = {n: {"uses": 0, "done": 0, "week": 0} for n in names}
+    per = {n: {"uses": 0, "done": 0, "week": 0, "week_done": 0} for n in names}
     mine = 0
     async for doc in _db()[COLL].find(dict(COUNTED), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
         asker: dict = {}
@@ -1474,9 +1474,11 @@ async def tools_usage(span: str = "week") -> dict:
                 if k in days:
                     days[k][n] = days[k].get(n, 0) + 1
                 try:
-                    per[n]["week"] += now - datetime.fromisoformat(at.replace("Z", "+00:00")) <= timedelta(days=7)
+                    recent = now - datetime.fromisoformat(at.replace("Z", "+00:00")) <= timedelta(days=7)
                 except ValueError:
-                    pass
+                    recent = False
+                per[n]["week"] += recent
+                per[n]["week_done"] += recent and (st.get("status") or "done") == "done"
     return {"tools": per, "mine": mine, "span": span, "days": [{"day": d, "by": by} for d, by in days.items()]}
 
 
