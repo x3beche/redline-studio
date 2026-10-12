@@ -43,8 +43,9 @@ DRAW_IMAGE = os.environ.get("REDLINE_DRAW_IMAGE", "redline-draw")
 DRAW_TIMEOUT = 300
 DRAWINGS = ROOT / ".cache" / "drawings"
 # Bumped when tools/techdraw.py draws differently, so kept drawings are made again.
-# 3: each kept drawing has an SVG of its sheet beside it, the 3D room's preview.
-DRAW_VERSION = 3
+# 4: each kept drawing has a small PNG of its sheet beside it (the 3D room's
+# preview) and a JSON of what the sheet holds.
+DRAW_VERSION = 4
 # The zips on disk as well as in the database: the database is far away,
 # and thirty megabytes from it is minutes; from disk it is at once.
 ZIPS = ROOT / ".cache" / "releases"
@@ -60,11 +61,15 @@ def _now() -> str:
 
 # ---------------------------------------------------------------- drawings
 
+_PROGRESS_LINE = re.compile(r"^@progress (\d+) (.*)$")
+
+
 async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str, ident: str, sha: str,
-                  svg: Path | None = None) -> str | None:
+                  preview: bool = False, on_progress=None) -> str | None:
     """A technical drawing of a STEP, in the drawing container. None if it
-    was made; otherwise why not. With `svg`, the same sheet as SVG there
-    too (a preview; a release has no use for one)."""
+    was made; otherwise why not. With `preview`, a small PNG of the sheet
+    and a JSON of what it holds beside `out` too (a release has no use for
+    them). `on_progress(pct, stage)` hears how far tools/techdraw.py is."""
     work = Path(tempfile.mkdtemp(prefix="redline-draw-"))
     try:
         os.chmod(work, 0o777)
@@ -73,23 +78,40 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
                 "--user", f"{os.getuid()}:{os.getgid()}",
                 "-v", f"{work}:/work", "-v", f"{ROOT / 'tools'}:/tools:ro", DRAW_IMAGE,
                 "/work/model.step", "/work/drawing.pdf", "--title", title, "--project", project,
-                "--tag", tag, "--id", ident, "--sha", sha, *(["--svg", "/work/drawing.svg"] if svg else [])]
+                "--tag", tag, "--id", ident, "--sha", sha, *(["--png", "/work/drawing.png", "--info", "/work/drawing.json"] if preview else [])]
         proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
-                                                    stderr=asyncio.subprocess.STDOUT)
+                                                    stderr=asyncio.subprocess.STDOUT, limit=1 << 20)
+        text: list[str] = []
+
+        async def follow() -> None:
+            async for raw in proc.stdout:
+                line = raw.decode(errors="replace").rstrip()
+                step_ = _PROGRESS_LINE.match(line)
+                if not step_:
+                    if line:
+                        text.append(line)
+                elif on_progress:
+                    on_progress(int(step_[1]), step_[2])
+            await proc.wait()
         try:
-            log, _ = await asyncio.wait_for(proc.communicate(), DRAW_TIMEOUT)
+            await asyncio.wait_for(follow(), DRAW_TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             return f"the drawing took longer than {DRAW_TIMEOUT} s"
         pdf = work / "drawing.pdf"
         if proc.returncode != 0 or not pdf.exists():
-            text = log.decode(errors="replace").strip().splitlines()
             if any("Unable to find image" in t or "pull access denied" in t for t in text):
                 return "the drawing image is not built: docker build -t redline-draw -f docker/draw/Dockerfile docker/draw"
-            return (text[-1] if text else "the drawing failed")[:300]
+            if text:
+                return text[-1][:300]
+            # Nothing said: killed from outside - 137 is what running out of memory looks like.
+            rc = proc.returncode
+            return (f"the drawing was stopped (exit {rc}: out of memory - try again when the machine is less busy)"
+                    if rc == 137 else f"the drawing stopped with exit {rc} and said nothing")
         # The preview first: the PDF on disk is what says the drawing is made.
-        if svg and (work / "drawing.svg").exists():
-            svg.write_bytes((work / "drawing.svg").read_bytes())
+        for suffix in (".png", ".json") if preview else ():
+            if (work / f"drawing{suffix}").exists():
+                out.with_suffix(suffix).write_bytes((work / f"drawing{suffix}").read_bytes())
         out.write_bytes(pdf.read_bytes())
         return None
     finally:
@@ -101,9 +123,25 @@ def _kept(meta: dict, suffix: str = ".pdf") -> Path:
     return DRAWINGS / f"{meta['sha256'][:24]}-v{DRAW_VERSION}{suffix}"
 
 
-async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
+# What each model's drawing is doing, for the 3D room's Model tab: being
+# made (how far, which step), waiting its turn, or the last failure - per
+# model, and only for the STEP it was about. In memory, like draw_later's
+# waits: a restart forgets it, and the files on disk still say what is made.
+_STATE: dict[str, dict] = {}
+# When draw_later makes each model's drawing.
+_DUE: dict[str, str] = {}
+# One making of a kept drawing at a time: a click while the background
+# makes the same one waits for it rather than making it twice.
+_MAKING: dict[str, asyncio.Lock] = {}
+# Drawings asked for with POST, running in the background.
+_STARTED: set[asyncio.Task] = set()
+
+
+async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False) -> bytes:
     """A model's technical drawing on its own, for the 3D room: made once
-    per STEP (kept by the STEP's fingerprint), with its SVG preview."""
+    per STEP (kept by the STEP's fingerprint), with its PNG preview.
+    `again` makes it anew even if it is kept."""
+    asked = time.time()
     doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1})
     if not doc:
         raise KeyError(model_id)
@@ -112,19 +150,36 @@ async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
         raise LookupError("this model has no STEP to draw from - its script does not export one")
     DRAWINGS.mkdir(parents=True, exist_ok=True)
     kept = _kept(meta)
-    if kept.exists():
+    if kept.exists() and not again:
         return kept.read_bytes()
-    step = await store.get_artifact(db, model_id, "step")
-    why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
-                        project=model_id.split("/")[0], tag=tag, ident=model_id, sha=doc.get("sha256") or "",
-                        svg=_kept(meta, ".svg"))
-    if why:
-        raise RuntimeError(why)
-    return kept.read_bytes()
+    async with _MAKING.setdefault(kept.name, asyncio.Lock()):
+        # Made while this waited (by the background, or another click).
+        if kept.exists() and (not again or kept.stat().st_mtime >= asked):
+            return kept.read_bytes()
+        sha = meta["sha256"]
+        live = {"sha": sha, "state": "making", "pct": 0, "stage": "starting", "started_at": _now()}
+        _STATE[model_id] = live
+        _DUE.pop(model_id, None)
+
+        def heard(pct: int, stage: str) -> None:
+            live.update(pct=pct, stage=stage)
+        try:
+            step = await store.get_artifact(db, model_id, "step")
+            why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
+                                project=model_id.split("/")[0], tag=tag, ident=model_id,
+                                sha=doc.get("sha256") or "", preview=True, on_progress=heard)
+        except Exception as exc:                    # noqa: BLE001 - said on the tab, then raised
+            why = str(exc) or type(exc).__name__
+        if why:
+            _STATE[model_id] = {"sha": sha, "state": "failed", "error": why, "failed_at": _now()}
+            raise RuntimeError(why)
+        if _STATE.get(model_id) is live:
+            _STATE.pop(model_id, None)
+        return kept.read_bytes()
 
 
 async def model_drawing_preview(db, model_id: str) -> bytes | None:
-    """The SVG preview of a model's drawing if it is already made, else
+    """The PNG preview of a model's drawing if it is already made, else
     None - never made here: the preview only shows what is there."""
     doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1})
     if not doc:
@@ -132,8 +187,83 @@ async def model_drawing_preview(db, model_id: str) -> bytes | None:
     meta = (doc.get("artifacts") or {}).get("step")
     if not meta:
         return None
-    svg = _kept(meta, ".svg")
-    return svg.read_bytes() if svg.exists() and _kept(meta).exists() else None
+    png = _kept(meta, ".png")
+    return png.read_bytes() if png.exists() and _kept(meta).exists() else None
+
+
+def _sheet(info: Path) -> dict:
+    """What a kept sheet holds - its size, scale and views (techdraw.py
+    --info)."""
+    try:
+        got = json.loads(info.read_text())
+    except (OSError, ValueError):
+        return {}
+    return {k: got.get(k) for k in ("sheet", "scale", "views")}
+
+
+def _iso(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).isoformat()
+
+
+async def drawing_status(db, model_id: str) -> dict:
+    """Where a model's drawing is, for the 3D room's Model tab - never
+    making one. state: no_step, none, scheduled (draw_later's time in
+    scheduled_at), queued, making (pct, stage), ready, failed; with what
+    is made (when, its size, the sheet) and the last failure, if any, for
+    the model's current STEP only."""
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "built": 1})
+    if not doc:
+        raise KeyError(model_id)
+    built = doc.get("built") or {}
+    out: dict = {"id": model_id, "auto_after_s": DRAW_AFTER_BUILD_S, "scheduled_at": _DUE.get(model_id),
+                 "built": {"version": built.get("version"), "at": built.get("at")}}
+    meta = (doc.get("artifacts") or {}).get("step")
+    if not meta:
+        out["state"] = "no_step"
+        return out
+    sha = meta["sha256"]
+    out["step"] = {"sha": sha[:12], "bytes": meta.get("bytes")}
+    kept, png = _kept(meta), _kept(meta, ".png")
+    # Its preview's address changes with the drawing, so it is kept for good.
+    out["key"] = f"{sha[:24]}-v{DRAW_VERSION}"
+    if kept.exists():
+        st = kept.stat()
+        out["made"] = {"at": _iso(st.st_mtime), "pdf_bytes": st.st_size, "preview": png.exists(),
+                       **_sheet(_kept(meta, ".json"))}
+    live = _STATE.get(model_id)
+    if live and live.get("sha") in (None, sha):
+        if live["state"] == "failed":
+            out["failed"] = {"reason": live.get("error"), "at": live.get("failed_at")}
+        else:
+            out.update(state=live["state"], pct=live.get("pct"), stage=live.get("stage"),
+                       started_at=live.get("started_at"))
+    if "state" not in out:
+        out["state"] = ("ready" if "made" in out else "failed" if "failed" in out
+                        else "scheduled" if out["scheduled_at"] else "none")
+    return out
+
+
+async def start_drawing(db, model_id: str, again: bool = False) -> dict:
+    """Make a model's drawing in the background (anew with `again`); its
+    progress is drawing_status's. Nothing new is started while one is
+    being made."""
+    now = await drawing_status(db, model_id)
+    if now["state"] == "no_step":
+        raise LookupError("this model has no STEP to draw from - its script does not export one")
+    # Waiting its turn behind the background's drawings is not made to wait.
+    if now["state"] == "making" or (now["state"] == "ready" and not again):
+        return now
+
+    async def go() -> None:
+        try:
+            await model_drawing(db, model_id, again=again)
+        except Exception as exc:                    # noqa: BLE001 - kept in _STATE for the tab
+            print(f"drawing {model_id}: {exc}", flush=True)
+    task = asyncio.get_running_loop().create_task(go())
+    _STARTED.add(task)
+    task.add_done_callback(_STARTED.discard)
+    await asyncio.sleep(0)                          # under way before the answer
+    return await drawing_status(db, model_id)
 
 
 # A model's drawing made by itself a while after it is built, so the 3D
@@ -152,10 +282,14 @@ def draw_later(db, model_id: str) -> None:
     old = _DRAW_LATER.pop(model_id, None)
     if old:
         old.cancel()
+    _DUE[model_id] = _iso(time.time() + DRAW_AFTER_BUILD_S)
 
     async def go() -> None:
         try:
             await asyncio.sleep(DRAW_AFTER_BUILD_S)
+            _DUE.pop(model_id, None)
+            if model_id not in _STATE or _STATE[model_id].get("state") == "failed":
+                _STATE[model_id] = {"sha": None, "state": "queued"}
             async with _DRAW_ONE:
                 await model_drawing(db, model_id)
         except asyncio.CancelledError:
@@ -163,8 +297,11 @@ def draw_later(db, model_id: str) -> None:
         except Exception as exc:                    # noqa: BLE001 - a click makes it again
             print(f"drawing after build {model_id}: {exc}", flush=True)
         finally:
+            if _STATE.get(model_id, {}).get("state") == "queued":
+                _STATE.pop(model_id, None)
             if _DRAW_LATER.get(model_id) is task:
                 _DRAW_LATER.pop(model_id, None)
+                _DUE.pop(model_id, None)
 
     task = asyncio.get_running_loop().create_task(go())
     _DRAW_LATER[model_id] = task

@@ -3252,9 +3252,9 @@ async def release_delete(rid: str):
 
 
 @app.get("/api/models/{model_id:path}/drawing.pdf")
-async def model_drawing(model_id: str):
+async def model_drawing(model_id: str, download: bool = False):
     """A dimensioned technical drawing of a model (made from its STEP, in
-    the drawing container; kept per STEP)."""
+    the drawing container; kept per STEP). ?download=1 saves it."""
     try:
         pdf = await release.model_drawing(db(), model_id)
     except KeyError as exc:
@@ -3265,22 +3265,47 @@ async def model_drawing(model_id: str):
         raise HTTPException(500, str(exc)) from exc
     name = model_id.split("/")[-1]
     return Response(pdf, media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="{name}-drawing.pdf"'})
+                    headers={"Content-Disposition":
+                             f'{"attachment" if download else "inline"}; filename="{name}-drawing.pdf"'})
 
 
-@app.get("/api/models/{model_id:path}/drawing.svg")
+@app.get("/api/models/{model_id:path}/drawing.png")
 async def model_drawing_preview(model_id: str):
-    """The model's technical drawing as an SVG of the same sheet - the 3D
-    room's preview - only if the drawing is already made: 404 otherwise,
-    and nothing is made here (drawing.pdf makes it). A HEAD asks whether
-    it is there."""
+    """A small picture of the model's technical drawing - the 3D room's
+    preview - only if the drawing is already made: 404 otherwise, and
+    nothing is made here (drawing.pdf makes it). The page asks for it by
+    the drawing's key (?k=, from drawing/status), so it is kept for good."""
     try:
-        svg = await release.model_drawing_preview(db(), model_id)
+        png = await release.model_drawing_preview(db(), model_id)
     except KeyError as exc:
         raise HTTPException(404, model_id) from exc
-    if svg is None:
+    if png is None:
         raise HTTPException(404, "not made yet")
-    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-cache"})
+    return Response(png, media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
+@app.get("/api/models/{model_id:path}/drawing/status")
+async def model_drawing_status(model_id: str):
+    """Where the model's drawing is - made (when, size, sheet), being made
+    (how far), waiting, failed, or when it is made by itself - for the 3D
+    room's Model tab, which asks again while one is under way."""
+    try:
+        return await release.drawing_status(db(), model_id)
+    except KeyError as exc:
+        raise HTTPException(404, model_id) from exc
+
+
+@app.post("/api/models/{model_id:path}/drawing")
+async def model_drawing_make(model_id: str, again: bool = False):
+    """Make the model's drawing now, in the background (?again=1: anew,
+    even if it is made); the answer is its status, followed above."""
+    try:
+        return await release.start_drawing(db(), model_id, again)
+    except KeyError as exc:
+        raise HTTPException(404, model_id) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 # ---------------- notes ----------------

@@ -3498,6 +3498,18 @@ const TR: Record<string, string> = {
   'In the model tree': 'Model ağacında', 'Moved on': 'İlerleyenler', 'used in': 'kullanıldığı yer',
   'Moving parts, on the Motion tab': 'Hareketli parçalar, Hareket sekmesinde', 'Nothing moves': 'Hareket eden yok',
   'Overall, in mm (x × y × z)': 'Toplam, mm (x × y × z)',
+  'reading the STEP': 'STEP okunuyor', 'projecting the front view': 'ön görünüş çıkarılıyor',
+  'projecting the top view': 'üst görünüş çıkarılıyor', 'projecting the right view': 'sağ görünüş çıkarılıyor',
+  'projecting the isometric view': 'izometrik görünüş çıkarılıyor', 'laying out the sheet': 'pafta yerleştiriliyor',
+  'writing the PDF': 'PDF yazılıyor', 'drawing the preview': 'önizleme çiziliyor',
+  'waiting its turn': 'sırasını bekliyor', 'starting': 'başlıyor', 'Sheet': 'Pafta', 'Views': 'Görünüşler',
+  'A3 landscape': 'A3 yatay', 'A4 landscape': 'A4 yatay', 'Isometric': 'İzometrik',
+  'No STEP to draw from: the model\'s script does not export one.': 'Çizilecek STEP yok: modelin betiği dışa aktarmıyor.',
+  'Not made yet.': 'Henüz yapılmadı.', 'Last attempt failed': 'Son deneme başarısız', 'Make again': 'Yeniden yap',
+  'making': 'yapılıyor', 'ready': 'hazır', 'due': 'saat', 'no STEP': 'STEP yok', 'not made': 'yapılmadı',
+  'Made by itself {n} min after a build': 'Derlemeden {n} dk sonra kendiliğinden yapılır', 'next at': 'sıradaki',
+  'part': 'parça', 'parts': 'parça', 'Built against older': 'Eski sürümlerine göre derlendi',
+  'No STEP: the script does not export one': 'STEP yok: betik dışa aktarmıyor',
 };
 
 export function t(text: string): string {

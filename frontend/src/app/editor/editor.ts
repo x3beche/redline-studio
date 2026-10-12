@@ -1333,7 +1333,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     return t && id ? this.findModel(t, id) : null;
   });
   /** What the loaded model says about itself, for the Model tab
-   *  (model-health.ts): its parts, its motions, its overall size. */
+   *  (model-health.ts): its parts and its overall size. */
   modelFacts = signal<ModelFacts | null>(null);
   private readFacts() {
     const v = this.viewer;
@@ -1343,7 +1343,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (bb?.max && bb?.min) size = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z];
     } catch { /* not rendered */ }
     if (size && !size.every(n => isFinite(n) && n >= 0)) size = null;
-    this.modelFacts.set({ parts: v?.parts.length ?? 0, motions: v?.motions?.specs.length ?? 0, size });
+    this.modelFacts.set({ parts: v?.parts.length ?? 0, size });
   }
   /** The open model's build, how far along (buildPct). */
   activePct = computed(() => { const m = this.activeEntry(); return m ? this.buildPct(m) : null; });

@@ -549,9 +549,8 @@
          into the tab as it is. -->
     <div #modelHealth class="tcv-model-host">
       <app-model-health [entry]="activeEntry()" [facts]="modelFacts()" [pct]="activePct()"
-                        [canBuild]="auth.can('run')" [drawingBusy]="drawingBusy()" [releasing]="releasing()"
-                        (build)="buildActive()" (release)="releasing.set(true)" (releases)="releasing.set(true)"
-                        (openDrawing)="openDrawing()" />
+                        [canBuild]="auth.can('run')" [releasing]="releasing()"
+                        (build)="buildActive()" (release)="releasing.set(true)" (releases)="releasing.set(true)" />
     </div>
     @if (releasing() && activeModel()) {
       <app-releases animate.leave="tcv-leave" [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
