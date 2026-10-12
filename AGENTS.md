@@ -236,6 +236,23 @@ Two ways to reach the data, same commands and the same output:
   token's workspace, under the token's name, and records deletes. The MCP
   server and `revisions.py board ...` send the same token.
 
+**On someone else's computer** an agent runs from the seed,
+https://github.com/x3beche/redline-agent-seed, with no source checkout:
+its `start.sh` keeps `REDLINE_API`, `REDLINE_TOKEN` and `REDLINE_AGENT` in
+a git-ignored `.env`, and on every start fetches the **agent kit** from
+the server (`GET /api/agent/kit`, for agent tokens only;
+`backend/agent_kit.py`): these commands, the library modules of
+`backend/` they import (never the server's own - the app, sign-in,
+tokens, chat), this file, `TOOLS.md` and `.claude/agents/`, plus a
+CLAUDE.md on working remotely. Through the server, `build` runs there
+and `part keep` fetches and seats parts there (`REDLINE_BUILD=local` /
+`REDLINE_PARTS=local` keep them local), so the kit needs neither
+build123d nor OpenCascade; `render.py` uses the server's own address for
+the page and a local Chrome. The Agent tokens page and the 3D room's
+first-run guide show the one line to start it, and whether an agent is
+connected (`GET /api/agent/status`: a working token used in the last ten
+minutes).
+
 On this machine the agents share one token, `REDLINE_TOKEN` in `.env` (which
 is not in the repo): the commands and the MCP server read it from there,
 and `REDLINE_AGENT` still says which of you is acting.

@@ -407,8 +407,41 @@
           <button class="tcv-chip" (click)="shutGuide()" [title]="'hide this guide' | t">{{ 'Hide' | t }}</button>
         </header>
         <ol class="tcv-guide-steps">
+          <!-- First: an agent on the person's own computer, connected with
+               a token - nothing in the queue moves without one. -->
+          @if (agentStep()) {
+            @let st = agents.status();
+            <li class="tcv-guide-agent" [attr.data-done]="st?.connected ? 1 : null">
+              <div class="tcv-guide-agent-what">
+                <h3><span>1</span>{{ 'Connect your agent' | t }}</h3>
+                <p>{{ 'The work on your notes is done by an AI agent (Claude Code) on your own computer. Make a token in Agent tokens, run the line on your computer, and keep it running the whole time you develop: if it stops, notes wait in the queue.' | t }}</p>
+              </div>
+              <div class="tcv-guide-agent-state" role="status">
+                <span class="tcv-dot" [attr.data-on]="st?.connected ? 1 : st?.tokens ? 0 : null"></span>
+                @if (!st) { <span>{{ 'checking…' | t }}</span> }
+                @else if (st.connected) { <b>{{ 'Connected' | t }}</b><small>{{ 'last seen' | t }} {{ seen(st.seen_s) }}</small> }
+                @else if (st.tokens) { <b>{{ 'Token made, agent not connected' | t }}</b>
+                  <small>{{ st.last_seen ? ('last seen' | t) + ' ' + seen(st.seen_s) : ('never used yet' | t) }}</small> }
+                @else { <b>{{ 'No agent token yet' | t }}</b><small>{{ 'make one first' | t }}</small> }
+              </div>
+              <div class="tcv-guide-agent-line">
+                <div class="tcv-seg" role="tablist">
+                  <button [class.on]="seedOs() === 'unix'" (click)="seedOs.set('unix')">macOS · Linux</button>
+                  <button [class.on]="seedOs() === 'windows'" (click)="seedOs.set('windows')"
+                          [title]="'PowerShell; runs the agent in WSL' | t">Windows</button>
+                </div>
+                <code class="mono">{{ agentLine() }}</code>
+                <small>{{ 'Put your token in place of your-token - or copy the whole line in Agent tokens, right after making the token.' | t }}</small>
+              </div>
+              <div class="tcv-guide-acts tcv-guide-agent-acts">
+                <button class="tcv-btn tcv-btn-accent" (click)="openTokens()" [disabled]="st && !st.can_make"
+                        [title]="(st && !st.can_make ? 'handing out agent tokens takes an editor, an admin or an owner' : 'user menu > Agent tokens') | t">{{ 'Agent tokens' | t }}</button>
+                <button class="tcv-btn" (click)="copyAgentLine()">{{ (seedCopied() ? 'Copied' : 'Copy the line') | t }}</button>
+              </div>
+            </li>
+          }
           <li [attr.data-done]="guideAt() ? 1 : null">
-            <h3><span>1</span>{{ 'Make a project' | t }}</h3>
+            <h3><span>{{ 1 + (agentStep() ? 1 : 0) }}</span>{{ 'Make a project' | t }}</h3>
             <p>{{ 'A folder for one product. Tick 3D parts, Electronics or both, and the folders are made inside it.' | t }}</p>
             @if (guideAt(); as g) {
               <span class="tcv-guide-at mono">{{ g.project }}/</span>
@@ -417,7 +450,7 @@
             }
           </li>
           <li>
-            <h3><span>2</span>{{ 'Make the first part' | t }}</h3>
+            <h3><span>{{ 2 + (agentStep() ? 1 : 0) }}</span>{{ 'Make the first part' | t }}</h3>
             <p>{{ 'Makes a starter block in parts/ and builds it. Describe the part you want under Comment, save it and queue it: the 3D agent turns the block into your part.' | t }}</p>
             <div class="tcv-guide-acts">
               <button class="tcv-btn" (click)="newModel(guideAt()!.parts)" [disabled]="!guideAt() || !auth.can('edit')">+ {{ 'New part' | t }}</button>
@@ -425,17 +458,17 @@
             </div>
           </li>
           <li>
-            <h3><span>3</span>{{ 'Bring in a CAD file' | t }}</h3>
+            <h3><span>{{ 3 + (agentStep() ? 1 : 0) }}</span>{{ 'Bring in a CAD file' | t }}</h3>
             <p>{{ 'STEP, IGES, BREP, STL or 3MF becomes a model in parts/ that can be cut, measured and placed. A maker\'s STEP of a bought part comes in the same way.' | t }}</p>
             <button class="tcv-btn" (click)="pickCad(guideAt()!.parts)" [disabled]="!guideAt() || !auth.can('edit')">+ CAD</button>
           </li>
           <li>
-            <h3><span>4</span>{{ 'Parts from LCSC' | t }}</h3>
+            <h3><span>{{ 4 + (agentStep() ? 1 : 0) }}</span>{{ 'Parts from LCSC' | t }}</h3>
             <p>{{ 'Electronic parts come from LCSC: Chat or the PCB agent finds them and keeps them in the PCB room\'s drawer. Each part\'s 3D body comes with the board it is on.' | t }}</p>
             <button class="tcv-btn" (click)="picked.room.set('pcb')">{{ 'Open the PCB room' | t }}</button>
           </li>
           <li>
-            <h3><span>5</span>{{ 'Put it together' | t }}</h3>
+            <h3><span>{{ 5 + (agentStep() ? 1 : 0) }}</span>{{ 'Put it together' | t }}</h3>
             <p>{{ 'An assembly is a model that imports parts and boards. Make one in assemblies/, open it and use Insert component on the toolbar; when a part changes, the assembly is rebuilt.' | t }}</p>
             <button class="tcv-btn" (click)="newAssembly()" [disabled]="!guideAt() || !auth.can('edit')">+ {{ 'New assembly' | t }}</button>
           </li>

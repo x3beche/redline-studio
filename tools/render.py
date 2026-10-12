@@ -56,6 +56,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -66,7 +67,21 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-WEB = "http://127.0.0.1:4200"
+def _web(env=os.environ) -> str:
+    """The app's page: REDLINE_WEB, else - for an agent on another computer,
+    through the server (REDLINE_TRANSPORT=api to a REDLINE_API that is not
+    this machine) - the server's own address, which serves the page too;
+    else the dev server here."""
+    if (env.get("REDLINE_WEB") or "").strip():
+        return env["REDLINE_WEB"].strip().rstrip("/")
+    api = (env.get("REDLINE_API") or "").strip().rstrip("/")
+    if env.get("REDLINE_TRANSPORT", "").strip().lower() == "api" and api \
+            and not re.match(r"https?://(localhost|127\.0\.0\.1|\[::1\])(:|/|$)", api):
+        return api
+    return "http://127.0.0.1:4200"
+
+
+WEB = _web()
 # The browser's DevTools port: a free one for each render. It used to be a
 # fixed 9411, and two renders at once (two agents finishing at the same
 # time) both talked to whichever browser had the port: each navigated,

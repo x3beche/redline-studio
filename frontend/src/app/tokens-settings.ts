@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { Auth } from './auth';
@@ -6,6 +6,7 @@ import { LANG, T, t } from './i18n';
 import { when } from './llm-settings';
 import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
+import { Agents, SeedOs, seedLine, seenAgo } from './agent-status';
 
 /** One agent's token as the server lists it - never the token, never its hash. */
 export interface AgentToken {
@@ -43,6 +44,42 @@ interface Detail {
   <p class="st-lead">{{ 'Programs such as AI agents sign in to Redline with an agent token (rlat_…) instead of a password. A token is at most an editor, can be kept to one room and taken back at any time; everything the agent does is recorded under the name you give it.' | t }}
     {{ 'The token is shown once, when it is made - Redline keeps only its SHA-256.' | t }}</p>
 
+  <!-- Setting up an agent on one's own computer: the seed's one line. -->
+  <div class="st-card tk-setup-card">
+    <div class="st-card-head"><h3>{{ 'Set up your agent' | t }}</h3>
+      @if (agents.status(); as st) {
+        <span class="tk-state"><span class="tk-dot" [attr.data-on]="st.connected ? 1 : st.tokens ? 0 : null"></span>
+          @if (st.connected) { {{ 'Connected' | t }} · {{ 'last seen' | t }} {{ seen(st.seen_s) }} }
+          @else if (st.tokens) { {{ 'Token made, agent not connected' | t }}{{ st.last_seen ? ' · ' + ('last seen' | t) + ' ' + seen(st.seen_s) : '' }} }
+          @else { {{ 'No agent token yet' | t }} }
+        </span>
+      }
+      <a class="st-right st-sub" [href]="seed()" target="_blank" rel="noopener">{{ 'the seed, and its README' | t }}</a></div>
+    <div class="st-card-body tk-setup">
+      <section>
+        <h4><span>1</span>{{ 'Make a token' | t }}</h4>
+        <p>{{ 'Below, under New token: name it after the computer it will run on (e.g. laptop). It is shown once - the line with it comes up right there.' | t }}</p>
+      </section>
+      <section class="tk-setup-line">
+        <h4><span>2</span>{{ 'Run the line on your computer' | t }}
+          <span class="st-seg tk-os">
+            <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
+            <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
+          </span></h4>
+        <code class="tk-code">{{ line(made()?.token) }}</code>
+        <p>{{ 'Needs git, Python 3.12 or newer and Claude Code, signed in. On Windows the line runs the agent in WSL. The token is kept in .env in that folder, readable only by you - never commit it or paste it anywhere else.' | t }}</p>
+        <div class="st-row">
+          <button class="tcv-btn" [class.tcv-btn-accent]="!!made()" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : made() ? 'Copy the line, with the token' : 'Copy the line') | t }}</button>
+        </div>
+      </section>
+      <section>
+        <h4><span>3</span>{{ 'Keep it running' | t }}</h4>
+        <p>{{ 'The agent is what does the work on the notes you queue: keep it running on your computer the whole time you develop. If it stops, notes wait in the queue until it is back.' | t }}</p>
+        <p class="mono tk-cmds">./start.sh &nbsp;{{ 'start again, updated' | t }}<br>./start.sh --stop &nbsp;{{ 'stop it' | t }}<br>tmux attach -t redline-agent &nbsp;{{ 'watch it' | t }}</p>
+      </section>
+    </div>
+  </div>
+
   @if (!may) {
     <div class="st-banner">{{ 'Read-only for you: handing out agent tokens takes an editor, an admin or an owner.' | t }}</div>
   } @else {
@@ -76,11 +113,16 @@ interface Detail {
             <div class="tk-once-top">
               <b>{{ 'Token for' | t }} {{ m.name }}</b>
               <span class="st-badge" data-tone="warn">{{ 'shown once' | t }}</span>
-              <span class="st-sub">{{ 'Copy it now - you will not see it again. Give the agent these lines:' | t }}</span>
+              <span class="st-sub">{{ 'Copy it now - you will not see it again. Run this line on the computer the agent will work on, and keep it running:' | t }}</span>
             </div>
-            <code class="tk-code">REDLINE_TRANSPORT=api<br>REDLINE_API={{ origin }}<br>REDLINE_TOKEN={{ m.token }}</code>
+            <code class="tk-code">{{ line(m.token) }}</code>
             <div class="st-row">
-              <button class="tcv-btn tcv-btn-accent" (click)="copy(m.token, true)">{{ (copied() === 'lines' ? 'Copied' : 'Copy the lines') | t }}</button>
+              <button class="tcv-btn tcv-btn-accent" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : 'Copy the line') | t }}</button>
+              <span class="st-seg tk-os">
+                <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
+                <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
+              </span>
+              <button class="tcv-btn" (click)="copy(m.token, true)" [title]="'for an agent you run yourself, in a full checkout' | t">{{ (copied() === 'lines' ? 'Copied' : 'Copy the lines') | t }}</button>
               <button class="tcv-btn" (click)="copy(m.token, false)">{{ (copied() === 'token' ? 'Copied' : 'Copy the token only') | t }}</button>
               <button class="tcv-btn tk-right" (click)="made.set(null)">{{ 'Done' | t }}</button>
             </div>
@@ -112,7 +154,8 @@ interface Detail {
                       <small>{{ x.role ?? 'editor' }} · {{ x.room ? x.room.toUpperCase() : ('any room' | t) }}</small></td>
                     <td class="tk-two" [title]="exact(x.created_at)">
                       <span>{{ ago(x.created_at) }}</span><small>{{ x.created_by?.name || ('someone' | t) }}</small></td>
-                    <td [title]="x.last_used ? exact(x.last_used) : ''" [class.dim]="!x.last_used">{{ x.last_used ? ago(x.last_used) : ('never' | t) }}</td>
+                    <td [title]="x.last_used ? exact(x.last_used) : ''" [class.dim]="!x.last_used">
+                      <span class="tk-dot" [attr.data-on]="live(x) ? 1 : null" [title]="(live(x) ? 'connected' : 'not connected') | t"></span>{{ x.last_used ? ago(x.last_used) : ('never' | t) }}</td>
                     <td class="r mono">
                       @if (per(x.id); as p) {
                         <span class="tk-spark"><app-spark [values]="p.series.slice(-14)" [width]="48" [height]="16" /></span>{{ p.d7 }}
@@ -218,9 +261,13 @@ interface Detail {
   }
 </div>`,
 })
-export class TokensSettingsPanel {
+export class TokensSettingsPanel implements OnDestroy {
   private http = inject(HttpClient);
   private auth = inject(Auth);
+  agents = inject(Agents);
+  private unwatch = this.agents.watch();
+  os = signal<SeedOs>(/Win/i.test(navigator.platform || navigator.userAgent) ? 'windows' : 'unix');
+  seed = computed(() => this.agents.status()?.seed ?? 'https://github.com/x3beche/redline-agent-seed');
   readonly may = this.auth.can('tokens');
   readonly myRole = this.auth.state()?.role ?? 'owner';
   /** The roles an agent may carry, no higher than one's own. */
@@ -243,7 +290,7 @@ export class TokensSettingsPanel {
   room = signal('');
   expiry = signal<number | null>(null);
   made = signal<{ name: string; token: string } | null>(null);
-  copied = signal<'lines' | 'token' | null>(null);
+  copied = signal<'lines' | 'token' | 'line' | null>(null);
   error = signal('');
   busy = signal(false);
   open = signal<string | null>(null);
@@ -260,6 +307,24 @@ export class TokensSettingsPanel {
   });
 
   constructor() { if (this.may) this.load(); }
+
+  ngOnDestroy() { this.unwatch(); }
+
+  /** The seed's one line for this server, with the token when there is one. */
+  line(token?: string | null) { return seedLine(this.seed(), this.origin, this.os(), token); }
+
+  copyLine() {
+    navigator.clipboard?.writeText(this.line(this.made()?.token)).then(() => this.copied.set('line'),
+      () => this.error.set(t('The browser would not copy - select the line instead.')));
+  }
+
+  seen(s: number | null) { return seenAgo(s); }
+
+  /** Used within the connected window (backend/agent_kit.py CONNECTED_S). */
+  live(x: AgentToken): boolean {
+    const w = this.agents.status()?.window_s ?? 600;
+    return x.status === 'active' && !!x.last_used && (Date.now() - this.ms(x.last_used)) / 1000 <= w;
+  }
 
   load() {
     forkJoin({ list: this.http.get<AgentToken[]>('/api/agent-tokens'),
@@ -278,7 +343,7 @@ export class TokensSettingsPanel {
       name: this.name().trim(), role: this.role(), room: this.room() || null, expires_days: this.expiry(),
     }).subscribe({
       next: x => { this.busy.set(false); this.made.set({ name: x.name, token: x.token }); this.copied.set(null);
-                   this.name.set(''); this.load(); },
+                   this.name.set(''); this.load(); this.agents.refresh(); },
       error: e => { this.busy.set(false); this.error.set(this.say(e)); },
     });
   }
@@ -301,7 +366,7 @@ export class TokensSettingsPanel {
     this.error.set('');
     call.subscribe({
       next: () => { this.busy.set(false); if (this.made()?.name === x.name) this.made.set(null);
-                    if (this.open() === x.id) this.open.set(null); this.load(); },
+                    if (this.open() === x.id) this.open.set(null); this.load(); this.agents.refresh(); },
       error: e => { this.busy.set(false); this.error.set(this.say(e)); },
     });
   }

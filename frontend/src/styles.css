@@ -5292,6 +5292,29 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-guide-steps .tcv-btn { align-self: flex-start; padding: 3px 10px; }
 .tcv-guide-acts { display: flex; flex-wrap: wrap; gap: 4px; }
 .tcv-guide-at { font-size: 12px; color: var(--accent); }
+/* The first step, an agent on the person's computer: one row across the
+   whole guide - what to do, the live state, the line to run, the buttons. */
+.tcv-guide-steps > li.tcv-guide-agent { grid-column: 1 / -1; display: grid; align-items: start; gap: 6px 18px;
+  grid-template-columns: minmax(16rem, 1.25fr) minmax(12rem, 0.75fr) minmax(0, 2.4fr) auto;
+  border-bottom: 1px solid var(--line); }
+.tcv-guide-steps > li.tcv-guide-agent + li { border-left: 0; }
+.tcv-guide-agent-what { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tcv-guide-agent-state { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px;
+  font-size: 12px; color: var(--ink); padding-top: 2px; }
+.tcv-guide-agent-state small { grid-column: 2; font-size: 11px; color: var(--ink-dim); }
+.tcv-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+.tcv-dot[data-on="0"] { background: var(--warn); }
+.tcv-dot[data-on="1"] { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); }
+.tcv-guide-agent-line { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tcv-guide-agent-line code { display: block; padding: 6px 8px; font-size: 11.5px; line-height: 1.5; color: var(--ink);
+  background: var(--hover); border: 1px solid var(--line); border-radius: 3px; overflow-wrap: anywhere; user-select: all; }
+.tcv-guide-agent-line small { font-size: 11px; color: var(--ink-dim); }
+.tcv-guide-agent .tcv-seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.tcv-guide-agent .tcv-seg button { padding: 2px 10px; font-size: 11px; color: var(--ink-dim); background: none; }
+.tcv-guide-agent .tcv-seg button + button { border-left: 1px solid var(--line); }
+.tcv-guide-agent .tcv-seg button.on { color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tcv-guide-agent-acts { flex-direction: column; align-items: stretch; }
+.tcv-guide-agent-acts .tcv-btn { align-self: stretch; }
 /* Narrower than five readable columns: steps one under another, each a
    row - the words beside, the button at the end. */
 @container (max-width: 860px) {
@@ -5300,6 +5323,9 @@ html[data-shot] .tcv-log { display: none !important; }
   .tcv-guide-steps > li { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr) auto;
     align-items: start; gap: 4px 14px; padding: 9px 14px; }
   .tcv-guide-steps > li + li { border-left: 0; border-top: 1px solid var(--line); }
+  .tcv-guide-steps > li.tcv-guide-agent { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-bottom: 0; }
+  .tcv-guide-agent-line { grid-column: 1 / -1; }
+  .tcv-guide-agent-acts { grid-column: 1 / -1; flex-direction: row; }
 }
 @container (max-width: 520px) {
   .tcv-guide-steps > li { display: flex; }

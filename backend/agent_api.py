@@ -312,3 +312,58 @@ async def agent_file_delete(bucket: str, fid: str):
     except Exception as exc:
         raise HTTPException(404, "no such file") from exc
     return {"deleted": fid}
+
+
+# ---------------------------------------------------------------- the agent kit
+#
+# An agent on someone's own computer runs from the seed (a start script, no
+# source): each start fetches the kit - the command line and the agents'
+# instructions (backend/agent_kit.py) - with the agent's token.
+
+def _kit_holder():
+    from . import auth
+    who = actors.current()
+    if who["type"] != "agent" or (auth.enabled() and not who.get("token")):
+        raise HTTPException(403, "the agent kit is for agents: send an agent token "
+                                 "(Authorization: Bearer rlat_...) - make one under Agent tokens")
+
+
+@router.get("/kit/version")
+async def agent_kit_version():
+    """The kit's version: the seed fetches the kit only when it changed. Also
+    how the seed checks its token before it starts the agent."""
+    import asyncio
+
+    from . import agent_kit
+    _kit_holder()
+    version, blob = await asyncio.to_thread(agent_kit.build)
+    return {"version": version, "bytes": len(blob), "python": "3.12"}
+
+
+@router.get("/kit")
+async def agent_kit_download(request: Request):
+    """The kit, as a tar.gz under redline-agent-kit/."""
+    import asyncio
+
+    from . import agent_kit
+    _kit_holder()
+    version, blob = await asyncio.to_thread(agent_kit.build)
+    etag = f'"{version}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    return Response(blob, media_type="application/gzip", headers={
+        "ETag": etag, "X-Redline-Kit-Version": version,
+        "Content-Disposition": f'attachment; filename="redline-agent-kit-{version}.tar.gz"'})
+
+
+@router.get("/status")
+async def agent_status():
+    """Whether this space has an agent at work: its working tokens, the last
+    time one was used, connected or not (backend/agent_kit.py status). For
+    the first-run guide and the token page - anyone who may look sees it;
+    `can_make` says whether they may also make a token."""
+    from . import agent_kit
+    who = actors.current()
+    out = await agent_kit.status(_db(), scope.current())
+    out["can_make"] = who["type"] == "user" and access.allowed(access.current(), "tokens")
+    return out

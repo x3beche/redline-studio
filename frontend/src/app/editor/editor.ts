@@ -30,6 +30,8 @@ import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
 import { Auth } from '../auth';
+import { Agents, SeedOs, seedLine, seenAgo } from '../agent-status';
+import { Prefs } from '../preferences';
 import { startFold, whenSettled } from '../fold';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
@@ -382,6 +384,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.stopWatching?.();
     this.ro?.disconnect();
     this.viewer?.dispose();
     clearInterval(this.healthTimer);
@@ -1093,6 +1096,42 @@ export class Editor implements AfterViewInit, OnDestroy {
     const tree = this.catalog();
     return !!tree && !this.guideShut() && this.countModels(tree) === 0;
   });
+
+  // The guide's first step, before any model: an agent on the person's own
+  // computer, connected with a token (the seed's one line). Shown while no
+  // token has been used lately; once shown it stays, so the person sees it
+  // turn connected.
+  agents = inject(Agents);
+  private prefs = inject(Prefs);
+  agentStep = signal(false);
+  seedOs = signal<SeedOs>(/Win/i.test(navigator.platform || navigator.userAgent) ? 'windows' : 'unix');
+  seedCopied = signal(false);
+  private stopWatching: (() => void) | null = null;
+  private watchAgents = effect(() => {
+    const on = this.showGuide();
+    untracked(() => {
+      if (on && !this.stopWatching) this.stopWatching = this.agents.watch();
+      if (!on && this.stopWatching) { this.stopWatching(); this.stopWatching = null; }
+    });
+  });
+  private showAgentStep = effect(() => {
+    const s = this.agents.status();
+    if (s && !s.connected) untracked(() => this.agentStep.set(true));
+  });
+  agentLine = computed(() => {
+    const s = this.agents.status();
+    return seedLine(s?.seed ?? 'https://github.com/x3beche/redline-agent-seed', location.origin, this.seedOs());
+  });
+  seen(s: number | null) { return seenAgo(s); }
+
+  openTokens() { this.prefs.open.set('tokens'); }
+
+  copyAgentLine() {
+    navigator.clipboard?.writeText(this.agentLine()).then(() => {
+      this.seedCopied.set(true);
+      setTimeout(() => this.seedCopied.set(false), 2000);
+    }, () => this.flash(t('The browser would not copy - select the line instead.')));
+  }
 
   /** The guide's project and what is in it, for the steps' buttons. */
   guideAt = computed(() => {

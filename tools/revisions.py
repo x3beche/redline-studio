@@ -302,6 +302,8 @@ async def cmd_part(args):
         # Ahead of a layout, and patient: each download is three asks of a
         # budget of 25 per five minutes, so twenty parts is a wait - better
         # spent here than in a layout that places half the board.
+        if _on_the_server("REDLINE_PARTS"):
+            return _keep_by_api(list(dict.fromkeys(args.args)), getattr(args, "refresh", False))
         from backend import store  # noqa: F401  (connect() needs the env)
         lcsc.PATIENT.set(True)
         # Line by line, even into a file: this takes minutes, and progress
@@ -404,6 +406,20 @@ async def cmd_part(args):
         print("\n# not written:\n" + "\n".join(f"#   {x}" for x in left_out),
               file=sys.stderr)
         sys.exit(2)
+
+
+def _keep_by_api(codes: list[str], refresh: bool) -> None:
+    """`part keep` through the server: each part fetched, its footprint and
+    3D model kept and seated there (POST /api/parts/<C>), one at a time."""
+    sys.stdout.reconfigure(line_buffering=True)
+    for i, code in enumerate(codes, 1):
+        try:
+            got = api_call(f"/api/parts/{code}" + ("?refresh=1" if refresh else ""), "POST", timeout=900)
+        except ApiError as exc:
+            print(f"[{i}/{len(codes)}] {code}: could not be kept - {exc}")
+            continue
+        print(f"[{i}/{len(codes)}] {code}: {got.get('name')}"
+              + (" + 3D" if got.get("has_3d") else ", footprint only"))
 
 
 def datasheet_out(code: str, out: str | None) -> Path:
@@ -1708,6 +1724,32 @@ async def cmd_save(args):
     print("next: python tools/revisions.py build " + args.model)
 
 
+def _on_the_server(what: str) -> bool:
+    """Through the server (REDLINE_TRANSPORT=api), heavy work is the
+    server's: a build runs there, and a part kept is fetched and seated
+    there - so an agent on someone's own computer needs neither build123d
+    nor OpenCascade (the agent kit, backend/agent_kit.py). REDLINE_BUILD=local
+    / REDLINE_PARTS=local keep it here, for a machine that has them."""
+    return (os.getenv("REDLINE_TRANSPORT", "").strip().lower() == "api"
+            and os.getenv(what, "").strip().lower() != "local")
+
+
+def _build_by_api(model: str) -> dict:
+    """POST /api/models/<id>/build, detached, then its job followed until it
+    ends: the same answer a build here gives, or a stop with what failed."""
+    import time as _t
+    from urllib.parse import quote
+
+    job = api_call(f"/api/models/{quote(model, safe='/')}/build?detach=1", "POST", timeout=120)
+    print(f"{model}: building on the server (job {job.get('job')})", flush=True)
+    while job.get("status") == "running":
+        _t.sleep(3)
+        job = api_call(f"/api/build-jobs/{job['job']}", timeout=60)
+    if job.get("status") != "done":
+        sys.exit(f"{model}: the build {job.get('status')}: {job.get('detail') or 'no detail'}")
+    return job.get("result") or {}
+
+
 async def cmd_build(args):
     from backend import build
 
@@ -1716,6 +1758,10 @@ async def cmd_build(args):
     # answer. Nothing here decides for them that four minutes of booleans
     # were a waste.
     await _shout_interrupts(db)
+    if _on_the_server("REDLINE_BUILD"):
+        # The server keeps how it went on the version itself (build_outcome).
+        _report_build(_build_by_api(args.model), args.model)
+        return
     from backend import store
     # The version this build is of; how it went is kept on it, so a saved
     # version that does not build is marked failed (pins and "latest" skip
@@ -1727,8 +1773,12 @@ async def cmd_build(args):
         await store.version_built(db, args.model, version, str(exc) or type(exc).__name__)
         raise
     await store.version_built(db, args.model, version)
-    sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
-    print(f"{res['model']} built: {sizes}")
+    _report_build(res, args.model)
+
+
+def _report_build(res: dict, model: str) -> None:
+    sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in (res.get("artifacts") or {}).items())
+    print(f"{res.get('model') or model} built: {sizes}")
     if res.get("bodies_redraw"):
         # A part's drawn 3D body (backend/bodies.py): the boards wearing it follow.
         print("3D body: the server redraws " + ", ".join(res["bodies_redraw"]))
