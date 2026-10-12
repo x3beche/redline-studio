@@ -351,19 +351,14 @@ def history(msgs: list[dict], images: list[dict] | None = None, tools: set[str] 
         merged.pop(0)
     if images and merged and merged[-1]["role"] == "user":
         merged[-1]["content"] = [{"type": "text", "text": merged[-1]["content"]}, *images]
-    # The date and time, on the line being answered only - in the system note it would
-    # change every turn and spoil the prompt cache for the whole conversation.
-    if merged and merged[-1]["role"] == "user" and (line := now_line()):
-        stamp = f"[{line}]\n\n"
-        c = merged[-1]["content"]
-        merged[-1] = {**merged[-1], "content": stamp + c if isinstance(c, str)
-                      else [{"type": "text", "text": stamp.strip()}, *c]}
     system = SYSTEM + ("\n\n" + STEPS_NOTE if stepped else "")
     return [{"role": "system", "content": system}] + merged
 
 
 def now_line(tz: str | None = None) -> str:
-    """'It is Monday 12 October 2026, 14:20 (Europe/Istanbul, UTC+03:00).'"""
+    """'It is Monday 12 October 2026, 14:20 (Europe/Istanbul, UTC+03:00).' -
+    what the clock tool (chat_tools/clock.py) answers. The Chat is not told
+    the time otherwise: it asks the tool when the time matters."""
     import os
     from zoneinfo import ZoneInfo
     name = tz or os.environ.get("REDLINE_TZ", "Europe/Istanbul")

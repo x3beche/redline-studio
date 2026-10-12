@@ -18,7 +18,6 @@ import pytest
 from fastapi import HTTPException
 
 from backend import access, actors, cc_chat, llm
-REAL_NOW_LINE = cc_chat.now_line   # before the tests' autouse stub (conftest.py)
 
 ME = {"id": "u-me", "name": "Me", "type": "person"}
 YOU = {"id": "u-you", "name": "You", "type": "person"}
@@ -147,7 +146,6 @@ def env(monkeypatch):
     monkeypatch.setattr(actors, "current", lambda: state["who"])
     monkeypatch.setattr(access, "current", lambda: state["role"])
     monkeypatch.setattr(llm, "key", lambda p: "k")
-    monkeypatch.setattr(cc_chat, "now_line", lambda tz=None: "")   # no clock stamp unless a test asks
 
     async def stream(messages, *, provider, model, max_tokens=8000, temperature=None):
         state["sent"] = messages
@@ -670,15 +668,14 @@ def test_a_stopped_answer_is_kept_and_marked(env, monkeypatch):
     assert last["content"] == "" and last["stopped"] and last["error"] == "stopped before the answer began"
 
 
-def test_the_line_being_answered_says_the_time(monkeypatch):
-    monkeypatch.setattr(cc_chat, "now_line", lambda tz=None: "It is now.")
+def test_the_line_being_answered_carries_no_time(monkeypatch):
+    """The time is the clock tool's to say, not a stamp on the person's line."""
     sent = cc_chat.history([msg("a", "user", "q1"), msg("b", "assistant", "x"), msg("c", "user", "q2")])
-    assert sent[-1]["content"] == "[It is now.]\n\nq2" and sent[1]["content"] == "q1"
-    assert "It is now" not in sent[0]["content"]
+    assert sent[-1]["content"] == "q2" and "It is " not in sent[0]["content"]
 
 
 def test_now_line_names_the_zone():
-    line = REAL_NOW_LINE("UTC")
+    line = cc_chat.now_line("UTC")
     assert line.startswith("It is ") and line.endswith("(UTC, UTC+00:00).")
 
 

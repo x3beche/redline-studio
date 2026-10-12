@@ -75,12 +75,3 @@ def _cc_answers_in_process(monkeypatch):
     cc_chat.HUB.live.clear()
     cc_chat.HUB.poked.clear()
 
-
-@pytest.fixture(autouse=True)
-def _no_clock_stamp(monkeypatch):
-    """The Chat starts the line it answers with today's date and time
-    (backend/cc_chat.py `now_line`); tests that look at what was sent see
-    the line alone. A test that wants the stamp sets now_line itself."""
-    from backend import cc_chat
-
-    monkeypatch.setattr(cc_chat, "now_line", lambda tz=None: "")
