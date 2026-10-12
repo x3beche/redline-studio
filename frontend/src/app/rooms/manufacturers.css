@@ -1,0 +1,81 @@
+/* Manufacturers (rooms/manufacturers.ts): the Taste room's language
+   (taste.css, settings.css) - the list on the left, tiles for the figures,
+   cards for the catalog, the steps and the pages. */
+.mf-side-acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 2px 8px 6px; }
+.mf-side-acts .tcv-btn { padding: 4px 8px; font-size: 11.5px; white-space: nowrap; }
+.mf-side-meta { display: flex; align-items: center; gap: 6px; }
+.mf-dom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-pulse { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--accent);
+  vertical-align: 1px; animation: mf-pulse 1.2s ease-in-out infinite; }
+@keyframes mf-pulse { 50% { opacity: .3; } }
+.mf-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.mf-link:hover { text-decoration: underline; }
+.mf-err { color: var(--danger); }
+.mf-pad { padding: 8px 10px; }
+
+/* tiles: one row, as wide as the room */
+.mf-htiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mf-mtiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mf-rtiles { grid-template-columns: .9fr 1fr 1fr .9fr 1.5fr 1.2fr 1.6fr; }
+.mf-rtiles .st-tile > b { font-size: 13.5px; }
+.mf-rtiles .st-tile[data-tone="accent"] > b, .mf-htiles .st-tile[data-tone="accent"] > b { color: var(--accent); }
+.mf-tilebtn { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.mf-tilebtn:hover { border-color: var(--accent); }
+
+/* adding one: the address, the name, the notes, how it fetches, the button - one row */
+.mf-addrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mf-addrow > .tst-in { flex: 1 1 150px; min-width: 0; }
+.mf-addrow > .tst-in:first-child, .mf-addrow > .tst-in:nth-child(3) { flex-grow: 1.4; }
+.mf-addrow > .st-seg, .mf-addrow > .tcv-btn { flex: none; }
+.mf-addhint { margin: 6px 0 0; }
+.mf-proxyhint { margin: -4px 0 0; }
+
+/* the manufacturer: what they make beside the notes */
+.mf-about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 18px; }
+.mf-about-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mf-label { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.mf-label small { margin-left: 6px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.mf-summary { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.mf-notes { margin-left: 0; margin-right: 0; border-color: var(--line); background: var(--surface); }
+.mf-cats { display: flex; flex-wrap: wrap; gap: 4px; }
+.mf-cat { padding: 1px 8px; font: inherit; font-size: 11.5px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.mf-cat b { margin-left: 3px; font-weight: 500; color: var(--ink-dim); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; }
+.mf-cat:hover { border-color: var(--accent); }
+.mf-cat[data-on] { background: var(--accent-deep); border-color: var(--accent); color: var(--ink-bright); }
+.mf-docs { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 11.5px; }
+
+/* the catalog */
+.mf-cathead { gap: 8px; }
+.mf-find { flex: 1 1 260px; max-width: 520px; }
+.mf-table td { vertical-align: top; }
+.mf-table .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+td.mf-pname { max-width: 0; width: 22%; font-weight: 600; }
+td.mf-specs { max-width: 0; width: 34%; white-space: normal; }
+td.mf-desc { max-width: 0; width: 24%; }
+.mf-spec { display: inline-block; margin-right: 10px; white-space: nowrap; }
+.mf-spec em { font-style: normal; color: var(--ink-dim); }
+.mf-open { display: inline; margin: 0 0 0 8px; }
+.mf-morerows { margin: 4px 10px 8px; }
+.mf-mtable tbody tr { cursor: pointer; }
+.mf-mtable tbody tr:hover td { background: var(--hover); }
+
+/* the run: the steps, and the pages beside them */
+.mf-rgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 8px; align-items: stretch; }
+.mf-rgrid > .st-card { display: flex; flex-direction: column; min-height: 0; }
+.mf-progress { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; margin-top: auto; border-top: 1px solid var(--line); }
+.mf-progress .st-meter { height: 6px; margin: 0; }
+.mf-pages-wrap { max-height: 62vh; overflow-y: auto; }
+.mf-ptable .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+td.mf-pmark { width: 10px; padding-right: 0; }
+.mf-pmark i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-dim); }
+.mf-pmark i[data-k="prod"] { background: var(--ok); }
+.mf-pmark i[data-k="bad"] { background: var(--danger); }
+
+@container (max-width: 1100px) {
+  .mf-rgrid { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 820px) {
+  .mf-rtiles, .mf-htiles, .mf-mtiles { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .mf-about { grid-template-columns: minmax(0, 1fr); }
+}

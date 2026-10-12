@@ -42,6 +42,8 @@ SCOPED = frozenset({
     "part_bodies",
     # taste palettes and their extraction runs (backend/taste.py)
     "taste_palettes", "taste_jobs",
+    # manufacturers and their explorations (backend/manufacturers.py)
+    "manufacturers", "manufacturer_jobs",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

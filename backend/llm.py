@@ -92,6 +92,9 @@ JOBS = {
     "taste": {"label": "Taste extraction",
               "about": "proposing taste palette items from a finished model, board or firmware",
               "default": CHEAP},
+    "manufacturer": {"label": "Manufacturer exploration",
+                     "about": "reading a manufacturer's website and listing its products for the catalog",
+                     "default": CHEAP},
     # Off until someone turns it on: it costs a call per finished answer
     # (backend/suggest.py). `switch`: the job has an on/off of its own;
     # `delay`: seconds of quiet after an answer before it is asked for.
@@ -108,7 +111,8 @@ DELAY_MIN, DELAY_MAX = 5, 600
 # summary job's model but belong to the room.
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
-         "part-category": "part_category", "suggest": "suggest", "taste": "taste"}
+         "part-category": "part_category", "suggest": "suggest", "taste": "taste",
+         "manufacturer": "manufacturer"}
 KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 

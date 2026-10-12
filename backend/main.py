@@ -120,6 +120,9 @@ app.include_router(suggest_api.router)
 # Taste palettes: design taste the agents follow, extracted or written (backend/taste.py).
 from . import taste as taste_api  # noqa: E402
 app.include_router(taste_api.router)
+# Manufacturers: makers' catalogs, explored from their sites (backend/manufacturers.py).
+from . import manufacturers as manufacturers_api  # noqa: E402
+app.include_router(manufacturers_api.router)
 
 
 def _raw_db():

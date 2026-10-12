@@ -189,7 +189,9 @@ SYSTEM_NOTE = (
     "files (file_read) - read them with those tools before answering about them; each lists what there "
     "is when called without an id. The person's design taste - their own rules, kept as taste palettes - "
     "is read with taste_read: read it when they ask about their taste or rules, or before advising on a "
-    "design. Leave a note in a room's queue (room_note) only when asked to."
+    "design. When the person needs a part or product from a maker, or says to look at a manufacturer, look in "
+    "the manufacturers they saved (manufacturer_search: their catalogs, read from the makers' own sites) before "
+    "anywhere else, and link the product pages it gives. Leave a note in a room's queue (room_note) only when asked to."
 )
 
 

@@ -7,6 +7,7 @@ import { RoomFirmware } from './rooms/firmware';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomTaste, TasteRuns } from './rooms/taste';
+import { MfrRuns, RoomMfr } from './rooms/manufacturers';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
@@ -24,7 +25,7 @@ import { CcTabUsage } from './cc-usage';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -71,6 +72,15 @@ import { CcTabUsage } from './cc-usage';
             <span class="tcv-tab-run" data-done="1" [title]="n + ' ' + ('extraction finished' | t)"><i></i>{{ n }}</span>
           }
         }
+        <!-- Manufacturers: an exploration running in the server (after a
+             reload too), or one that finished elsewhere (rooms/manufacturers.ts). -->
+        @if (b.id === 'mfr') {
+          @if (mfrRuns.running(); as n) {
+            <span class="tcv-tab-run" [title]="n + ' ' + ('exploration running' | t)"><i></i>{{ n }}</span>
+          } @else if (mfrRuns.unseen(); as n) {
+            <span class="tcv-tab-run" data-done="1" [title]="n + ' ' + ('exploration finished' | t)"><i></i>{{ n }}</span>
+          }
+        }
       </button>
     }
     <app-topbar-more />
@@ -104,6 +114,7 @@ import { CcTabUsage } from './cc-usage';
       @case ('firmware') { <app-room-firmware /> }
       @case ('notes') { <app-room-notes /> }
       @case ('taste') { <app-room-taste /> }
+      @case ('mfr') { <app-room-mfr /> }
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
       @case ('tools') { <app-room-tools /> }
@@ -144,8 +155,10 @@ export class App {
   bar = inject(TopBar);
   /** The Taste extractions running in the server, for the tab's mark. */
   tasteRuns = inject(TasteRuns);
+  /** The manufacturers' explorations, for the tab's mark. */
+  mfrRuns = inject(MfrRuns);
   /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'mfr' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
   tasteTab = WORKSPACES.find(w => w.id === 'taste');
   ccTab = WORKSPACES.find(w => w.id === 'commandcode');
@@ -238,7 +251,7 @@ export class App {
     this.auth.load();
     // Once someone is signed in: whether an extraction is running (it is
     // asked again only while one is).
-    effect(() => { if (this.auth.signedIn()) untracked(() => this.tasteRuns.watch()); });
+    effect(() => { if (this.auth.signedIn()) untracked(() => { this.tasteRuns.watch(); this.mfrRuns.watch(); }); });
     this.here.set(currentWorkspace());
     // Whoever changed it - a tab up here, or a file clicked in the catalog
     // - the address bar and the memory follow, so a room can be linked to
@@ -256,7 +269,9 @@ export class App {
       // A room thread belongs to the Chat tab's address only.
       if (id !== 'commandcode') url.searchParams.delete('thread');
       // An extraction run belongs to the Taste tab's address only (rooms/taste.ts).
-      if (id !== 'taste') url.searchParams.delete('run');
+      if (id !== 'taste' && id !== 'mfr') url.searchParams.delete('run');
+      // A manufacturer and its product search belong to the Manufacturers tab's (rooms/manufacturers.ts).
+      if (id !== 'mfr') for (const k of ['m', 'q', 'cat']) url.searchParams.delete(k);
       history.replaceState(null, '', url);
     });
   }

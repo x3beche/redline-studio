@@ -160,7 +160,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     on = {t["name"]: t["on"] for t in got["tools"]}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True,
-                  "firmware_build": True, "file_read": False, "taste_read": False, "room_note": False}
+                  "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
+                  "room_note": False}
     assert {t["package"] for t in got["tools"]} >= {"drawer", "3d", "pcb", "firmware", "files", "taste", "notes"}
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
@@ -171,7 +172,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search", "drawer_add",
                                                                 "datasheet_get", "datasheet_read", "board_read", "model_read",
-                                                                "firmware_build"}
+                                                                "firmware_build", "manufacturer_search"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
@@ -776,6 +777,37 @@ def test_taste_read_lists_the_palettes_and_reads_one(env):
     assert "attached to model iot-fan/parts/lid" in got.text
     with pytest.raises(ToolError, match="taste palette"):
         run(tool.run(Ctx(db=db), {"palette": "gearbox"}))
+
+
+def test_manufacturer_search_lists_reads_and_searches(env):
+    raw, _ = env
+    db = cc_chat._db()
+    tool = _tool("manufacturer_search")
+    assert tool.level == "read" and tool.default
+    assert run(tool.run(Ctx(db=db), {})).say == "No manufacturers here"
+    raw["manufacturers"].rows["m1"] = {
+        "_id": "m1", "workspace_id": "default", "name": "Doğuş Kalıp", "url": "https://www.doguskalip.com.tr/",
+        "domain": "doguskalip.com.tr", "notes": "use them for injection molds", "summary": "Mold components",
+        "categories": ["Menteşeler", "Rulmanlar"], "explored_at": "2026-10-12T10:00:00+00:00",
+        "products": [{"id": "a", "name": "Paslanmaz Menteşe", "category": "Menteşeler", "description": "Hinge",
+                      "specs": {"Boy": "20 mm", "Malzeme": "AISI 304"}, "sku": "DK-120",
+                      "url": "https://www.doguskalip.com.tr/Urun/mentese/1", "image": ""},
+                     {"id": "b", "name": "Teflon Rulman", "category": "Rulmanlar", "description": "",
+                      "specs": {}, "sku": "", "url": "", "image": ""}]}
+    raw["manufacturers"].rows["m2"] = {"_id": "m2", "workspace_id": "default", "name": "Other Works",
+                                       "url": "https://other.example/", "products": []}
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 2 and "use them for injection molds" in listed.text and "2 products" in listed.text
+    got = run(tool.run(Ctx(db=db), {"manufacturer": "dogus"}))                # words of its name, accents folded
+    assert got.vars["name"] == "Doğuş Kalıp" and "Paslanmaz Menteşe" in got.text and "Boy: 20 mm" in got.text
+    found = run(tool.run(Ctx(db=db), {"query": "mentese 20 mm"}))
+    assert found.vars["n"] == 1 and "DK-120" in found.text and "doguskalip.com.tr/Urun/mentese/1" in found.text
+    inside = run(tool.run(Ctx(db=db), {"manufacturer": "m1", "category": "rulman"}))
+    assert inside.vars["n"] == 1 and "Teflon Rulman" in inside.text
+    none = run(tool.run(Ctx(db=db), {"query": "gearbox"}))
+    assert none.say == "Nothing found for {q}" and "Menteşeler" in none.text
+    with pytest.raises(ToolError, match="manufacturer"):
+        run(tool.run(Ctx(db=db), {"manufacturer": "acme"}))
 
 
 def test_bom_cost_prices_flags_and_cuts(env, monkeypatch):

@@ -6,6 +6,7 @@ import { CcWant, Selection } from './selection';
 import { WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
 import { TasteApi } from './rooms/taste';
+import { MfrApi } from './rooms/manufacturers';
 import { Prefs } from './preferences';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
@@ -43,7 +44,7 @@ interface Hit {
 }
 
 const ROOM_ICON: Record<string, string> = {
-  cad: '◆', pcb: '▦', notes: '✎', taste: '≡', tools: '⚒', analyze: '▤',
+  cad: '◆', pcb: '▦', notes: '✎', taste: '≡', mfr: '▥', tools: '⚒', analyze: '▤',
 };
 
 function words(q: string) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
@@ -121,6 +122,7 @@ export class Palette {
   private picked = inject(Selection);
   private notes = inject(NotesApi);
   private taste = inject(TasteApi);
+  private mfrs = inject(MfrApi);
   private prefs = inject(Prefs);
   private threads = inject(AgentThreads);
   private box = viewChild<ElementRef<HTMLInputElement>>('box');
@@ -135,6 +137,7 @@ export class Palette {
   private tree = signal<FolderNode | null>(null);
   private tools = signal<{ id: string; name: string; blurb: string }[]>([]);
   private palettes = signal<{ id: string; name: string; items: unknown[] }[]>([]);
+  private makers = signal<{ id: string; name: string; domain: string; product_count: number }[]>([]);
   private hits = signal<Hit[]>([]);
   private timer?: ReturnType<typeof setTimeout>;
 
@@ -163,6 +166,9 @@ export class Palette {
       { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', run: () => this.picked.room.set('taste') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '≡', label: 'Extract taste from a project', hint: 'a model proposes, you review',
         run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste-extract'), 50); } }] : []),
+      { group: 'Actions', icon: '▥', label: 'Open Manufacturers', hint: 'makers and their catalogs', run: () => this.picked.room.set('mfr') },
+      ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▥', label: 'Add a manufacturer', hint: 'by its website; its products are read',
+        run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-add'), 50); } }] : []),
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
       { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy', run: () => this.prefs.open.set('appearance') },
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },
@@ -205,6 +211,8 @@ export class Palette {
     if (room === 'notes' && note) return { label: 'Ask Chat about this note', what: note.label, mention: { kind: 'note', ...note } };
     const palette = this.picked.taste();
     if (room === 'taste' && palette) return { label: 'Ask Chat with this palette', what: palette.label, mention: { kind: 'taste', ...palette } };
+    const maker = this.picked.mfr();
+    if (room === 'mfr' && maker) return { label: 'Ask Chat about this manufacturer', what: maker.label, mention: { kind: 'manufacturer', ...maker } };
     const file = this.picked.file();
     if (room === 'files' && file) return { label: 'Ask Chat about this file', what: file.label, mention: { kind: 'file', ...file } };
     return null;
@@ -269,6 +277,8 @@ export class Palette {
     if (t) walk(t as never);
     for (const p of this.palettes()) out.push({ group: 'Taste', icon: '≡', label: p.name, hint: this.itemCount(p.items.length),
       run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste', p.id), 50); } });
+    for (const m of this.makers()) out.push({ group: 'Manufacturers', icon: '▥', label: m.name, hint: `${m.domain} · ${m.product_count}`,
+      run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr', m.id), 50); } });
     for (const tool of this.tools()) out.push({ group: 'Tools', icon: '⚒', label: tool.name, hint: tool.blurb,
       run: () => { this.picked.room.set('tools'); this.picked.ask('tool', tool.id); } });
     return out;
@@ -330,7 +340,7 @@ export class Palette {
     const out: { name: string; items: { item: Item; i: number }[] }[] = [];
     // Empty: Chat, the tabs, then the actions. Typed: a group stands where
     // its best match does, so the best match is on top whatever it is.
-    const fixed = ['Chat', 'Rooms', 'Actions', 'Models', 'Boards', 'Taste', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
+    const fixed = ['Chat', 'Rooms', 'Actions', 'Models', 'Boards', 'Taste', 'Manufacturers', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
     const by = new Map<string, Item[]>();
     for (const it of this.items()) by.set(it.group, [...(by.get(it.group) ?? []), it]);
     const order = words(this.q()).length && !this.asking() ? [...by.keys()] : fixed;
@@ -351,6 +361,7 @@ export class Palette {
     this.open.set(true);
     this.catalog.tree().subscribe(t => this.tree.set(t));
     this.taste.list().subscribe({ next: ps => this.palettes.set(ps), error: () => {} });
+    this.mfrs.list().subscribe({ next: ms => this.makers.set(ms), error: () => {} });
     if (!this.tools().length) {
       fetch('/api/tools/catalog').then(r => r.ok ? r.json() : null)
         .then(d => d && this.tools.set(d.tools)).catch(() => {});

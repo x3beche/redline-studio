@@ -130,6 +130,15 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/taste/.+", "draw"),
     ("PUT", "/api/taste/.+", "draw"),
     ("DELETE", "/api/taste/.+", "draw"),
+    # manufacturers (backend/manufacturers.py): the same as taste - adding
+    # one, its notes, exploring its site (a crawl and model calls, as an
+    # extraction is) and cancelling a run; the routes keep deleting someone
+    # else's manufacturer or run to those who may delete. Reading them,
+    # their runs and the proxy's state is looking
+    ("POST", "/api/manufacturers(/.*)?", "draw"),
+    ("PATCH", "/api/manufacturers/.+", "draw"),
+    ("PUT", "/api/manufacturers/.+", "draw"),
+    ("DELETE", "/api/manufacturers/.+", "draw"),
     # files: bringing one in, or pointing an agent at it, is like writing a
     # note; the route keeps deleting someone else's to those who may delete
     ("POST", "/api/files", "draw"),

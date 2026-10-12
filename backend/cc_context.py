@@ -21,7 +21,9 @@ What a block holds:
 - a part: what LCSC's record on disk says, and where the drawer keeps it;
 - a taste palette (backend/taste.py): its statements, grouped by domain,
   MUST, PREFER and AVOID. A palette attached to a mentioned model or board
-  goes along by itself, after the mentions, its chip marked `auto`.
+  goes along by itself, after the mentions, its chip marked `auto`;
+- a manufacturer (backend/manufacturers.py): what it makes, the person's
+  notes on it, and its catalog as read from its site.
 
 Every block says where it came from (kind, id and version) and is cut to
 PER_ITEM characters, the whole message's blocks to PER_MESSAGE, with a
@@ -46,7 +48,7 @@ from fastapi import HTTPException
 
 from . import access
 
-KINDS = ("model", "board", "file", "note", "revision", "part", "taste")
+KINDS = ("model", "board", "file", "note", "revision", "part", "taste", "manufacturer")
 PER_ITEM = 30_000          # characters of one mentioned thing
 PER_MESSAGE = 100_000      # of all of them in one line
 MAX_MENTIONS = 8           # in one line
@@ -142,6 +144,13 @@ async def candidates(db, q: str = "", kind: str = "", limit: int = 40) -> list[d
                  "sub": f"taste palette · {len(d.get('items') or [])} items", "version": d.get("updated_at")}
                 for d in await taste.listing(db)]
         await take("taste", rows)
+    if "manufacturer" in kinds:
+        from . import manufacturers
+        rows = [{"id": d["_id"], "label": d.get("name") or d["_id"],
+                 "sub": f"manufacturer · {d.get('domain') or ''} · {len(d.get('products') or [])} products",
+                 "version": d.get("explored_at") or d.get("updated_at")}
+                for d in await manufacturers.listing(db)]
+        await take("manufacturer", rows)
     return out[:limit] if not words else _ranked(out, words)[:limit]
 
 
@@ -479,8 +488,17 @@ async def _taste(db, pid: str) -> dict | None:
                                      "never do AVOID items.", "images": []}
 
 
+async def _manufacturer(db, mid: str) -> dict | None:
+    from . import manufacturers
+    d = await manufacturers.get(db, mid)
+    if not d:
+        return None
+    return {"label": d.get("name") or mid, "version": d.get("explored_at") or d.get("updated_at"),
+            "text": manufacturers.block(d, PER_ITEM - 200), "images": []}
+
+
 _LOADERS = {"model": _model, "board": _board, "file": _file, "note": _note, "revision": _revision, "part": _part,
-            "taste": _taste}
+            "taste": _taste, "manufacturer": _manufacturer}
 
 
 async def attached_refs(db, refs: list[dict]) -> list[dict]:

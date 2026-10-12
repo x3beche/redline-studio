@@ -46,7 +46,7 @@ import { ModelPicker } from '../model-picker';
  */
 /** Something of the workspace mentioned in a line: what the chip shows. */
 export interface CcMention {
-  kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part' | 'taste'; id: string; label: string;
+  kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part' | 'taste' | 'manufacturer'; id: string; label: string;
   version?: string | number | null; sub?: string; chars?: number; truncated?: boolean; images?: number;
   /** A file that is a picture (backend/cc_context.py): drawn as one under the line. */
   image?: boolean;
@@ -314,6 +314,7 @@ const I = {
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
   note: 'M5 4h14v16H5z M8.5 9h7 M8.5 13h7 M8.5 17h4',
   taste: 'M4 5h16v4H4z M4 11h16v4H4z M4 17h10v3H4z M7 7h.01 M7 13h.01',
+  factory: 'M3 20V10l5 3V10l5 3V6h3l1 4h1l1-6h2v16z M7 16h2 M12 16h2 M17 16h1',
   drawer: 'M4 5h16v6H4z M4 11h16v8H4z M10 8h4 M10 15h4',
   sheet: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15.5h6 M9 9h2',
   tool: 'M14.5 4.5a4 4 0 0 0-5 5L4 15l2 2 2 2 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z',
@@ -325,7 +326,7 @@ const I = {
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
   model: { icon: I.cad, name: '3D model' }, board: { icon: I.pcb, name: 'Board' }, file: { icon: I.file, name: 'File' },
   note: { icon: I.note, name: 'Note' }, revision: { icon: I.edit, name: 'Drawn note' }, part: { icon: I.chip, name: 'Part' },
-  taste: { icon: I.taste, name: 'Taste palette' },
+  taste: { icon: I.taste, name: 'Taste palette' }, manufacturer: { icon: I.factory, name: 'Manufacturer' },
 };
 
 /** Where to begin, for an empty conversation: the work this app is for. */
@@ -2470,6 +2471,7 @@ export class RoomCommandCode implements OnDestroy {
       case 'board': this.sel.openBoard(m.id); break;
       case 'note': this.sel.room.set('notes'); this.sel.ask('note', m.id); break;
       case 'taste': this.sel.room.set('taste'); this.sel.ask('taste', m.id); break;
+      case 'manufacturer': this.sel.room.set('mfr'); this.sel.ask('mfr', m.id); break;
       case 'part': this.sel.room.set('pcb'); setTimeout(() => this.sel.ask('part', m.id), 300); break;
       case 'file': window.open(`/api/files/${encodeURIComponent(m.id)}?inline=1`, '_blank', 'noopener'); break;
       case 'revision': {

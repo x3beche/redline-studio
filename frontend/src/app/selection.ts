@@ -9,7 +9,7 @@ export interface CcWant {
   chat?: string;
   message?: string;
   /** Attached to the new conversation's first line, as an @-mention. */
-  mention?: { kind: 'model' | 'board' | 'file' | 'note' | 'taste'; id: string; label?: string };
+  mention?: { kind: 'model' | 'board' | 'file' | 'note' | 'taste' | 'manufacturer'; id: string; label?: string };
   /** Sent at once when given; otherwise the composer waits, focused. */
   text?: string;
 }
@@ -58,6 +58,8 @@ export class Selection {
   file = signal<{ id: string; label: string } | null>(null);
   /** The palette open in the Taste room, for "Ask Chat with this palette". */
   taste = signal<{ id: string; label: string } | null>(null);
+  /** The manufacturer open in the Manufacturers room, for "Ask Chat about this manufacturer". */
+  mfr = signal<{ id: string; label: string } | null>(null);
 
   /** Something the Chat room is asked to do when it is on screen
    *  (app/palette.ts): a new conversation, with something of the workspace
