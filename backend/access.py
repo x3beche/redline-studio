@@ -211,6 +211,12 @@ _RULES: list[tuple[str, str, str]] = [
     # the empty Chat's example questions written again now: a model call,
     # for whoever may start a conversation (backend/chat_ideas.py)
     ("POST", "/api/cc/ideas/refresh", "draw"),
+    # direct messages (backend/dm.py): reading them is looking, writing one,
+    # editing or deleting one's own line and marking read is chatting
+    ("GET", "/api/dm(/.*)?", "view"),
+    # a thing sent, added to one's own space: making something
+    ("POST", "/api/dm/items/{}/add", "edit"),
+    ("*", "/api/dm(/.*)?", "draw"),
     # a ```task block in a chat, queued with its button: queueing a note
     # (backend/tasks.py), so it is the same right as queueing one
     ("POST", "/api/chat/{}/task/{}/queue", "run"),

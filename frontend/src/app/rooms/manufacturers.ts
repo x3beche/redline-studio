@@ -8,6 +8,7 @@ import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
 import { CatalogStock, InventoryApi, qty } from './inventory';
 import { RouteOrder, routeLine } from '../route-order';
+import { DmSendButton } from '../dm';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -235,7 +236,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet, RouteOrder],
+  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -849,6 +850,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             </dl>
             <div class="mf-dacts">
               @if (d.url) { <a class="tcv-btn tcv-btn-accent" [href]="d.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
+              <!-- To a person in Chat, as a card that opens it (dm.ts). -->
+              <rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-btn tcv-dm-sendbtn" />
               @if (can()) {
                 <button class="tcv-btn" (click)="openStock(d.id)">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
                 <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>

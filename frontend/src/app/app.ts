@@ -24,10 +24,12 @@ import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 import { ConfirmHost } from './confirm';
+import { DmSend, DmStore, DmViewer } from './dm';
+import { Avatar } from './avatar';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomInventory, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomInventory, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, DmSend, DmViewer, Avatar],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -67,6 +69,16 @@ import { ConfirmHost } from './confirm';
         <!-- Chat: what the rooms' agents wrote, or ask, that has not been read here. -->
         @if (b.id === 'commandcode') { @if (threads.total(); as n) {
           <span class="tcv-tab-unread" [title]="n + ' ' + ('unread in the agent threads' | t)">{{ n }}</span> } }
+        <!-- And what people wrote to me (dm.ts): the senders' faces, the latest on top, and how many. -->
+        @if (b.id === 'commandcode') { @if (dms.total(); as n) {
+          <span class="tcv-dm-badge" data-dm-badge="1" [title]="n + ' ' + ('unread direct messages' | t) + ': ' + dms.sendersTip()">
+            <span class="tcv-dm-faces">
+              @for (s of dms.senders(); track s.id) {
+                <app-avatar [name]="s.name" [userId]="s.id" [hasPicture]="s.has_avatar" [v]="s.avatar_v" [colour]="s.avatar_colour" [size]="18" />
+              }
+            </span>
+            <b>{{ n }}</b>
+          </span> } }
         <!-- And the Command Code account's usage, in the tab itself (cc-usage.ts;
              Settings > Top bar says how): a click on it is a click on the tab. -->
         @if (b.id === 'commandcode') { <app-cc-tab-usage /> }
@@ -135,6 +147,9 @@ import { ConfirmHost } from './confirm';
 <app-quick-note />
 <!-- Ctrl+K anywhere: go to anything, do anything, search everything. -->
 <app-palette />
+<!-- "Send to...": a thing of any tab, to people in Chat (dm.ts). -->
+<app-dm-send />
+<app-dm-viewer />
 } @else if (auth.state()) {
   <app-landing />
 }
@@ -242,6 +257,13 @@ export class App {
   /** The rooms' agent threads (Chat tab): unread counts, polled while signed in. */
   threads = inject(AgentThreads);
   private pollThreads = effect(() => { if (this.auth.signedIn()) untracked(() => this.threads.start()); });
+  /** Direct messages (dm.ts): only with sign-in on, as a person - the live stream and the badge. */
+  dms = inject(DmStore);
+  private liveDms = effect(() => {
+    const st = this.auth.state();
+    const person = this.auth.signedIn() && st?.mode === 'on' && st.user?.type === 'user';
+    untracked(() => (person ? this.dms.start() : this.dms.stop()));
+  });
   /** Shared, because the catalog changes rooms by opening a file. */
   here = this.picked.room;
 

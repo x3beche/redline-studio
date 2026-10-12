@@ -11,6 +11,7 @@ import { Prefs } from './preferences';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
 import { AgentThreads } from './rooms/agent-thread';
+import { DmKind, DmStore } from './dm';
 
 /** Ctrl+K: one box to go anywhere and do anything.
  *
@@ -120,6 +121,8 @@ export class Palette {
   private auth = inject(Auth);
   private catalog = inject(Catalog);
   private picked = inject(Selection);
+  /** Direct messages: "Send to a person…" for what is open (dm.ts). */
+  private dms = inject(DmStore);
   private notes = inject(NotesApi);
   private taste = inject(TasteApi);
   private mfrs = inject(MfrApi);
@@ -221,6 +224,25 @@ export class Palette {
     return null;
   }
 
+  /** The thing open on screen that could be sent to a person (dm.ts). */
+  private shareCtx(): { kind: DmKind; id: string; label: string } | null {
+    const room = this.picked.room();
+    if (room === 'cad' && this.picked.model()) {
+      const id = this.picked.model()!;
+      return { kind: 'model', id, label: this.titleOf('model', id) ?? id };
+    }
+    if (room === 'pcb' && this.picked.board()) {
+      const id = this.picked.board()!;
+      return { kind: 'board', id, label: this.titleOf('board', id) ?? id };
+    }
+    if (room === 'firmware' && this.picked.firmware()) { const id = this.picked.firmware()!; return { kind: 'firmware', id, label: id }; }
+    const note = this.picked.note(), palette = this.picked.taste(), file = this.picked.file();
+    if (room === 'notes' && note) return { kind: 'note', ...note };
+    if (room === 'taste' && palette) return { kind: 'taste', ...palette };
+    if (room === 'files' && file) return { kind: 'file', ...file };
+    return null;
+  }
+
   private ask(ctx: AskCtx | null, text?: string) {
     this.picked.askCc({ action: 'new', mention: ctx?.mention, text: text?.trim() || undefined });
   }
@@ -231,6 +253,12 @@ export class Palette {
     const ctx = this.askCtx();
     const out: Item[] = [];
     if (ctx) out.push({ group: 'Chat', icon: '›_', label: ctx.label, hint: ctx.what, ask: ctx, run: () => this.ask(ctx) });
+    // The same thing to a person, in a direct message (dm.ts "Send to...").
+    const share = this.shareCtx();
+    if (share && this.dms.enabled() && this.dms.people().length) {
+      out.push({ group: 'Chat', icon: '↗', label: 'Send to a person…', hint: share.label,
+                 run: () => this.dms.sendTo.set(share) });
+    }
     out.push(
       { group: 'Chat', icon: '+', label: 'New chat', keys: 'Ctrl+Shift+O',
         run: () => this.picked.askCc({ action: 'new' }) },

@@ -5526,3 +5526,147 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-brand { color: inherit; text-decoration: none; border-radius: 4px; }
 .tcv-brand:hover .brand-name { color: var(--ink-bright, var(--ink)); }
 .tcv-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Direct messages (dm.ts, rooms/dm-view.ts): the People in the Chat list, a
+   conversation between people, the cards of things sent in it, "Send to..."
+   and the Chat tab's badge with the senders' faces. The Chat's own rows,
+   bubbles and composer, with a few marks of their own. */
+.tcv-dm-grouphead { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-right: 8px; }
+.tcv-dm-grouphead .tcv-cc-textbtn { padding: 1px 6px; font-size: 10.5px; letter-spacing: 0; text-transform: none; }
+.tcv-dm-grouphead .tcv-cc-textbtn.on { color: var(--accent); }
+.tcv-dm-groupbar { display: flex; gap: 6px; padding: 4px 10px 6px; }
+.tcv-dm-groupbar .tcv-field { flex: 1; min-width: 0; height: 28px; font-size: 12px; }
+.tcv-dm-groupbar .tcv-btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.tcv-dm-person[data-unread] .tcv-cc-itemtitle { font-weight: 650; color: var(--ink-bright); }
+.tcv-dm-person[data-unread] .tcv-cc-itemsnip { color: var(--ink); }
+.tcv-dm-face { position: relative; flex: none; display: inline-flex; align-items: center; }
+.tcv-dm-dot { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--ok); border: 2px solid var(--surface); box-sizing: border-box; }
+.tcv-dm-sendrow .tcv-dm-dot { position: static; border: 0; width: 7px; height: 7px; }
+.tcv-dm-stack app-avatar + app-avatar { margin-left: -8px; box-shadow: 0 0 0 2px var(--surface); }
+.tcv-dm-bar .tcv-dm-face { margin-left: 2px; }
+.tcv-dm-row[data-role="other"] .tcv-cc-bubble { border-radius: 4px 14px 14px 14px; background: var(--surface); }
+.tcv-dm-row[data-role="other"] .tcv-cc-rowmain { align-items: flex-start; }
+/* A run of lines from one person reads as one block. */
+.tcv-dm-row[data-same] { margin-top: -16px; }
+.tcv-dm-row[data-same] .tcv-cc-rowhead { min-height: 0; }
+.tcv-dm-pop { max-width: none; }
+.tcv-dm-avwrap { flex: none; width: 30px; }
+.tcv-dm-avwrap[data-hide] app-avatar { visibility: hidden; }
+.tcv-dm-bubble { white-space: normal; }
+.tcv-dm-bubble > :first-child { margin-top: 0; }
+.tcv-dm-bubble > :last-child { margin-bottom: 0; }
+.tcv-dm-cards { display: flex; flex-wrap: wrap; gap: 6px; max-width: min(100%, 620px); }
+.tcv-dm-row[data-role="user"] .tcv-dm-cards { justify-content: flex-end; }
+.tcv-dm-card { display: flex; flex-direction: column; width: 340px; max-width: 100%; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tcv-dm-card:hover:not([data-revoked]) { border-color: var(--accent); }
+.tcv-dm-card[data-revoked] { color: var(--ink-dim); border-style: dashed; }
+.tcv-dm-cardmain { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 7px 10px;
+  text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+.tcv-dm-cardmain:hover:not(:disabled) { background: var(--hover); }
+.tcv-dm-cardmain:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tcv-dm-cardmain:disabled { cursor: default; }
+.tcv-dm-cardacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; padding: 2px 6px 4px;
+  border-top: 1px solid var(--line); }
+.tcv-dm-cardacts .tcv-cc-textbtn { font-size: 11.5px; }
+.tcv-dm-cardacts .tcv-cc-textbtn:first-child { color: var(--accent); }
+.tcv-dm-cardico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  color: var(--accent); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.tcv-dm-card[data-revoked] .tcv-dm-cardico { color: var(--ink-dim); }
+.tcv-dm-cardico svg, .tcv-dm-cardlock svg, .tcv-dm-sendico { width: 17px; height: 17px; fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tcv-dm-cardtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tcv-dm-cardtop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tcv-dm-cardtop b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; }
+.tcv-dm-cardkind { flex: none; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim); }
+.tcv-dm-cardfacts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink-dim); }
+.tcv-dm-cardlock { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; font-size: 11px; white-space: normal; }
+.tcv-dm-cardlock svg { width: 12px; height: 12px; flex: none; }
+.tcv-dm-seen { font-size: 10.5px; color: var(--ink-dim); }
+.tcv-dm-more { align-self: center; }
+.tcv-dm-edit { display: flex; flex-direction: column; gap: 6px; width: min(100%, 620px); }
+.tcv-dm-edit textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
+.tcv-dm-editacts { display: flex; justify-content: flex-end; gap: 6px; }
+.tcv-dm-pophead { gap: 8px; }
+.tcv-dm-find { flex: 1; min-width: 0; height: 26px; padding: 0 6px; font-size: 12.5px; color: var(--ink); background: transparent;
+  border: 0; outline: none; }
+.tcv-dm-kinds { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.tcv-dm-kinds button { height: 22px; padding: 0 8px; font-size: 11px; color: var(--ink-dim); background: none;
+  border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
+.tcv-dm-kinds button:hover { color: var(--ink); background: var(--hover); }
+.tcv-dm-kinds button.on { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tcv-dm-err { color: var(--danger); }
+.tcv-dm-pad { padding: 10px; font-size: 12px; }
+/* "Send to..." (dm.ts DmSend): the confirm card, wider, with the people to pick. */
+.tcv-dm-scrim { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: color-mix(in srgb, var(--scrim) 60%, transparent); }
+.tcv-dm-dialog { max-height: 86vh; overflow-y: auto; box-sizing: border-box; padding: 18px 18px 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 36px var(--shadow-hard); }
+.tcv-dm-dtitle { margin: 0; font-size: 15px; font-weight: 600; }
+.tcv-dm-dtext { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.tcv-dm-drow { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.tcv-dm-dbtn { min-width: 76px; height: 28px; padding: 0 12px; font-size: 12.5px; }
+.tcv-dm-dok { color: var(--ink-on-accent); background: var(--accent); border-color: var(--accent); }
+.tcv-dm-dok:disabled { opacity: .45; cursor: not-allowed; }
+.tcv-dm-send .tcv-field { width: 100%; box-sizing: border-box; height: 30px; padding: 5px 8px; font-size: 12.5px; }
+.tcv-dm-send textarea.tcv-field { height: auto; }
+.tcv-dm-send { width: min(460px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; }
+.tcv-dm-send .tcv-dm-card { width: 100%; }
+/* A shared thing, read-only (dm.ts DmShared): the dialog, wide, its body scrolling. */
+.tcv-dm-view { width: min(860px, calc(100vw - 32px)); max-height: 88vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.tcv-dm-viewhead { display: flex; align-items: center; gap: 10px; }
+.tcv-dm-viewtitle { min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.tcv-dm-viewbody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+.tcv-dm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tcv-dm-table td { padding: 5px 8px; vertical-align: top; border-top: 1px solid var(--line); }
+.tcv-dm-table td:first-child { width: 110px; white-space: nowrap; font-size: 11px; }
+.tcv-dm-3dview app-part-body-view .pbv-tag { display: none; }
+.tcv-cc-tag[data-s="must"] { color: var(--accent); border-color: var(--accent); }
+.tcv-cc-tag[data-s="avoid"] { color: var(--danger); border-color: var(--danger); }
+.tcv-dm-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 12.5px; }
+.tcv-dm-dl dt { color: var(--ink-dim); }
+.tcv-dm-dl dd { margin: 0; overflow-wrap: anywhere; }
+.tcv-dm-pics { display: flex; gap: 6px; overflow-x: auto; }
+.tcv-dm-pics img { height: 120px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); }
+.tcv-dm-lines { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.tcv-dm-code { margin: 0; padding: 10px 12px; max-height: 420px; overflow: auto; font: 11.5px/1.5 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
+.tcv-dm-dls { display: flex; flex-wrap: wrap; gap: 6px; }
+.tcv-dm-h { margin: 4px 0 0; font-size: 12px; font-weight: 600; }
+.tcv-dm-md { font-size: 13px; line-height: 1.55; }
+.tcv-dm-view[data-kind="model"], .tcv-dm-view[data-kind="board"], .tcv-dm-view[data-kind="file"] { width: min(1180px, calc(100vw - 32px)); }
+.tcv-dm-viewhead .grow { flex: 1; }
+.tcv-dm-h[data-s="must"] { color: var(--accent); }
+.tcv-dm-h[data-s="avoid"] { color: var(--danger); }
+.tcv-dm-3d { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
+.tcv-dm-3dview { position: relative; height: min(56vh, 520px); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 6px; overflow: hidden; }
+.tcv-dm-3dside { max-height: min(56vh, 520px); overflow-y: auto; }
+.tcv-dm-src { border: 1px solid var(--line); border-radius: 6px; }
+.tcv-dm-src > summary { padding: 6px 10px; font-size: 12.5px; cursor: pointer; }
+.tcv-dm-src .tcv-dm-code { border: 0; border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; }
+.tcv-dm-layout { display: block; max-width: 100%; max-height: 60vh; margin: 0 auto; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--pcb-bg); }
+.tcv-dm-pdf { width: 100%; height: 62vh; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.tcv-dm-unshare { margin-left: auto; }
+@media (max-width: 760px) { .tcv-dm-3d { grid-template-columns: 1fr; } }
+.tcv-dm-sendlist { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: 6px; }
+.tcv-dm-sendrow { display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 0 10px; cursor: pointer; }
+.tcv-dm-sendrow + .tcv-dm-sendrow { border-top: 1px solid var(--line); }
+.tcv-dm-sendrow:hover { background: var(--hover); }
+.tcv-dm-sendrow[data-on] { background: var(--surface-2); }
+.tcv-dm-sendname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink); }
+.tcv-dm-sendtext { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
+.tcv-dm-toast { position: fixed; left: 50%; bottom: 24px; z-index: 90; transform: translateX(-50%); padding: 8px 14px;
+  font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: var(--shadow-soft); }
+.tcv-dm-sendbtn { display: inline-flex; align-items: center; gap: 6px; }
+/* The Chat tab's badge: who wrote (three faces at most, overlapping) and how many lines. */
+.tcv-dm-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 6px 1px 2px; line-height: 16px;
+  background: var(--accent); border-radius: 11px; }
+.tcv-dm-badge b { font-size: 10px; font-weight: 700; color: var(--ink-on-accent); }
+.tcv-dm-faces { display: inline-flex; align-items: center; }
+.tcv-dm-faces app-avatar { box-shadow: 0 0 0 1.5px var(--accent); }
+.tcv-dm-faces app-avatar + app-avatar { margin-left: -4px; }

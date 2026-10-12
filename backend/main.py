@@ -72,6 +72,9 @@ app.include_router(imports_api.router)
 from . import cc_chat, llm, llm_api, netproxy  # noqa: E402
 app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
+# People writing to each other in the Chat tab: direct messages, outside every space (backend/dm.py).
+from . import dm  # noqa: E402
+app.include_router(dm.router)
 # Settings > Proxy & Data: a second way out for the EasyEDA part lookups,
 # and Jina AI (its Reader and Search, the key kept here).
 app.include_router(netproxy.router)
@@ -3070,6 +3073,10 @@ async def _start_sampler():
             await cc_chat.ensure_search_index(db().raw)
         except Exception as exc:                       # noqa: BLE001 - search falls back to reading them all
             LOG.warning("Command Code search index not made: %s", exc)
+        try:
+            await dm.ensure_indexes(db().raw)          # direct messages: by member, one per pair, by time
+        except Exception as exc:                       # noqa: BLE001 - they still work, only slower
+            LOG.warning("Direct message indexes not made: %s", exc)
         try:
             await llm.load(db())                       # the keys and the model each job uses
             from . import netmeter

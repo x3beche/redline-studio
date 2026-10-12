@@ -305,15 +305,22 @@ async def drop_avatar():
 
 @router.get("/api/me/avatar/{user_id}")
 async def avatar(user_id: str, v: str | None = None):
-    """Someone's picture: one's own, the person whose space this is, or -
-    to the owner and the admins - anyone's. Only the picture - a 404 says
+    """Someone's picture: one's own, the person whose space this is,
+    someone one has a direct conversation with, or - to the owner and the
+    admins - anyone's. Only the picture - a 404 says
     nothing else."""
     db = _db()
     who = actors.current()
     mine = who.get("type") == "user" and who.get("id") == user_id
     u = await db[auth.USERS].find_one({"_id": user_id}, {"avatar": 1, "avatar_v": 1, "role": 1, "space": 1})
     admin = who.get("type") == "user" and not who.get("page") and access.current() in ("owner", "admin")
-    if not u or not (mine or admin or auth.space_of(u) == scope.current()):
+    if u and not (mine or admin or auth.space_of(u) == scope.current()):
+        # Someone one writes to (backend/dm.py): a direct or group
+        # conversation with them both in it.
+        from . import dm
+        if not await dm.together(who, user_id):
+            u = None
+    if not u:
         raise HTTPException(404, "no picture")
     if not u.get("avatar"):
         raise HTTPException(404, "no picture")

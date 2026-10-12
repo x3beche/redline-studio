@@ -20,6 +20,8 @@ import { FilesApi } from './files-model';
 import { FileModal, FileModalHost, fileIdOf } from './file-modal';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { ModelPicker } from '../model-picker';
+import { DmApi, DmStore } from '../dm';
+import { DmPeople, DmView, dmWhen } from './dm-view';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -368,7 +370,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -476,7 +478,7 @@ type Ask = { text: string; label: string; go: () => void };
         <div class="tcv-cc-group">{{ 'Rooms' | t }}</div>
         @for (r of shownRooms(); track r.room) {
           <div class="tcv-cc-item tcv-th-item" role="listitem" tabindex="0" [attr.data-room]="r.room"
-               [attr.data-on]="sel.thread() === r.room ? 1 : null" (click)="openThread(r.room)" (keydown.enter)="openThread(r.room)"
+               [attr.data-on]="!dms.open() && sel.thread() === r.room ? 1 : null" (click)="openThread(r.room)" (keydown.enter)="openThread(r.room)"
                [title]="(threads.label(r.room) | t) + ' - ' + ('agent thread' | t)">
             <span class="tcv-th-ico"><ng-container *ngTemplateOutlet="ico; context: { $implicit: r.room === 'pcb' ? I.pcb : r.room === 'firmware' ? I.fw : I.cad }" /></span>
             <div class="tcv-cc-itemtext">
@@ -491,13 +493,30 @@ type Ask = { text: string; label: string; go: () => void };
           </div>
         }
       }
+      <!-- The people on this server: direct messages, person to person, no
+           model in them (rooms/dm-view.ts, backend/dm.py). -->
+      @if (!trash()) {
+        <app-dm-people [q]="q()" (opened)="drawer.set(false); toolsOpen.set(false)" />
+      }
       @if (trash() && shownChats().length) {
         <p class="tcv-cc-trashnote">{{ 'Deleted conversations are kept here for 30 days, then deleted for good.' | t }}</p>
       }
       @if (hits(); as hs) {
+        @if (dmHits().length) {
+          <div class="tcv-cc-group">{{ 'Found in direct messages' | t }} · {{ dmHits().length }}</div>
+          @for (h of dmHits(); track h.message_id) {
+            <button class="tcv-cc-hit" [attr.data-on]="dms.open() === h.chat_id ? 1 : null" (click)="openDmHit(h.chat_id)">
+              <span class="tcv-cc-itemtop">
+                <span class="tcv-cc-itemtitle">{{ h.title }}</span>
+                <time class="tcv-cc-itemwhen">{{ dmWhen(h.at) }}</time>
+              </span>
+              <span class="tcv-cc-hitsnip"><b>{{ h.by }}: </b><span>{{ h.snippet }}</span></span>
+            </button>
+          }
+        }
         <div class="tcv-cc-group">{{ 'Found in messages' | t }} · {{ hs.length }}</div>
         @for (h of hs; track $index) {
-          <button class="tcv-cc-hit" [attr.data-on]="!sel.thread() && h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
+          <button class="tcv-cc-hit" [attr.data-on]="!dms.open() && !sel.thread() && h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
             <span class="tcv-cc-itemtop">
               <span class="tcv-cc-itemtitle">{{ h.title | t }}</span>
               @if (h.archived) { <span class="tcv-cc-tag">{{ 'Archived' | t }}</span> }
@@ -512,7 +531,7 @@ type Ask = { text: string; label: string; go: () => void };
       @for (g of groups(); track g.name) {
         <div class="tcv-cc-group">{{ g.name | t }}</div>
         @for (c of g.chats; track c.id) {
-          <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!sel.thread() && c.id === openId() ? 1 : null"
+          <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
                [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
                [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')
@@ -587,6 +606,8 @@ type Ask = { text: string; label: string; go: () => void };
     @if (toolsOpen()) {
       <app-cc-tools [tools]="tools()" [ready]="toolsReady()" [canEdit]="auth.can('draw')" (set)="setTools($event)" (openChat)="showTools(false); open($event)"
                     (done)="showTools(false)" (menu)="drawer.set(!drawer())" />
+    } @else if (dms.open(); as did) {
+      <app-dm-view [id]="did" [ico]="ico" (menu)="drawer.set(!drawer())" />
     } @else if (sel.thread(); as room) {
       <app-room-thread [room]="room" [userAv]="userAv" [botAv]="botAv" [ico]="ico" (menu)="drawer.set(!drawer())" />
     } @else if (chat(); as c) {
@@ -1073,6 +1094,12 @@ type Ask = { text: string; label: string; go: () => void };
 export class RoomCommandCode implements OnDestroy {
   private api = inject(CcApi);
   auth = inject(Auth);
+  /** Direct messages (dm.ts): the People in the list, and the one open. */
+  dms = inject(DmStore);
+  private dmApi = inject(DmApi);
+  dmHits = signal<{ chat_id: string; title: string; message_id: string; at: string; by: string; snippet: string }[]>([]);
+  readonly dmWhen = dmWhen;
+  openDmHit(cid: string) { this.drawer.set(false); this.toolsOpen.set(false); this.dms.show(cid); }
   private box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
 
   /** The composer, ready to type in, once it is on the page. Asked for as
@@ -1173,6 +1200,7 @@ export class RoomCommandCode implements OnDestroy {
   });
   openThread(room: string) {
     if (this.selecting()) return;
+    this.dms.show(null);
     this.drawer.set(false);
     this.toolsOpen.set(false);
     this.sel.thread.set(room);
@@ -1476,6 +1504,7 @@ export class RoomCommandCode implements OnDestroy {
     if ((e.target as HTMLElement).closest('button, input')) return;
     if (c.deleted_at) return;                            // restored first, then read
     this.sel.thread.set(null);
+    this.dms.show(null);
     this.toolsOpen.set(false);
     if (this.openId() === c.id && this.chat()?.id === c.id) { this.drawer.set(false); return; }
     this.open(c.id);
@@ -1485,6 +1514,7 @@ export class RoomCommandCode implements OnDestroy {
    *  on (on the server, and their requests here), and show again when their
    *  conversation is opened again. */
   open(id: string, at?: string | null, then?: (c: CcChat) => void) {
+    this.dms.show(null);
     this.openId.set(id);
     this.win.reset();
     this.error.set(this.runErrors.get(id) ?? null);
@@ -1511,6 +1541,7 @@ export class RoomCommandCode implements OnDestroy {
   newChat(then?: (c: CcChat) => void, route?: { provider: string; model: string }, failed?: () => void) {
     if (!this.auth.can('draw')) return;
     this.sel.thread.set(null);
+    this.dms.show(null);
     this.toolsOpen.set(false);
     if (this.tab() !== 'list') this.showTab('list');
     this.api.create(route?.provider, route?.model || undefined).subscribe({
@@ -2627,15 +2658,18 @@ export class RoomCommandCode implements OnDestroy {
   setQuery(v: string) {
     this.q.set(v);
     if (this.searchTimer) clearTimeout(this.searchTimer);
-    if (!v.trim()) { this.searchSeq++; this.hits.set(null); this.searching.set(false); return; }
+    if (!v.trim()) { this.searchSeq++; this.hits.set(null); this.dmHits.set([]); this.searching.set(false); return; }
     this.searching.set(true);
     this.searchTimer = setTimeout(() => this.runSearch(), 250);
   }
 
   runSearch() {
     const q = this.q().trim();
-    if (!q) { this.hits.set(null); return; }
+    if (!q) { this.hits.set(null); this.dmHits.set([]); return; }
     const seq = ++this.searchSeq;
+    if (this.dms.enabled()) {
+      this.dmApi.search(q).subscribe({ next: r => { if (seq === this.searchSeq) this.dmHits.set(r.results); }, error: () => {} });
+    }
     this.searching.set(true);
     this.api.search(q, this.tab(), this.withArchived()).subscribe({
       next: r => { if (seq === this.searchSeq) { this.hits.set(r.results); this.searching.set(false); } },
@@ -2661,6 +2695,7 @@ export class RoomCommandCode implements OnDestroy {
   openHit(h: CcHit) {
     if (h.trashed) return;                                    // restored first, then read
     this.sel.thread.set(null);
+    this.dms.show(null);
     this.toolsOpen.set(false);
     this.drawer.set(false);
     if (this.openId() === h.chat_id && this.chat()?.id === h.chat_id) { if (h.message_id) this.scrollTo(h.message_id); return; }

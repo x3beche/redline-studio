@@ -4,6 +4,7 @@ import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
+import { DmSendButton } from '../dm';
 
 /** Inventory ("Envanter"): what is on hand - each thing kept, how many, and
  *  where it is (backend/inventory.py).
@@ -135,7 +136,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [T],
+  imports: [T, DmSendButton],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -212,6 +213,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
         </div>
         <div class="tst-acts">
           <button class="tcv-btn" (click)="exportItems([it])" [title]="'Save it as a file to send to someone' | t">{{ 'Export' | t }}</button>
+          <rl-dm-send-btn kind="inventory" [id]="it.id" [label]="it.name" cls="tcv-btn tcv-dm-sendbtn" />
           @if (can()) { <button class="tcv-btn tst-del" (click)="remove(it)">{{ 'Delete' | t }}</button> }
           <button class="tcv-btn" (click)="goHome()">{{ 'Overview' | t }}</button>
         </div>

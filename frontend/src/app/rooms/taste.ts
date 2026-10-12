@@ -5,6 +5,7 @@ import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
+import { DmSendButton } from '../dm';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -182,7 +183,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 /** The Taste room. */
 @Component({
   selector: 'app-room-taste',
-  imports: [T, NgTemplateOutlet],
+  imports: [T, NgTemplateOutlet, DmSendButton],
   styleUrls: ['../settings.css', './taste.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'closePicker()' },
   template: `
@@ -444,6 +445,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
             </span>
             <button class="tcv-btn" (click)="startExtract(); $event.stopPropagation()">{{ 'Extract from project…' | t }}</button>
             <button class="tcv-btn" (click)="exportPalette(p)" [title]="'Save this palette as a file to send to someone' | t">{{ 'Export' | t }}</button>
+            <rl-dm-send-btn kind="taste" [id]="p.id" [label]="p.name" cls="tcv-btn tcv-dm-sendbtn" />
             <button class="tcv-btn" (click)="pin(p)">{{ (p.pinned ? 'Unpin' : 'Pin') | t }}</button>
             <button class="tcv-btn tst-del" (click)="remove(p)">{{ 'Delete' | t }}</button>
           }
