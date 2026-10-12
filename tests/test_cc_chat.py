@@ -18,6 +18,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend import access, actors, cc_chat, llm
+REAL_NOW_LINE = cc_chat.now_line   # before the tests' autouse stub (conftest.py)
 
 ME = {"id": "u-me", "name": "Me", "type": "person"}
 YOU = {"id": "u-you", "name": "You", "type": "person"}
@@ -677,7 +678,7 @@ def test_the_line_being_answered_says_the_time(monkeypatch):
 
 
 def test_now_line_names_the_zone():
-    line = cc_chat.now_line("UTC")
+    line = REAL_NOW_LINE("UTC")
     assert line.startswith("It is ") and line.endswith("(UTC, UTC+00:00).")
 
 
