@@ -143,3 +143,7 @@
 .ct-pack[data-empty] .ct-name, .ct-pack[data-empty] .ct-ico { color: var(--ink-dim); }
 .ct-msearch { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0; }
 .ct-msearch .tcv-field { flex: 1; min-width: 0; padding: 5px 8px; }
+/* the overview's two cards: one fixed height, the by-tool list scrolling inside */
+.ct-over { align-items: stretch; }
+.ct-over > .st-card { height: 300px; display: flex; flex-direction: column; margin: 0; }
+.ct-over > .st-card > .st-card-body { flex: 1; min-height: 0; overflow-y: auto; }

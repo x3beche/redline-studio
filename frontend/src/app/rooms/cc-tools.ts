@@ -214,7 +214,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
         <div class="st-tile" [attr.data-tone]="worked(u) == null ? 'dim' : worked(u)! < 90 ? 'warn' : 'ok'">
           <span>{{ 'Worked' | t }}</span><b>{{ worked(u) == null ? '–' : worked(u) + '%' }}</b></div>
       </div>
-      <div class="ct-cols">
+      <div class="ct-cols ct-over">
         <section class="st-card">
           <div class="st-card-head"><h3>{{ 'Uses by tool' | t }}</h3><span class="st-sub">{{ 'last 14 days' | t }}</span>
             <span class="st-right st-sub mono">{{ sum14(u) }}</span></div>
