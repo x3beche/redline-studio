@@ -63,3 +63,14 @@
 .um-when { margin-left: 4px; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
 .um-edit { flex: none; margin-left: auto; }
 @media (max-width: 768px) { .um-edit { display: none; } }
+
+/* The list inside the overview (admin-overview.ts): the page takes the
+   whole width, the accounts a column of their own on the left. */
+.st-page.um-wide { max-width: none; }
+.um-users .um-find { width: 100%; min-width: 0; flex: 1; }
+.um-users .st-right { flex: 1; min-width: 0; justify-content: flex-end; }
+.um-users .um-tiles { grid-template-columns: 1fr 1fr 1fr 1.5fr; }
+@media (max-width: 768px) {
+  .um-users .um-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .um-users .st-right { flex: 1 1 100%; }
+}

@@ -8,6 +8,7 @@
     PUT    /api/admin/users/{id}/avatar         a new picture (profile.py's square JPEG)
     DELETE /api/admin/users/{id}/avatar         no picture
     DELETE /api/admin/users/{id}[?with_data=1]  delete the account (owner only)
+    GET    /api/admin/overview?span=            the dashboard: what is kept, who did what
 
 The middleware lets only the owner and the admins in ("users",
 backend/access.py). The rules past that are here:
@@ -28,9 +29,12 @@ the audit trail - the owner's (the server's) and, for an admin, their own.
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -343,3 +347,187 @@ async def delete_user(user_id: str, with_data: bool = False) -> dict:
     auth.forget_sessions()
     await _audit("user-delete", u["email"], {"id": user_id, "with_data": with_data, "removed": removed})
     return {"deleted": user_id, "removed": removed}
+
+
+# ---------------------------------------------------------------- the overview
+
+# The overview's periods: the activity chart's buckets (cc_chat.USAGE_SPANS).
+_SPANS = {"day": 3600, "week": 86400, "month": 86400}
+# What a person does that is not a change: being let in.
+_SIGN_INS = ("sign-in", "switch")
+# The trail's lines that are not anybody's doing: a page opened for an agent.
+_NOT_ACTIONS = ("page-session",)
+# Folders at the top that are not projects: the shared parts library.
+_NOT_PROJECTS = ("components",)
+_FEED = 12
+
+
+def _at(v) -> datetime | None:
+    """A moment as the collections keep it - a date or an ISO text - in UTC."""
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    if isinstance(v, str) and v:
+        try:
+            d = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _space(doc: dict) -> str:
+    return doc.get("workspace_id") or doc.get("workspace") or scope.DEFAULT
+
+
+def _bare(_id: str) -> str:
+    """A scoped id without its "@space" ending (scope.key)."""
+    return str(_id).split("@", 1)[0]
+
+
+@router.get("/overview")
+async def overview(span: str = "week") -> dict:
+    """The server at a glance, for the dashboard beside the accounts: what
+    is kept in every space (projects, models, boards, files, chats), and
+    what the people did over `span` (day: by hour; week, month: by day) -
+    sign-ins, changes, chat messages, tool uses, by bucket and by person,
+    the projects that moved most, the model calls and what they cost, and
+    the latest lines of the trail. People are named by account id: the
+    names are in GET /users beside it."""
+    _me()
+    if span not in _SPANS:
+        raise HTTPException(400, f"span is one of {', '.join(_SPANS)}")
+    from .cc_chat import _buckets
+    raw = _raw()
+    now = datetime.now(timezone.utc)
+    keys, key = _buckets(span, now)
+    step = _SPANS[span]
+    # The first bucket's start, in the app's time zone: the chart's t0.
+    tz = ZoneInfo(os.environ.get("REDLINE_TZ", "Europe/Istanbul"))
+    since = datetime.fromisoformat(keys[0] + (":00" if step == 3600 else "T00:00")).replace(tzinfo=tz)
+    since_iso = since.astimezone(timezone.utc).isoformat()
+    users = {u["_id"]: u async for u in raw[auth.USERS].find({}, {"_id": 1, "space": 1, "role": 1})}
+    owner_of = {auth.space_of(u): uid for uid, u in users.items()}
+
+    # What is kept, everywhere - and in whose space.
+    per_user: dict[str, dict] = {uid: {"sign_ins": 0, "changes": 0, "messages": 0, "tools": 0,
+                                       "projects": 0, "models": 0, "files": 0} for uid in users}
+    projects: dict[tuple[str, str], dict] = {}
+    async for f in raw["folders"].find({"parent": ""}, {"_id": 1, "name": 1, "workspace_id": 1}):
+        name = f.get("name") or _bare(f["_id"])
+        if name in _NOT_PROJECTS:
+            continue
+        ws = _space(f)
+        projects[(ws, name)] = {"name": name, "user": owner_of.get(ws), "models": 0, "boards": 0, "moves": 0}
+        if owner_of.get(ws) in per_user:
+            per_user[owner_of[ws]]["projects"] += 1
+
+    def project(ws: str, path: str | None) -> dict | None:
+        return projects.get((ws, (path or "").split("/", 1)[0])) if path else None
+
+    models = 0
+    async for m in raw["models"].find({}, {"folder": 1, "workspace_id": 1, "updated_at": 1}):
+        models += 1
+        ws = _space(m)
+        if owner_of.get(ws) in per_user:
+            per_user[owner_of[ws]]["models"] += 1
+        if p := project(ws, m.get("folder")):
+            p["models"] += 1
+    boards = 0
+    async for b in raw["boards"].find({}, {"folder": 1, "workspace_id": 1}):
+        boards += 1
+        if p := project(_space(b), b.get("folder")):
+            p["boards"] += 1
+    files = 0
+    async for f in raw["files"].find({}, {"workspace_id": 1}):
+        files += 1
+        if owner_of.get(_space(f)) in per_user:
+            per_user[owner_of[_space(f)]]["files"] += 1
+    chats = messages = 0
+    async for c in raw["cc_chats"].find({"deleted_at": None}, {"messages.role": 1}):
+        chats += 1
+        messages += len(c.get("messages") or [])
+    messages += await raw["dm_messages"].count_documents({})
+
+    # What the people did, bucket by bucket.
+    names = ("Sign-ins", "Changes", "Messages", "Tool uses", "Agents")
+    series = {n: [0] * len(keys) for n in names}
+    slot = {k: i for i, k in enumerate(keys)}
+
+    def count(name: str, when: datetime | None, uid: str | None = None, field: str | None = None) -> None:
+        i = slot.get(key(when.isoformat())) if when else None
+        if i is None:
+            return
+        series[name][i] += 1
+        if uid in per_user and field:
+            per_user[uid][field] += 1
+
+    feed: list[dict] = []
+    async for a in raw["audit"].find({"at": {"$gte": since}}, {"at": 1, "actor": 1, "action": 1, "target": 1}):
+        act, who = a.get("action"), a.get("actor") or {}
+        if act in _NOT_ACTIONS:
+            continue
+        when = _at(a.get("at"))
+        if who.get("type") != "user":
+            count("Agents", when)
+            continue
+        if act in _SIGN_INS:
+            count("Sign-ins", when, who.get("id"), "sign_ins")
+        else:
+            count("Changes", when, who.get("id"), "changes")
+        if when:
+            feed.append({"at": when.isoformat(), "user": who.get("id"), "action": act,
+                         "target": str(a.get("target") or "")[:120]})
+    async for g in raw["cc_gens"].find({"at": {"$gte": since_iso}}, {"at": 1, "actor": 1}):
+        count("Messages", _at(g.get("at")), (g.get("actor") or {}).get("id"), "messages")
+    async for d in raw["dm_messages"].find({"at": {"$gte": since_iso}}, {"at": 1, "by": 1}):
+        count("Messages", _at(d.get("at")), (d.get("by") or {}).get("id"), "messages")
+    async for u in raw["tool_usage"].find({"at": {"$gte": since}}, {"at": 1, "by": 1}):
+        who = u.get("by") or {}
+        if who.get("type") == "user":
+            count("Tool uses", _at(u.get("at")), who.get("id"), "tools")
+        else:
+            count("Agents", _at(u.get("at")))
+
+    # The projects that moved: versions asked for, models rebuilt.
+    async for r in raw["revisions"].find({"created_at": {"$gte": since_iso}}, {"model": 1, "workspace_id": 1}):
+        if p := project(_space(r), r.get("model")):
+            p["moves"] += 1
+    async for h in raw["item_history"].find({"at": {"$gte": since_iso}}, {"item": 1, "workspace_id": 1}):
+        if p := project(_space(h), h.get("item")):
+            p["moves"] += 1
+
+    # The models' calls and what they cost.
+    llm = {"calls": 0, "tokens": 0, "cost_usd": 0.0}
+    by_model: dict[str, list] = {}
+    cost = [0.0] * len(keys)
+    async for c in raw["llm_calls"].find({"at": {"$gte": since_iso}},
+                                         {"at": 1, "input": 1, "output": 1, "cost_usd": 1, "model": 1}):
+        usd = float(c.get("cost_usd") or 0)
+        llm["calls"] += 1
+        llm["tokens"] += int(c.get("input") or 0) + int(c.get("output") or 0)
+        llm["cost_usd"] += usd
+        m = str(c.get("model") or "?").rsplit("/", 1)[-1]
+        row = by_model.setdefault(m, [0.0, 0])
+        row[0] += usd
+        row[1] += 1
+        when = _at(c.get("at"))
+        i = slot.get(key(when.isoformat())) if when else None
+        if i is not None:
+            cost[i] += usd
+    llm["cost_usd"] = round(llm["cost_usd"], 6)
+
+    feed.sort(key=lambda x: x["at"], reverse=True)
+    active = sorted(projects.values(), key=lambda p: (-p["moves"], -p["models"], p["name"]))
+    return {
+        "span": span, "since": since_iso,
+        "totals": {"users": len(users), "projects": len(projects), "models": models, "boards": boards,
+                   "files": files, "chats": chats, "messages": messages},
+        "activity": {"t0": int(since.timestamp()), "step": step, "n": len(keys),
+                     "series": [{"name": n, "values": v} for n, v in series.items()]},
+        "people": [{"id": uid, **row} for uid, row in per_user.items()],
+        "projects": [p for p in active if p["moves"] or p["models"] or p["boards"]][:8],
+        "llm": {**llm, "cost": cost,
+                "by_model": [{"name": k, "cost_usd": round(v[0], 6), "calls": v[1]}
+                             for k, v in sorted(by_model.items(), key=lambda x: (-x[1][0], -x[1][1]))[:6]]},
+        "feed": feed[:_FEED],
+    }

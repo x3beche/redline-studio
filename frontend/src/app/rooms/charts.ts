@@ -47,7 +47,8 @@ function generation(of: () => unknown) {
  */
 export interface Series { name: string; values: (number | null)[] }
 export interface TimeData { t0: number; step: number; n: number; series: Series[] }
-export interface Row { name: string; value: number; sub?: string }
+/** A ranked row; `color` is its own colour (a person's), else the palette's in order. */
+export interface Row { name: string; value: number; sub?: string; color?: string }
 
 /** The theme's series colours, in order - named in full so a search for a
  *  token finds where it is used. */
@@ -380,7 +381,7 @@ export class BarList {
   f = input<Fmt>(fmt.count);
   /** One colour for every bar, or a colour each. */
   mono = input(false);
-  colorOf(i: number) { return this.mono() ? color(0) : color(i); }
+  colorOf(i: number) { return this.rows()[i]?.color ?? (this.mono() ? color(0) : color(i)); }
   pct(v: number) { const m = Math.max(...this.rows().map(r => r.value), 0); return m ? 100 * v / m : 0; }
 }
 

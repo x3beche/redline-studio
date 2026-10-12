@@ -324,3 +324,59 @@ def test_an_admin_sets_a_users_avatar_colour_from_the_palette(db):
     assert "avatar_colour" not in run(db["users"].find_one({"_id": "a"}))
     # The usual rules hold: an admin does not recolour the owner.
     assert ad.patch("/api/admin/users/o", json={"avatar_colour": "series-1"}).status_code == 403
+
+
+# ---------------------------------------------------------------- the overview
+
+def test_the_overview_is_the_admins_and_counts_every_space(db):
+    now = datetime.now(timezone.utc)
+    a_space = auth.space_of(run(db["users"].find_one({"_id": "a"})))
+    for doc in ({"_id": "fan", "name": "fan", "parent": ""},
+                {"_id": "fan/parts", "name": "parts", "parent": "fan"},
+                {"_id": "components", "name": "components", "parent": ""},
+                {"_id": "rig@" + a_space, "name": "rig", "parent": "", "workspace_id": a_space}):
+        run(db["folders"].insert_one(doc))
+    for doc in ({"_id": "fan/parts/lid", "folder": "fan/parts"},
+                {"_id": "rig/arm@" + a_space, "folder": "rig", "workspace_id": a_space},
+                {"_id": "rig/leg@" + a_space, "folder": "rig", "workspace_id": a_space}):
+        run(db["models"].insert_one(doc))
+    run(db["files"].insert_one({"_id": "f1", "workspace_id": a_space}))
+    run(db["cc_chats"].insert_one({"_id": "c1", "messages": [{"role": "user"}, {"role": "assistant"}]}))
+    run(db["cc_chats"].insert_one({"_id": "c2", "messages": [{"role": "user"}], "deleted_at": now}))
+    for actor, action in ((("user", "a"), "sign-in"), (("user", "a"), "change"), (("user", "a"), "delete"),
+                          (("user", "o"), "page-session"), (("agent", "bot"), "change")):
+        run(db["audit"].insert_one({"at": now - timedelta(minutes=5), "actor": {"type": actor[0], "id": actor[1]},
+                                    "action": action, "target": "rig"}))
+    run(db["audit"].insert_one({"at": now - timedelta(days=40), "actor": {"type": "user", "id": "b"},
+                                "action": "change", "target": "old"}))
+    run(db["cc_gens"].insert_one({"at": (now - timedelta(minutes=3)).isoformat(), "actor": {"type": "user", "id": "o"}}))
+    run(db["revisions"].insert_one({"created_at": (now - timedelta(hours=1)).isoformat(), "model": "rig/arm",
+                                    "workspace_id": a_space}))
+    run(db["llm_calls"].insert_one({"at": (now - timedelta(minutes=2)).isoformat(), "input": 100, "output": 20,
+                                    "cost_usd": 0.5, "model": "vendor/some-model"}))
+
+    # Not a user's, nor an agent's.
+    assert person(db, "a").get("/api/admin/overview").status_code == 403
+    tok = person(db, "o").post("/api/agent-tokens", json={"name": "bot"}).json()["token"]
+    assert agent(tok).get("/api/admin/overview").status_code == 403
+
+    ad = person(db, "ad")
+    assert ad.get("/api/admin/overview?span=decade").status_code == 400
+    r = ad.get("/api/admin/overview?span=week")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # The parts library is no project; a deleted chat is not counted.
+    assert {k: body["totals"][k] for k in ("users", "projects", "models", "files", "chats", "messages")} == \
+        {"users": 5, "projects": 2, "models": 3, "files": 1, "chats": 1, "messages": 2}
+    act = body["activity"]
+    assert act["n"] == 7 and act["step"] == 86400
+    sums = {s["name"]: sum(s["values"]) for s in act["series"]}
+    # a's two changes and the owner's agent token above; the page session is nobody's doing
+    assert sums == {"Sign-ins": 1, "Changes": 3, "Messages": 1, "Tool uses": 0, "Agents": 1}
+    people = {p["id"]: p for p in body["people"]}
+    assert (people["a"]["sign_ins"], people["a"]["changes"], people["a"]["projects"], people["a"]["models"]) == (1, 2, 1, 2)
+    assert people["o"]["messages"] == 1 and people["b"]["changes"] == 0      # forty days ago is not this week
+    assert body["projects"][0] == {"name": "rig", "user": "a", "models": 2, "boards": 0, "moves": 1}
+    assert body["llm"]["calls"] == 1 and body["llm"]["tokens"] == 120 and body["llm"]["by_model"][0]["name"] == "some-model"
+    assert {f["action"] for f in body["feed"]} == {"sign-in", "change", "delete", "token"}
+    assert '"pw"' not in r.text and "scrypt" not in r.text
