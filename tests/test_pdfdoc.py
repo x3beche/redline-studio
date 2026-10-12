@@ -1,4 +1,4 @@
-"""The Chat's PDFs (backend/pdfdoc.py): Markdown in Redline's white theme.
+"""The Chat's PDFs (backend/pdfdoc.py): Markdown in Workbench's white theme.
 
 What matters: what the model writes is text, never markup of its own (no
 script, no raw HTML, no javascript: link); a picture is only ever a Files
@@ -6,7 +6,7 @@ file or a public address fetched here, re-encoded, and handed to the page
 as a data: URL - nothing private is reached, and the browser fetches
 nothing; tables put their numbers to the right, '- [ ]' are boxes. And,
 where Docker and the Chromium image are there, a real document prints
-with the Redline mark, the title, the author, its purpose and "Page N of
+with the Workbench mark, the title, the author, its purpose and "Page N of
 M" on its pages.
 """
 
@@ -88,7 +88,7 @@ def test_the_page_allows_nothing_from_outside_and_escapes_its_fields():
     assert '<span class="pageNumber"></span>' in foot and '<span class="totalPages"></span>' in foot
     assert "&lt;script&gt;x&lt;/script&gt;" in foot and "Why &amp; how" in foot and "p&lt;1&gt;" in foot
     head = pdfdoc.header_html(doc)
-    assert pdfdoc.MARK in head and ">Redline</span>" in head
+    assert pdfdoc.MARK in head and ">Workbench</span>" in head
 
 
 def test_sections_follow_the_body():
@@ -218,7 +218,7 @@ def test_a_document_prints_with_its_header_footer_and_page_count():
     one, two = texts
     assert "Fan controller BOM comparison" in one and "Pick the cheaper build for 100 boards" in one
     for i, page in enumerate(texts, 1):
-        assert "Redline" in page and "Ann Example" in page and "fan-ctrl-b" in page
+        assert "Workbench" in page and "Ann Example" in page and "fan-ctrl-b" in page
         assert f"Page {i} of 2" in page
     assert "$3.31" in one and "Appendix" in two and "Prices as of 12 Oct 2026." in two
 

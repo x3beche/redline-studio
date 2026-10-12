@@ -1,4 +1,4 @@
-"""pdf_make: a document written by the model, printed as a PDF in Redline's
+"""pdf_make: a document written by the model, printed as a PDF in Workbench's
 white theme (backend/pdfdoc.py) and kept in the Files room - in
 "Documents", or "Documents/<project>" when it is about one, or the folder
 asked for - by the asker, as an upload would keep it (files.put).
@@ -22,7 +22,7 @@ NAME_MAX = 120
 
 SKILL = (
     "Make a PDF document - a report, a datasheet summary, a BOM, a comparison, a spec, a test plan - printed in "
-    "Redline's white theme (the Redline mark at the top of every page; the author, date and time, purpose and "
+    "Workbench's white theme (the Workbench mark at the top of every page; the author, date and time, purpose and "
     "page N of M at the bottom) and kept in the Files room. Use it when the person asks for a PDF, a report or a "
     "document to keep or share; not for a short answer. Gather the facts first with the other tools (drawer, "
     "datasheets, LCSC, boards, BOM cost, inventory...) and only then write it: every value in it comes from them, "
@@ -129,7 +129,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 TOOL = Tool(
     name="pdf_make", package="commandcode", level="change", order=40, default=True,
     label="Make a PDF",
-    about="Writes a document as a PDF in Redline's theme and keeps it in Files.",
+    about="Writes a document as a PDF in Workbench's theme and keeps it in Files.",
     description=SKILL,
     schema={"type": "object", "properties": {
         "title": {"type": "string", "description": "The document's title, a few words"},

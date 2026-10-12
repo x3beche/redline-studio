@@ -5,7 +5,7 @@ Std/Pro, Altium, Eagle, CADSTAR, P-CAD, Fabmaster (and IPC-2581/ODB++
 where the KiCad in the image can read them). `pcbnew_load.py` - our
 script, run in the container - loads the file with the right plugin and
 saves it as a .kicad_pcb; kicad-cli then draws it exactly the way a board
-laid out in Redline is drawn (backend/kicad.py), so everything a built
+laid out in Workbench is drawn (backend/kicad.py), so everything a built
 board has comes out of the same tools.
 
 KiCad is GPL and stays a tool here: nothing of its source is in this

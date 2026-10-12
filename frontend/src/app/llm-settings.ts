@@ -56,7 +56,7 @@ interface LlmUsage {
 }
 
 const PROVIDERS = ['commandcode', 'openrouter', 'claude', 'opencode-go'];
-/** The providers whose card shows Redline's own call log: no account to read for their key. */
+/** The providers whose card shows Workbench's own call log: no account to read for their key. */
 const OWN = ['claude', 'opencode-go'];
 /** The usage panel's switch: both providers together first, so the latest
  *  calls show whichever provider the jobs are on. */
@@ -90,7 +90,7 @@ export function when(at: string | number | null | undefined): string {
 <div class="st-card">
   <div class="st-card-head">
     <h3>{{ 'Usage' | t }}</h3>
-    <span class="st-sub">{{ 'every call Redline made, from its own journal' | t }}</span>
+    <span class="st-sub">{{ 'every call Workbench made, from its own journal' | t }}</span>
     <div class="st-right">
       <div class="st-seg">
         @for (p of providers; track p) {
@@ -244,7 +244,7 @@ export class LlmUsagePanel {
   template: `
 @if (data(); as d) {
 <div class="st-page">
-  <p class="st-lead">{{ 'Which model does what in Redline, and the keys it uses. The keys stay on the server: once saved, only their last four characters are shown.' | t }}</p>
+  <p class="st-lead">{{ 'Which model does what in Workbench, and the keys it uses. The keys stay on the server: once saved, only their last four characters are shown.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <div class="st-tiles">

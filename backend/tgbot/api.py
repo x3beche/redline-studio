@@ -8,7 +8,7 @@
     GET    /api/telegram/profile         name, descriptions, commands - live from Telegram
     PUT    /api/telegram/profile         change the fields given, per language  (settings)
     PUT    /api/telegram/profile/photo   a new picture (cut square, sent as JPG) (settings)
-    PUT    /api/telegram/profile/photo/default   Redline's mark as the picture   (settings)
+    PUT    /api/telegram/profile/photo/default   Workbench's mark as the picture   (settings)
     DELETE /api/telegram/profile/lang/{code}     a language's own texts away     (settings)
     POST   /api/telegram/profile/translate       the default's texts, translated (settings)
     POST   /api/telegram/profile/done            step 3 saved: the profile is as wanted (settings)
@@ -282,7 +282,7 @@ async def put_token(body: TokenIn) -> dict:
 
 @router.delete("/bot")
 async def remove_bot(forget: bool = False) -> dict:
-    """Remove the bot from Redline: tell every linked chat, take the webhook
+    """Remove the bot from Workbench: tell every linked chat, take the webhook
     down (dropping what waits), forget the token, the secret and the bot's
     state, unlink everyone, drop the codes and what was not sent. With
     `forget`, the log and the counters go too. The bot itself still exists
@@ -295,7 +295,7 @@ async def remove_bot(forget: bool = False) -> dict:
         async for link in raw[core.LINKS].find({}):
             try:
                 await b.send_message(chat_id=link["chat"],
-                                     text="This bot was disconnected from Redline. Nothing more will come "
+                                     text="This bot was disconnected from Workbench. Nothing more will come "
                                           "from it, and what you send is not read.")
                 told += 1
             except TelegramError:
@@ -464,7 +464,7 @@ async def default_photo():
 
 @router.put("/profile/photo/default")
 async def use_default_photo() -> dict:
-    """Redline's mark as the bot's picture."""
+    """Workbench's mark as the bot's picture."""
     return await _photo(profile.DEFAULT_PHOTO.read_bytes())
 
 
@@ -590,7 +590,7 @@ async def delete_my_link() -> dict:
     await raw[core.CODES].delete_many({"user": who["id"]})
     if link:
         await links.unlink(raw, who["id"])
-        await outbox.enqueue(raw, link["chat"], text="Unlinked from Redline (from the app).", kind="unlinked",
+        await outbox.enqueue(raw, link["chat"], text="Unlinked from Workbench (from the app).", kind="unlinked",
                              user=who["id"])
     return await state()
 

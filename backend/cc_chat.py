@@ -96,7 +96,7 @@ CHAT_CONTEXT = 4_000_000         # characters of mentioned context one conversat
 MAX_QUEUE = 10                   # lines waiting for the answer being written, per conversation
 
 SYSTEM = (
-    "You are a helpful assistant in Redline Studio, a workshop app for 3D CAD models, "
+    "You are a helpful assistant in Workbench, a workshop app for 3D CAD models, "
     "circuit boards. Several people may share this conversation; a line "
     "written by someone is prefixed with their name in brackets when there is more than "
     "one of them. Answer in the language you are asked in. Use Markdown where it helps. "

@@ -3,7 +3,7 @@
 The parsing is gerbonara's (Apache-2.0): it reads RS-274X with its
 macros and polarities, and Excellon in every dialect a board house sees.
 The drawing is ours, in the colours KiCad's own SVG export uses, so an
-imported board sits in the PCB room looking like one Redline laid out -
+imported board sits in the PCB room looking like one Workbench laid out -
 front copper C83434, back 4D7FC4, mask openings D864FF / 02FFEE at 40 %,
 silkscreen F2EDA1, holes white, the edge D0D2CD - and the light theme's
 ink swap (main.LIGHT_INKS) applies to it unchanged.

@@ -11,7 +11,7 @@ import { when } from './llm-settings';
  *  order) and the Chat's web_read; its Search
  *  answers the Chat's web_search. One API key for both, kept on the server:
  *  only its last four characters come back. Under it: what the key has
- *  left, from Jina's own dashboard, and Redline's own count of its calls,
+ *  left, from Jina's own dashboard, and Workbench's own count of its calls,
  *  Reader's and Search's apart. */
 interface JinaSettings { set: boolean; hint: string | null; set_at?: string | null;
   check?: { valid: boolean | null; how: string; error?: string; empty?: boolean; at: string } | null }
@@ -71,7 +71,7 @@ export function foldKeep(key: string, v: boolean): void {
           <b>{{ a()?.balance ? fmt.count(a()!.balance!.total) : (st.set ? (a()?.error ? ('unknown' | t) : '…') : '–') }}</b>
           <small>@if (a()?.balance; as b) { {{ 'free trial' | t }} {{ fmt.count(b.trial ?? 0) }} · {{ 'paid' | t }} {{ fmt.count(b.regular ?? 0) }} }
                  @else { {{ a()?.error || ('Jina\\'s dashboard' | t) }} }</small></div>
-        <div class="st-tile" [title]="'the balance\\'s drop over the days Redline looked at it' | t"><span>{{ 'Used' | t }} · 14d</span>
+        <div class="st-tile" [title]="'the balance\\'s drop over the days Workbench looked at it' | t"><span>{{ 'Used' | t }} · 14d</span>
           <b>{{ spent() == null ? '–' : fmt.count(spent()!) }}</b><small>{{ 'tokens, by the balance' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="tone(u()?.reader?.success_rate)"><span>Reader · 14d</span>
           <b>{{ fmt.count(u()?.reader?.requests ?? 0) }}</b>

@@ -286,7 +286,7 @@ def test_an_uploaded_step_is_moved_into_the_board_frame_with_its_names(tmp_path)
 
 
 def test_a_connector_is_known_by_its_library_footprint_when_the_layout_names_it_by_number():
-    """A Redline layout names footprints by LCSC number (C5379909) and its
+    """A Workbench layout names footprints by LCSC number (C5379909) and its
     parts are all U<n>: the netlist's footprint name says it is a USB-C
     receptacle or a pin header."""
     info = {"box": [0, 0, 30, 20], "thickness": 1.6, "outline": [], "holes": [],

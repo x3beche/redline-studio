@@ -15,7 +15,7 @@ branches.
 
 ## What is in scope
 
-Redline is meant to run on one machine or a small private server, behind
+Workbench is meant to run on one machine or a small private server, behind
 a reverse proxy with TLS. Problems worth reporting include:
 
 - signing in, sessions, the admin panel and roles (`backend/auth.py`,

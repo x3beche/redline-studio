@@ -11,8 +11,8 @@
     { "key": "sourceSize", "label": "Source width", "type": "number", "unit": "px", "default": "512", "help": "For an SVG: its viewBox width (sets the render density)." },
     { "key": "shape", "label": "Logo shape", "type": "select", "default": "square",
       "options": [["square", "Square"], ["circle", "Round"], ["wide", "Wide (2:1)"], ["tall", "Tall (1:2)"]] },
-    { "key": "name", "label": "App name", "type": "text", "default": "Redline Tools" },
-    { "key": "shortName", "label": "Short name", "type": "text", "default": "Redline" },
+    { "key": "name", "label": "App name", "type": "text", "default": "Workbench Tools" },
+    { "key": "shortName", "label": "Short name", "type": "text", "default": "Workbench" },
     { "key": "background", "label": "Background colour", "type": "text", "default": "#ffffff", "help": "Fills maskable, Apple and iOS icons (they must be opaque)." },
     { "key": "theme", "label": "Theme colour", "type": "text", "default": "#1f4ed8" },
     { "key": "prefix", "label": "URL path of the icons", "type": "text", "default": "/" },
@@ -23,7 +23,7 @@
       "options": [["single", "One 1024 px (Xcode 14+)"], ["full", "Every size (older Xcode)"]] }
   ],
   "examples": [
-    { "title": "A PWA from an SVG logo", "input": { "source": "logo.svg", "sourceSize": "512", "shape": "square", "name": "Redline Tools", "shortName": "Redline", "background": "#ffffff", "theme": "#1f4ed8", "prefix": "/", "web": true, "android": false, "ios": false, "iosSet": "single" } },
+    { "title": "A PWA from an SVG logo", "input": { "source": "logo.svg", "sourceSize": "512", "shape": "square", "name": "Workbench Tools", "shortName": "Workbench", "background": "#ffffff", "theme": "#1f4ed8", "prefix": "/", "web": true, "android": false, "ios": false, "iosSet": "single" } },
     { "title": "Web, Android and iOS from a 1024 px round PNG", "input": { "source": "logo.png", "sourceSize": "1024", "shape": "circle", "name": "Field Logger", "shortName": "Logger", "background": "#0f151b", "theme": "#0f151b", "prefix": "/icons/", "web": true, "android": true, "ios": true, "iosSet": "single" } }
   ],
   "usage": "Give the source file name, its width in px, the logo shape (square, circle, wide, tall), app name, short name, background and theme colours as #hex, the URL prefix, and booleans web/android/ios (iosSet single or full). Returns a table of every file with its pixel size and the logo size inside it, and texts: HTML head tags, manifest.webmanifest, Android adaptive XML, iOS Contents.json and an ImageMagick 7 shell script. It does not read the image itself; run the script to make the files.",

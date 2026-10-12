@@ -303,7 +303,7 @@ export function page(root, ctx) {
         : 'The server has no model key configured, so Run is off. Scoring pasted answers still works.', j.available ? '' : 'warn');
     } catch (e) {
       server = { state: 'offline', models: [], def: '' };
-      setStatus('Running prompts needs the Redline app (this page is served without its /api). Editing, checks and scoring of pasted answers work here.', 'warn');
+      setStatus('Running prompts needs the Workbench app (this page is served without its /api). Editing, checks and scoring of pasted answers work here.', 'warn');
     }
     drawBar();
   }
@@ -335,7 +335,7 @@ export function page(root, ctx) {
     runCells(cells);
   }
   function runCells(cells) {
-    if (server.state !== 'ok') { setStatus(server.state === 'nokey' ? 'The server has no model key configured.' : 'Running prompts needs the Redline app.', 'warn'); return; }
+    if (server.state !== 'ok') { setStatus(server.state === 'nokey' ? 'The server has no model key configured.' : 'Running prompts needs the Workbench app.', 'warn'); return; }
     const fresh = cells.filter((q) => !queue.some((x) => x.v === q.v && x.c === q.c) && !running.has(cellKey(q)));
     if (!busyNow()) { total = 0; finished = 0; }
     stopped = false;
@@ -405,7 +405,7 @@ export function page(root, ctx) {
         if (e.status === 404 || e.status === 503) {
           running.delete(kk); finished++;
           server.state = e.status === 404 ? 'offline' : 'nokey';
-          stop(e.status === 404 ? 'Running prompts needs the Redline app.' : `The server cannot call a model: ${e.message}`);
+          stop(e.status === 404 ? 'Running prompts needs the Workbench app.' : `The server cannot call a model: ${e.message}`);
           return;
         }
         rec = { variant: v.id, case: k.id, error: `${e.status ? `HTTP ${e.status}: ` : ''}${e.message}`.slice(0, 300), hash: x.hash };

@@ -16,7 +16,7 @@ from . import core
 # The bot's own words. A key missing in a language falls back to English.
 WORDS = {
     "en": {
-        "open": "Open in Redline",
+        "open": "Open in Workbench",
         "asking": "Agent is asking",
         "own_words": "✍️ Reply in your own words",
         "send_picked": "Send ✓",
@@ -30,12 +30,12 @@ WORDS = {
         "type_answer": "Type your answer…",
         "thanks_answer": "✅ Answer sent: {a}",
         "already": "That question was already answered or withdrawn.",
-        "not_linked": "This chat is not linked to Redline. Open Settings → Telegram in Redline and press <b>Link my Telegram</b>.",
-        "too_many": "Too many wrong codes. Wait {m} minutes, then make a new code in Redline → Settings → Telegram.",
-        "bad_code": "That link code is unknown or older than 10 minutes. Make a new one in Redline → Settings → Telegram.",
-        "linked": "✅ Linked. This chat is now <b>{name}</b> in Redline ({ws}, {role}).\nYou will hear about agents' questions and applied notes here. /help lists what you can do.",
-        "stopped": "Unlinked. This chat is no longer connected to Redline. Link it again any time from Settings → Telegram.",
-        "no_access": "Your Redline account is disabled or no longer there, so the bot cannot act for you. Ask an admin, then link again.",
+        "not_linked": "This chat is not linked to Workbench. Open Settings → Telegram in Workbench and press <b>Link my Telegram</b>.",
+        "too_many": "Too many wrong codes. Wait {m} minutes, then make a new code in Workbench → Settings → Telegram.",
+        "bad_code": "That link code is unknown or older than 10 minutes. Make a new one in Workbench → Settings → Telegram.",
+        "linked": "✅ Linked. This chat is now <b>{name}</b> in Workbench ({ws}, {role}).\nYou will hear about agents' questions and applied notes here. /help lists what you can do.",
+        "stopped": "Unlinked. This chat is no longer connected to Workbench. Link it again any time from Settings → Telegram.",
+        "no_access": "Your Workbench account is disabled or no longer there, so the bot cannot act for you. Ask an admin, then link again.",
         "role_cant": "As {role} you cannot {what} - ask someone who is {who} or above.",
         "pick_target": "Which model or board is the note for?",
         "last_used": "↺ {t}",
@@ -64,7 +64,7 @@ WORDS = {
         "lang_set": "Questions will come in {lang}.",
         "lang_usage": "Use <code>/lang tr</code>, <code>/lang de</code> … or <code>/lang en</code> for the original English.",
         "help": (
-            "<b>Redline bot</b>\n"
+            "<b>Workbench bot</b>\n"
             "/note <i>text</i> - a draft note on a model or board (a photo with a caption works too)\n"
             "/queue - queue the last draft note you made here\n"
             "/ask <i>text</i> - write to the agent's thread in a room\n"
@@ -74,11 +74,11 @@ WORDS = {
             "/help - this list\n\n"
             "Anything else you send, I will ask whether it is a note or for the agent. "
             "When an agent asks a question, answer with the buttons, or reply in your own words."),
-        "test": "👋 <b>Test from Redline</b>\nThe bot can reach you. This is what notifications look like.",
+        "test": "👋 <b>Test from Workbench</b>\nThe bot can reach you. This is what notifications look like.",
         "photo_note": "Photo from Telegram",
     },
     "tr": {
-        "open": "Redline'da aç",
+        "open": "Workbench'te aç",
         "asking": "Ajan soruyor",
         "own_words": "✍️ Kendi sözlerinle yanıtla",
         "send_picked": "Gönder ✓",
@@ -92,12 +92,12 @@ WORDS = {
         "type_answer": "Yanıtını yaz…",
         "thanks_answer": "✅ Yanıt gönderildi: {a}",
         "already": "Bu soru zaten yanıtlanmış ya da geri çekilmiş.",
-        "not_linked": "Bu sohbet Redline'a bağlı değil. Redline'da Ayarlar → Telegram'ı aç ve <b>Telegram'ımı bağla</b>'ya bas.",
-        "too_many": "Çok fazla yanlış kod. {m} dakika bekle, sonra Redline → Ayarlar → Telegram'dan yeni kod al.",
-        "bad_code": "Bu bağlantı kodu bilinmiyor ya da 10 dakikadan eski. Redline → Ayarlar → Telegram'dan yenisini al.",
-        "linked": "✅ Bağlandı. Bu sohbet artık Redline'da <b>{name}</b> ({ws}, {role}).\nAjanların soruları ve uygulanan notlar buraya gelecek. /help yapabileceklerini listeler.",
-        "stopped": "Bağlantı kaldırıldı. Bu sohbet artık Redline'a bağlı değil. İstediğin zaman Ayarlar → Telegram'dan yeniden bağlayabilirsin.",
-        "no_access": "Redline hesabın devre dışı ya da artık yok, bot senin adına iş yapamaz. Bir yöneticiye sor, sonra yeniden bağla.",
+        "not_linked": "Bu sohbet Workbench'e bağlı değil. Workbench'te Ayarlar → Telegram'ı aç ve <b>Telegram'ımı bağla</b>'ya bas.",
+        "too_many": "Çok fazla yanlış kod. {m} dakika bekle, sonra Workbench → Ayarlar → Telegram'dan yeni kod al.",
+        "bad_code": "Bu bağlantı kodu bilinmiyor ya da 10 dakikadan eski. Workbench → Ayarlar → Telegram'dan yenisini al.",
+        "linked": "✅ Bağlandı. Bu sohbet artık Workbench'te <b>{name}</b> ({ws}, {role}).\nAjanların soruları ve uygulanan notlar buraya gelecek. /help yapabileceklerini listeler.",
+        "stopped": "Bağlantı kaldırıldı. Bu sohbet artık Workbench'e bağlı değil. İstediğin zaman Ayarlar → Telegram'dan yeniden bağlayabilirsin.",
+        "no_access": "Workbench hesabın devre dışı ya da artık yok, bot senin adına iş yapamaz. Bir yöneticiye sor, sonra yeniden bağla.",
         "role_cant": "{role} olarak {what} yapamazsın - {who} ya da üstü birine sor.",
         "pick_target": "Not hangi model ya da kart için?",
         "cancel": "✕ Vazgeç",
@@ -123,7 +123,7 @@ WORDS = {
         "status_idle": "Çalışan bir şey yok.",
         "status_recent": "<b>Az önce bitenler</b>",
         "lang_set": "Sorular {lang} gelecek.",
-        "test": "👋 <b>Redline'dan test</b>\nBot sana ulaşabiliyor. Bildirimler böyle görünür.",
+        "test": "👋 <b>Workbench'ten test</b>\nBot sana ulaşabiliyor. Bildirimler böyle görünür.",
         "photo_note": "Telegram'dan fotoğraf",
     },
 }

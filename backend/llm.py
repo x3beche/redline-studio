@@ -1468,7 +1468,7 @@ async def cc_loop(raw_getter) -> None:
 # have been tracking.
 #
 # Nothing here says which model spent what - Command Code does not tell.
-# What Redline itself asked of Command Code is in its own call log
+# What Workbench itself asked of Command Code is in its own call log
 # (llm_calls), by model and by job; the rest of the account's requests and
 # tokens are other clients' (the Claude Code CLI, agents).
 
@@ -1605,7 +1605,7 @@ async def cc_days_from_points(raw, start_ms: int, now_ms: int) -> tuple[list[dic
 
 
 async def redline_share(raw, since_ms: int) -> dict:
-    """What Redline itself asked of Command Code since then, from its own
+    """What Workbench itself asked of Command Code since then, from its own
     call log: requests and tokens, by model and by job."""
     from datetime import datetime, timezone
 
@@ -1631,7 +1631,7 @@ async def redline_share(raw, since_ms: int) -> dict:
 
 async def cc_analysis(db, *, force: bool = False, now: float | None = None) -> dict:
     """The billing period so far: spend per day, the last 7 days' burn rate
-    and where it leads, the weekly window, and Redline's share. Every figure
+    and where it leads, the weekly window, and Workbench's share. Every figure
     says where it is from."""
     k = key("commandcode")
     if not k:
@@ -1689,7 +1689,7 @@ async def cc_analysis(db, *, force: bool = False, now: float | None = None) -> d
     try:
         mine = await redline_share(raw, int(start))
     except Exception as exc:                           # noqa: BLE001
-        log.warning("Redline's Command Code calls not read: %s", type(exc).__name__)
+        log.warning("Workbench's Command Code calls not read: %s", type(exc).__name__)
         mine = None
     us = acct.get("usage") or {}
     others = None
@@ -1792,7 +1792,7 @@ async def or_account(*, force: bool = False, now: float | None = None) -> dict:
 
 
 async def own_spend(raw, provider: str, now: float | None = None) -> dict:
-    """What Redline itself asked of a provider, from its own call log: the
+    """What Workbench itself asked of a provider, from its own call log: the
     last 30 days and this calendar month - calls, tokens, and the money
     when the provider priced the calls."""
     from datetime import datetime, timedelta, timezone
@@ -1854,7 +1854,7 @@ REGISTRY = {
                    "about": "hundreds of models, paid per call; every call is priced"},
     # No account API for either with an ordinary key (Anthropic's usage
     # reports want an admin key; OpenCode shows its limits in the console
-    # only): their cards show Redline's own call log (own_spend).
+    # only): their cards show Workbench's own call log (own_spend).
     "claude": {"account": None, "analysis": False,
                "about": "Anthropic's own API: Opus, Sonnet, Haiku and Fable, paid per token; priced here at list rates"},
     "opencode-go": {"account": None, "analysis": False,

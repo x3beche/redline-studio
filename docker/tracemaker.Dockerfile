@@ -1,5 +1,5 @@
 # TraceMaker, the board router (https://github.com/DingoOz/TraceMaker,
-# GPL-3.0-or-later): run as a program of its own, never linked into Redline.
+# GPL-3.0-or-later): run as a program of its own, never linked into Workbench.
 #
 #   docker build -f docker/tracemaker.Dockerfile -t redline-tracemaker .
 #
@@ -27,6 +27,6 @@ COPY --from=build /src/build/cpu-only/src/app/tracemaker /usr/local/bin/tracemak
 COPY --from=build /src/build/cpu-only/src/place/tracemaker-place /usr/local/bin/tracemaker-place
 COPY --from=build /src/LICENSE /src/NOTICE /usr/share/doc/tracemaker/
 # The relay: runs the router and writes what its viewer stream says into
-# /work/live.jsonl, for Redline's own board view to draw while it routes.
+# /work/live.jsonl, for Workbench's own board view to draw while it routes.
 COPY docker/tm_relay.py /opt/tm_relay.py
 ENTRYPOINT ["tracemaker"]

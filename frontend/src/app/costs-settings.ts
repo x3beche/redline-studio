@@ -9,7 +9,7 @@ import {
   convert, currencies, currencyName, fromUsd, money, moneyIn, setOverride, toUsd,
 } from './money';
 
-/** Settings > Costs & currency: what Redline costs to run, and the currency
+/** Settings > Costs & currency: what Workbench costs to run, and the currency
  *  money is shown in (money.ts).
  *
  *  The subscriptions, the price of a kWh and of a GB of proxy traffic and
@@ -58,7 +58,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
   styleUrl: './settings.css',
   template: `
 <div class="st-page">
-  <p class="st-lead">{{ 'What Redline costs to run - the subscriptions, the electricity, the proxy traffic - each typed in its own currency. Analytics adds them to the work of each range, and every amount in the app is shown in the display currency.' | t }}</p>
+  <p class="st-lead">{{ 'What Workbench costs to run - the subscriptions, the electricity, the proxy traffic - each typed in its own currency. Analytics adds them to the work of each range, and every amount in the app is shown in the display currency.' | t }}</p>
   @if (!canEdit()) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
   @if (m.costsError(); as e) {
     <div class="st-banner">{{ (e === 'not-yet' ? 'The server does not keep costs yet - the figures here are empty until it does.' : 'The costs did not load') | t }}@if (e !== 'not-yet') { ({{ e }}) }</div>
@@ -386,7 +386,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
     @if (others().length) {
       <ng-container *ngTemplateOutlet="table; context: { s: 'other', rows: others() }" />
     } @else {
-      <div class="st-card-body"><p class="st-hint">{{ 'Nothing else yet - add what else is paid regularly to run Redline, and Analytics counts it in each range.' | t }}</p></div>
+      <div class="st-card-body"><p class="st-hint">{{ 'Nothing else yet - add what else is paid regularly to run Workbench, and Analytics counts it in each range.' | t }}</p></div>
     }
   </div>
 

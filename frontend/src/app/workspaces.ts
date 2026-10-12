@@ -1,6 +1,6 @@
 /** The four sides of the application, and which one is on screen.
  *
- *  Redline started as one room - a parametric model, a drawing over it, a
+ *  Workbench started as one room - a parametric model, a drawing over it, a
  *  note. The loop under that room is not about geometry: source in a
  *  database, built into something you can look at, marked up, picked up by
  *  an agent, rebuilt, checked against a measurement, photographed from the

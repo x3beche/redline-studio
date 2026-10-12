@@ -179,7 +179,7 @@ def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: st
         x += w
     pdf.set_font("Helvetica", "", 7)
     notes = [f"Overall {sx:.1f} x {sy:.1f} x {sz:.1f} mm.  General tolerances ISO 2768-m unless stated.",
-             f"Model {ident}  ·  source {sha[:12] or '-'}  ·  views projected from the model (Redline)."]
+             f"Model {ident}  ·  source {sha[:12] or '-'}  ·  views projected from the model (Workbench)."]
     for i, line in enumerate(notes):
         pdf.text(MARGIN + 2, y + 25 + i * 5, line)
     pdf.output(out)

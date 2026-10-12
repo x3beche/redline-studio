@@ -1,4 +1,4 @@
-# Users in Redline - research and work plan
+# Users in Workbench - research and work plan
 
 > **Superseded (2026-10-07).** Shared workspaces, members and invitations
 > were removed. Accounts now have a system role (owner, admin, user), the
@@ -11,7 +11,7 @@ below are recorded in section 6.
 
 ## 1. Where things stand
 
-Redline is a single-person tool today, and that assumption runs through all of it:
+Workbench is a single-person tool today, and that assumption runs through all of it:
 
 | area | today | why it matters for users |
 |---|---|---|
@@ -316,7 +316,7 @@ workspace B that A has a document with that id; room-limited tokens (the
   yourself out. Taking someone out ends their sessions at once in this
   server (others within a minute), and they can no longer sign in.
 - **Invitations**: an address and a role give a link, shown once, good for
-  a week, one per address; Redline sends no email. The link opens a card
+  a week, one per address; Workbench sends no email. The link opens a card
   saying who invited you, to what, as which role; a new address chooses a
   name and password, an existing account signs in with its password. The
   link works once. Owners are not invited - they are made from the list.
@@ -343,7 +343,7 @@ out, whose session ended and whose sign-in was then refused. A reviewer
 token read and was refused a write and a queue; an admin token was
 refused. In the browser: the owner's menu with Members and Agent tokens,
 an invitation made and its link shown, the members with their roles; the
-link's card ("Olive Owner invited you to Redline as reviewer ..."), joining,
+link's card ("Olive Owner invited you to Workbench as reviewer ..."), joining,
 the link gone from the address bar, the newcomer's menu without Members
 or tokens, and the note's queue, archive and delete buttons disabled with
 their reasons. Not seen in the browser: the refusal banner (the buttons

@@ -220,8 +220,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       </div>
     }
 
-    <!-- COSTS: what running Redline cost over the range (Settings > Costs & currency) -->
-    <ng-container *ngTemplateOutlet="head; context: { id: 'running', title: 'Costs', sub: 'what running Redline cost over the range, in ' + cash.currency() }" />
+    <!-- COSTS: what running Workbench cost over the range (Settings > Costs & currency) -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'running', title: 'Costs', sub: 'what running Workbench cost over the range, in ' + cash.currency() }" />
     @if (open('running')) {
       @if (d.costs; as c) {
         <div class="tcv-dash-grid">

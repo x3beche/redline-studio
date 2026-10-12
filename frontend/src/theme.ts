@@ -14,7 +14,7 @@ export const LIGHT_THEMES: ReadonlySet<string> = new Set(['light', 'github-light
 
 /** What each is called where one is chosen. */
 export const THEME_NAMES: Record<Theme, string> = {
-  default: 'Redline dark', light: 'Light', oled: 'OLED black', 'vercel-dark': 'Vercel Dark', 'spartan-dark': 'Spartan Dark', 'github-dark': 'GitHub Dark',
+  default: 'Workbench dark', light: 'Light', oled: 'OLED black', 'vercel-dark': 'Vercel Dark', 'spartan-dark': 'Spartan Dark', 'github-dark': 'GitHub Dark',
   'atom-one-dark': 'Atom One Dark', 'one-dark-pro': 'One Dark Pro', 'vscode-dark': 'VS Code Dark',
   'dracula': 'Dracula',
   'tokyo-night': 'Tokyo Night',

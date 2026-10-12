@@ -51,7 +51,7 @@ img { display: block; max-width: 100%; }
 .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 2px; }
 .bar i { display: block; height: 100%; }
 
-/* hero: what Redline is, then the app itself, whole, in the first screen */
+/* hero: what Workbench is, then the app itself, whole, in the first screen */
 .hero .top { margin-top: 24px; align-items: end; }
 .hero h1 { grid-column: 1 / 7; font-size: clamp(64px, 7vw, 104px); line-height: .9; letter-spacing: -.055em; margin: 0 0 0 -.04em; }
 .hero .top p { grid-column: 7 / 13; font-size: 20px; line-height: 1.3; letter-spacing: -.01em; padding-bottom: 6px; }

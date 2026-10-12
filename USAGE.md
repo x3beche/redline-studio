@@ -774,7 +774,7 @@ The guide on the page has six steps, and each one shows whether it is done:
 3. **Name and picture.** The name (up to 64 characters), description (what
    people read before they press Start, up to 512) and short description (the
    profile's "about" line, up to 120) are set here. They come filled with
-   Redline's own defaults, in English and Turkish, and each field has
+   Workbench's own defaults, in English and Turkish, and each field has
    **reset to default**. The default texts are what everyone sees. Any other
    language (every ISO 639-1 code, from a search box: Deutsch · de, 日本語 · ja
    ...) can have texts of its own, shown to people whose Telegram uses that
@@ -783,11 +783,11 @@ The guide on the page has six steps, and each one shows whether it is done:
    saved. Each field shows whether it is saved on Telegram or only changed
    here, and saving sends only what changed. The picture is any image cut to
    a centred square and sent as a JPG, or **Use the default picture** for
-   Redline's mark. The command menu is set automatically.
+   Workbench's mark. The command menu is set automatically.
 4. **How updates arrive.** Choose a **webhook** (recommended): Telegram calls
    `https://<your address>/api/telegram/webhook`, and every call carries a
-   secret header that Redline checks. A request without it gets 401, and one
-   with the wrong secret gets 403. Or choose **long polling**: Redline asks
+   secret header that Workbench checks. A request without it gets 401, and one
+   with the wrong secret gets 403. Or choose **long polling**: Workbench asks
    Telegram itself, with no public address, from one server only. The tile
    shows getWebhookInfo's status.
 5. **Link people**, as above.
@@ -1072,7 +1072,7 @@ message in its thread.
 **Preferences** - your name's menu at the top right (or ⚙ there when
 nobody signs in), Ctrl+K, or **?** for the shortcuts page:
 
-- **Theme**: twenty-six, dark and light - Redline dark, Light, OLED black,
+- **Theme**: twenty-six, dark and light - Workbench dark, Light, OLED black,
   GitHub Dark and Light, Atom One Dark, One Dark Pro, VS Code Dark and
   Light, Dracula, Tokyo Night, Catppuccin Mocha and Latte, Nord, Monokai,
   Gruvbox Dark and Light, Solarized Dark and Light, Material Palenight,
@@ -1106,7 +1106,7 @@ board is shown like any other, without Build and Code.
 
 **Converting an imported board to code.** *Convert to code* (the
 schematic-file button, on an imported board) writes the board as atopile
-so it can be changed and rebuilt like one Redline made. The same thing
+so it can be changed and rebuilt like one Workbench made. The same thing
 from a terminal: `revisions.py board convert <id>`.
 
 - **Nets and designators are the import's.** Every net joining two pads
@@ -1136,7 +1136,7 @@ from a terminal: `revisions.py board convert <id>`.
   `imported_graph`, `imported_layout`, `imported_model3d` and so on, with
   the uploaded files (`sources.zip`) and the import's account.
 
-**What a note changed.** When an agent works a note, Redline keeps every
+**What a note changed.** When an agent works a note, Workbench keeps every
 source in the project as it was when the agent started and as it was when
 it finished. The note's card then carries a chip with the lines added and
 removed (`+12 −3`); it opens the changed files side by side in VS Code's
@@ -1172,7 +1172,7 @@ everywhere else.
 
 **Members and roles.** Owners and admins have **Members** in the same
 menu. Invite someone with their email address and a role; you get a link
-to send them (Redline sends no email), good for a week and for one use.
+to send them (Workbench sends no email), good for a week and for one use.
 The roles: *owner* (everything), *admin* (people, settings and all
 below), *editor* (designs, queueing, builds, deleting, agent tokens),
 *reviewer* (notes and drafts, chat, answers - not queue, build or

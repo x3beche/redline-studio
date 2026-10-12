@@ -382,17 +382,17 @@ export class CustomThemesPanel implements OnDestroy {
     let j: Record<string, unknown>;
     try { j = JSON.parse(txt); } catch { this.importErr.set(t('That is not JSON.')); return; }
     if (!j || typeof j !== 'object' || typeof j['vars'] !== 'object' || !j['vars']) {
-      this.importErr.set(t('That is not a Redline theme.')); return;
+      this.importErr.set(t('That is not a Workbench theme.')); return;
     }
     const vars: Record<string, string> = {};
     const skipped: string[] = [];
     for (const [k, v] of Object.entries(j['vars'] as Record<string, unknown>)) {
-      // A token Redline knows is one the stylesheet defines on the root.
+      // A token Workbench knows is one the stylesheet defines on the root.
       if (/^--[a-z0-9-]+$/.test(k) && typeof v === 'string' && parseColour(v)
           && getComputedStyle(document.documentElement).getPropertyValue(k).trim() !== '') vars[k] = v.trim();
       else skipped.push(k);
     }
-    if (!Object.keys(vars).length) { this.importErr.set(t('That theme sets no colour Redline knows.')); return; }
+    if (!Object.keys(vars).length) { this.importErr.set(t('That theme sets no colour Workbench knows.')); return; }
     const base = (THEMES as readonly string[]).includes(String(j['base'])) ? j['base'] as Theme : 'default';
     const name = (typeof j['name'] === 'string' && j['name'].trim() ? j['name'].trim() : t('Imported theme')).slice(0, 40);
     this.importing.set(false);

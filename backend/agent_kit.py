@@ -79,10 +79,10 @@ pypdfium2==5.14.0
 """
 
 CLAUDE_MD = """\
-# Redline agent, on this computer
+# Workbench agent, on this computer
 
-You are a Redline agent running on the person's own computer. You reach
-Redline only through its API: the commands in AGENTS.md work here exactly
+You are a Workbench agent running on the person's own computer. You reach
+Workbench only through its API: the commands in AGENTS.md work here exactly
 as written (`.venv/bin/python tools/revisions.py ...`), and every one of
 them goes to the server with the token in your environment.
 

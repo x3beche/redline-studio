@@ -291,7 +291,7 @@ class FakeBot:
         if self.token != TOKEN:
             from telegram.error import InvalidToken
             raise InvalidToken("refused")
-        return {"id": 123456789, "is_bot": True, "username": "redline_test_bot", "first_name": "Redline"}
+        return {"id": 123456789, "is_bot": True, "username": "redline_test_bot", "first_name": "Workbench"}
 
     async def send_message(self, **kw):
         self._rec("send_message", kw)
@@ -997,15 +997,15 @@ def test_wrong_codes_are_limited_per_chat(env):
 
 def test_the_profile_is_read_per_language_and_only_changes_are_sent(env):
     configured(env.db)
-    env.bot.__dict__["prof"] = {"": {"name": "Redline", "description": "old"}, "tr": {"name": "Redline TR"}}
+    env.bot.__dict__["prof"] = {"": {"name": "Workbench", "description": "old"}, "tr": {"name": "Workbench TR"}}
     got = run(api.get_profile(extra="tr"))
-    assert got["langs"]["default"]["name"] == "Redline" and got["langs"]["tr"]["name"] == "Redline TR"
+    assert got["langs"]["default"]["name"] == "Workbench" and got["langs"]["tr"]["name"] == "Workbench TR"
     assert got["langs"]["default"]["commands"][0]["command"] == "note"
     out = run(api.put_profile(api.ProfileIn(lang="tr", description="Türkçe açıklama")))
     assert out["results"] == {"description": {"ok": True}}
     assert [n for n, _ in env.bot.calls if n.startswith("set_my_")] == ["set_my_description"]
     assert ("set_my_description", {"v": "Türkçe açıklama", "lang": "tr"}) in env.bot.calls
-    out = run(api.put_profile(api.ProfileIn(name="Redline", description="a bad one", short_description="x" * 121)))
+    out = run(api.put_profile(api.ProfileIn(name="Workbench", description="a bad one", short_description="x" * 121)))
     r = out["results"]
     assert r["name"]["ok"] and not r["description"]["ok"] and "120" in r["short_description"]["error"]
     assert env.db[core.SETTINGS].docs[core.DOC_ID]["profile_state"]["name"] is True
@@ -1044,7 +1044,7 @@ def test_the_profile_photo_is_cut_square_and_sent_as_jpg(env):
 def test_the_defaults_fit_telegrams_limits():
     from backend.tgbot import profile
     for lang, d in profile.DEFAULTS.items():
-        assert d["name"] == "Redline"
+        assert d["name"] == "Workbench"
         for f, limit in profile.LIMITS.items():
             assert 0 < len(d[f]) <= limit, (lang, f, len(d[f]))
     from PIL import Image
@@ -1100,7 +1100,7 @@ def test_translate_from_default_uses_the_reading_job(env, monkeypatch):
     monkeypatch.setattr(reading, "_check_key", lambda: None)
     src = profile.DEFAULTS["default"]
     out = run(api.translate_profile(api.TranslateIn(lang="de", **src)))
-    assert out["fields"]["name"] == "Redline"                                       # a name stays
+    assert out["fields"]["name"] == "Workbench"                                       # a name stays
     assert out["fields"]["short_description"].startswith("Übersetzt: ")
     assert len(out["fields"]["description"]) <= profile.LIMITS["description"] and out["cut"]["description"]
     assert asked == [("German", "reading:bot-profile")] * 2 and out["model"] == "Qwen/Qwen3.8-Flash"

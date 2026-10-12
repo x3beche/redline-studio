@@ -65,7 +65,7 @@ through the workspace, and the list of them when the name fits nothing).
   (bom_cost.py, offers on disk only), `firmware_build` (the firmware's
   build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
 - `pdf_make` (change, on; package `files`): a document the model writes in
-  Markdown, printed as a PDF in Redline's white theme (backend/pdfdoc.py:
+  Markdown, printed as a PDF in Workbench's white theme (backend/pdfdoc.py:
   headless Chromium in its container, no network) and kept in Files >
   Documents; its description is the writing guide. The step carries the
   file; the Chat opens it, and any `/api/files/<id>` link, in its viewer

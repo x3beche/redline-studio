@@ -13,7 +13,7 @@ Chat's `web_read` tool reads one page with it.
 Search (https://s.jina.ai/search?q=...) is a web search: the top results'
 titles, addresses and snippets. The Chat's `web_search` tool uses it.
 
-Both take the same API key, which is Redline's, not a person's: machine-wide
+Both take the same API key, which is Workbench's, not a person's: machine-wide
 like the LLM keys (backend/llm.py), kept in `server_settings`, changed only
 by the owner or an admin, and never sent back to a page - only its last
 four characters. It goes to Jina in the Authorization header (and to Jina's
@@ -539,7 +539,7 @@ async def account(refresh: bool = False) -> dict:
 
 @router.get("/usage")
 async def usage(days: int = 14) -> dict:
-    """Redline's own count of its Jina calls - Reader's and Search's apart,
+    """Workbench's own count of its Jina calls - Reader's and Search's apart,
     by day - and the latest of them."""
     from . import lcsc
     days = max(1, min(int(days), 90))

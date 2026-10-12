@@ -197,7 +197,7 @@ const MIN_PASSWORD = 10;
           </div>
           <label class="um-check"><input type="checkbox" [checked]="nForce()" (change)="nForce.set($any($event.target).checked)">
             {{ 'Must change the password at first sign-in' | t }}</label>
-          <p class="st-hint">{{ 'Redline sends no email: pass the address and the password on yourself.' | t }}</p>
+          <p class="st-hint">{{ 'Workbench sends no email: pass the address and the password on yourself.' | t }}</p>
           <div class="pf-foot">
             @if (err(); as e) { <span class="st-err">{{ e }}</span> }
             @else if (nPw() && nPw().length < 10) { <span class="st-hint">{{ 'At least 10 characters.' | t }}</span> }

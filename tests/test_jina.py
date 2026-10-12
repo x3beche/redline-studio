@@ -2,7 +2,7 @@
 whole, the balance read from Jina's dashboard, Reader as a way for the
 Product Catalog's crawler to read a page (the "jina" route of its order,
 backend/netroutes.py), Search and Reader as the Chat's web_search and web_read,
-and Redline's own count of every call.
+and Workbench's own count of every call.
 
 No real Jina is reached and no real key is used: the HTTP goes to fake
 transports, the names to the crawler tests' fake resolver."""

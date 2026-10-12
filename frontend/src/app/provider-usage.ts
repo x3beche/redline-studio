@@ -10,7 +10,7 @@ export { OwnUsage } from './cc-usage';
  *  settings (llm-settings.ts draws the card and its header line): a few
  *  meters, a row of tiles, the period's spend per day and who used it -
  *  everything shown, nothing folded. Every figure says whose it is - the provider's own, or
- *  Redline's call log.
+ *  Workbench's call log.
  *
  *  The figures live in root services (CcUsage in cc-usage.ts, CcPeriod and
  *  OrUsage here) so the card's header line can show them too. */
@@ -143,12 +143,12 @@ export class PvMeters {
             <p class="pv-src">{{ daysNote(a) }}</p>
           </section>
         }
-        <!-- Only Redline's own calls: what else uses the same Command Code account is not this app's. -->
-        <section class="st-chart c4"><h4>{{ 'Redline\\'s requests this period' | t }}<em>{{ count(a.redline?.requests ?? 0) }}</em></h4>
+        <!-- Only Workbench's own calls: what else uses the same Command Code account is not this app's. -->
+        <section class="st-chart c4"><h4>{{ 'Workbench\\'s requests this period' | t }}<em>{{ count(a.redline?.requests ?? 0) }}</em></h4>
           <app-bar-list [rows]="shareRows(a)" [f]="count" />
         </section>
         @if (a.redline; as r) {
-          <section class="st-chart"><h4>{{ 'Redline\\'s use, by job' | t }}</h4>
+          <section class="st-chart"><h4>{{ 'Workbench\\'s use, by job' | t }}</h4>
             <div class="st-table-wrap"><table class="st-table">
               <thead><tr><th></th><th class="r">{{ 'requests' | t }}</th><th class="r">{{ 'tokens in' | t }}</th><th class="r">{{ 'tokens out' | t }}</th></tr></thead>
               <tbody>
@@ -156,11 +156,11 @@ export class PvMeters {
                   <tr><td>{{ j.name | t }}</td><td class="r mono">{{ count(j.requests) }}</td>
                     <td class="r mono">{{ count(j.tokens_in) }}</td><td class="r mono">{{ count(j.tokens_out) }}</td></tr>
                 }
-                <tr><td><b>{{ 'All of Redline' | t }}</b></td><td class="r mono">{{ count(r.requests) }}</td>
+                <tr><td><b>{{ 'All of Workbench' | t }}</b></td><td class="r mono">{{ count(r.requests) }}</td>
                   <td class="r mono">{{ count(r.tokens_in) }}</td><td class="r mono">{{ count(r.tokens_out) }}</td></tr>
               </tbody>
             </table></div>
-            <p class="pv-src">{{ 'Redline\\'s own call log, by job. Other programs using the same Command Code account are left out.' | t }}</p>
+            <p class="pv-src">{{ 'Workbench\\'s own call log, by job. Other programs using the same Command Code account are left out.' | t }}</p>
           </section>
         }
       </div>
@@ -205,9 +205,9 @@ export class CcCompact {
     const out: { label: string; value: string; sub: string; tone?: string | null; title?: string }[] = [
       { label: 'Spent this period', value: num(u?.credits), sub: t('credits, as Command Code reports') },
       { label: 'Left', value: num(d?.credits?.monthly_left), sub: t('monthly credits'), tone: d?.credits?.below_threshold ? 'warn' : null },
-      // Redline's own calls only: other programs on the same account are not this app's (the meters and credits are the account's).
-      { label: 'Redline\'s requests', value: count(a?.redline?.requests ?? null), sub: t('this period') },
-      { label: 'Redline\'s tokens in', value: count(a?.redline?.tokens_in ?? null), sub: `${t('out')} ${count(a?.redline?.tokens_out ?? null)}` },
+      // Workbench's own calls only: other programs on the same account are not this app's (the meters and credits are the account's).
+      { label: 'Workbench\'s requests', value: count(a?.redline?.requests ?? null), sub: t('this period') },
+      { label: 'Workbench\'s tokens in', value: count(a?.redline?.tokens_in ?? null), sub: `${t('out')} ${count(a?.redline?.tokens_out ?? null)}` },
     ];
     if (pr) {
       const end = a?.period?.end;
@@ -229,7 +229,7 @@ export class CcCompact {
   jobsText(r: NonNullable<CcAnalysis['redline']>) { return r.by_job.map(j => `${t(j.name)}: ${j.requests}`).join('\n'); }
   daysNote(a: CcAnalysis): string {
     const src = a.days_source === 'command-code' ? t('Command Code\'s own totals, a day at a time (Istanbul days); today so far.')
-      : a.days_source === 'snapshots' ? t('From Redline\'s own readings of the account - tracked since') + ' ' + day(a.tracked_since)
+      : a.days_source === 'snapshots' ? t('From Workbench\'s own readings of the account - tracked since') + ' ' + day(a.tracked_since)
       : t('Command Code shared no day-by-day figures.');
     return src;
   }
@@ -239,7 +239,7 @@ export class CcCompact {
   }
 }
 
-/** OpenRouter, inside its card: credits and the key as meters, a row of tiles, Redline's calls by model. */
+/** OpenRouter, inside its card: credits and the key as meters, a row of tiles, Workbench's calls by model. */
 @Component({
   selector: 'app-or-compact',
   imports: [T, PvMeters, BarList],
@@ -255,10 +255,10 @@ export class CcCompact {
         <div class="st-tile" [attr.data-tone]="x.tone ?? null"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
       }
     </div>
-    <section class="st-chart"><h4>{{ 'Redline\\'s calls by model, 30 days' | t }}<em>{{ money(o.data()?.redline?.days30?.cost_usd) }}</em></h4>
+    <section class="st-chart"><h4>{{ 'Workbench\\'s calls by model, 30 days' | t }}<em>{{ money(o.data()?.redline?.days30?.cost_usd) }}</em></h4>
       @if (modelRows().length) { <app-bar-list [rows]="modelRows()" [f]="money" /> }
-      @else { <p class="pv-src">{{ 'No calls by Redline in 30 days.' | t }}</p> }
-      <p class="pv-src">{{ 'Credits and the key: as OpenRouter reports (GET /key, /credits). Redline: its own call log - OpenRouter prices every call.' | t }}</p>
+      @else { <p class="pv-src">{{ 'No calls by Workbench in 30 days.' | t }}</p> }
+      <p class="pv-src">{{ 'Credits and the key: as OpenRouter reports (GET /key, /credits). Workbench: its own call log - OpenRouter prices every call.' | t }}</p>
     </section>
   }
 } @else if (o.err()) {
@@ -298,8 +298,8 @@ export class OrCompact {
       out.push({ label: 'Key, this month', value: money(k.usage_monthly), sub: `${money(k.usage_weekly)} ${t('this week')}` });
     }
     if (r) {
-      out.push({ label: 'Redline, this month', value: money(r.month.cost_usd), sub: `${r.month.calls} ${t('calls')} · ${t('its own call log')}` });
-      out.push({ label: 'Redline, 30 days', value: money(r.days30.cost_usd), sub: `${r.days30.calls} ${t('calls')} · ${count(r.days30.input + r.days30.output)} ${t('tokens')}` });
+      out.push({ label: 'Workbench, this month', value: money(r.month.cost_usd), sub: `${r.month.calls} ${t('calls')} · ${t('its own call log')}` });
+      out.push({ label: 'Workbench, 30 days', value: money(r.days30.cost_usd), sub: `${r.days30.calls} ${t('calls')} · ${count(r.days30.input + r.days30.output)} ${t('tokens')}` });
     }
     if (rl) out.push({ label: 'Rate limit', value: rl.requests == null || rl.requests < 0 ? t('none') : String(rl.requests),
                        sub: `${t('per')} ${rl.interval || '–'}`, tone: 'dim' });
@@ -310,17 +310,17 @@ export class OrCompact {
 }
 
 
-// ---------------- Claude API, OpenCode Go: Redline's own log ----------------
+// ---------------- Claude API, OpenCode Go: Workbench's own log ----------------
 
 /** What each of these providers says about itself, and where to read the rest. */
 const OWN_NOTES: Record<string, { line: string; link?: { href: string; label: string } }> = {
-  claude: { line: 'Anthropic shares no usage for an ordinary API key (its usage reports need an admin key). Redline: its own call log, priced at Anthropic\'s list rates.',
+  claude: { line: 'Anthropic shares no usage for an ordinary API key (its usage reports need an admin key). Workbench: its own call log, priced at Anthropic\'s list rates.',
             link: { href: 'https://console.anthropic.com/usage', label: 'Usage in the Claude Console' } },
-  'opencode-go': { line: 'OpenCode shares no usage through its API. The Go plan\'s limits - 5 hours 20%, a week 50%, a month 100% of the monthly allowance - are in the OpenCode console. Redline: its own call log, in tokens.',
+  'opencode-go': { line: 'OpenCode shares no usage through its API. The Go plan\'s limits - 5 hours 20%, a week 50%, a month 100% of the monthly allowance - are in the OpenCode console. Workbench: its own call log, in tokens.',
                    link: { href: 'https://opencode.ai/auth', label: 'Usage in the OpenCode console' } },
 };
 
-/** The Claude API or OpenCode Go, inside its card: Redline's own calls - a row of tiles and the calls by model. */
+/** The Claude API or OpenCode Go, inside its card: Workbench's own calls - a row of tiles and the calls by model. */
 @Component({
   selector: 'app-own-compact',
   imports: [T, BarList],
@@ -332,9 +332,9 @@ const OWN_NOTES: Record<string, { line: string; link?: { href: string; label: st
       <div class="st-tile"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
     }
   </div>
-  <section class="st-chart"><h4>{{ 'Redline\\'s calls by model, 30 days' | t }}<em>{{ priced() ? money(d.redline?.days30?.cost_usd) : count(d.redline?.days30?.calls) }}</em></h4>
+  <section class="st-chart"><h4>{{ 'Workbench\\'s calls by model, 30 days' | t }}<em>{{ priced() ? money(d.redline?.days30?.cost_usd) : count(d.redline?.days30?.calls) }}</em></h4>
     @if (modelRows().length) { <app-bar-list [rows]="modelRows()" [f]="priced() ? money : count" /> }
-    @else { <p class="pv-src">{{ 'No calls by Redline in 30 days.' | t }}</p> }
+    @else { <p class="pv-src">{{ 'No calls by Workbench in 30 days.' | t }}</p> }
     @if (note(); as n) {
       <p class="pv-src">{{ n.line | t }}@if (n.link; as l) { <a class="st-link" [href]="l.href" target="_blank" rel="noopener">{{ l.label | t }} ↗</a> }</p>
     }
@@ -359,9 +359,9 @@ export class OwnCompact implements OnInit, OnDestroy {
     if (!r) return [];
     const tok = (b: { input: number; output: number }) => `${count(b.input + b.output)} ${t('tokens')}`;
     return [
-      { label: 'Redline, this month', value: this.priced() ? money(r.month.cost_usd) : count(r.month.calls),
+      { label: 'Workbench, this month', value: this.priced() ? money(r.month.cost_usd) : count(r.month.calls),
         sub: this.priced() ? `${r.month.calls} ${t('calls')} · ${tok(r.month)}` : `${t('calls')} · ${tok(r.month)}` },
-      { label: 'Redline, 30 days', value: this.priced() ? money(r.days30.cost_usd) : count(r.days30.calls),
+      { label: 'Workbench, 30 days', value: this.priced() ? money(r.days30.cost_usd) : count(r.days30.calls),
         sub: this.priced() ? `${r.days30.calls} ${t('calls')} · ${tok(r.days30)}` : `${t('calls')} · ${tok(r.days30)}` },
       { label: 'Input tokens', value: count(r.days30.input), sub: t('30 days') },
       { label: 'Output tokens', value: count(r.days30.output), sub: t('30 days') },

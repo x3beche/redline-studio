@@ -11,7 +11,7 @@ Runs inside the TraceMaker container (docker/tracemaker.Dockerfile):
 TraceMaker streams its routing to a browser viewer of its own over a
 WebSocket (docs/13-viewer-protocol.md: JSON messages - the board, tracks
 and vias added and removed, the unrouted connections, the paths it is
-trying, failures, progress). Redline draws the routing in its own board
+trying, failures, progress). Workbench draws the routing in its own board
 view instead, so this listens to that stream on the container's loopback
 and writes it to `live`, one JSON object a line, for the API to hand the
 page (backend/routelive.py).

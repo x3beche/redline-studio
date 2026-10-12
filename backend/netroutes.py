@@ -1,4 +1,4 @@
-"""The order in which Redline's outside lookups try their ways out
+"""The order in which Workbench's outside lookups try their ways out
 (Settings > Proxy & Data > Route order).
 
 A route is one way out:

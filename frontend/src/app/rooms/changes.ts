@@ -54,7 +54,7 @@ type PicMode = 'side' | 'slider' | 'diff';
         }
         @if (detail(); as d) {
           @if (!d.recorded) {
-            <p class="tcv-code-tree-empty">This note was worked before Redline kept what a note changes - the pictures
+            <p class="tcv-code-tree-empty">This note was worked before Workbench kept what a note changes - the pictures
               are all there is.</p>
           } @else if (!d.files.length) {
             <p class="tcv-code-tree-empty">No source changed.</p>

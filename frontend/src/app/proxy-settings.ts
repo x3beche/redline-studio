@@ -403,8 +403,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       } @else {
         <div class="st-empty">{{ 'Loading…' | t }}</div>
       }
-      <p class="st-hint">{{ 'The cost is an estimate from the bytes Redline sent and received through the proxy; the provider\\'s own meter is the bill.' | t }}
-        {{ '2Captcha bills the traffic that goes through the proxy. Its balance is on 2Captcha\\'s own dashboard - Redline keeps no 2Captcha API key.' | t }}
+      <p class="st-hint">{{ 'The cost is an estimate from the bytes Workbench sent and received through the proxy; the provider\\'s own meter is the bill.' | t }}
+        {{ '2Captcha bills the traffic that goes through the proxy. Its balance is on 2Captcha\\'s own dashboard - Workbench keeps no 2Captcha API key.' | t }}
         <a href="https://2captcha.com/enterpage" target="_blank" rel="noopener">2captcha.com ↗</a></p>
     </div>
   </div>

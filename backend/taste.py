@@ -365,7 +365,7 @@ def agent_text(palettes: list[dict], limit: int = BLOCK_CHARS * 3) -> str:
 # ---- extraction --------------------------------------------------------------
 
 EXTRACT_PROMPT = (
-    "You read a finished hardware project from Redline Studio (a 3D CAD model in build123d, a circuit "
+    "You read a finished hardware project from Workbench (a 3D CAD model in build123d, a circuit "
     "board in atopile/KiCad, or ESP32 firmware) and distil its design taste: the decisions that make it "
     "good and that a designer would want repeated in the next project.\n\n"
     f"Write between {PROPOSALS[0]} and {PROPOSALS[1]} statements. Each one must be:\n"
@@ -1112,9 +1112,9 @@ async def import_doc(db, data: dict, by: dict) -> dict:
     """A palette file made into a new palette here. Its items are checked one
     by one like any other; a name already taken gets "(imported)"."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise ValueError("this is not a Redline taste palette file")
+        raise ValueError("this is not a Workbench taste palette file")
     if int(data.get("version") or 0) > 1:
-        raise ValueError("this palette file is from a newer Redline")
+        raise ValueError("this palette file is from a newer Workbench")
     items = data.get("items")
     if not isinstance(items, list):
         raise ValueError("the file has no items")

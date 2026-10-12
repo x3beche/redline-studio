@@ -530,7 +530,7 @@ def test_the_registry_lists_each_provider_for_the_page():
                                                    "opencode-go": False}
     assert llm.public()["registry"] == reg
     # every registered provider is one the calls know, and has an account
-    # reader - or none, and its card shows Redline's own log
+    # reader - or none, and its card shows Workbench's own log
     assert set(llm.REGISTRY) <= set(llm.PROVIDERS)
     assert all(callable(e["account"]) for k, e in llm.REGISTRY.items() if k in ("commandcode", "openrouter"))
     assert {p["id"]: p["account"] for p in reg}["claude"] is False

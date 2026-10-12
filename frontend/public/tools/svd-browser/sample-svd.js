@@ -11,9 +11,9 @@
 // https://arm-software.github.io/CMSIS_5/SVD/html/svd_Format_pg.html
 
 export const SAMPLE_SVD = `<?xml version="1.0" encoding="utf-8"?>
-<!-- Synthetic example device for the Redline SVD browser. -->
+<!-- Synthetic example device for the Workbench SVD browser. -->
 <device schemaVersion="1.3" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="CMSIS-SVD.xsd">
-  <vendor>Redline</vendor>
+  <vendor>Workbench</vendor>
   <name>RLX32F1</name>
   <version>1.2</version>
   <description>Synthetic Cortex-M4 microcontroller used as the example device</description>

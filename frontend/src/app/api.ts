@@ -946,7 +946,7 @@ export interface ChatLine {
   tasks?: Record<string, { note_id?: string; at: string; by?: { id?: string; name?: string };
                            room?: string; target?: string; pending?: boolean }>;
   /** Changed after it was written, and by whom and why (e.g. a task block
-   *  added by Redline to an older answer). */
+   *  added by Workbench to an older answer). */
   edited?: { at: string; by: string; why?: string };
   /** Which room's thread it is in. */
   room?: string;
@@ -1153,7 +1153,7 @@ export interface Insights {
   project_detail: Record<string, ProjectDetail>;
   /** The rates the figures were read against (money.ts converts on screen). */
   fx?: { display_currency: string; rates: Record<string, number>; date: string | null };
-  /** What running Redline cost over the range, in dollars (Settings > Costs & currency). */
+  /** What running Workbench cost over the range, in dollars (Settings > Costs & currency). */
   costs?: InsightCosts;
   /** This calendar month's budgets (UTC), whatever the range. */
   budget_status?: BudgetStatus;

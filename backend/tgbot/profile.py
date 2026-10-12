@@ -13,7 +13,7 @@ getMyShortDescription, getMyCommands, and the bot's own profile photos),
 so the page can tell what is saved on Telegram from what was only typed.
 Saving sends only the fields that changed and says how each one went.
 
-Redline's own defaults come with it - the name "Redline", a description and a
+Workbench's own defaults come with it - the name "Workbench", a description and a
 short description in English and Turkish, and a picture: the app's mark,
 640×640 (default-avatar.png, drawn from frontend/public/favicon.svg).
 A new language can be translated from the default by the Reading
@@ -38,25 +38,25 @@ SIDE = 640
 MAX_UPLOAD = 10 * 1024 * 1024
 DEFAULT_PHOTO = Path(__file__).with_name("default-avatar.png")
 
-# Redline's words for its bot, in the languages the app itself speaks.
+# Workbench's words for its bot, in the languages the app itself speaks.
 DEFAULTS = {
     "default": {
-        "name": "Redline",
-        "description": ("Redline's bot. Linked people get the agents' questions with answer buttons, "
+        "name": "Workbench",
+        "description": ("Workbench's bot. Linked people get the agents' questions with answer buttons, "
                         "applied and failed notes with their pictures, and the other updates they choose. "
                         "Send /note (or a photo with a caption) to leave a note on a model or board, "
                         "or /ask to write to the agent.\n\n"
-                        "To link this chat: Redline → Settings → Telegram → Link my Telegram."),
-        "short_description": "The agents' questions, your notes' results, and notes from your phone - for Redline.",
+                        "To link this chat: Workbench → Settings → Telegram → Link my Telegram."),
+        "short_description": "The agents' questions, your notes' results, and notes from your phone - for Workbench.",
     },
     "tr": {
-        "name": "Redline",
-        "description": ("Redline'ın botu. Bağlı kişilere ajanların soruları yanıt düğmeleriyle, uygulanan ve "
+        "name": "Workbench",
+        "description": ("Workbench'in botu. Bağlı kişilere ajanların soruları yanıt düğmeleriyle, uygulanan ve "
                         "başarısız notlar resimleriyle ve seçtikleri diğer güncellemeler gelir. Bir model ya da "
                         "karta not bırakmak için /note (ya da açıklamalı bir fotoğraf), ajana yazmak için /ask "
                         "gönderin.\n\n"
-                        "Bu sohbeti bağlamak için: Redline → Ayarlar → Telegram → Telegram'ımı bağla."),
-        "short_description": "Ajanların soruları, notlarınızın sonuçları ve telefonunuzdan notlar - Redline için.",
+                        "Bu sohbeti bağlamak için: Workbench → Ayarlar → Telegram → Telegram'ımı bağla."),
+        "short_description": "Ajanların soruları, notlarınızın sonuçları ve telefonunuzdan notlar - Workbench için.",
     },
 }
 

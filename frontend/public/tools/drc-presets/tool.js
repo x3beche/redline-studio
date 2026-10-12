@@ -5,7 +5,7 @@
 //   via pad         = drill + 2 x annular ring
 //   heavy copper    2 oz outer copper etches wider: tracks and gaps of at least
 //                   0.2 mm (8 mil) - the figure most fabs publish for 2 oz
-// Output: the Redline Rules-tab JSON (backend/rules.py SCHEMA: classes, board,
+// Output: the Workbench Rules-tab JSON (backend/rules.py SCHEMA: classes, board,
 // pours, route) and a KiCad custom-rules (.kicad_dru) file with the limits.
 import { fmtNum } from '../kit/eng.js';
 

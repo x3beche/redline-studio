@@ -10,7 +10,7 @@ import { Confirm } from './confirm';
  *  language - the default, and any ISO 639-1 language - read back live from
  *  Telegram.
  *
- *  Redline's own defaults (English, Turkish) fill a field Telegram has
+ *  Workbench's own defaults (English, Turkish) fill a field Telegram has
  *  empty, and each field can go back to its default. A language added here
  *  can be translated from the default by the Reading translation job; the
  *  text is marked machine-translated until it is edited or saved. Each field
@@ -112,7 +112,7 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
         @for (c of (d.langs[lang()]?.commands?.length ? d.langs[lang()].commands : d.langs['default'].commands); track c.command) {
           <div class="tg-menu-row"><code>/{{ c.command }}</code><span>{{ c.about }}</span></div>
         } @empty { <span class="st-sub">{{ 'none set' | t }}</span> }
-        <span class="st-hint">{{ 'Set by Redline when the token is saved, in English and Turkish.' | t }}</span>
+        <span class="st-hint">{{ 'Set by Workbench when the token is saved, in English and Turkish.' | t }}</span>
       </div>
     </div>
     <!-- One Save for the whole step: every language's changed texts, the
@@ -199,7 +199,7 @@ export class TelegramProfilePanel {
     });
   }
 
-  /** Redline's defaults into fields Telegram has empty, as unsaved drafts. */
+  /** Workbench's defaults into fields Telegram has empty, as unsaved drafts. */
   private prefill(d: Profile) {
     if (!this.canEdit()) return;
     const add: Record<string, string> = {};
@@ -367,7 +367,7 @@ export class TelegramProfilePanel {
     img.onerror = () => this.photoErr.set(t('That picture could not be read.'));
     img.src = url;
   }
-  /** Redline's mark: shown first, sent with the step's Save. */
+  /** Workbench's mark: shown first, sent with the step's Save. */
   useDefault() { this.clearPick(); this.file = null; this.preview.set('/api/telegram/profile/photo/default'); }
   clearPick() { const p = this.preview(); if (p?.startsWith('blob:')) URL.revokeObjectURL(p); this.preview.set(null); this.file = null; }
 

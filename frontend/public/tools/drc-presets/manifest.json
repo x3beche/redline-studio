@@ -26,5 +26,5 @@
     { "title": "OSH Park 4-layer at the limit", "input": { "fab": "osh4", "copper": "1oz", "margin": "limit", "sig": "0.2", "pwr": "0.4" } }
   ],
   "usage": "Give the fab id (jlc2, jlc4, pcbway, osh2, osh4, generic or custom with ct/cc/cd/cv/ce in mm), copper weight (1oz/2oz), margin (limit, plus20, safe) and the signal and power track widths in mm. It returns the fab limits and working values for track, gap, via drill/pad, annular ring and edge clearance, a JSON object in the board room's Rules-tab shape (classes Default and Power, board minimums, a GND pour) and a KiCad .kicad_dru file. Use it when starting a board for a given fab.",
-  "sources": ["Fab capability pages (JLCPCB, PCBWay, OSH Park), minimums as published at the time of writing", "Redline backend/rules.py SCHEMA (Rules tab format and bounds)", "KiCad custom design rules syntax (.kicad_dru)", "Heavy-copper 0.2 mm minimum and margins: rule of thumb"]
+  "sources": ["Fab capability pages (JLCPCB, PCBWay, OSH Park), minimums as published at the time of writing", "Workbench backend/rules.py SCHEMA (Rules tab format and bounds)", "KiCad custom design rules syntax (.kicad_dru)", "Heavy-copper 0.2 mm minimum and margins: rule of thumb"]
 }

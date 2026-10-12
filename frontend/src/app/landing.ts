@@ -68,7 +68,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   host: { '(document:keydown.escape)': 'close()', '(document:click)': 'shutMore($event)' },
   template: `
 <nav class="nav">
-  <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Redline</a>
+  <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Workbench</a>
   <!-- Five sections in the bar, the rest under More: the bar never runs into Sign in. -->
   <div class="links">@for (l of links.slice(0, 5); track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }
     <details class="more" #more>
@@ -82,10 +82,10 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 
 <header class="hero wrap">
   <div class="grid top">
-    <h1>Redline</h1>
+    <h1>Workbench</h1>
     <p>A hardware design workbench. AI agents design the 3D parts, the circuit board and the firmware of one product, together, and check each other's work.</p>
   </div>
-  <div class="shot hero-shot" id="heroband"><app-snap src="hero" [crop]="[0, 0, 1920, 1000]" [min]="0" alt="Redline's 3D Drawing room with the iot-fan station open" /></div>
+  <div class="shot hero-shot" id="heroband"><app-snap src="hero" [crop]="[0, 0, 1920, 1000]" [min]="0" alt="Workbench's 3D Drawing room with the iot-fan station open" /></div>
   <div class="grid under">
     <b>iot-fan, live in the app</b>
     <span>3D Drawing with the station open: the project tree, Working now, a note the Chat agent wrote and its run with tokens and cost, and the queue of drawn notes.</span>
@@ -93,7 +93,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 </header>
 
 <section class="wrap">
-  <div class="grid sh rv"><h2>The project, in numbers</h2><p>Straight from Redline's own analytics for iot-fan.</p></div>
+  <div class="grid sh rv"><h2>The project, in numbers</h2><p>Straight from Workbench's own analytics for iot-fan.</p></div>
   <div class="stats rv">
     <div class="stat"><span>Items</span><b class="num">27</b><em>26 models · 1 board</em><div class="bar"><i style="flex:26;background:var(--s1)"></i><i style="flex:1;background:var(--s3)"></i></div></div>
     <div class="stat"><span>Notes</span><b class="num">67</b><em>written on the design</em><div class="bar"><i style="flex:1;background:var(--s7)"></i></div></div>
@@ -205,7 +205,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 </section>
 
 <section class="wrap" id="cost">
-  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">07</span></div>
+  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Workbench routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">07</span></div>
   <div class="save rv">
     <div class="save-x">
       <span>The plans against API prices</span>
@@ -267,11 +267,11 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 
 <footer>
   <div class="grid">
-    <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Redline</a>
+    <a class="brand" href="/"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/></svg>Workbench</a>
     <div class="col"><h4>Product</h4>@for (l of links; track l.id) { <a [href]="'#' + l.id" (click)="go($event, l.id)">{{ l.name }}</a> }</div>
     <div class="col"><h4>Access</h4><a [href]="ask">Request access</a><a href="/" (click)="$event.preventDefault(); open.set(true)">Sign in</a></div>
     <div class="col"><h4>Contact</h4><a href="mailto:info@medipol.dev">info@medipol.dev</a></div>
-    <div class="fine"><span>© 2026 Redline</span><span>Istanbul</span></div>
+    <div class="fine"><span>© 2026 Workbench</span><span>Istanbul</span></div>
   </div>
 </footer>
 
@@ -289,7 +289,7 @@ export class Landing implements AfterViewInit, OnDestroy {
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
   private io?: IntersectionObserver;
   open = signal(new URLSearchParams(location.search).has('signin'));
-  ask = 'mailto:info@medipol.dev?subject=Redline%20access';
+  ask = 'mailto:info@medipol.dev?subject=Workbench%20access';
   links = [
     { id: 'rooms', name: 'Rooms' }, { id: 'draw', name: 'Draw' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
     { id: 'taste', name: 'Taste' }, { id: 'themes', name: 'Themes' }, { id: 'cost', name: 'Cost' }, { id: 'proxy', name: 'Proxy' },
@@ -355,7 +355,7 @@ export class Landing implements AfterViewInit, OnDestroy {
   chatStep = [596, 849, 582, 506];
   chatPhoto = [596, 2201, 582, 648];
   chatFrame = [582, 648];
-  /** The plans connected to Redline (Settings > Costs, LLM settings). */
+  /** The plans connected to Workbench (Settings > Costs, LLM settings). */
   plans = [
     ['Claude Max', '₺3,170/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
     ['Command Code', '$5/mo', '8 of 9 jobs · 4,321 requests this period', 'var(--s1)'],
@@ -363,7 +363,7 @@ export class Landing implements AfterViewInit, OnDestroy {
     ['OpenRouter', '458 models', 'connected · no job on it now', 'var(--s4)'],
     ['Cache', '98.5%', 'of prompt tokens · ₺4.17M not paid', 'var(--s3)'],
   ];
-  /** What Redline runs around the agents, in iot-fan's figures. */
+  /** What Workbench runs around the agents, in iot-fan's figures. */
   infra = [
     { name: 'Compute', color: 'var(--s1)', big: '1,310 jobs', sub: '35.2 h of CPU · 8.16 kWh',
       lines: ['801 model builds, 342 renders', '78 board runs, 76 layouts, 13 firmware builds', 'queued, run in containers, timed and metered'] },

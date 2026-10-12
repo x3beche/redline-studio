@@ -2,7 +2,7 @@
 
 An import (backend/imports/) knows what a board *is* - which pad meets
 which, where every part sits, the outline - but not what it is *made of*
-in a form Redline can change: there is no source, so nothing can be
+in a form Workbench can change: there is no source, so nothing can be
 built, edited or handed to an agent. This writes that source.
 
 What it keeps, and how it proves it:
@@ -722,7 +722,7 @@ def write(title: str, parts: list[Part], graph: dict, pads: dict, origin: str,
     lines = [
         f"# {title} - converted from an imported board ({origin}).",
         "#",
-        "# Written by Redline's converter (backend/convert.py). The nets are the",
+        "# Written by Workbench's converter (backend/convert.py). The nets are the",
         "# imported netlist's, pad for pad and under their own names; every",
         "# designator is the original. After each build the netlist is compared",
         "# with the imported one, (ref, pad) by (ref, pad).",

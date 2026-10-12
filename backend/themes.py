@@ -36,7 +36,7 @@ TOKENS = frozenset({
     "--scrim", "--shade", "--shadow-soft", "--shadow-hard",
     "--view-top", "--view-mid", "--view-bottom", "--draw-label", "--shot-bg", "--pcb-bg",
     "--switch-knob", "--overlay", "--overlay-rest", "--tooltip-bg",
-    "--scroll-thumb", "--scroll-hover", "--scroll-active",
+    "--scroll-thumb", "--scroll-hover", "--scroll-active", "--marquee",
     "--chart-work", "--chart-build", "--chart-progress", "--chart-reply",
     "--chart-summary", "--chart-translate", "--chart-other",
     "--code-kw", "--code-str", "--code-num", "--code-com", "--code-fn", "--code-type",

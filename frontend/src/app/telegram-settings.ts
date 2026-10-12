@@ -93,7 +93,7 @@ const GROUPS = [
 /** The one thing done in @BotFather: making the bot, which gives the token.
  *  Its name, descriptions, picture and commands are set here afterwards. */
 const FATHER = [
-  { cmd: '/newbot', what: 'Send it to @BotFather. It asks for a display name (Redline), then a username that ends in "bot" (redline_studio_bot), and answers with the token.' },
+  { cmd: '/newbot', what: 'Send it to @BotFather. It asks for a display name (Workbench), then a username that ends in "bot" (redline_studio_bot), and answers with the token.' },
 ];
 
 @Component({
@@ -113,7 +113,7 @@ const FATHER = [
       <small>{{ d.bot.username ? '@' + d.bot.username : ('no token yet' | t) }}</small></div>
     <div class="st-tile" [attr.data-tone]="updatesTone()"><span>{{ 'Updates' | t }}</span>
       <b>{{ updatesLabel() | t }}</b>
-      <small>{{ d.mode === 'webhook' ? (d.webhook?.pending_update_count ?? 0) + ' ' + ('waiting' | t) : d.mode === 'polling' ? ('Redline asks Telegram' | t) : ('choose in step 4' | t) }}</small></div>
+      <small>{{ d.mode === 'webhook' ? (d.webhook?.pending_update_count ?? 0) + ' ' + ('waiting' | t) : d.mode === 'polling' ? ('Workbench asks Telegram' | t) : ('choose in step 4' | t) }}</small></div>
     <div class="st-tile"><span>{{ 'Linked people' | t }}</span><b>{{ d.linked }}</b>
       <small>{{ d.me.linked ? ('you included' | t) : ('you are not linked' | t) }}</small></div>
     <div class="st-tile"><span>{{ 'Sent' | t }} · {{ d.stats.days }}{{ 'd' }}</span><b>{{ d.stats.sent }}</b>
@@ -196,12 +196,12 @@ const FATHER = [
                   <div class="tg-choices">
                     <button class="tg-choice" [attr.data-on]="d.mode === 'webhook' ? 1 : null" [disabled]="!d.can_edit || !d.bot.set || !!busy()" (click)="setMode('webhook')">
                       <span class="tg-choice-top"><b>{{ 'Webhook' | t }}</b><span class="st-badge" data-tone="accent">{{ 'recommended' | t }}</span></span>
-                      <span>{{ 'Telegram calls Redline the moment something arrives. Needs the public https address; each call carries a secret header, and anything without it is refused.' | t }}</span>
+                      <span>{{ 'Telegram calls Workbench the moment something arrives. Needs the public https address; each call carries a secret header, and anything without it is refused.' | t }}</span>
                       <code class="tg-url">{{ webhookPreview() }}</code>
                     </button>
                     <button class="tg-choice" [attr.data-on]="d.mode === 'polling' ? 1 : null" [disabled]="!d.can_edit || !d.bot.set || !!busy()" (click)="setMode('polling')">
                       <span class="tg-choice-top"><b>{{ 'Long polling' | t }}</b><span class="st-badge">{{ 'fallback' | t }}</span></span>
-                      <span>{{ 'Redline keeps asking Telegram for news. Works behind any firewall, with no public address - one server at a time.' | t }}</span>
+                      <span>{{ 'Workbench keeps asking Telegram for news. Works behind any firewall, with no public address - one server at a time.' | t }}</span>
                       <code class="tg-url">getUpdates · timeout 25 s</code>
                     </button>
                   </div>
@@ -368,10 +368,10 @@ const FATHER = [
   @if (d.can_edit && d.bot.set) {
     <div class="st-card tg-danger" id="tg-remove">
       <div class="st-card-head"><h3>{{ 'Remove the bot' | t }}</h3>
-        <span class="st-sub">{{ 'disconnect @' + d.bot.username + ' from Redline' }}</span></div>
+        <span class="st-sub">{{ 'disconnect @' + d.bot.username + ' from Workbench' }}</span></div>
       <div class="st-card-body">
         <p class="st-hint">{{ 'Every linked chat is told the bot was disconnected, then unlinked. The webhook is taken down and what waits there is dropped; the token, the secret, the codes and the unsent messages are forgotten.' | t }}</p>
-        <p class="st-hint"><b>{{ 'The bot itself still exists on Telegram.' | t }}</b> {{ 'To delete it there, send /deletebot to @BotFather - Redline cannot do that.' | t }}</p>
+        <p class="st-hint"><b>{{ 'The bot itself still exists on Telegram.' | t }}</b> {{ 'To delete it there, send /deletebot to @BotFather - Workbench cannot do that.' | t }}</p>
         <div class="st-row">
           <label class="tg-check"><input type="checkbox" [checked]="forget()" (change)="forget.set($any($event.target).checked)">
             {{ 'Forget everything: the message log and the counters too' | t }}</label>
@@ -505,11 +505,11 @@ export class TelegramSettingsPanel implements OnDestroy {
   async removeBot() {
     const d = this.s()!;
     if (!await Confirm.ask({
-      title: t('Remove @{bot} from Redline?').replace('{bot}', d.bot.username ?? ''),
+      title: t('Remove @{bot} from Workbench?').replace('{bot}', d.bot.username ?? ''),
       text: t('Every linked chat is told and unlinked, and the token is forgotten.')
         + (this.forget() ? '\n' + t('The message log and the counters are deleted too.') : ''),
       ok: t('Remove'), danger: true })) return;
-    this.call('remove', this.http.delete<TgState>(`/api/telegram/bot?forget=${this.forget()}`), t('The bot is removed from Redline.'),
+    this.call('remove', this.http.delete<TgState>(`/api/telegram/bot?forget=${this.forget()}`), t('The bot is removed from Workbench.'),
       () => { this.open.set(1); this.code.set(null); this.testResult.set(null); });
   }
   check() { this.call('check', this.http.get<TgState>('/api/telegram/check'), t('Asked Telegram just now.')); }

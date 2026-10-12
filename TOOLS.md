@@ -316,7 +316,7 @@ agents, the most used, and every tool nobody used.
 | **Naming Convention Enforcer** · MCP | `naming-enforcer` | nets, symbols, parts and files checked against one naming rule | PCB, 3D |
 | **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB |
 | **Project Constants** · MCP | `project-constants` | board size, supply voltages and mechanical references kept in one place | all |
-| **Redline History Diff** · MCP | `redline-history` | every note that landed on the same area over time, with outcomes | all |
+| **Workbench History Diff** · MCP | `redline-history` | every note that landed on the same area over time, with outcomes | all |
 | **Requirement ↔ Test Matrix** · MCP | `req-test-matrix` | each requirement matched with the test that proves it, gaps shown | Analytics |
 | **Total Cost Roll-Up** · MCP | `cost-rollup` | PCB, BOM, assembly, enclosure and cable cost per unit at a quantity | Analytics |
 <!-- catalog:end -->

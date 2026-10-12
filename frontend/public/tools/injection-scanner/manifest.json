@@ -303,7 +303,7 @@
   "Hines et al., 'Defending Against Indirect Prompt Injection Attacks With Spotlighting', 2024",
   "Simon Willison, 'The lethal trifecta for AI agents' (2025)",
   "Unicode Standard ch. 23 (tag characters U+E0000-E007F, format controls) and UTS #39",
-  "Redline /api/tools/llm (backend/tools_llm.py) for the optional Run"
+  "Workbench /api/tools/llm (backend/tools_llm.py) for the optional Run"
  ],
  "view": true,
  "layout": "custom",

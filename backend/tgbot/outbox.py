@@ -104,7 +104,7 @@ def test_picture() -> bytes:
     d = ImageDraw.Draw(im)
     d.rectangle((16, 16, 463, 223), outline=(226, 61, 61), width=4)
     d.line((60, 170, 200, 80, 300, 150, 420, 60), fill=(226, 61, 61), width=6)
-    d.text((32, 196), "Redline - test picture", fill=(220, 224, 230))
+    d.text((32, 196), "Workbench - test picture", fill=(220, 224, 230))
     out = io.BytesIO()
     im.save(out, "PNG")
     return out.getvalue()

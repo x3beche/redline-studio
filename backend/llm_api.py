@@ -263,7 +263,7 @@ async def commandcode_account(refresh: bool = False) -> dict:
 async def commandcode_analysis(refresh: bool = False) -> dict:
     """The billing period analysed: spend per day (from Command Code's own
     totals, a day at a time), the burn rate and where it leads, the weekly
-    window, and how much of it was Redline's (backend/llm.py cc_analysis)."""
+    window, and how much of it was Workbench's (backend/llm.py cc_analysis)."""
     try:
         return await llm.cc_analysis(_db(), force=refresh)
     except Exception as exc:                           # noqa: BLE001 - say so, not a 500
@@ -276,7 +276,7 @@ async def commandcode_analysis(refresh: bool = False) -> dict:
 @router.get("/providers/{provider}/account")
 async def provider_account(provider: str, refresh: bool = False) -> dict:
     """One provider's own account figures (backend/llm.py REGISTRY), and -
-    for a provider that prices its calls - what Redline itself spent there.
+    for a provider that prices its calls - what Workbench itself spent there.
     Never the key."""
     if provider not in llm.REGISTRY:
         raise HTTPException(404, f"unknown provider {provider!r}")
@@ -291,6 +291,6 @@ async def provider_account(provider: str, refresh: bool = False) -> dict:
         raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
         out["redline"] = await llm.own_spend(raw, provider)
     except Exception as exc:                           # noqa: BLE001
-        llm.log.warning("%s: Redline's own spend not read: %s", provider, type(exc).__name__)
+        llm.log.warning("%s: Workbench's own spend not read: %s", provider, type(exc).__name__)
         out["redline"] = None
     return out

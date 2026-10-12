@@ -76,7 +76,7 @@
   ],
   "usage": "Pass `snapshot` as JSON {at: ISO time of the snapshot, queue: [{id, kind, summary, queued_at}], runs: {room: {status, percent, title, started_at, finished_at}}, activity: {room: [{at, text, level}]}, revisions: [{kind, status}]} - the app's /api/queue, /api/run?room=, /api/activity?room= and /api/revisions - plus `stuck` in minutes and optionally one `room`. It returns per room the queue length and oldest wait, the current run and its time, runs ok from the log's started/finished lines, error lines and the applied rate; stuck runs with the last step logged; and the queue sorted by wait. Use it when work seems not to move, to find which room and which step to look at.",
   "sources": [
-    "Redline app API: /api/queue, /api/run, /api/activity, /api/revisions",
+    "Workbench app API: /api/queue, /api/run, /api/activity, /api/revisions",
     "Stuck = no log line for longer than a threshold: rule of thumb (a heartbeat timeout)"
   ],
   "view": true

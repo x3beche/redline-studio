@@ -19,7 +19,7 @@ const TOKENS: [string, string][] = [
 
 /** A tool that is a page of its own under `public/tools/`, self-contained
  *  so it can be updated by dropping in a new copy. It is framed, and takes
- *  the app's colours on the way in, so it looks like part of Redline in
+ *  the app's colours on the way in, so it looks like part of Workbench in
  *  any theme. */
 @Component({
   selector: 'app-tool-frame',

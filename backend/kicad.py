@@ -130,7 +130,7 @@ async def held_plan(db, board_id: str, hold: dict | None) -> dict | None:
 
     A board converted from an import is marked `hold` (backend/convert.py)
     with the Gerbers' outline; where its parts sat is the import's own
-    `pads` and `placement`. Anything else - a board Redline designed, or a
+    `pads` and `placement`. Anything else - a board Workbench designed, or a
     held board someone let go (`hold.placement` false) - is packed as
     usual, and this says None.
     """

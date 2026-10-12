@@ -346,7 +346,7 @@ export function page(root, ctx) {
         ...list, o.output ? h('details', {}, h('summary', {}, 'What dtc built (decompiled)'), h('pre', {}, o.output)) : null);
     } catch (err) {
       checkOut.replaceChildren(h('div', { class: 'dob-sub' }, String(err.message) === 'no-api' || /Failed to fetch|NetworkError|JSON/.test(String(err.message))
-        ? 'The dtc check runs inside the Redline app; this page is served without its API. The overlay above is what it would compile.'
+        ? 'The dtc check runs inside the Workbench app; this page is served without its API. The overlay above is what it would compile.'
         : `The check did not run (${err.message}).`));
     } finally { checkBtn.disabled = false; }
   }

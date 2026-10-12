@@ -93,7 +93,7 @@
   "usage": "Paste rule set A and B as text: JSON (flattened to dotted keys, classes keyed by name), KiCad .kicad_dru (constraint.min/max keys, with the condition), or key = value lines; lengths in mm, mil, thou, in or um are converted to mm. It returns counts of changed / only-in-A / only-in-B / same rules, a table with both values, the difference and whether B is stricter, and a change list text. Use it to review a rule change or to compare a board's rules with a fab's.",
   "sources": [
     "KiCad custom design rules syntax (.kicad_dru)",
-    "Redline Rules tab JSON (backend/rules.py)",
+    "Workbench Rules tab JSON (backend/rules.py)",
     "Eagle .dru key = value format"
   ]
 }

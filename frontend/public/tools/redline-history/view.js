@@ -1,4 +1,4 @@
-// Redline History: the page is the history of the marked spots.
+// Workbench History: the page is the history of the marked spots.
 //   Strata  - one lane per area (a model's part, or a camera spot), the most
 //             marked on top, every note a mark at its time: a filled dot was
 //             applied, a cross rejected, a ring is still open. An amber arc

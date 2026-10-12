@@ -42,8 +42,8 @@ interface Detail {
   styleUrls: ['./settings.css', './tokens-settings.css'],
   template: `
 <div class="st-page">
-  <p class="st-lead">{{ 'Programs such as AI agents sign in to Redline with an agent token (rlat_…) instead of a password. A token is at most an editor, can be kept to one room and taken back at any time; everything the agent does is recorded under the name you give it.' | t }}
-    {{ 'The token is shown once, when it is made - Redline keeps only its SHA-256.' | t }}</p>
+  <p class="st-lead">{{ 'Programs such as AI agents sign in to Workbench with an agent token (rlat_…) instead of a password. A token is at most an editor, can be kept to one room and taken back at any time; everything the agent does is recorded under the name you give it.' | t }}
+    {{ 'The token is shown once, when it is made - Workbench keeps only its SHA-256.' | t }}</p>
 
   <!-- Setting up an agent on one's own computer: the seed's one line. -->
   <div class="st-card tk-setup-card">

@@ -1,6 +1,6 @@
 # Accounts and sign-in: how to run them, and how to get back in
 
-What to do on the machine that runs Redline when sign-in is on
+What to do on the machine that runs Workbench when sign-in is on
 (`REDLINE_REQUIRE_SIGNIN=true` in `.env`). Nothing private belongs in this file - no
 addresses, passwords, links or tokens; the repository is public.
 
@@ -31,7 +31,7 @@ address>:4200`.
 - There is no sign-up. The owner and the **admin**s add accounts: your name
   (top right) > **Admin panel** > **Add user** - a name, an address and a
   first password, which the person changes when they first sign in.
-  Redline sends no email: you pass the password on.
+  Workbench sends no email: you pass the password on.
 - Roles (`backend/access.py`): owner, admin, user. Admins run the server's
   settings (LLM keys, proxy, Telegram bot, costs) and the users' accounts -
   edit, disable, reset a password, sign out everywhere. Only the owner

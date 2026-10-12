@@ -282,7 +282,7 @@ export function page(root, ctx) {
       setStatus(j.available ? `Probes run through the app's server, ${j.per_minute ?? '?'} calls a minute at most. Text only: no tools are attached.` : 'The server has no model key configured, so Run is off. Findings, probes and grading of pasted answers still work.', j.available ? '' : 'warn');
     } catch {
       server = { state: 'offline', models: [], def: '' };
-      setStatus('Running probes needs the Redline app (this page is served without its /api). Everything else works here; paste answers into the responses input to grade them.', 'warn');
+      setStatus('Running probes needs the Workbench app (this page is served without its /api). Everything else works here; paste answers into the responses input to grade them.', 'warn');
     }
     drawModels(); if (res) drawProbes();
   }
@@ -300,7 +300,7 @@ export function page(root, ctx) {
     runIds(which === 'missing' && missing.length ? missing : p.map((x) => x.id));
   }
   function runIds(ids) {
-    if (server.state !== 'ok') { setStatus(server.state === 'nokey' ? 'The server has no model key configured.' : 'Running probes needs the Redline app.', 'warn'); return; }
+    if (server.state !== 'ok') { setStatus(server.state === 'nokey' ? 'The server has no model key configured.' : 'Running probes needs the Workbench app.', 'warn'); return; }
     const fresh = ids.filter((id) => !queue.includes(id) && !running.has(id));
     if (!busyNow()) { total = 0; finished = 0; }
     stopped = false; queue.push(...fresh); total += fresh.length;
@@ -346,7 +346,7 @@ export function page(root, ctx) {
         if (e.status === 404 || e.status === 503 || e.status === 502) {
           finished++;
           if (e.status !== 502) server.state = e.status === 404 ? 'offline' : 'nokey';
-          stop(e.status === 404 ? 'Running probes needs the Redline app.' : `The model call failed (${e.status}): ${e.message}. Try again in a moment.`);
+          stop(e.status === 404 ? 'Running probes needs the Workbench app.' : `The model call failed (${e.status}): ${e.message}. Try again in a moment.`);
           return;
         }
         rec = { probe: id, error: `${e.status ? `HTTP ${e.status}: ` : ''}${e.message}`.slice(0, 300) };

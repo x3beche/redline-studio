@@ -236,7 +236,7 @@ function python(m, input) {
   const head = [
     `"""${name}: ${docLines(input.description) || 'an MCP server.'}`,
     '',
-    `Scaffold from Redline's MCP Server Scaffold for the ${v2 ? `mcp ${VERSIONS.pyV2} (v2, MCPServer)` : `mcp ${VERSIONS.pyV1} (v1, FastMCP)`} Python SDK`,
+    `Scaffold from Workbench's MCP Server Scaffold for the ${v2 ? `mcp ${VERSIONS.pyV2} (v2, MCPServer)` : `mcp ${VERSIONS.pyV1} (v1, FastMCP)`} Python SDK`,
     `(versions as of ${VERSIONS.asOf}). Run: ${http ? 'uv run server.py' : 'uv run server.py (a client starts it over stdio)'}`,
     '"""',
     '',
@@ -346,7 +346,7 @@ function typescript(m, input) {
   const main = http
     ? `// Stateless Streamable HTTP: a fresh server and transport per request.\n// createMcpExpressApp binds 127.0.0.1 and checks the Host header (DNS rebinding).\nconst app = createMcpExpressApp();\napp.post("/mcp", async (req: Request, res: Response) => {\n  const server = buildServer();\n  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });\n  res.on("close", () => { void transport.close(); void server.close(); });\n  await server.connect(transport);\n  await transport.handleRequest(req, res, req.body);\n});\napp.listen(${port}, "127.0.0.1", () => {\n  console.error(${tsStr(`${name} MCP server on http://127.0.0.1:${port}/mcp`)});\n});\n`
     : `// stdio: stdout carries the protocol; log with console.error only.\nconst transport = new StdioServerTransport();\nawait buildServer().connect(transport);\nconsole.error(${tsStr(`${name} MCP server running on stdio`)});\n`;
-  const code = `#!/usr/bin/env node\n// ${name}: ${str(input.description) || 'an MCP server.'}\n// Scaffold from Redline's MCP Server Scaffold for @modelcontextprotocol/sdk ${VERSIONS.tsSdk}\n// (versions as of ${VERSIONS.asOf}). Build: npm install && npm run build\n\n${imports.join('\n')}\n\n${build}\n${main}`;
+  const code = `#!/usr/bin/env node\n// ${name}: ${str(input.description) || 'an MCP server.'}\n// Scaffold from Workbench's MCP Server Scaffold for @modelcontextprotocol/sdk ${VERSIONS.tsSdk}\n// (versions as of ${VERSIONS.asOf}). Build: npm install && npm run build\n\n${imports.join('\n')}\n\n${build}\n${main}`;
   const pkgName = `${snake(name).replace(/_/g, '-')}-mcp`;
   const pkg = {
     name: pkgName, version: '0.1.0', description: str(input.description) || `${name} MCP server`, type: 'module',

@@ -1,4 +1,4 @@
-"""PDF documents in Redline's own white theme: Markdown in, a PDF out.
+"""PDF documents in Workbench's own white theme: Markdown in, a PDF out.
 
 The Chat's `pdf_make` tool (backend/chat_tools/pdf_make.py) writes a
 report, a BOM comparison or a part's summary as Markdown; this turns it
@@ -22,7 +22,7 @@ by its id, or a public http(s) address (backend/manufacturers.py `check`:
 no private, local or link-local address, every redirect checked again) -
 re-encoded with Pillow and put in the page as data: URLs.
 
-Every page: the Redline mark and wordmark at the top left, the title at the
+Every page: the Workbench mark and wordmark at the top left, the title at the
 top right; the project (if one is given) at the bottom left, and the author,
 the date and time it was made, its purpose and "page N of M" at the bottom
 right. Page 1 opens with the title block.
@@ -350,7 +350,7 @@ async def fetch_public(url: str, limit: int = IMAGE_BYTES, hops: int = 4) -> byt
         except Refused as exc:
             raise RenderError(str(exc)) from exc
         async with httpx.AsyncClient(follow_redirects=False, timeout=15,
-                                     headers={"User-Agent": "Redline-PDF/1"}) as client:
+                                     headers={"User-Agent": "Workbench-PDF/1"}) as client:
             async with client.stream("GET", url) as r:
                 if r.is_redirect and r.headers.get("location"):
                     url = str(httpx.URL(url).join(r.headers["location"]))
@@ -443,7 +443,7 @@ def font_faces() -> str:
     return _FACES
 
 
-# The page's colours: Redline's light theme (frontend/src/styles.css
+# The page's colours: Workbench's light theme (frontend/src/styles.css
 # [data-theme="light"]), on white paper.
 CSS = """
 
@@ -589,7 +589,7 @@ def header_html(doc: Doc) -> str:
     mx = MARGIN["left"]
     return (_HEAD_CSS.format(faces=font_faces(), mx=mx)
             + '<div class="rl"><span class="rl-brand"><svg viewBox="0 0 64 64" aria-hidden="true">'
-            f'<path fill="#1d2329" fill-rule="evenodd" d="{MARK}"/></svg>Redline</span>'
+            f'<path fill="#1d2329" fill-rule="evenodd" d="{MARK}"/></svg>Workbench</span>'
             f'<span class="rl-right">{_e(doc.title)}</span></div>')
 
 

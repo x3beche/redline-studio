@@ -280,7 +280,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 <div class="tcv-signin-wrap">
   @if (mustChange(); as u) {
     <form class="tcv-signin" (submit)="$event.preventDefault(); setNew()">
-      <div class="tcv-signin-brand">Redline</div>
+      <div class="tcv-signin-brand">Workbench</div>
       <p class="tcv-signin-lead">{{ 'Hello' | t }} <b>{{ u.name }}</b>. {{ 'Your password was set by an admin. Choose your own to continue - your other sessions are signed out.' | t }}</p>
       <input type="email" class="tcv-signin-hidden" [value]="u.email ?? ''" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
       <label>{{ 'New password' | t }}<input type="password" [value]="password()" (input)="password.set($any($event.target).value); error.set('')"
@@ -294,7 +294,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     </form>
   } @else if (chooser()) {
     <div class="tcv-signin tcv-acct">
-      <div class="tcv-signin-brand">Redline</div>
+      <div class="tcv-signin-brand">Workbench</div>
       <p class="tcv-signin-lead">{{ 'Choose an account' | t }}</p>
       <ul class="tcv-acct-list">
         @for (a of auth.accounts(); track a.id) {
@@ -332,7 +332,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     </div>
   } @else {
   <form class="tcv-signin" (submit)="$event.preventDefault(); go()">
-    <div class="tcv-signin-brand">Redline</div>
+    <div class="tcv-signin-brand">Workbench</div>
     @if (resetFor(); as r) {
       <p class="tcv-signin-lead">Choose a new password for <b>{{ r }}</b>. You are signed in with it at once,
         and signed out everywhere else.</p>

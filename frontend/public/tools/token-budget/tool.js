@@ -57,7 +57,7 @@ export const KINDS = {
 const CUT_ORDER = ['documents', 'history', 'examples', 'tools', 'other', 'system', 'question'];
 
 export const DEFAULT_PARTS = `=== system ===
-You are a firmware support engineer for the Redline modem board (STM32F407 + Quectel EG25-G).
+You are a firmware support engineer for the Workbench modem board (STM32F407 + Quectel EG25-G).
 Answer from the logs and documents provided. Quote the log line you rely on.
 If the documents do not say, say so; do not guess register values or AT command syntax.
 Answer in English, short paragraphs, code in fenced blocks.

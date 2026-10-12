@@ -38,7 +38,7 @@ export interface CcAccount {
 }
 
 const EVERY_MS = 120_000;
-/** The providers with no usage of their own to show: their line is Redline's own calls. */
+/** The providers with no usage of their own to show: their line is Workbench's own calls. */
 const OWN_LINE = [{ id: 'claude', name: 'Claude API' }, { id: 'opencode-go', name: 'OpenCode Go' }];
 
 @Injectable({ providedIn: 'root' })
@@ -88,7 +88,7 @@ export class CcUsage {
 }
 
 /** A provider with no account to read for its key (backend/llm.py
- *  REGISTRY, account None): the card shows what Redline itself asked of
+ *  REGISTRY, account None): the card shows what Workbench itself asked of
  *  it, from its own call log (GET /api/llm/providers/<id>/account). */
 export interface OwnAccount {
   set: boolean; shared: boolean;
@@ -271,7 +271,7 @@ export class CcTabUsage implements OnDestroy {
   styles: [`
     :host { display: block; flex: none; }
     .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
-    /* One frame: the plan's windows, Redline's own calls, the Tools line - rows split by hairlines. */
+    /* One frame: the plan's windows, Workbench's own calls, the Tools line - rows split by hairlines. */
     .ccl-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px;
       background: var(--surface); overflow: hidden; }
     :host ::ng-deep .ccl-card > * + * { border-top: 1px solid var(--line); }
@@ -312,7 +312,7 @@ export class CcTabUsage implements OnDestroy {
   </button>
 } }
 @for (r of own(); track r.id) {
-  <!-- The Claude API and OpenCode Go share no usage: Redline's own calls this month. -->
+  <!-- The Claude API and OpenCode Go share no usage: Workbench's own calls this month. -->
   <button class="ccl ccl-own" type="button" (click)="openSettings()" [title]="r.title">
     <div class="ccl-head"><b>{{ r.name }}</b><span>{{ r.sub }}</span><em>{{ r.value }}</em></div>
   </button>
@@ -332,7 +332,7 @@ export class CcUsageLine implements OnDestroy {
     const tok = (m.input + m.output).toLocaleString('en-US');
     return [{ id: p.id, name: p.name, value: m.cost_usd != null ? shown(m.cost_usd) : `${m.calls} ${t('calls')}`,
               sub: `${num(m.input + m.output)} ${t('tokens')} ${t('this month')}`,
-              title: `${p.name} - ${t('Redline\'s own calls this month')}: ${m.calls} ${t('calls')}, ${tok} ${t('tokens')}` }];
+              title: `${p.name} - ${t('Workbench\'s own calls this month')}: ${m.calls} ${t('calls')}, ${tok} ${t('tokens')}` }];
   }));
   readonly tone = tone;
   readonly pct = pctOf;

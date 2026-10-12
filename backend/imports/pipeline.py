@@ -58,7 +58,7 @@ NEEDS = {
     "values": "a BOM CSV with a Value / Comment column",
     "part_numbers": "a BOM CSV with an LCSC Part / Supplier Part / MPN column",
     "model3d": "the assembled board's STEP (EasyEDA: Export > 3D Model)",
-    "schematic": "the schematic itself (not in any fab or 3D export); Redline draws one "
+    "schematic": "the schematic itself (not in any fab or 3D export); Workbench draws one "
                  "only from an atopile build, where every part has an LCSC number",
 }
 

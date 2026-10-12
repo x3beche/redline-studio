@@ -566,9 +566,9 @@ async def import_doc(db, data: dict, by: dict | None = None) -> dict:
     kept gets its quantity raised. A catalog link that does not point at a
     product here is dropped rather than refusing the item."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise ValueError("this is not a Redline inventory file")
+        raise ValueError("this is not a Workbench inventory file")
     if int(data.get("version") or 0) > 1:
-        raise ValueError("this inventory file is from a newer Redline")
+        raise ValueError("this inventory file is from a newer Workbench")
     items = data.get("items")
     if not isinstance(items, list) or not items:
         raise ValueError("the file has no items")

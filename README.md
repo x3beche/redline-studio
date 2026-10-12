@@ -1,14 +1,14 @@
-# Redline
+# Workbench
 
 A hardware design workbench. AI agents design the 3D parts, the circuit board and the firmware of one product, together, and check each other's work.
 
 **[redline.medipol.dev](https://redline.medipol.dev)** · in private beta
 
-![Redline's 3D Drawing room with the iot-fan station open: the project tree, Working now, a note the Chat agent wrote and its run with tokens and cost, and the queue of drawn notes](docs/readme/hero.png)
+![Workbench's 3D Drawing room with the iot-fan station open: the project tree, Working now, a note the Chat agent wrote and its run with tokens and cost, and the queue of drawn notes](docs/readme/hero.png)
 
 ## The project, in numbers
 
-Straight from Redline's own analytics for iot-fan.
+Straight from Workbench's own analytics for iot-fan.
 
 ![iot-fan in numbers: 27 items (26 models, 1 board), 67 notes, 54 runs by the agents, 342 jobs, 7 failed (2.0% of jobs)](docs/readme/numbers.png)
 
@@ -77,7 +77,7 @@ Every rule was reviewed before it was kept; attach the palette to a project and 
 
 ## 07 · What it cost
 
-Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.
+Connect the plans you already pay for. Workbench routes the agents' work through them and prices every call at API rates, so you see what the plans saved.
 
 The plans against API prices: **251.9×**. ₺579,595 of work, paid with ₺2,301 of plans. Three weeks of work, 21 September to 11 October. Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.
 
@@ -110,7 +110,7 @@ An agent can write a part. What it needs around it to do a whole product is the 
 
 ## Running it
 
-Redline is in private beta at [redline.medipol.dev](https://redline.medipol.dev). To run it yourself you need Python 3.10 or newer, Node 20.19 or newer, and a MongoDB connection (Atlas or a local server).
+Workbench is in private beta at [redline.medipol.dev](https://redline.medipol.dev). To run it yourself you need Python 3.10 or newer, Node 20.19 or newer, and a MongoDB connection (Atlas or a local server).
 
 ```bash
 git clone https://github.com/x3beche/redline-studio.git
@@ -123,7 +123,7 @@ On first run `start.sh` creates the virtual environment, installs the npm depend
 
 The model API keys are not read from `.env`: they are kept in the database and typed in Settings > LLM settings, where each job also picks its provider and model. The board room (atopile, and KiCad with Freerouting in a container), the firmware room (PlatformIO in a container), technical drawings and the Tools tab's checks each need an image built once; without them the rest still works and says what is missing.
 
-To run an agent on your own computer against a Redline server, use [redline-agent-seed](https://github.com/x3beche/redline-agent-seed) with a token from Agent tokens (the user menu): a start script and a few instructions, which fetch the agents' tools from the server on every start.
+To run an agent on your own computer against a Workbench server, use [redline-agent-seed](https://github.com/x3beche/redline-agent-seed) with a token from Agent tokens (the user menu): a start script and a few instructions, which fetch the agents' tools from the server on every start.
 
 - [INSTALL.md](INSTALL.md): requirements, Windows (WSL 2), containers, configuration, the images, Telegram
 - [USAGE.md](USAGE.md): the rooms and the everyday loop

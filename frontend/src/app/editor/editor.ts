@@ -14,7 +14,7 @@ with BuildPart() as part:
     Box(40, 30, 10)
     fillet(part.edges().filter_by(Axis.Z), radius=4)
 
-# Redline reads these two names:
+# Workbench reads these two names:
 PARTS = [part.part]
 NAMES = ["body"]
 `;
@@ -204,7 +204,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private setAside = signal<Set<string>>(new Set());
   notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   private askedAlready = new Set<string>();
-  private plainTitle = 'Redline';
+  private plainTitle = 'Workbench';
   /* theme:pigment - a mark's colour is written into the revision and
      printed into the picture, so it must mean the same thing in every
      theme and on paper. These four are ink, not chrome, and are the one
@@ -607,7 +607,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (this.askedAlready.has(q._id)) continue;
       this.askedAlready.add(q._id);
       try {
-        const n = new Notification('Redline needs an answer', {
+        const n = new Notification('Workbench needs an answer', {
           body: q.text.slice(0, 180), tag: q._id, icon: '/favicon.svg',
         });
         n.onclick = () => { window.focus(); n.close(); this.openThread(q); };

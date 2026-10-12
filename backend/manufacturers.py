@@ -75,7 +75,7 @@ COLL = "manufacturers"
 JOBS = "manufacturer_jobs"
 PAGES = "manufacturer_pages"         # a run's pages as read (their text), so the model step can be run again without fetching the site
 JOB = "manufacturer"                # the LLM job (llm.JOBS)
-USER_AGENT = "RedlineStudio-CatalogReader/1.0 (+https://redline.medipol.dev; reads product pages, obeys robots.txt)"
+USER_AGENT = "Workbench-CatalogReader/1.0 (+https://redline.medipol.dev; reads product pages, obeys robots.txt)"
 
 # The crawl.
 MAX_PAGES = 100                     # pages read in one run
@@ -2775,9 +2775,9 @@ def export_doc(doc: dict) -> dict:
 
 async def import_doc(db, data: dict, by: dict) -> dict:
     if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise ValueError("this is not a Redline manufacturer file")
+        raise ValueError("this is not a Workbench manufacturer file")
     if int(data.get("version") or 0) > 1:
-        raise ValueError("this manufacturer file is from a newer Redline")
+        raise ValueError("this manufacturer file is from a newer Workbench")
     u = normalise(str(data.get("url") or ""))
     if not u:
         raise ValueError("the file has no site address")

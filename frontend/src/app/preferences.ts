@@ -116,7 +116,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
   <nav class="st-list" [attr.aria-label]="'Settings' | t">
     <div class="st-list-head">
       <b>{{ 'Settings' | t }}</b>
-      <span>{{ 'How Redline looks here, and what the server uses' | t }}</span>
+      <span>{{ 'How Workbench looks here, and what the server uses' | t }}</span>
     </div>
     <div class="st-list-scroll">
       @for (g of shownNav(); track g.group) {
@@ -231,7 +231,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         }
         @case ('language') {
           <div class="st-page">
-            <p class="st-lead">{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
+            <p class="st-lead">{{ 'The words Workbench says. Names of models, boards, parts and code stay as they are.' | t }}</p>
             <div class="st-card">
               <div class="st-card-head"><h3>{{ 'Language' | t }}</h3>
                 <div class="st-right"><div class="st-seg">
@@ -336,7 +336,7 @@ export class RoomSettings {
       { id: 'proxy', label: 'Proxy & Data', about: 'the EasyEDA proxy, Jina AI for web pages and search', ico: 'M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4',
         blurb: 'A second way out for the part lookups, Jina AI for reading web pages and searching, and what each carried.' },
       { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M6 12h.01M18 12h.01',
-        blurb: 'What Redline costs to run, and the currency money is shown in.' },
+        blurb: 'What Workbench costs to run, and the currency money is shown in.' },
       { id: 'telegram', label: 'Telegram', about: 'notifications, questions and notes from your phone', ico: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
         blurb: 'A bot for the server: notifications, the agents\' questions, and notes from Telegram.' },
       { id: 'tokens', label: 'Agent tokens', about: 'let agents work here, and what they did', ico: 'M15.5 7.5l2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6M7.5 10a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11',

@@ -1,4 +1,4 @@
-// Redline History Diff: every note drawn on the same area of a model,
+// Workbench History Diff: every note drawn on the same area of a model,
 // in time order, with what became of it - so a spot that keeps coming back
 // (fixed, then re-marked) stands out.
 //

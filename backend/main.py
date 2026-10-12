@@ -1,4 +1,4 @@
-"""Redline - API.
+"""Workbench - API.
 
 All project data lives in MongoDB: model sources, generated viewer payloads,
 revision images and version history. Local disk is used only as scratch space
@@ -49,7 +49,7 @@ MONGODB_DB = os.getenv("MONGODB_DB", "redline")
 STATUSES = ("draft", "queued", "applied", "rejected")   # a note's status (PATCH /api/revisions)
 ORDER = {"queued": 0, "draft": 1, "applied": 2, "rejected": 3}
 
-app = FastAPI(title="Redline API")
+app = FastAPI(title="Workbench API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],

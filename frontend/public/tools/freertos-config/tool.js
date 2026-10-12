@@ -288,7 +288,7 @@ export function run(input) {
   const eg = hasKind('event group');
   const L = [];
   const def = (k, v, c) => L.push(`#define ${k.padEnd(44)} ${String(v)}${c ? `   /* ${c} */` : ''}`);
-  L.push('/* FreeRTOSConfig.h - written by the Redline FreeRTOS Config & Heap Sizer', ` * Port: portable/GCC/${portId}, heap: portable/MemMang/${scheme}.c`, ` * Heap estimate: ${used} B used of ${usable} B usable (${pct.toFixed(1)} %). */`, '#ifndef FREERTOS_CONFIG_H', '#define FREERTOS_CONFIG_H', '');
+  L.push('/* FreeRTOSConfig.h - written by the Workbench FreeRTOS Config & Heap Sizer', ` * Port: portable/GCC/${portId}, heap: portable/MemMang/${scheme}.c`, ` * Heap estimate: ${used} B used of ${usable} B usable (${pct.toFixed(1)} %). */`, '#ifndef FREERTOS_CONFIG_H', '#define FREERTOS_CONFIG_H', '');
   L.push('#if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)', '  #include <stdint.h>', '  extern uint32_t SystemCoreClock;', '#endif', '');
   def('configUSE_PREEMPTION', 1);
   def('configUSE_PORT_OPTIMISED_TASK_SELECTION', port.basepri && maxPrio <= 32 ? 1 : 0, port.basepri ? 'CLZ-based, max 32 priorities' : 'not on Armv6-M');

@@ -8,7 +8,7 @@ run's work folder, one message a line; the board's document says where
 (`route_live`, set by backend/kicad.py while the router runs).
 
 The page asks for what is new since the byte it last read, a few times a
-second, and draws it in Redline's own board view. A poll and not a socket:
+second, and draws it in Workbench's own board view. A poll and not a socket:
 it is what every other long job here does, and a reload of the API in the
 middle of a run loses nothing - the file is still there.
 """

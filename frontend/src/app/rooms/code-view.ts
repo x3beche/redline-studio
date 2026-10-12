@@ -214,7 +214,7 @@ function hex(css: string): string {
   return '#' + rgb.slice(0, 3).map(n => Math.round(+n).toString(16).padStart(2, '0')).join('');
 }
 
-/** Redline's theme, as a Monaco theme: the same tokens as the rest of the app. */
+/** Workbench's theme, as a Monaco theme: the same tokens as the rest of the app. */
 export function redlineTheme(m: MonacoApi): string {
   // The page resolves each var() for us: the probe in hex() is styled with it.
   const v = (color: string) => hex(color);

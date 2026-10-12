@@ -2,7 +2,7 @@
 //
 // Reads, per side, whichever of these it finds:
 //   JSON        any object, flattened to dotted keys; arrays of objects with a
-//               "name" are keyed by it (Redline Rules tab: classes.Default.track;
+//               "name" are keyed by it (Workbench Rules tab: classes.Default.track;
 //               KiCad .kicad_pro: board.design_settings.rules.min_clearance)
 //   KiCad DRU   (rule "x" [(condition "...")] (constraint TYPE (min V) (max V)))
 //               -> TYPE.min, TYPE.max  (plus the condition when there is one)

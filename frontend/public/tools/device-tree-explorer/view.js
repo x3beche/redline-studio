@@ -600,7 +600,7 @@ export function page(root, ctx) {
     } catch (e) {
       dtcOut.replaceChildren(h('div', { class: 'dte-dtcr' }, h('b', {}, 'dtc is not reachable here. '),
         [404, 405, 501].includes(e.status) || !e.status
-          ? 'The real compile runs inside the Redline app (tools image); opened on its own this page has no server to ask. The findings above come from the built-in parser.'
+          ? 'The real compile runs inside the Workbench app (tools image); opened on its own this page has no server to ask. The findings above come from the built-in parser.'
           : `The check service answered ${e.message}. The findings above come from the built-in parser.`));
     } finally { dtcBtn.disabled = false; }
   });

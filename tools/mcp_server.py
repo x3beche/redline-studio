@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Redline's queues, as an MCP server.
+"""Workbench's queues, as an MCP server.
 
 The same operations as tools/revisions.py - what is queued in which room,
 a note in full, the run and its log, the check, the thread, a question on

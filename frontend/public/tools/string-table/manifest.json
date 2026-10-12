@@ -32,7 +32,7 @@
       "label": "String table (CSV or TSV, header row first)",
       "type": "textarea",
       "rows": 9,
-      "default": "key,en,tr,de,comment\napp_name,Redline,Redline,Redline,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
+      "default": "key,en,tr,de,comment\napp_name,Workbench,Workbench,Workbench,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
       "help": "Header: key, then language codes (en, tr, pt-BR), optionally a comment column. Copy straight from a spreadsheet (tab-separated) or paste CSV; quote values that contain the separator or a line break."
     },
     {
@@ -101,7 +101,7 @@
     {
       "title": "App strings in English, Turkish and German for Android",
       "input": {
-        "table": "key,en,tr,de,comment\napp_name,Redline,Redline,Redline,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
+        "table": "key,en,tr,de,comment\napp_name,Workbench,Workbench,Workbench,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
         "format": "android",
         "base": "en",
         "missing": "omit"

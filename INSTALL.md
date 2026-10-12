@@ -89,7 +89,7 @@ are kept in the database and typed in **Settings > LLM settings**, where each jo
 also picks its provider and model. Without a key there, the jobs that need it
 (card summaries, the English translation, tool pages, the Chat room)
 stop with a message that points there.
-Redline's own settings are all named `REDLINE_*`.
+Workbench's own settings are all named `REDLINE_*`.
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -196,12 +196,12 @@ or admin. Nothing goes in `.env`: the token is kept in the database only
 (`telegram_settings`), and the page shows only its last four characters.
 
 1. In Telegram, send `/newbot` to [@BotFather](https://t.me/BotFather). Give it
-   a display name (`Redline`) and a username ending in `bot`
+   a display name (`Workbench`) and a username ending in `bot`
    (`redline_studio_bot`). Its answer holds the token, `123456789:AA…`. Keep
    it secret.
 2. Paste the token in step 2 of the guide. It is checked with getMe before it
    is saved.
-3. Step 3 comes filled with Redline's defaults: the name, description and
+3. Step 3 comes filled with Workbench's defaults: the name, description and
    short description in English and Turkish, and the app's mark as the
    picture. Save them as they are, change them, or add other languages. The
    command menu is set for you.

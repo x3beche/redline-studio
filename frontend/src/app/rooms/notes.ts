@@ -376,7 +376,7 @@ const NOTE_ICONS = {
       <div class="tcv-notes-tips">
         <p><b>Writing a note should take no time.</b> Press <b>New note</b> (or N) and type - no title, folder or form. Double-click a note to change it.</p>
         <ul>
-          <li><b>Alt+N</b> anywhere in Redline opens a small box; you stay where you are, and the note remembers the room and what was open.</li>
+          <li><b>Alt+N</b> anywhere in Workbench opens a small box; you stay where you are, and the note remembers the room and what was open.</li>
           <li><code>#tag</code> to find it later, <code>&#64;controller</code> to point at a board or model.</li>
           <li><code>- [ ] check the fan clearance</code> becomes a box to tick; <b>To-do</b> collects the open ones.</li>
           <li>🎙 to speak it instead (where the browser can listen).</li>

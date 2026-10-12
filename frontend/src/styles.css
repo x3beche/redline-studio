@@ -4613,7 +4613,7 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
 
 /* ---- Command Code: avatars ------------------------------------------------ */
 /* A person: their picture, or initials on a tint of their own series colour
-   (rooms/commandcode.ts avColour). A model: its maker's mark, or Redline's.
+   (rooms/commandcode.ts avColour). A model: its maker's mark, or Workbench's.
    One size, a thin line around both; only the first of a run shows. */
 .tcv-cc-av { overflow: hidden; }
 .tcv-cc-av[data-role="user"] { color: var(--ink); line-height: 1; }
@@ -4634,7 +4634,7 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
 .tcv-cc-av[data-family="gpt"] { color: var(--series-3); }
 .tcv-cc-av[data-family="llama"], .tcv-cc-av[data-family="mistral"] { color: var(--series-6); }
 /* Models and agents wear no colour: whatever the maker (and the room agent's
-   Redline mark, its red stroke too), one grey mark on a grey ground with a
+   Workbench mark, its red stroke too), one grey mark on a grey ground with a
    grey ring - colour is for people, who choose theirs (avatar.ts). */
 .tcv-cc-av[data-role="assistant"], .tcv-cc-av[data-role="assistant"][data-family] {
   color: var(--ink-dim); background: var(--surface-2);
