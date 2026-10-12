@@ -2,10 +2,10 @@ import {
   Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { toHtml } from '../markdown';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { T } from '../i18n';
+import { NoteDoc } from './note-doc';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -67,31 +67,8 @@ export class NotesApi {
   }
 }
 
-/** A note's text as blocks: to-do lines on their own (so they can be
- *  ticked), the rest as markdown. */
-type Block = { kind: 'todo'; line: number; done: boolean; html: string } | { kind: 'md'; html: string };
-
-function blocks(text: string): Block[] {
-  const out: Block[] = [];
-  let buf: string[] = [];
-  const flush = () => { if (buf.join('').trim()) out.push({ kind: 'md', html: decorate(toHtml(buf.join('\n'))) }); buf = []; };
-  text.split('\n').forEach((l, i) => {
-    const m = /^\s*[-*] \[( |x|X)\]\s(.*)$/.exec(l);
-    if (m) { flush(); out.push({ kind: 'todo', line: i, done: m[1] !== ' ', html: decorate(toHtml(m[2])) }); }
-    else buf.push(l);
-  });
-  flush();
-  return out;
-}
-
-/** #tags and @names made visible (and clickable) in rendered text. Only
- *  outside tags, so an attribute or a colour code is left alone. */
-function decorate(html: string): string {
-  return html.split(/(<[^>]+>)/).map(part => part.startsWith('<') ? part : part
-    .replace(/(^|[\s(>])#([^\W\d_][\w-]*)/gu, (m, pre, t) =>
-      /^[0-9a-f]{3,8}$/i.test(t) && /\d/.test(t) ? m : `${pre}<span class="tcv-note-tag">#${t}</span>`)
-    .replace(/(^|[\s(>])@([\w][\w\-./]*)/gu, '$1<span class="tcv-note-at">@$2</span>')).join('');
-}
+/** A to-do line, as the backend counts them (backend/notes.py). */
+const TODO_LINE = /^\s*[-*] \[( |x|X)\]\s/;
 
 function when(iso: string): string {
   const d = new Date(iso), now = new Date();
@@ -270,7 +247,7 @@ const NOTE_ICONS = {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [T],
+  imports: [T, NoteDoc],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
@@ -350,56 +327,38 @@ const NOTE_ICONS = {
 
   <!-- RIGHT: write, and read one -->
   <section class="tcv-notes-main">
-    @if (creating()) {
-      <!-- A new note: straight into the editor; it is kept from the first words. -->
+    @if (creating() || open()) {
       <article class="tcv-note">
-        <header class="tcv-note-head">
-          <span class="tcv-note-meta">{{ 'New note' | t }}</span>
-          <span class="grow"></span>
-          @if (saving()) { <span class="tcv-note-meta">saving…</span> }
-          <button class="tcv-btn tcv-note-btn" (click)="done()">{{ 'Done' | t }}</button>
-        </header>
-        <textarea #editor class="tcv-note-edit" [value]="draft()" (input)="typed($any($event.target).value)"
-                  [placeholder]="'First line is the title - #tags, @controller, - [ ] to-dos…' | t"
-                  (keydown.escape)="done()" (keydown.control.enter)="done()"></textarea>
-        <p class="tcv-note-meta">{{ 'Saved as you type · Esc or Ctrl+Enter when done' | t }}</p>
-      </article>
-    } @else if (open(); as n) {
-      <article class="tcv-note">
-        <header class="tcv-note-head">
-          <span class="tcv-note-meta">
-            {{ n.by.name || 'someone' }} · {{ when(n.created_at) }}
-            @if (n.updated_at !== n.created_at) { · edited {{ when(n.updated_at) }} }
-            @if (n.context.room) {
-              · <button class="tcv-note-ctx" (click)="goTo(n)" title="Go back to where it was written">
-                {{ roomName(n.context.room) }}{{ n.context.model || n.context.board ? ': ' + (n.context.model || n.context.board) : '' }}</button>
-            }
-            @if (n.sent) { · sent to the {{ roomName(n.sent.room) }} agent }
-          </span>
-          <span class="grow"></span>
-          @if (saving()) { <span class="tcv-note-meta">saving…</span> }
-          @if (copied()) { <span class="tcv-note-meta">{{ 'Copied' | t }}</span> }
-          @if (editing()) { <button class="tcv-btn tcv-note-btn" (click)="done()">{{ 'Done' | t }}</button> }
-        </header>
         @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
-        @if (editing()) {
-          <textarea #editor class="tcv-note-edit" [value]="draft()" (input)="typed($any($event.target).value)"
-                    (keydown.escape)="done()" (keydown.control.enter)="done()"></textarea>
-          <p class="tcv-note-meta">Saved as you type · Esc or Ctrl+Enter when done</p>
-        } @else {
-          <div class="tcv-note-body" (dblclick)="edit(n)" (click)="clickBody($event)">
-            @for (b of body(); track $index) {
-              @if (b.kind === 'todo') {
-                <label class="tcv-note-todo" [attr.data-done]="b.done ? 1 : null">
-                  <input type="checkbox" [checked]="b.done" (change)="tick(n, b.line)">
-                  <span class="md" [innerHTML]="b.html"></span>
-                </label>
-              } @else {
-                <div class="md" [innerHTML]="b.html"></div>
+        <!-- One page for reading and writing: starting to edit does not move a word. -->
+        <app-note-doc [text]="editing() ? draft() : (open()?.text ?? '')" [editable]="editing()"
+                      [placeholder]="'First line is the title - #tags, @controller, - [ ] to-dos…'"
+                      (changed)="typed($event)" (done)="done()" (ticked)="tickAt($event)"
+                      (tag)="tag.set($event)" (wantEdit)="auth.can('draw') && open() && edit(open()!)">
+            @if (!editing() && open(); as n) {
+              <span class="tcv-note-meta">
+                {{ n.by.name || 'someone' }} · {{ when(n.created_at) }}
+                @if (n.updated_at !== n.created_at) { · edited {{ when(n.updated_at) }} }
+                @if (n.context.room) {
+                  · <button class="tcv-note-ctx" (click)="goTo(n)" title="Go back to where it was written">
+                    {{ roomName(n.context.room) }}{{ n.context.model || n.context.board ? ': ' + (n.context.model || n.context.board) : '' }}</button>
+                }
+                @if (n.sent) { · sent to the {{ roomName(n.sent.room) }} agent }
+              </span>
+              @if (n.todo.open + n.todo.done; as all) {
+                <span class="tcv-note-progress" [attr.data-done]="!n.todo.open ? 1 : null" [title]="'To-dos done' | t">
+                  <i><b [style.width.%]="100 * n.todo.done / all"></b></i>{{ n.todo.done }}/{{ all }}</span>
               }
             }
-          </div>
-        }
+            <span class="grow"></span>
+            @if (saving()) { <span class="tcv-note-meta">{{ 'saving…' | t }}</span> }
+            @if (copied()) { <span class="tcv-note-meta">{{ 'Copied' | t }}</span> }
+            @if (editing()) {
+              <button class="tcv-btn tcv-note-btn" (click)="done()" [title]="'Saved as you type · Esc or Ctrl+Enter when done' | t">{{ 'Done' | t }}</button>
+            } @else if (auth.can('draw')) {
+              <button class="tcv-btn tcv-note-btn" (click)="edit(open()!)">{{ 'Edit' | t }}</button>
+            }
+        </app-note-doc>
       </article>
     } @else {
       <div class="tcv-notes-tips">
@@ -420,7 +379,6 @@ export class RoomNotes implements OnDestroy {
   private api = inject(NotesApi);
   private picked = inject(Selection);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
-  private editor = viewChild<ElementRef<HTMLTextAreaElement>>('editor');
 
   readonly filters = [{ id: '', label: 'All' }, { id: 'pinned', label: 'Pinned' },
                       { id: 'todo', label: 'To-do' }, { id: 'mine', label: 'Mine' }];
@@ -450,7 +408,6 @@ export class RoomNotes implements OnDestroy {
   private poll = setInterval(() => this.read(), 15_000);
 
   open = computed(() => this.notes().find(n => n.id === this.openId()) ?? null);
-  body = computed(() => blocks(this.open()?.text ?? ''));
   groups = computed(() => {
     const out: { name: string; notes: Note[] }[] = [];
     const pinned = this.notes().filter(n => n.pinned);
@@ -508,10 +465,6 @@ export class RoomNotes implements OnDestroy {
     this.editingId = n.id;
     this.draft.set(n.text);
     this.editing.set(true);
-    setTimeout(() => {
-      const t = this.editor()?.nativeElement;
-      if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
-    });
   }
 
   newNote() {
@@ -521,7 +474,6 @@ export class RoomNotes implements OnDestroy {
     this.draft.set('');
     this.creating.set(true);
     this.editing.set(true);
-    setTimeout(() => this.editor()?.nativeElement.focus());
   }
 
   typed(text: string) {
@@ -555,6 +507,7 @@ export class RoomNotes implements OnDestroy {
     }
     const cur = this.notes().find(n => n.id === id);
     if (!id || !cur || !text.trim() || text === cur.text) { then?.(); return; }
+    this.replace({ ...cur, text });   // shown at once, so leaving the editor does not flash the old text
     this.saving.set(true);
     this.api.update(id, { text }).subscribe({
       next: n => { this.saving.set(false); this.replace(n); then?.(); },
@@ -575,12 +528,27 @@ export class RoomNotes implements OnDestroy {
 
   private replace(n: Note) { this.notes.set(this.notes().map(x => x.id === n.id ? n : x)); }
 
+  /** The n-th to-do of the open note, as the editor counts them: the
+   *  n-th `- [ ]` line outside code blocks. */
+  tickAt(index: number) {
+    const n = this.open();
+    if (!n || !this.auth.can('draw')) return;
+    let fence = false, seen = -1;
+    const lines = n.text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*(```|~~~)/.test(lines[i])) fence = !fence;
+      else if (!fence && TODO_LINE.test(lines[i]) && ++seen === index) { this.tick(n, i); return; }
+    }
+  }
+
   /** Ticking a box rewrites that one line of the text. */
   tick(n: Note, line: number) {
     const lines = n.text.split('\n');
     lines[line] = lines[line].replace(/\[( |x|X)\]/, m => m === '[ ]' ? '[x]' : '[ ]');
     const text = lines.join('\n');
-    this.replace({ ...n, text });
+    const marks = lines.filter(l => TODO_LINE.test(l)).map(l => TODO_LINE.exec(l)![1]);
+    const todo = { open: marks.filter(m => m === ' ').length, done: marks.filter(m => m !== ' ').length };
+    this.replace({ ...n, text, todo });
     this.api.update(n.id, { text }).subscribe(r => this.replace(r));
   }
 
@@ -606,12 +574,6 @@ export class RoomNotes implements OnDestroy {
     });
   }
 
-  /** A #tag in the text filters by it. */
-  clickBody(e: MouseEvent) {
-    const el = e.target as HTMLElement;
-    if (el.classList.contains('tcv-note-tag')) this.tag.set(el.textContent!.replace('#', '').toLowerCase());
-  }
-
   /** Back to the room (and board) the note was written in. */
   goTo(n: Note) {
     const r = n.context.room as any;
@@ -623,7 +585,7 @@ export class RoomNotes implements OnDestroy {
   private say(msg: string) { this.flash.set(msg); setTimeout(() => this.flash.set(null), 4000); }
 
   key(e: KeyboardEvent) {
-    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable;
     if (e.key === '/' && !typing) { e.preventDefault(); this.search().nativeElement.focus(); }
     if ((e.key === 'n' || e.key === 'N') && !typing && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); this.newNote(); }
     if (!typing && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {

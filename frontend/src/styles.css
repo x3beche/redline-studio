@@ -5344,3 +5344,134 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-notes-row .tcv-notes-item-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .tcv-notes-row .tcv-cc-itemacts[data-open] { display: inline-flex; }
 .tcv-notes-sendmenu { right: 0; top: 30px; min-width: 140px; }
+
+/* THE NOTE AS A PAGE (rooms/note-doc.ts): read and written in the same
+   place, with the same type, so starting to edit moves nothing. The
+   editor is TipTap; every colour is the theme's. */
+.tcv-notedoc { display: flex; flex-direction: column; min-width: 0; position: relative; }
+.tcv-doc-host { min-width: 0; }
+.tcv-doc { outline: none; font-size: 14.5px; line-height: 1.7; color: var(--ink); word-wrap: break-word; white-space: pre-wrap;
+  padding: 6px 2px 24px; cursor: text; }
+.tcv-notedoc:not([data-editing]) .tcv-doc { cursor: default; }
+.tcv-notedoc[data-editing] .tcv-doc { min-height: 50vh; }
+.tcv-doc > * + * { margin-top: .85em; }
+.tcv-doc p { margin: 0; }
+/* The first line is the note's title, whatever it was written as. */
+.tcv-doc > :first-child:is(p, h1, h2, h3) { margin: 0 0 .2em; font-size: 26px; line-height: 1.25; font-weight: 650;
+  letter-spacing: -.01em; color: var(--ink-bright); }
+.tcv-doc h1, .tcv-doc h2, .tcv-doc h3, .tcv-doc h4 { color: var(--ink-bright); line-height: 1.3; letter-spacing: -.005em; }
+.tcv-doc h1 { margin: 1.4em 0 .5em; font-size: 22px; font-weight: 650; }
+.tcv-doc h2 { margin: 1.5em 0 .45em; padding-bottom: .3em; font-size: 18px; font-weight: 620; border-bottom: 1px solid var(--line); }
+.tcv-doc h3 { margin: 1.3em 0 .35em; font-size: 15.5px; font-weight: 620; }
+.tcv-doc h4, .tcv-doc h5, .tcv-doc h6 { margin: 1.1em 0 .3em; font-size: 14.5px; font-weight: 600; }
+.tcv-doc strong { font-weight: 650; color: var(--ink-bright); }
+.tcv-doc a { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 2px; cursor: pointer; }
+.tcv-doc a:hover { text-decoration-color: var(--accent); }
+.tcv-doc ul, .tcv-doc ol { margin-block: .6em; padding-left: 1.5em; }
+.tcv-doc ul { list-style: disc; }
+.tcv-doc ol { list-style: decimal; }
+.tcv-doc li { margin: .25em 0; }
+.tcv-doc li > p { margin: 0; }
+.tcv-doc li > * + * { margin-top: .35em; }
+.tcv-doc li::marker { color: var(--ink-dim); }
+/* To-dos: a box to tick, struck and dimmed when done. */
+.tcv-doc ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.tcv-doc ul[data-type="taskList"] ul[data-type="taskList"] { padding-left: 1.6em; margin-block: .25em; }
+.tcv-doc li[data-type="taskItem"], .tcv-doc ul[data-type="taskList"] > li { display: flex; align-items: flex-start; gap: .6em;
+  margin: 0; padding: .3em .5em; border-radius: 5px; }
+.tcv-doc ul[data-type="taskList"] > li + li { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); border-radius: 0; }
+.tcv-doc ul[data-type="taskList"] > li > label { flex: none; display: flex; padding-top: .28em; user-select: none; }
+.tcv-doc ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
+.tcv-doc ul[data-type="taskList"] input[type="checkbox"] { appearance: none; width: 16px; height: 16px; margin: 0; cursor: pointer;
+  border: 1.5px solid var(--ink-dim); border-radius: 4px; background: transparent; display: grid; place-items: center; }
+.tcv-doc ul[data-type="taskList"] input[type="checkbox"]:hover { border-color: var(--accent); }
+.tcv-doc ul[data-type="taskList"] input[type="checkbox"]:checked { background: var(--ok); border-color: var(--ok); }
+.tcv-doc ul[data-type="taskList"] input[type="checkbox"]:checked::after { content: ''; width: 8px; height: 4.5px; margin-top: -2px;
+  border: solid var(--ink-on-ok); border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.tcv-doc li[data-checked="true"] > div { color: var(--ink-dim); text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-dim) 60%, transparent); }
+.tcv-doc li[data-checked="true"] > div strong, .tcv-doc li[data-checked="true"] > div a { color: inherit; }
+/* Quotes read as a callout. */
+.tcv-doc blockquote { margin-inline: 0; padding: .6em .9em; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; }
+.tcv-doc blockquote > * + * { margin-top: .5em; }
+.tcv-doc code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: .88em; padding: .1em .35em;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
+.tcv-doc pre { margin-inline: 0; padding: .8em 1em; overflow-x: auto; white-space: pre; line-height: 1.55;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
+.tcv-doc pre code { padding: 0; background: none; border: 0; font-size: 12.5px; }
+.tcv-doc hr { margin: 1.6em 0; border: 0; border-top: 1px solid var(--line); }
+.tcv-doc hr.ProseMirror-selectednode { border-top-color: var(--accent); }
+.tcv-doc img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+.tcv-doc img.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+/* Tables: the reading column's full width, a header row, row lines,
+   figures lined up. */
+.tcv-doc .tableWrapper { overflow-x: auto; margin-block: 1em; }
+.tcv-doc table { width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 1.5; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line); border-radius: 6px; }
+.tcv-doc th, .tcv-doc td { position: relative; padding: 6px 12px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line); min-width: 3em; }
+.tcv-doc th + th, .tcv-doc td + td { border-left: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.tcv-doc th { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim);
+  background: var(--surface-2); }
+.tcv-doc tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+.tcv-doc tr:hover td { background: var(--hover); }
+.tcv-doc th > p, .tcv-doc td > p { margin: 0; }
+.tcv-doc td.tcv-num, .tcv-doc th.tcv-num { text-align: right; }
+.tcv-doc .selectedCell::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); }
+/* #tags and @names: chips, in reading and in writing alike. */
+.tcv-doc .tcv-note-tag, .tcv-doc .tcv-note-at { padding: .05em .45em; border-radius: 999px; font-size: .9em; white-space: nowrap;
+  text-decoration: none; }
+.tcv-doc .tcv-note-tag { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.tcv-doc .tcv-note-at { color: var(--code-type); font-weight: 600; background: color-mix(in srgb, var(--code-type) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--code-type) 28%, transparent); }
+.tcv-notedoc:not([data-editing]) .tcv-doc .tcv-note-tag { cursor: pointer; }
+.tcv-notedoc:not([data-editing]) .tcv-doc .tcv-note-tag:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+/* What the empty page and an empty line say. */
+.tcv-doc .is-empty::before { content: attr(data-placeholder); float: left; height: 0; pointer-events: none; color: var(--ink-dim);
+  opacity: .7; font-weight: 400; }
+.tcv-doc.ProseMirror-focused { outline: none; }
+.tcv-doc .ProseMirror-gapcursor::after { border-top-color: var(--ink); }
+.tcv-doc ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+/* The toolbar: flat, the theme's, kept at the top of the pane while the note scrolls. */
+.tcv-doc-bar { position: sticky; top: -10px; z-index: 3; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px;
+  min-height: 43px; margin: -10px -14px 0; padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.tcv-doc-b { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; font: inherit;
+  font-size: 13.5px; color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
+.tcv-doc-b:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.tcv-doc-b.on { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--line); }
+.tcv-doc-b:disabled { opacity: .35; cursor: default; }
+.tcv-doc-b b, .tcv-doc-b i, .tcv-doc-b s { font-size: 14px; }
+.tcv-doc-b b { font-weight: 700; }
+.tcv-doc-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; }
+.tcv-doc-danger:hover:not(:disabled) { color: var(--danger); }
+.tcv-doc-ico { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tcv-doc-sep { width: 1px; height: 18px; margin: 0 5px; background: var(--line); }
+.tcv-doc-group { display: inline-flex; gap: 2px; padding: 0 3px; border-radius: 6px; background: var(--surface-2); }
+.tcv-doc-type { height: 30px; padding: 0 8px; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 5px; cursor: pointer; outline: none; }
+.tcv-doc-type:focus { border-color: var(--accent); }
+.tcv-doc-type option { color: var(--ink); background: var(--surface-2); }
+.tcv-doc-hint { font-size: 11px; color: var(--ink-dim); }
+.tcv-doc-linkbar { position: sticky; top: 33px; z-index: 3; display: flex; gap: 6px; align-items: center; margin: 0 -14px;
+  padding: 6px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.tcv-doc-href { flex: 1; min-width: 0; padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--accent); border-radius: 5px; outline: none; }
+/* The "/" menu. */
+.tcv-doc-slash { position: fixed; z-index: 60; display: flex; flex-direction: column; min-width: 230px; max-height: 320px; overflow-y: auto;
+  padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 30px var(--shadow-soft); }
+.tcv-doc-slash button { display: flex; align-items: baseline; gap: 10px; padding: 6px 9px; font: inherit; font-size: 13px; text-align: left;
+  color: var(--ink); background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.tcv-doc-slash button em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--ink-dim);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tcv-doc-slash button:hover, .tcv-doc-slash button[data-on] { background: var(--hover); }
+/* To-dos done, beside the note's byline. */
+.tcv-note-progress { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums; }
+.tcv-note-progress i { display: inline-block; width: 54px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.tcv-note-progress b { display: block; height: 100%; background: var(--ok); }
+.tcv-note-progress[data-done] { color: var(--ok); }

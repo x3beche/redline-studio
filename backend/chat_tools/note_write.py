@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from .. import actors, notes
 from . import Ctx, Result, Tool, ToolError
-from ._notes import head, need
+from ._notes import NOTE_STYLE, head, need
 
 MAX = 20_000                                     # as the API's NoteIn
 
@@ -34,7 +34,7 @@ TOOL = Tool(
     description="Write a new note in the Notes tab, as the person would jot it down: the first line is its title, "
                 "#words are tags, @names point at models and boards, '- [ ] ' lines are to-dos. Use it only when "
                 "asked to write or keep a note (not for a task for a room's agent - that is room_note). `model` or "
-                "`board`: the id it is about, if any.",
+                "`board`: the id it is about, if any. " + NOTE_STYLE,
     schema={"type": "object", "properties": {
         "text": {"type": "string", "description": "The note: a title line, then the rest (Markdown)"},
         "model": {"type": "string", "description": "A 3D model's id it is about"},

@@ -73,6 +73,13 @@ def test_the_tools_are_in_their_packages_at_their_levels():
         assert n in chat_tools.SYSTEM_NOTE
 
 
+def test_the_note_writing_tools_ask_for_a_well_set_page():
+    for n in ("note_write", "note_edit"):
+        d = chat_tools.tools()[n].description
+        assert "title line" in d and "'## '" in d and "'- [ ] '" in d and "table" in d and "units" in d
+    assert "'## ' sections" in chat_tools.SYSTEM_NOTE and "no filler" in chat_tools.SYSTEM_NOTE
+
+
 def test_notes_search_lists_newest_first_in_the_workspace_and_filters(env):
     raw, state = env
     _notes(raw)

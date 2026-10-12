@@ -15,6 +15,11 @@ from ._things import find
 
 ROOM = {"cad": "3D", "pcb": "PCB", "firmware": "Firmware", "notes": "Notes", "taste": "Taste", "mfr": "Manufacturers",
         "files": "Files", "tools": "Basic Tools", "commandcode": "Chat"}
+# How a note the Chat writes should read: as a page, not a dump (the Notes
+# tab shows it as one - title, tag chips, headed sections, ticked boxes).
+NOTE_STYLE = ("Write it as a short, well-set Markdown page: a clear title line first (a few words), the #tags on the "
+              "line under it, then a one- or two-sentence summary; sections under '## ' headings; to-dos as '- [ ] ' "
+              "items; a table for comparisons and parts lists, with units in the header or the cells; no filler.")
 TODO_LINE = re.compile(r"^(\s*[-*] \[)( |x|X)(\]\s)(.*)$")
 
 

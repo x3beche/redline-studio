@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from .. import notes
 from . import Ctx, Result, Tool, ToolError
-from ._notes import head, need, one
+from ._notes import NOTE_STYLE, head, need, one
 from .note_write import MAX
 
 
@@ -33,7 +33,7 @@ TOOL = Tool(
     about="Changes a note's text in the Notes tab.",
     description="Change a note in the Notes tab: `text` is its whole new text (read it with note_read first and "
                 "keep what should stay - its title line, #tags, to-dos). Use it only when asked to change a note; "
-                "to tick a to-do use note_todo.",
+                "to tick a to-do use note_todo. " + NOTE_STYLE,
     schema={"type": "object", "properties": {
         "note": {"type": "string", "description": "The note's id, or words of its title"},
         "text": {"type": "string", "description": "The note's whole new text"}}, "required": ["note", "text"]},
