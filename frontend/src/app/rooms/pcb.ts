@@ -2,7 +2,7 @@ import {
   Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
-import { money } from '../money';
+import { moneyIn, moneyTip } from '../money';
 import {
   Activity, BoardComponent, BoardEntry, BoardGeometry, BoardSchematic, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LogLine, PartHeld, PartHit,
@@ -225,7 +225,7 @@ type BoardView = Pane | 'split' | 'focus';
                    style="color: var(--ink-dim)">{{ h.mpn }}</div>
               <div class="mono text-[10px]" style="color: var(--ink-dim)">
                 {{ h.maker }} · {{ countOf(h.stock) }} in stock
-                @if (h.price != null) { · {{ money(h.price) }} }
+                @if (h.price != null) { · <span [title]="moneyTip(h.price, 'USD')">{{ money(h.price) }}</span> }
               </div>
             </div>
             @if (h.have) {
@@ -1108,8 +1108,9 @@ export class RoomPcb implements OnDestroy {
     this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
   }
 
-  /** A price in dollars, in the display currency (money.ts). */
-  money(p: number | null): string { return p == null ? '–' : money(p); }
+  /** An LCSC price: dollars as LCSC sells, the display currency in its tooltip (money.ts). */
+  money(p: number | null): string { return p == null ? '–' : moneyIn(p, 'USD'); }
+  readonly moneyTip = moneyTip;
 
   countOf(n: number | null): string {
     if (!n) return 'none';

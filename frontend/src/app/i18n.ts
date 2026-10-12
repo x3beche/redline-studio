@@ -891,6 +891,8 @@ const TR: Record<string, string> = {
   '2Captcha bills the traffic that goes through the proxy. Its balance is on 2Captcha\'s own dashboard - Workbench keeps no 2Captcha API key.': '2Captcha proxy\'den geçen trafiği faturalar. Bakiye 2Captcha\'nın kendi panelindedir - Workbench 2Captcha API anahtarı saklamaz.',
   // Currency system (money.ts, costs-settings.ts, the proxy's price read-out)
   'Costs & currency': 'Maliyetler ve para birimi',
+  // money.ts: the tooltip of an amount shown in another currency
+  'rates of': 'kur tarihi',
   'subscriptions, electricity, exchange rates': 'abonelikler, elektrik, döviz kurları',
   'What Workbench costs to run, and the currency money is shown in.': 'Workbench\'i çalıştırmanın maliyeti ve tutarların gösterildiği para birimi.',
   'What Workbench costs to run - the subscriptions, the electricity, the proxy traffic - each typed in its own currency. Analytics adds them to the work of each range, and every amount in the app is shown in the display currency.': 'Workbench\'i çalıştırmanın maliyeti - abonelikler, elektrik, proxy trafiği - her biri kendi para biriminde girilir. Analitik bunları her aralığın işine ekler; uygulamadaki her tutar gösterim para biriminde görünür.',

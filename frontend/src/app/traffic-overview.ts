@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { T, t } from './i18n';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
-import { money } from './money';
+import { Money, MoneyView, money, usdTip } from './money';
 import { TrafficPeriod } from './jina-settings';
 import { CountUp } from './count';
 import { Skeleton } from './skeleton';
@@ -41,7 +41,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
 
 @Component({
   selector: 'app-traffic-overview',
-  imports: [Skeleton, CountUp, T, TimeChart, BarList],
+  imports: [Skeleton, CountUp, MoneyView, T, TimeChart, BarList],
   styleUrl: './settings.css',
   template: `
 <section class="st-card">
@@ -67,7 +67,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
         }
         <div class="st-tile" [title]="'measured on the wire between this machine and the proxy; priced from Settings > Costs' | t">
           <span>{{ 'Proxy on the wire' | t }}</span><b [wbCount]="f.bytes(v.cost.proxy_bytes)"></b>
-          <small>≈ {{ usd(v.cost.proxy_usd) }} · {{ usd(v.cost.price_per_gb) }}/GB</small></div>
+          <small><wb-money [usd]="v.cost.proxy_usd" /> · @if (proxyPrice(); as pp) {<wb-money [amount]="pp.amount" [cur]="pp.currency" alt="tip" />} @else {<wb-money [usd]="v.cost.price_per_gb" />}/GB</small></div>
         <div class="st-tile"><span>{{ 'Jina tokens' | t }}</span><b [wbCount]="f.count(v.cost.jina_tokens)"></b>
           <small>{{ f.count(v.routes.jina.requests) }} {{ 'calls' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="v.totals.rescued ? 'ok' : null"
@@ -89,7 +89,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
               }
             }
           </div></section>
-        <section class="st-chart c6"><h4>{{ 'Proxy cost' | t }} · {{ 'estimated from the bytes on the wire' | t }}<em>≈ {{ usd(v.cost.proxy_usd) }}</em></h4>
+        <section class="st-chart c6"><h4>{{ 'Proxy cost' | t }} · {{ 'estimated from the bytes on the wire' | t }}<em [title]="usdTip(v.cost.proxy_usd)">{{ usd(v.cost.proxy_usd) }}</em></h4>
           <app-time-chart [data]="charts()!.usd" kind="area" [f]="fusd" [legend]="false" [height]="110" /></section>
         <section class="st-chart c6"><h4>{{ 'Jina tokens' | t }} · {{ 'used per bucket' | t }}<em>{{ f.count(v.cost.jina_tokens) }}</em></h4>
           <app-time-chart [data]="charts()!.tokens" kind="bar" [f]="f.count" [legend]="false" [height]="110" /></section>
@@ -107,6 +107,10 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
 export class TrafficOverview {
   private http = inject(HttpClient);
   readonly period = inject(TrafficPeriod);
+  /** The price per GB as it was typed, in its own currency (Settings > Costs). */
+  private cash = inject(Money);
+  readonly proxyPrice = computed(() => this.cash.costs()?.proxy ?? null);
+  readonly usdTip = usdTip;
   readonly f = fmt;
   readonly ms = ms;
   readonly routes = ROUTES;

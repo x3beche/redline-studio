@@ -1,7 +1,8 @@
-import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, Injectable, Input, booleanAttribute, computed, effect, inject, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { Auth } from './auth';
+import { LANG, t } from './i18n';
 
 /** Money, app-wide: every amount the server sends is in US dollars, and
  *  this shows it in the currency the person reading wants.
@@ -121,34 +122,63 @@ export function convert(amount: number, from: string, to: string): number | null
   const u = toUsd(amount, from); return u == null ? null : fromUsd(u, to);
 }
 
+/* ---- How an amount is written: ONE rule for the whole app ----
+ *
+ *  1. Costs the app works out (LLM spend, proxy traffic, budgets,
+ *     electricity, subscriptions, Jina, a BOM's total) are kept in dollars
+ *     and shown in the display currency: money(usd). Where the dollar figure
+ *     itself matters, the tooltip (usdTip) gives it with the rate and its date.
+ *  2. A price that belongs to something in its own currency (a catalog
+ *     product priced in lira by its seller, an LCSC part in dollars, a price
+ *     per GB typed in dollars, a stock item's unit price) is shown in that
+ *     currency: moneyIn(amount, cur) - and when that is not the display
+ *     currency, a muted "≈ <display>" after it (moneyAlt) or the same in a
+ *     tooltip (moneyTip). <wb-money> does both kinds in a template.
+ *  3. Strike-through list prices are written the same way.
+ *
+ *  The writing: the currency's own sign, never its code ("₺435,12", not
+ *  "TRY 435.12"), before the figure; the separators of the UI language,
+ *  not the browser's - "₺1.234,56" in Turkish, "₺1,234.56" in English.
+ *  Two decimals from one up, whole above 100,000; under one, two to four
+ *  decimals ("$0.50", "$0.0123"); tinier, two significant figures. Prompts
+ *  for a model (backend) write ISO codes instead, which is unambiguous there.
+ */
+
+/** The locale numbers are written in: the UI language's (i18n.ts). */
+export function moneyLocale(): string { return LANG() === 'tr' ? 'tr-TR' : 'en-US'; }
+
 const formats = new Map<string, Intl.NumberFormat>();
-function nf(cur: string, digits: number, sig = false): Intl.NumberFormat {
-  const key = `${cur}|${digits}|${sig}`;
+function nf(cur: string, min: number, max = min, sig = false): Intl.NumberFormat {
+  const lang = moneyLocale();
+  const key = `${lang}|${cur}|${min}|${max}|${sig}`;
   let f = formats.get(key);
   if (!f) {
-    const lang = navigator.language || 'en-US';
     const base: Intl.NumberFormatOptions = { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol' };
-    const opts: Intl.NumberFormatOptions = sig ? { ...base, maximumSignificantDigits: digits }
-      : { ...base, minimumFractionDigits: digits, maximumFractionDigits: digits };
-    try { f = new Intl.NumberFormat(lang, opts); } catch { f = new Intl.NumberFormat('en-US', opts); }
+    const opts: Intl.NumberFormatOptions = sig ? { ...base, maximumSignificantDigits: max }
+      : { ...base, minimumFractionDigits: min, maximumFractionDigits: max };
+    try { f = new Intl.NumberFormat(lang, opts); }
+    catch {
+      // Not a currency code the browser knows: the figure, then the code.
+      const plain = new Intl.NumberFormat(lang, sig ? { maximumSignificantDigits: max } : { minimumFractionDigits: min, maximumFractionDigits: max });
+      f = { format: (v: number) => plain.format(v) + (cur ? ' ' + cur : ''),
+            formatToParts: (v: number) => [{ type: 'integer', value: plain.format(v) }, { type: 'currency', value: cur }] } as unknown as Intl.NumberFormat;
+    }
     formats.set(key, f);
   }
   return f;
 }
 
-/** An amount already in `cur`, the app's compact way: big ones whole with
- *  thousands separators, everyday ones with cents, small ones with a digit
- *  more, tiny ones to two significant figures. The browser's language for
- *  the separators, the currency's own sign. */
-export function moneyIn(amount: number | null | undefined, cur: string): string {
+/** An amount already in `cur`, written the app's one way (above); with
+ *  no currency (an old stock item), the figure alone. */
+export function moneyIn(amount: number | null | undefined, cur: string | null | undefined): string {
   if (amount == null || !isFinite(amount)) return '–';
+  const c = /^[A-Za-z]{3}$/.test(cur ?? '') ? cur!.toUpperCase() : '';
   const a = Math.abs(amount);
-  if (a === 0) return nf(cur, 0).format(0);
-  if (a >= 1000) return nf(cur, 0).format(amount);
-  if (a >= 1) return nf(cur, 2).format(amount);
-  if (a >= 0.01) return nf(cur, 3).format(amount);
-  if (a >= 0.001) return nf(cur, 4).format(amount);
-  return nf(cur, 2, true).format(amount);
+  if (a === 0) return nf(c, 2).format(0);
+  if (a >= 100_000) return nf(c, 0).format(amount);
+  if (a >= 1) return nf(c, 2).format(amount);
+  if (a >= 0.001) return nf(c, 2, 4).format(amount);
+  return nf(c, 0, 2, true).format(amount);
 }
 
 /** Dollars from the server, in the display currency. */
@@ -158,16 +188,85 @@ export function money(usd: number | null | undefined): string {
   return moneyIn(fromUsd(usd, cur) ?? usd, cur);
 }
 
-/** Shorter still, for a chip: "₺12.3k". */
+/** An amount in `cur` written as it is (rule 2), or with `convert` in the
+ *  display currency (rule 1, for a cost typed in another currency). */
+export function fmtMoney(amount: number | null | undefined, cur: string | null | undefined,
+                         opts: { convert?: boolean } = {}): string {
+  if (amount == null || !isFinite(amount)) return '–';
+  const c = (cur || 'USD').toUpperCase();
+  if (!opts.convert) return moneyIn(amount, c);
+  const u = toUsd(amount, c);
+  return u == null ? moneyIn(amount, c) : money(u);
+}
+
+/** "≈ $10.56": an amount in `cur` in the display currency, when that is
+ *  another one and there is a rate - else ''. */
+export function moneyAlt(amount: number | null | undefined, cur: string | null | undefined): string {
+  if (amount == null || !isFinite(amount) || !/^[A-Za-z]{3}$/.test(cur ?? '')) return '';
+  const c = cur!.toUpperCase(), d = CURRENCY();
+  if (c === d) return '';
+  const v = convert(amount, c, d);
+  return v == null ? '' : '≈ ' + moneyIn(v, d);
+}
+
+function rateNote(): string {
+  const date = FX()?.date;
+  return date ? ` · ${t('rates of')} ${date}` : '';
+}
+
+/** A tooltip for a price in its own currency: "₺435,12 ≈ $10.56 · rates of
+ *  2026-10-11", or '' when it is in the display currency already. */
+export function moneyTip(amount: number | null | undefined, cur: string | null | undefined): string {
+  const alt = moneyAlt(amount, cur);
+  return alt ? `${moneyIn(amount, cur)} ${alt}${rateNote()}` : '';
+}
+
+/** A tooltip for a cost shown converted from dollars: "$4.00 · 1 USD = ₺41,23
+ *  · rates of 2026-10-11", or '' when the display currency is the dollar. */
+export function usdTip(usd: number | null | undefined): string {
+  if (usd == null || !isFinite(usd)) return '';
+  const d = CURRENCY();
+  if (d === 'USD') return '';
+  const r = rate(d);
+  return `${moneyIn(usd, 'USD')}${r ? ` · 1 USD = ${moneyIn(r, d)}` : ''}${rateNote()}`;
+}
+
+/** Shorter still, for a chip: "₺12,3B" / "₺12.3K". */
 export function moneyShort(usd: number): string {
   const cur = CURRENCY();
   const v = fromUsd(usd, cur) ?? usd;
   if (Math.abs(v) < 1000) return nf(cur, 0).format(v);
-  const lang = navigator.language || 'en-US';
   try {
-    return new Intl.NumberFormat(lang, { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol',
+    return new Intl.NumberFormat(moneyLocale(), { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol',
       notation: 'compact', maximumFractionDigits: 1 }).format(v);
   } catch { return moneyIn(v, cur); }
+}
+
+/** An amount in a template, by the rule above:
+ *    <wb-money [usd]="x" />                 a cost, in the display currency,
+ *                                           the dollars and rate in its tooltip;
+ *    <wb-money [amount]="p" cur="TRY" />    a price in its own currency, with a
+ *                                           muted "≈ $10.56" when that differs
+ *                                           (alt="tip" puts it in the tooltip,
+ *                                           alt="none" leaves it out);
+ *    <wb-money ... strike />                a list price, struck through. */
+@Component({
+  selector: 'wb-money',
+  host: { '[class.wb-money-strike]': 'strike' },
+  template: `@if (usd != null) {<span class="wb-money-v" [title]="usdTip(usd)">{{ money(usd) }}</span>}
+    @else {<span class="wb-money-v" [title]="alt === 'tip' ? moneyTip(amount, cur) : ''">{{ moneyIn(amount, cur) }}</span>@if (alt === 'inline' && moneyAlt(amount, cur); as a) {<small class="wb-money-alt">{{ a }}</small>}}`,
+  styles: [`:host { white-space: nowrap; }
+    :host(.wb-money-strike) .wb-money-v { text-decoration: line-through; }
+    .wb-money-alt { margin-left: .4em; color: var(--ink-dim); font-weight: 400; font-size: .85em; }`],
+})
+export class MoneyView {
+  @Input() usd: number | null | undefined = undefined;
+  @Input() amount: number | null | undefined = undefined;
+  @Input() cur: string | null | undefined = 'USD';
+  @Input() alt: 'inline' | 'tip' | 'none' = 'inline';
+  @Input({ transform: booleanAttribute }) strike = false;
+  readonly money = money; readonly moneyIn = moneyIn; readonly moneyAlt = moneyAlt;
+  readonly moneyTip = moneyTip; readonly usdTip = usdTip;
 }
 
 /** The currency's sign alone: "₺". */

@@ -6,7 +6,7 @@ import { Auth } from './auth';
 import { T, t } from './i18n';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
-import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
+import { Money, MoneyView, money as shown, usdTip } from './money';
 import { Prefs } from './preferences';
 import { JinaSettingsPanel, TrafficPeriod, foldKeep, foldLoad } from './jina-settings';
 import { TrafficOverview } from './traffic-overview';
@@ -77,7 +77,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [CountUp, Skeleton, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
+  imports: [CountUp, Skeleton, MoneyView, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
   styleUrl: './settings.css',
   template: `
 <ng-template #periodSeg>
@@ -125,8 +125,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
     </button>
       <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ d.active ? proxyUse() : ((d.configured ? 'in no route order' : 'Not set up') | t) }}{{ d.host ? ' · ' + d.host : '' }}</span>
       @if (traffic(); as tr) {
-        <span class="pv-right pv-meta" [title]="'through the proxy in this period, measured on the wire, and what it costs' | t">
-          <b class="mono" [wbCount]="f.bytes(tr.bytes)"></b>{{ tr.usd != null ? ' · ≈ ' + money(tr.usd) : '' }} · {{ period.label() }}</span>
+        <span class="pv-right pv-meta" [title]="('through the proxy in this period, measured on the wire, and what it costs' | t) + (tr.usd != null && usdTip(tr.usd) ? ' · ' + usdTip(tr.usd) : '')">
+          <b class="mono" [wbCount]="f.bytes(tr.bytes)"></b><span [wbCount]="tr.usd != null ? ' · ' + money(tr.usd) : ''"></span> · {{ period.label() }}</span>
       }
     </div>
     @if (open()) {
@@ -165,8 +165,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         <div class="st-f"><span>{{ 'Price per GB' | t }}</span>
           <span class="st-readout">
             @if (proxyPrice(); as pp) {
-              <b class="mono">{{ inCur(pp.amount, pp.currency) }}</b>
-              @if (pp.currency !== cur()) { <span class="st-dim mono">≈ {{ shownUsd(toUsd(pp.amount, pp.currency)) }}</span> }
+              <wb-money class="mono" [amount]="pp.amount" [cur]="pp.currency" />
             } @else { <span class="st-dim">{{ 'not set' | t }}</span> }
             <button class="st-more" (click)="prefs.tab.set('costs')">{{ 'Edit in Settings > Costs' | t }} →</button>
           </span></div>
@@ -281,8 +280,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
           <div class="st-tile" [attr.data-tone]="us.totals.failed ? 'danger' : null"><span>{{ 'Failed' | t }}</span><b [wbCount]="f.count(us.totals.failed)"></b>
             <small>{{ pct(us.totals.failed, us.totals.lookups) }}</small></div>
           @if (us.cost; as c) {
-            <div class="st-tile" [title]="c.note"><span>{{ 'Estimated cost' | t }}</span><b [wbCount]="money(c.usd)"></b>
-              <small>{{ c.bytes != null ? f.bytes(c.bytes) : gb(c.gb) }} · {{ money(c.price_per_gb) }}/GB</small></div>
+            <div class="st-tile" [title]="c.note + (usdTip(c.usd) ? ' · ' + usdTip(c.usd) : '')"><span>{{ 'Estimated cost' | t }}</span><b [wbCount]="money(c.usd)"></b>
+              <small>{{ c.bytes != null ? f.bytes(c.bytes) : gb(c.gb) }} · @if (proxyPrice(); as pp) {<wb-money [amount]="pp.amount" [cur]="pp.currency" alt="tip" />} @else {<span>{{ money(c.price_per_gb) }}</span>}/GB</small></div>
           }
         </div>
         @if (us.totals.lookups) {
@@ -419,10 +418,7 @@ export class ProxySettingsPanel {
   private moneyState = inject(Money);
   readonly prefs = inject(Prefs);
   proxyPrice = computed(() => this.moneyState.costs()?.proxy ?? null);
-  readonly cur = CURRENCY;
-  readonly inCur = moneyIn;
-  readonly toUsd = toUsd;
-  shownUsd(v: number | null) { return v == null ? '–' : shown(v); }
+  readonly usdTip = usdTip;
   busy = signal(false);
   testing = signal(false);
   exits = signal<{ exits: Exit[]; rotates: boolean } | null>(null);

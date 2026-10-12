@@ -5,6 +5,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
+import { money as shownMoney } from '../money';
 import { SelectOption, UiSelect } from '../ui-select';
 import { Confirm } from '../confirm';
 import { DmSendButton, DmStore, SHARE_ICON } from '../dm';
@@ -1432,10 +1433,8 @@ export class RoomTaste implements OnDestroy {
   }
   num(n: number) { return Math.round(n).toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-US'); }
   round = Math.round;
-  money(v: number | null | undefined) {
-    if (v == null) return '–';
-    return '$' + (v < 1 ? v.toFixed(4) : v.toFixed(2));
-  }
+  /** A run's cost (dollars) in the display currency (money.ts). */
+  money(v: number | null | undefined) { return shownMoney(v); }
   dur(s: number | null | undefined) {
     if (s == null) return '–';
     if (s < 10) return this.fmt('{s} s', { s: s.toFixed(1) });

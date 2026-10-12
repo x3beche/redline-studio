@@ -2,7 +2,7 @@ import { Component, DestroyRef, ElementRef, Injectable, OnDestroy, computed, inj
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
-import { money as shown } from './money';
+import { money as shown, usdTip } from './money';
 import { CcTabWindow, TopBar } from './topbar';
 import { TimeChart, TimeData } from './rooms/charts';
 import { Skeleton } from './skeleton';
@@ -399,7 +399,7 @@ export class CcUsageLine implements OnDestroy {
       const m = s.month;
       lines.push(`${t('All providers, this month')}: ${m.calls.toLocaleString('en-US')} ${t('calls')}, `
         + `${m.tokens.toLocaleString('en-US')} tok (${num(m.input)} ${t('in')}, ${num(m.output)} ${t('out')})`
-        + (m.cost_usd != null ? `, ${shown(m.cost_usd)}` : ''));
+        + (m.cost_usd != null ? `, ${shown(m.cost_usd)}${usdTip(m.cost_usd) ? ` (${usdTip(m.cost_usd)})` : ''}` : ''));
       if (m.unpriced_calls) lines.push(`${m.unpriced_calls} ${t('calls without a price - the provider does not say')}`);
       lines.push(`${t('Today')}: ${s.today.calls} ${t('calls')}, ${num(s.today.tokens)} tok, ${s.today.answers} ${t('answers')}`);
       if (s.answers.n) lines.push(`${t('Answers in the last 14 days')}: ${s.answers.n}`

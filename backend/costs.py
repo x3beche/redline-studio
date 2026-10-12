@@ -184,7 +184,9 @@ async def summary(db, since: datetime, until: datetime, *, llm_list_usd: float,
                 continue
             total += usd
             items.append({"name": r.get("name"), "kind": kind, "usd": round(usd, 4),
-                          "detail": f"{r['amount']:g} {r['currency']} a {r.get('period') or 'month'}"})
+                          "detail": f"{r['amount']:g} {r['currency']} a {r.get('period') or 'month'}",
+                          # The price as typed, for the UI to write in its own way (money.ts).
+                          "price": {"amount": r["amount"], "currency": r["currency"], "per": r.get("period") or "month"}})
         return total
 
     subs_usd = per_row(doc.get("subscriptions") or [], "subscription")
@@ -193,13 +195,15 @@ async def summary(db, since: datetime, until: datetime, *, llm_list_usd: float,
     if elec_usd is not None:
         e = doc["electricity"]
         items.append({"name": "Electricity", "kind": "electricity", "usd": round(elec_usd, 4),
-                      "detail": f"{machine_kwh:.2f} kWh at {e['amount']:g} {e['currency']} per kWh"})
+                      "detail": f"{machine_kwh:.2f} kWh at {e['amount']:g} {e['currency']} per kWh",
+                      "price": {"amount": e["amount"], "currency": e["currency"], "per": "kWh"}, "qty": round(machine_kwh, 3)})
     gb = (await proxy_bytes(db, since, until)) / 1e9
     proxy_usd = gb * d["proxy_per_gb"] if d["proxy_per_gb"] is not None else None
     if proxy_usd is not None:
         p = doc["proxy"]
         items.append({"name": "Proxy traffic", "kind": "proxy", "usd": round(proxy_usd, 6),
-                      "detail": f"{gb * 1000:.2f} MB at {p['amount']:g} {p['currency']} per GB"})
+                      "detail": f"{gb * 1000:.2f} MB at {p['amount']:g} {p['currency']} per GB",
+                      "price": {"amount": p["amount"], "currency": p["currency"], "per": "GB"}, "qty": round(gb, 6)})
     total = subs_usd + other_usd + (elec_usd or 0) + (proxy_usd or 0)
     return {"months": round(months, 3), "items": sorted(items, key=lambda x: -x["usd"]),
             "subscriptions_usd": round(subs_usd, 2), "other_usd": round(other_usd, 2),

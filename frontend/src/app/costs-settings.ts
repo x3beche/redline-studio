@@ -8,7 +8,7 @@ import { BudgetBars } from './budget-bars';
 import { SelectOption, UiSelect } from './ui-select';
 import {
   Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
-  convert, currencies, currencyName, fromUsd, money, moneyIn, setOverride, toUsd,
+  convert, currencies, currencyName, fmtMoney, fromUsd, money, moneyIn, moneyLocale, setOverride, toUsd,
 } from './money';
 import { Skeleton } from './skeleton';
 import { CountUp } from './count';
@@ -295,7 +295,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
                        [value]="budget(k.id).warn" (input)="editBudget(k.id, { warn: num($any($event.target).value) ?? 80 })"><span class="st-dim">%</span>
               </label>
               <span class="st-right mono">
-                @if (budget(k.id).amount != null) { {{ money(toUsd(budget(k.id).amount!, budget(k.id).currency)) }} }
+                @if (budget(k.id).amount != null) { {{ fmtMoney(budget(k.id).amount, budget(k.id).currency, { convert: true }) }} }
                 @else { <span class="st-dim">{{ 'not set' | t }}</span> }
               </span>
             </div>
@@ -432,6 +432,7 @@ export class CostsSettingsPanel implements OnDestroy {
   readonly cur = CURRENCY;
   readonly money = money;
   readonly inCur = moneyIn;
+  readonly fmtMoney = fmtMoney;
   readonly convert = convert;
   readonly currencyName = currencyName;
   readonly toUsd = toUsd;
@@ -541,7 +542,7 @@ export class CostsSettingsPanel implements OnDestroy {
   cross(a: string, b: string): string {
     const v = convert(1, a, b);
     if (v == null) return '–';
-    return new Intl.NumberFormat(navigator.language || 'en-US', { maximumSignificantDigits: 5 }).format(v);
+    return new Intl.NumberFormat(moneyLocale(), { maximumSignificantDigits: 5 }).format(v);
   }
   usdOf(p: PriceDraft): number | null { return p.amount == null ? null : toUsd(p.amount, p.currency); }
   /** A row's cost a month, in dollars. */
@@ -603,8 +604,8 @@ export class CostsSettingsPanel implements OnDestroy {
   barOf(usd: number) { return Math.min(100, usd / this.planScale() * 100); }
   fromUsdOr(usd: number, c: string) { return fromUsd(usd, c) ?? 0; }
   pct(r: number) { return isFinite(r) ? `${Math.round(r * 100)}%` : '–'; }
-  times(r: number) { return `${new Intl.NumberFormat(navigator.language || 'en-US', { maximumFractionDigits: 1 }).format(r)}${LANG() === 'tr' ? '' : '×'}`; }
-  fmt(v: number, d: number) { return new Intl.NumberFormat(navigator.language || 'en-US', { maximumFractionDigits: d }).format(v); }
+  times(r: number) { return `${new Intl.NumberFormat(moneyLocale(), { maximumFractionDigits: 1 }).format(r)}${LANG() === 'tr' ? '' : '×'}`; }
+  fmt(v: number, d: number) { return new Intl.NumberFormat(moneyLocale(), { maximumFractionDigits: d }).format(v); }
 
   ago(iso: string | null): string {
     if (!iso) return '–';

@@ -1163,7 +1163,9 @@ export interface InsightCosts {
   /** The range's length in months, for the prorated subscriptions. */
   months: number;
   items: { name: string; kind: 'subscription' | 'electricity' | 'proxy' | 'other' | 'llm_list' | string;
-           usd: number; detail?: string }[];
+           usd: number; detail?: string;
+           /** The price as typed (backend/costs.py), and the kWh or GB it was multiplied by. */
+           price?: { amount: number; currency: string; per: string }; qty?: number }[];
   subscriptions_usd: number; other_usd: number; electricity_usd: number | null; proxy_usd: number | null;
   proxy_gb: number | null; total_usd: number; llm_list_usd: number;
 }

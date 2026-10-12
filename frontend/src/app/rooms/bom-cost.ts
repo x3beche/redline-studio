@@ -1,6 +1,6 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { CURRENCY, fromUsd, money } from '../money';
+import { CURRENCY, fromUsd, money, moneyIn, moneyTip, usdTip } from '../money';
 
 /** One part line of the board's bill (backend/bom_cost.py). Dollars. */
 export interface BomAlt {
@@ -67,10 +67,10 @@ const STATE_TONE: Record<StockState, string> = {
 
   @if (data(); as d) {
     <div class="bc-tiles">
-      <div class="bc-tile hero" [title]="'Parts only, at LCSC prices for ' + d.qty + ' boards'">
+      <div class="bc-tile hero" [title]="'Parts only, at LCSC prices for ' + d.qty + ' boards' + (usdTip(d.per_board_usd) ? ' · ' + usdTip(d.per_board_usd) : '')">
         <span>per board</span><b>{{ money(d.per_board_usd) }}</b>
       </div>
-      <div class="bc-tile" [title]="'Buying the minimum LCSC sells: ' + money(d.min_order_usd)">
+      <div class="bc-tile" [title]="'Buying the minimum LCSC sells: ' + money(d.min_order_usd) + (usdTip(d.total_usd) ? ' · ' + usdTip(d.total_usd) : '')">
         <span>{{ d.qty }} {{ d.qty === 1 ? 'board' : 'boards' }}</span><b>{{ money(d.total_usd) }}</b>
       </div>
       <div class="bc-tile" [attr.data-tone]="d.priced < d.distinct ? 'warn' : 'ok'"
@@ -152,8 +152,8 @@ const STATE_TONE: Record<StockState, string> = {
                   @if (l.mpn && l.mpn !== l.value) { <div class="bc-cell bc-dim">{{ l.mpn }}</div> }
                 </td>
                 <td class="r mono">{{ l.qty }}</td>
-                <td class="r mono" [title]="l.break_qty ? 'price for ' + l.break_qty + '+ pieces' : (l.flags.join(', ') || '')">
-                  {{ l.unit_usd == null ? '–' : money(l.unit_usd) }}
+                <td class="r mono" [title]="(l.break_qty ? 'price for ' + l.break_qty + '+ pieces' : (l.flags.join(', ') || '')) + (l.unit_usd != null && moneyTip(l.unit_usd, 'USD') ? ' · ' + moneyTip(l.unit_usd, 'USD') : '')">
+                  {{ l.unit_usd == null ? '–' : moneyIn(l.unit_usd, 'USD') }}
                 </td>
                 <td class="r mono">{{ l.line_usd == null ? '–' : money(l.line_usd) }}</td>
                 <td>
@@ -245,7 +245,11 @@ export class BomCost {
   board = input.required<string>();
 
   readonly presets = PRESETS;
+  /** The totals are what the board costs, in the display currency; a unit price is LCSC's, in dollars (money.ts). */
   readonly money = money;
+  readonly moneyIn = moneyIn;
+  readonly moneyTip = moneyTip;
+  readonly usdTip = usdTip;
   qty = signal(10);
   customOn = signal(false);
   data = signal<BomCostData | null>(null);

@@ -2,7 +2,7 @@ import { ToolsUsage } from './tools-usage';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { AuditRow, BoardRunRow, InsightCosts, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
-import { Money, currencies, currencyName, money, moneyIn, setOverride } from '../money';
+import { Money, currencies, currencyName, moneyAlt, moneyIn, moneyTip, setOverride } from '../money';
 import { Prefs } from '../preferences';
 import { BudgetBars } from '../budget-bars';
 import { Markdown } from '../markdown';
@@ -244,7 +244,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
               <tbody>
                 @for (it of c.items; track $index) {
                   <tr [class.tcv-dash-dim]="it.kind === 'llm_list'"><td [title]="it.name">{{ it.name }}</td>
-                    <td>{{ kindName(it.kind) }}</td><td class="tcv-dash-dim" [title]="it.detail ?? ''">{{ it.detail || '–' }}</td>
+                    <td>{{ kindName(it.kind) }}</td><td class="tcv-dash-dim" [title]="it.price ? moneyTip(it.price.amount, it.price.currency) : (it.detail ?? '')">{{ costHow(it) }}</td>
                     <td class="r mono">{{ f.money(it.usd) }}</td></tr>
                 } @empty { <tr><td colspan="4" class="tcv-dash-dim">no costs set - Settings &gt; Costs &amp; currency</td></tr> }
               </tbody>
@@ -936,10 +936,24 @@ export class RoomAnalyze implements OnDestroy {
     const e = this.cash.costs()?.electricity;
     return e && e.currency !== this.cash.currency() ? moneyIn(e.amount, e.currency) + ' per kWh' : null;
   });
+  /** The price per GB as it was typed, in its own currency, the display currency beside it (money.ts). */
   proxyPriceText = computed(() => {
-    const u = this.cash.costs()?.usd.proxy_per_gb;
-    return u == null ? '' : ' at ' + money(u) + '/GB';
+    const p = this.cash.costs()?.proxy;
+    if (!p) return '';
+    const alt = moneyAlt(p.amount, p.currency);
+    return ' at ' + moneyIn(p.amount, p.currency) + '/GB' + (alt ? ` (${alt})` : '');
   });
+  readonly moneyTip = moneyTip;
+  /** A cost's working: "5 kWh at ₺3,00 per kWh", "$5,00 a month" - the price in its own currency. */
+  costHow(it: InsightCosts['items'][number]): string {
+    const p = it.price;
+    if (!p) return it.detail || '–';
+    const price = moneyIn(p.amount, p.currency);
+    if (p.per === 'month' || p.per === 'year') return `${price} a ${p.per}`;
+    if (p.per === 'GB' && it.qty != null) return `${this.gbText(it.qty)} at ${price} per GB`;
+    if (p.per === 'kWh' && it.qty != null) return `${fmt.wh(it.qty * 1000)} at ${price} per kWh`;
+    return `${price} per ${p.per}`;
+  }
   costMonthUsd(k: 'subscriptions' | 'other'): number {
     const u = this.cash.costs()?.usd;
     return (k === 'subscriptions' ? u?.subscriptions_per_month : u?.other_per_month) ?? 0;

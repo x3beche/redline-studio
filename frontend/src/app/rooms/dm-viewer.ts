@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { Markdown } from '../markdown';
-import { moneyIn } from '../money';
+import { moneyAlt, moneyIn, moneyTip } from '../money';
 import { DM_ADD, DM_ICONS, DM_KIND_NAME, DmApi, DmKind, DmSnapshot, DmStore } from '../dm';
 import { BarList, Row, TimeChart, TimeData } from './charts';
 import { CodeFile, DmCode, langOf } from './dm-code';
@@ -246,11 +246,12 @@ const LAST_TAB: Record<string, string> = {};
                   </div>
                   <div class="mf-dprice">
                     @if (p.price) {
-                      <b>{{ money2(p.price.amount, p.price.currency) }}</b>
+                      <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>
+                      @if (moneyAlt(p.price.amount, p.price.currency); as alt) { <small class="dim" [title]="moneyTip(p.price.amount, p.price.currency)">{{ alt }}</small> }
                       @if (p.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (p.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
                       @else { <span class="mf-vat dim">{{ 'VAT not stated' | t }}</span> }
-                      @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ money2(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }
-                      @if (p.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: money2(p.price.gross, p.price.currency) }) }}</small> }
+                      @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }
+                      @if (p.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(p.price.gross, p.price.currency) }) }}</small> }
                     } @else if (c['price_label']) { <b>{{ c['price_label'] }}</b> }
                     @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
                   </div>
@@ -274,7 +275,7 @@ const LAST_TAB: Record<string, string> = {};
                       <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
                       <tbody>@for (h of histRows(p); track $index) {
                         <tr><td>{{ shortDate(h.at) }}</td>
-                          <td class="r">{{ h.amount != null ? money2(h.amount, h.currency || '') : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
+                          <td class="r" [title]="h.amount != null ? moneyTip(h.amount, h.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency) : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
                           <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
                           <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
                       }</tbody>
@@ -298,8 +299,8 @@ const LAST_TAB: Record<string, string> = {};
               </div>
               <div class="st-tiles dmv-tiles">
                 <div class="st-tile" [attr.data-tone]="c['location'] ? null : 'dim'"><span>{{ 'Location' | t }}</span><b [title]="c['location'] || ''">{{ c['location'] || '–' }}</b><small>{{ c['category'] || ('no category' | t) }}</small></div>
-                <div class="st-tile" [attr.data-tone]="c['price'] != null ? null : 'dim'"><span>{{ 'Unit price' | t }}</span><b>{{ c['price'] != null ? moneyIn(c['price'], c['currency'] || '') : '–' }}</b><small>{{ c['currency'] || '' }}&nbsp;</small></div>
-                <div class="st-tile" [attr.data-tone]="c['price'] != null ? null : 'dim'"><span>{{ 'Value' | t }}</span><b>{{ c['price'] != null ? moneyIn(c['price'] * (c['quantity'] || 0), c['currency'] || '') : '–' }}</b><small>{{ 'quantity × unit price' | t }}</small></div>
+                <div class="st-tile" [attr.data-tone]="c['price'] != null ? null : 'dim'"><span>{{ 'Unit price' | t }}</span><b>{{ c['price'] != null ? moneyIn(c['price'], c['currency']) : '–' }}</b><small>{{ c['price'] != null ? moneyAlt(c['price'], c['currency']) : '' }}&nbsp;</small></div>
+                <div class="st-tile" [attr.data-tone]="c['price'] != null ? null : 'dim'"><span>{{ 'Value' | t }}</span><b [title]="c['price'] != null ? moneyTip(c['price'] * (c['quantity'] || 0), c['currency']) : ''">{{ c['price'] != null ? moneyIn(c['price'] * (c['quantity'] || 0), c['currency']) : '–' }}</b><small>{{ 'quantity × unit price' | t }}</small></div>
                 <div class="st-tile" [attr.data-tone]="c['min_stock'] != null ? null : 'dim'"><span>{{ 'Minimum' | t }}</span><b>{{ c['min_stock'] != null ? qty(c['min_stock']) : '–' }}</b><small>{{ (c['min_stock'] != null ? (low ? 'at or below it' : 'above it') : 'none set') | t }}</small></div>
                 <div class="st-tile" [attr.data-tone]="c['mpn'] || c['lcsc'] ? null : 'dim'"><span>{{ 'Part' | t }}</span><b class="mono" [title]="c['mpn'] || ''">{{ c['mpn'] || c['lcsc'] || '–' }}</b><small>{{ c['lcsc'] && c['mpn'] ? 'LCSC ' + c['lcsc'] : (c['manufacturer'] || '') }}&nbsp;</small></div>
                 <div class="st-tile" [attr.data-tone]="c['log']?.length ? null : 'dim'"><span>{{ 'Changes' | t }}</span><b>{{ c['log']?.length ?? 0 }}</b><small>{{ c['updated_at'] ? shortDate(c['updated_at']) : '' }}&nbsp;</small></div>
@@ -674,6 +675,8 @@ export class DmViewer {
   down = 0;
   readonly t = t;
   readonly moneyIn = moneyIn;
+  readonly moneyAlt = moneyAlt;
+  readonly moneyTip = moneyTip;
   readonly strengths = STRENGTHS;
   readonly domains = DOMAINS;
   readonly PHOTO = 'M4 6h16v13H4z M4 15l4.5-4.5 4 4 2.5-2.5L20 17 M15.5 9.5h.01';
@@ -879,13 +882,6 @@ export class DmViewer {
     return p.stock_qty != null ? this.fmt('{n} left', { n: p.stock_qty }) : t('In stock');
   }
   specs(p: { specs?: Record<string, string> }) { return Object.entries(p.specs ?? {}); }
-  money2(v: number, cur: string) {
-    const loc = LANG() === 'tr' ? 'tr-TR' : 'en-US';
-    try {
-      if (cur) return new Intl.NumberFormat(loc, { style: 'currency', currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-    } catch { /* not a currency the browser knows */ }
-    return new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + (cur ? ' ' + cur : '');
-  }
   histRows(p: { history?: { at: string; amount?: number; currency?: string; vat?: string; stock?: string; qty?: number }[] }) {
     const h = p.history ?? [];
     return h.map((x, i) => {
@@ -903,7 +899,7 @@ export class DmViewer {
   });
   priceFmt = computed(() => {
     const cur = this.data()?.data['product']?.price?.currency ?? '';
-    return (v: number) => this.money2(v, cur);
+    return (v: number) => moneyIn(v, cur);
   });
 
   // ---------------------------------------------------------------- stock

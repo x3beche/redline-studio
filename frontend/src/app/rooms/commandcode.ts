@@ -12,6 +12,7 @@ import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { LogWindow } from './log-window';
 import { CcUsageLine } from '../cc-usage';
+import { money as shownMoney } from '../money';
 import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
 import { AvatarColours, avatarColour } from '../avatar';
@@ -3017,7 +3018,8 @@ export class RoomCommandCode implements OnDestroy {
   stamp(iso: string) { return new Date(iso).toLocaleString(); }
   secs(ms: number) { return `${(ms / 1000).toFixed(1)} s`; }
   num(n: number | null | undefined) { return n == null ? '–' : n.toLocaleString(); }
-  money(n: number | null | undefined) { return n == null ? '' : n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(3)}`; }
+  /** An answer's cost (dollars, from the provider) in the display currency (money.ts). */
+  money(n: number | null | undefined) { return n == null ? '' : shownMoney(n); }
   provLabel(p: string) { return PROVIDERS.find(x => x.id === p)?.name ?? p; }
 
   /** "3 min ago" against a clock that ticks, not read while the page is drawn. */

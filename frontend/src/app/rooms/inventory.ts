@@ -12,6 +12,7 @@ import { SelectionBar } from '../selection-bar';
 import { SelectOption, UiSelect } from '../ui-select';
 import { TimeChart, TimeData, fmt as chartFmt } from './charts';
 import { CountUp } from '../count';
+import { CURRENCY, convert, moneyIn, moneyTip } from '../money';
 import { Skeleton } from '../skeleton';
 
 /** Inventory ("Envanter"): what is on hand - each thing kept, how many, and
@@ -280,7 +281,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
       <button class="st-tile mf-tilebtn" [attr.data-tone]="stats().low ? 'warn' : 'dim'" (click)="fLow.set(!fLow())" [title]="'Only items at or below their minimum' | t">
         <span>{{ 'Low stock' | t }}</span><b [wbCount]="stats().low"></b>
         <small>{{ fmt('{o} out of stock · {n} with a minimum', { o: stats().out, n: stats().withMin }) }}</small></button>
-      <div class="st-tile inv-value" [attr.data-tone]="stats().valueLine ? null : 'dim'"><span>{{ 'Value' | t }}</span><b [title]="stats().valueLine" [wbCount]="stats().valueLine || '–'"></b>
+      <div class="st-tile inv-value" [attr.data-tone]="stats().valueLine ? null : 'dim'"><span>{{ 'Value' | t }}</span><b [title]="stats().valueTip || stats().valueLine" [wbCount]="stats().valueLine || '–'"></b>
         <small>{{ fmt('{n} items priced', { n: stats().priced }) }}</small></div>
       <div class="st-tile" [attr.data-tone]="recent().length ? null : 'dim'"><span>{{ 'Last change' | t }}</span><b>{{ recent().length ? ago(recent()[0].updated_at) : '–' }}</b>
         <small [title]="recent().length ? recent()[0].name : ''">{{ recent().length ? recent()[0].name + ' · ' + (recent()[0].updated_by.name || '') : ('none yet' | t) }}</small></div>
@@ -405,8 +406,8 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
                     <td class="dim">{{ i.category || '–' }}</td>
                     <td class="mono dim">@if (i.lcsc) { <a class="inv-lcsc" [href]="lcscUrl(i.lcsc)" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ i.lcsc }}</a> } {{ i.mpn || (i.lcsc ? '' : '–') }}</td>
                     <td class="r mono dim">{{ i.min_stock == null ? '–' : qty(i.min_stock) }}</td>
-                    <td class="r mono">{{ i.price == null ? '–' : money(i.price, i.currency) }}</td>
-                    <td class="r mono">{{ i.value == null ? '–' : money(i.value, i.currency) }}</td>
+                    <td class="r mono" [title]="i.price == null ? '' : moneyTip(i.price, i.currency)">{{ i.price == null ? '–' : money(i.price, i.currency) }}</td>
+                    <td class="r mono" [title]="i.value == null ? '' : moneyTip(i.value, i.currency)">{{ i.value == null ? '–' : money(i.value, i.currency) }}</td>
                     <td class="r dim nowrap">{{ ago(i.updated_at) }}</td>
                   </tr>
                 }
@@ -825,7 +826,7 @@ export class RoomInventory implements OnDestroy {
     return {
       low: rows.filter(i => i.low).length, out: rows.filter(i => i.quantity <= 0).length,
       withMin: rows.filter(i => i.min_stock != null).length, priced: rows.filter(i => i.price != null).length,
-      valueLine: this.valueLine(rows),
+      valueLine: this.valueLine(rows), valueTip: this.valueTip(rows),
     };
   });
   recent = computed(() => [...this.all()].sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '')));
@@ -873,6 +874,18 @@ export class RoomInventory implements OnDestroy {
     const value = new Map<string, number>();
     for (const i of items) if (i.value != null) value.set(i.currency || '?', (value.get(i.currency || '?') ?? 0) + i.value);
     return [...value.entries()].map(([c, v]) => this.money(v, c)).join(' · ');
+  }
+  /** The stock's worth in the display currency, when some of it is priced in another: "≈ ₺12.345,00". */
+  private valueTip(items: Item[]): string {
+    const d = CURRENCY();
+    let sum = 0, other = false;
+    for (const i of items) {
+      if (i.value == null) continue;
+      const v = i.currency ? convert(i.value, i.currency, d) : null;
+      if (v == null) return '';
+      sum += v; other ||= i.currency !== d;
+    }
+    return other ? `≈ ${moneyIn(sum, d)}` : '';
   }
 
   // ---- what a card shows
@@ -1168,13 +1181,9 @@ export class RoomInventory implements OnDestroy {
     if (l.kind === 'merged' && l.filled?.length) return this.fmt('filled in {f}', { f: l.filled.join(', ') });
     return '';
   }
-  money(v: number, cur: string) {
-    const loc = LANG() === 'tr' ? 'tr-TR' : 'en-US';
-    if (/^[A-Z]{3}$/.test(cur)) {
-      try { return v.toLocaleString(loc, { style: 'currency', currency: cur, maximumFractionDigits: v < 1 ? 4 : 2 }); } catch { /* an unknown code */ }
-    }
-    return `${v.toLocaleString(loc, { maximumFractionDigits: 2 })}${cur && cur !== '?' ? ' ' + cur : ''}`;
-  }
+  /** A stock item's price or worth, in its own currency (money.ts). */
+  money(v: number, cur: string) { return moneyIn(v, cur); }
+  readonly moneyTip = moneyTip;
   /** How long ago: "just now", "5 min ago", "2 h ago", "3 d ago", else the date. */
   ago(iso: string | null | undefined): string {
     if (!iso) return '–';

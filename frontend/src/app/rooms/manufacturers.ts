@@ -6,6 +6,7 @@ import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { Prefs } from '../preferences';
 import { LANG, T, t } from '../i18n';
+import { money as shownMoney, moneyAlt, moneyIn, moneyTip } from '../money';
 import { Confirm } from '../confirm';
 import { CatalogStock, InventoryApi, qty } from './inventory';
 import { RouteOrder, routeLine } from '../route-order';
@@ -544,7 +545,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
                     <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
-                    <td class="r mf-pprice" [title]="p.price?.text || ''">@if (p.price) { <b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
+                    <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
                       @if (p.stock) { <br><span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }</td>
                     <td class="dim mf-pcat" [title]="p.category">{{ p.category || '–' }}</td>
                     <td class="mf-specs" [title]="specLine(p)">@for (s of specs(p); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }@if (!specs(p).length) { <span class="dim">–</span> }</td>
@@ -635,7 +636,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
                       <td class="give"><b>{{ p.name }}</b></td>
                       <td class="dim">{{ sellerName(p) }}</td>
-                      <td class="r">@if (p.price) { <b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
+                      <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
                       <td>@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
                       <td class="dim">{{ p.category || '–' }}</td>
                       <td class="mono dim">{{ p.sku || '–' }}</td>
@@ -814,10 +815,11 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             </div>
             <div class="mf-dprice">
               @if (d.price) {
-                <b>{{ money2(d.price.amount, d.price.currency) }}</b>
+                <b>{{ moneyIn(d.price.amount, d.price.currency) }}</b>
+                @if (moneyAlt(d.price.amount, d.price.currency); as alt) { <small class="dim" [title]="moneyTip(d.price.amount, d.price.currency)">{{ alt }}</small> }
                 @if (d.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (d.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
-                @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ money2(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
-                @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: money2(d.price.gross, d.price.currency) }) }}</small> }
+                @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ moneyIn(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
+                @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(d.price.gross, d.price.currency) }) }}</small> }
               } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
             </div>
             <div class="mf-dstock">
@@ -859,7 +861,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
                 <tbody>@for (h of histRows(d); track h.at) {
                   <tr><td>{{ stamp(h.at) }}@if (h.seen) { <span class="dim"> – {{ stamp(h.seen) }}</span> }</td>
-                    <td class="r">{{ h.amount != null ? money2(h.amount, h.currency || '') : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
+                    <td class="r" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
                     <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
                     <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
                 }</tbody>
@@ -894,8 +896,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     <span class="mf-card-body">
       <span class="mf-card-name">{{ p.name }}</span>
       @if (p.price) {
-        <span class="mf-card-price"><b>{{ money2(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
-          @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ money2(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }</span>
+        <span class="mf-card-price" [title]="moneyTip(p.price.amount, p.price.currency)"><b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
+          @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }</span>
       } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}</span> }
       <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
       <span class="mf-card-foot">@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
@@ -1343,13 +1345,10 @@ export class RoomMfr implements OnDestroy {
       return { ...x, change: Math.abs(change) < 0.05 ? 0 : change };
     }).reverse();
   }
-  money2(v: number, cur: string) {
-    const loc = LANG() === 'tr' ? 'tr-TR' : 'en-US';
-    try {
-      if (cur) return new Intl.NumberFormat(loc, { style: 'currency', currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-    } catch { /* not a currency the browser knows */ }
-    return new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + (cur ? ' ' + cur : '');
-  }
+  /** A product's price in its own currency, the display currency beside it (money.ts). */
+  readonly moneyIn = moneyIn;
+  readonly moneyAlt = moneyAlt;
+  readonly moneyTip = moneyTip;
   /** How long ago: "just now", "5 min ago", "2 h ago", "3 d ago", else the date. */
   ago(iso: string | null | undefined): string {
     if (!iso) return '–';
@@ -1724,7 +1723,8 @@ export class RoomMfr implements OnDestroy {
   pct(n: number, of: number) { return of ? Math.min(100, Math.round(n / of * 100)) : 0; }
   num(n: number) { return Math.round(n).toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-US'); }
   kb(n: number) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
-  money(v: number | null | undefined) { return v == null ? '–' : '$' + (v < 1 ? v.toFixed(4) : v.toFixed(2)); }
+  /** A run's cost (dollars) in the display currency (money.ts). */
+  money(v: number | null | undefined) { return shownMoney(v); }
   dur(s: number | null | undefined) {
     if (s == null) return '–';
     if (s < 10) return this.fmt('{s} s', { s: s.toFixed(1) });

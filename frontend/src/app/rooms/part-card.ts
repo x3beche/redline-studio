@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { Parts, PartHeld, PartPreview } from '../api';
-import { money } from '../money';
+import { moneyIn, moneyTip } from '../money';
 import { T, t } from '../i18n';
 import { SelectOption, UiSelect } from '../ui-select';
 import { PartBodiesCard } from './part-bodies';
@@ -122,7 +122,7 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
     </div>
     @if (datasheet()?.state === 'error') { <p class="st-err">{{ datasheet()?.text }}</p> }
     <div class="st-tiles">
-      <div class="st-tile"><span>{{ 'Price' | t }}</span><b>{{ price() }}</b>
+      <div class="st-tile"><span>{{ 'Price' | t }}</span><b [title]="priceTip()">{{ price() }}</b>
         <small>@if (s.price == null) { {{ 'no price' | t }} } @else if (s.min && s.min > 1) { {{ 'min. order' | t }} {{ s.min }} } @else { {{ 'per piece' | t }} }</small></div>
       <div class="st-tile" [attr.data-tone]="s.stock ? null : 'danger'"><span>{{ 'Stock' | t }}</span><b>{{ count(s.stock) }}</b>
         <small>LCSC</small></div>
@@ -230,7 +230,9 @@ export class PartCard {
   noPhoto = signal(false);
 
   datasheetUrl(): string { return `/api/parts/${encodeURIComponent(this.part().lcsc)}/datasheet`; }
-  price(): string { const p = this.part().price; return p == null ? '–' : money(p); }
+  /** LCSC sells in dollars: the price as it is, the display currency in its tooltip (money.ts). */
+  price(): string { const p = this.part().price; return p == null ? '–' : moneyIn(p, 'USD'); }
+  priceTip(): string { const p = this.part().price; return p == null ? '' : moneyTip(p, 'USD'); }
   count(n: number | null): string {
     if (!n) return t('none');
     return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
