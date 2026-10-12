@@ -44,7 +44,12 @@ def project(shape, direction, up):
         out = []
         for e in edges:
             try:
-                n = 2 if e.geom_type in ("LINE",) or str(e.geom_type).endswith("LINE") else 24
+                # Only a true line is two points. A projected curve often comes
+                # back as a B-spline ("BSPLINE", "GeomType.BSPLINE" - which also
+                # ends in "LINE"), and drawn as one chord it broke rounded
+                # openings into straight stubs; curves get points by length.
+                kind = getattr(e.geom_type, "name", str(e.geom_type)).split(".")[-1]
+                n = 2 if kind == "LINE" else max(24, min(240, int(e.length / 0.4)))
                 pts = [e @ (i / (n - 1)) for i in range(n)]
                 out.append([(p.X, p.Y) for p in pts])
             except Exception:

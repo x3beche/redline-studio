@@ -42,6 +42,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DRAW_IMAGE = os.environ.get("REDLINE_DRAW_IMAGE", "redline-draw")
 DRAW_TIMEOUT = 300
 DRAWINGS = ROOT / ".cache" / "drawings"
+# Bumped when tools/techdraw.py draws differently, so kept drawings are made again.
+DRAW_VERSION = 2
 # The zips on disk as well as in the database: the database is far away,
 # and thirty megabytes from it is minutes; from disk it is at once.
 ZIPS = ROOT / ".cache" / "releases"
@@ -98,7 +100,7 @@ async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
     if not meta:
         raise LookupError("this model has no STEP to draw from - its script does not export one")
     DRAWINGS.mkdir(parents=True, exist_ok=True)
-    kept = DRAWINGS / f"{meta['sha256'][:24]}.pdf"
+    kept = DRAWINGS / f"{meta['sha256'][:24]}-v{DRAW_VERSION}.pdf"
     if kept.exists():
         return kept.read_bytes()
     step = await store.get_artifact(db, model_id, "step")
