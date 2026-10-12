@@ -8,7 +8,7 @@
 .tst-on { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
 /* ---- the head: name, description, what can be done --------------- */
-.tst-head { display: flex; align-items: flex-start; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.tst-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .tst-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .tst-title h2 { margin: 2px 0 2px; font-size: 15px; font-weight: 600; color: var(--ink); }
 .tst-name, .tst-desc {
@@ -16,7 +16,8 @@
   border: 1px solid transparent; border-radius: 4px; outline: none;
 }
 .tst-name { font-size: 16px; font-weight: 600; }
-.tst-desc { font-size: 12px; color: var(--ink-dim); }
+/* the whole description, wrapped over as many lines as it takes */
+.tst-desc { flex-basis: 100%; margin-right: -6px; font-size: 12px; line-height: 1.45; color: var(--ink-dim); resize: none; field-sizing: content; min-height: calc(1.45em + 6px); overflow: hidden; }
 .tst-name:not([readonly]):hover, .tst-desc:not([readonly]):hover { border-color: var(--line); }
 .tst-name:focus, .tst-desc:focus { border-color: var(--accent); background: var(--surface-2); }
 .tst-acts { flex: none; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }

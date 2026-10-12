@@ -417,8 +417,6 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <div class="tst-title">
           <input class="tst-name" [value]="p.name" [readonly]="!can()" (change)="rename(p, $any($event.target).value)"
                  (keydown.enter)="$any($event.target).blur()" [attr.aria-label]="'Palette name' | t">
-          <input class="tst-desc" [value]="p.description" [readonly]="!can()" [placeholder]="can() ? ('Add a description' | t) : ''"
-                 (change)="describe(p, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()">
         </div>
         <div class="tst-acts">
           <span class="st-sub">{{ p.by.name || ('someone' | t) }} · {{ when(p.updated_at) }}</span>
@@ -449,6 +447,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <button class="tcv-btn tst-del" (click)="remove(p)">{{ 'Delete' | t }}</button>
           }
         </div>
+        <textarea class="tst-desc" rows="1" [value]="p.description" [readonly]="!can()" [placeholder]="can() ? ('Add a description' | t) : ''"
+                  (change)="describe(p, $any($event.target).value)" (keydown.enter)="$event.preventDefault(); $any($event.target).blur()"></textarea>
       </header>
       @let ps = openStats();
       <div class="st-tiles tsh-ptiles">
