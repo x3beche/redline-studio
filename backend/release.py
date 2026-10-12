@@ -111,6 +111,41 @@ async def model_drawing(db, model_id: str, tag: str = "") -> bytes:
     return kept.read_bytes()
 
 
+
+# A model's drawing made by itself a while after it is built, so the 3D
+# room's Technical drawing opens at once. Not right away: a model is often
+# built several times in a row, and its imports' builds bring it round
+# again - each build starts the wait over, and only the last one is drawn.
+# One at a time, in the background; lost on a restart, when the drawing is
+# simply made on the next click as before.
+DRAW_AFTER_BUILD_S = int(os.environ.get("REDLINE_DRAW_AFTER_S", "600"))
+_DRAW_LATER: dict[str, asyncio.Task] = {}
+_DRAW_ONE = asyncio.Semaphore(1)
+
+
+def draw_later(db, model_id: str) -> None:
+    """Make `model_id`'s drawing DRAW_AFTER_BUILD_S after its latest build."""
+    old = _DRAW_LATER.pop(model_id, None)
+    if old:
+        old.cancel()
+
+    async def go() -> None:
+        try:
+            await asyncio.sleep(DRAW_AFTER_BUILD_S)
+            async with _DRAW_ONE:
+                await model_drawing(db, model_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:                    # noqa: BLE001 - a click makes it again
+            print(f"drawing after build {model_id}: {exc}", flush=True)
+        finally:
+            if _DRAW_LATER.get(model_id) is task:
+                _DRAW_LATER.pop(model_id, None)
+
+    task = asyncio.get_running_loop().create_task(go())
+    _DRAW_LATER[model_id] = task
+
+
 # ---------------------------------------------------------------- boards
 
 def _copper_layers(pcb: str) -> list[str]:

@@ -403,6 +403,14 @@ async def build(db, model_id: str, script: Path) -> dict:
         if (doc.get("link") or {}).get("state") in ("failed", "blocked"):
             patch["link.state"] = "done"
         await db.models.update_one({"_id": model_id}, {"$set": patch})
+        # Its technical drawing, made in the background a while later
+        # (release.draw_later): ready when the 3D room asks for it.
+        if "step" in stored:
+            try:
+                from . import release
+                release.draw_later(db, model_id)
+            except Exception:                       # noqa: BLE001 - the build stands
+                pass
         # A model bound to a part as a 3D body (backend/bodies.py): when its
         # STEP changed, the boards that wear it are queued to be redrawn -
         # the API does that, then what imports those boards follows.
