@@ -514,7 +514,9 @@ export class DrawingLayout implements OnInit, OnDestroy {
   /** The drawing as made, under the boxes - only while it is what they say. */
   underlay = computed(() => {
     const d = this.draw();
-    if (!d?.made?.preview || !d.key || this.dirty() || this.busy()) return '';
+    // Only a drawing that says where its boxes were: one made before it did
+    // was laid out otherwise, and under these boxes it would mislead.
+    if (!d?.made?.preview || !d.key || !d.made.boxes?.length || this.dirty() || this.busy()) return '';
     return `/api/models/${d.id}/drawing.png?k=${d.key}`;
   });
   unmatched = computed(() => this.made()?.unmatched ?? []);

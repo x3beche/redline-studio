@@ -45,7 +45,8 @@ DRAWINGS = ROOT / ".cache" / "drawings"
 # Bumped when tools/techdraw.py draws differently, so kept drawings are made again.
 # 4: each kept drawing has a small PNG of its sheet beside it (the 3D room's
 # preview) and a JSON of what the sheet holds.
-DRAW_VERSION = 4
+# 5: its JSON says where each view box was, so the layout editor starts from the drawing.
+DRAW_VERSION = 5
 # The zips on disk as well as in the database: the database is far away,
 # and thirty megabytes from it is minutes; from disk it is at once.
 ZIPS = ROOT / ".cache" / "releases"
