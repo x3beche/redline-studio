@@ -15,6 +15,7 @@ import { CustomThemesPanel } from './custom-themes';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
+import { AdminOverview } from './admin-overview';
 import { RustdeskSettings } from './rustdesk-settings';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
@@ -25,7 +26,7 @@ import { RustdeskSettings } from './rustdesk-settings';
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page). The owner
  *  and the admins also get the admin panel: the accounts (admin-users.ts).
  */
-export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'admin' | 'rustdesk';
+export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'dashboard' | 'admin' | 'rustdesk';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -109,7 +110,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, RustdeskSettings],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -141,14 +142,14 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'admin' || x.id === 'rustdesk' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'rustdesk' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
           @if (x.id === 'profile') {
             <span>{{ 'only you can change these' | t }}</span>
           } @else if (x.id === 'admin') {
             <span>{{ (auth.state()?.role === 'owner' ? 'owner: everything here' : 'admin: manages user accounts') | t }}</span>
-          } @else if (x.id === 'rustdesk') {
+          } @else if (x.id === 'rustdesk' || x.id === 'dashboard') {
             <span>{{ 'only the owner and the admins see this' | t }}</span>
           } @else if (server(x.id)) {
             <span class="st-badge" [attr.data-tone]="mayEdit(x.id) ? 'ok' : 'warn'">{{ (mayEdit(x.id) ? 'you can change these' : 'read-only for you') | t }}</span>
@@ -261,6 +262,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('costs') { <app-costs-settings /> }
         @case ('telegram') { <app-telegram-settings /> }
         @case ('tokens') { <app-tokens-settings /> }
+        @case ('dashboard') { @if (auth.admin()) { <app-admin-overview /> } }
         @case ('admin') { @if (auth.admin()) { <app-admin-users /> } }
         @case ('rustdesk') { @if (auth.admin()) { <app-rustdesk-settings /> } }
         @case ('topbar') { <app-topbar-settings /> }
@@ -343,7 +345,9 @@ export class RoomSettings {
         blurb: 'Tokens for agents and scripts: make, revoke, delete, and see what each one did.' },
     ] },
     { group: 'Administration', items: [
-      { id: 'admin', label: 'Admin panel', about: 'accounts, roles, passwords', ico: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+      { id: 'dashboard', label: 'Dashboard', about: 'people, projects, models at a glance', ico: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+        blurb: 'The server at a glance: what is kept, what the people did, and the models they used.' },
+      { id: 'admin', label: 'Users', about: 'accounts, roles, passwords', ico: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
         blurb: 'The accounts on this server: add people, change roles, reset passwords, disable or delete.' },
       { id: 'rustdesk', label: 'RustDesk', about: 'the remote desktop, over Tailscale', ico: 'M3 4h18v12H3zM8 20h8M12 16v4',
         blurb: 'The remote desktop on the server: on or off, and its Tailscale address and password.' },

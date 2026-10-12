@@ -8,7 +8,6 @@ import { reportError } from './error-report';
 import { Confirm } from './confirm';
 import { CountUp } from './count';
 import { Skeleton } from './skeleton';
-import { AdminOverview } from './admin-overview';
 
 /** Settings > Admin panel: the accounts on this server (backend/admin.py),
  *  for the owner and the admins - opened from the account menu.
@@ -33,7 +32,7 @@ const MIN_PASSWORD = 10;
 
 @Component({
   selector: 'app-admin-users',
-  imports: [Skeleton, CountUp, T, Avatar, AdminOverview],
+  imports: [Skeleton, CountUp, T, Avatar],
   styleUrls: ['./settings.css', './profile-settings.css', './admin-users.css'],
   template: `
 <div class="st-page" [class.um-wide]="!!data() && !editing() && !adding()">
@@ -212,9 +211,6 @@ const MIN_PASSWORD = 10;
         </form>
       </div>
     } @else {
-      <!-- Two columns: the accounts on the left, the server at a glance
-           around them (admin-overview.ts); one under the other on a phone. -->
-      <app-admin-overview [users]="d.users">
       <div class="st-card um-users">
         <div class="st-card-head"><h3>{{ 'Users' | t }}</h3>
           <span class="st-sub">{{ d.users.length }} {{ 'accounts' | t }}</span>
@@ -259,7 +255,6 @@ const MIN_PASSWORD = 10;
           }
         </div>
       </div>
-      </app-admin-overview>
     }
   }
 </div>`,

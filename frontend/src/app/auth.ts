@@ -541,7 +541,7 @@ export class SignIn {
           <span class="tcv-menu-blurb">{{ 'Your profile: name, picture, password, sessions' | t }}</span></button>
         @if (auth.admin()) {
           <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('admin')">
-            <span class="tcv-menu-name">{{ 'Admin panel' | t }}</span>
+            <span class="tcv-menu-name">{{ 'Users' | t }}</span>
             <span class="tcv-menu-blurb">{{ 'Accounts: add people, roles, passwords, disable' | t }}</span></button>
         }
         <!-- The accounts this browser remembers: the one signed in ticked,

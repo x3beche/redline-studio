@@ -64,10 +64,9 @@
 .um-edit { flex: none; margin-left: auto; }
 @media (max-width: 768px) { .um-edit { display: none; } }
 
-/* The list inside the overview (admin-overview.ts): the page takes the
-   whole width, the accounts a column of their own on the left. */
+/* The list takes the whole width; its search no wider than it needs. */
 .st-page.um-wide { max-width: none; }
-.um-users .um-find { width: 100%; min-width: 0; flex: 1; }
+.um-users .um-find { width: 100%; max-width: 320px; min-width: 0; flex: 1; }
 .um-users .st-right { flex: 1; min-width: 0; justify-content: flex-end; }
 .um-users .um-tiles { grid-template-columns: 1fr 1fr 1fr 1.5fr; }
 @media (max-width: 768px) {

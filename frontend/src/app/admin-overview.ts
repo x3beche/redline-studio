@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { Avatar, avatarColour } from './avatar';
@@ -8,14 +8,14 @@ import { money, moneyShort } from './money';
 import { BarList, Donut, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import type { AdminUser } from './admin-users';
 
-/** Settings > Admin panel, around the accounts: the server at a glance
+/** Settings > Dashboard, for the owner and the admins: the server at a glance
  *  (GET /api/admin/overview, backend/admin.py) - what is kept in every
  *  space, and what the people did over a day, a week or a month: by
  *  bucket, by person in their own colour, the projects that moved most,
  *  the models' calls and what they cost, and the latest lines of the trail.
  *  The server names people by id; their names and colours come from the
- *  accounts list the panel already has. The accounts' card is projected in
- *  at the top of the left column, the trail's lines under it. */
+ *  accounts list (GET /api/admin/users). The charts take the width, the
+ *  trail's lines a column beside them. */
 interface Person { id: string; sign_ins: number; changes: number; messages: number; tools: number;
   projects: number; models: number; files: number }
 interface Overview {
@@ -44,13 +44,14 @@ const SERIES: Record<string, string> = { 'Changes': 'Changes made', 'Agents': 'A
   imports: [T, Avatar, CountUp, Skeleton, TimeChart, BarList, Donut],
   styleUrls: ['./settings.css'],
   styles: [`
-    /* Two columns: the accounts (projected from admin-users.ts) and the
-       latest lines on the left, the figures and charts on the right; one
-       under the other when the stage is narrow. */
+    /* Two columns over the whole width: the figures and the charts, and
+       beside them the trail's latest lines; one under the other when the
+       stage is narrow. */
     :host { display: block; min-width: 0; container-type: inline-size; }
-    .ao-cols { display: grid; grid-template-columns: minmax(380px, 2fr) minmax(0, 5fr); gap: 12px; align-items: start; }
-    .ao-left, .ao-right, .ao-sk { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-    .ao-right { container-type: inline-size; }
+    .st-page.ao-page { max-width: none; }
+    .ao-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(340px, 2fr); gap: 12px; align-items: start; }
+    .ao-main, .ao-side, .ao-sk { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .ao-main { container-type: inline-size; }
     .ao-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     .ao-three { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .ao-three > .ao-wide { grid-column: 1 / -1; }
@@ -69,31 +70,9 @@ const SERIES: Record<string, string> = { 'Changes': 'Changes made', 'Agents': 'A
     .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
   `],
   template: `
+<div class="st-page ao-page">
 <div class="ao-cols">
-<div class="ao-left">
-  <ng-content />
-  <div class="st-card">
-    <div class="st-card-head"><h3>{{ 'Latest' | t }}</h3><span class="st-sub">{{ 'what the people did' | t }}</span></div>
-    @if (data(); as d) {
-      <div class="ao-feed">
-        @for (e of d.feed; track $index) {
-          <div class="ao-line" [title]="when(e.at) + ' · ' + e.action + (e.target ? ' · ' + e.target : '')">
-            @if (who(e.user); as u) {
-              <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [colour]="u.avatar_colour" [size]="20" />
-              <b>{{ u.name }}</b>
-            } @else { <b>{{ 'someone' | t }}</b> }
-            <span>{{ did(e.action) }}</span>
-            <small>{{ quiet(e.action) ? '' : e.target }}</small>
-            <em class="mono">{{ ago(e.at) }}</em>
-          </div>
-        } @empty { <div class="st-empty">{{ 'Nothing in this period.' | t }}</div> }
-      </div>
-    } @else if (!err()) {
-      <div class="st-card-body"><wb-skel kind="rows" [count]="8" [h]="20" /></div>
-    }
-  </div>
-</div>
-<div class="ao-right">
+<div class="ao-main">
 @if (data(); as d) {
   <div class="st-card">
     <div class="st-card-head"><h3>{{ 'Overview' | t }}</h3>
@@ -152,12 +131,35 @@ const SERIES: Record<string, string> = { 'Changes': 'Changes made', 'Agents': 'A
   </div></wb-skel>
 }
 </div>
+<div class="ao-side">
+  <div class="st-card">
+    <div class="st-card-head"><h3>{{ 'Latest' | t }}</h3><span class="st-sub">{{ 'what the people did' | t }}</span></div>
+    @if (data(); as d) {
+      <div class="ao-feed">
+        @for (e of d.feed; track $index) {
+          <div class="ao-line" [title]="when(e.at) + ' · ' + e.action + (e.target ? ' · ' + e.target : '')">
+            @if (who(e.user); as u) {
+              <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [colour]="u.avatar_colour" [size]="20" />
+              <b>{{ u.name }}</b>
+            } @else { <b>{{ 'someone' | t }}</b> }
+            <span>{{ did(e.action) }}</span>
+            <small>{{ quiet(e.action) ? '' : e.target }}</small>
+            <em class="mono">{{ ago(e.at) }}</em>
+          </div>
+        } @empty { <div class="st-empty">{{ 'Nothing in this period.' | t }}</div> }
+      </div>
+    } @else if (!err()) {
+      <div class="st-card-body"><wb-skel kind="rows" [count]="8" [h]="20" /></div>
+    }
+  </div>
+</div>
+</div>
 </div>`,
 })
 export class AdminOverview {
   private http = inject(HttpClient);
-  /** The accounts, from the panel's list: names, pictures and colours. */
-  users = input<AdminUser[]>([]);
+  /** The accounts (GET /api/admin/users): names, pictures and colours. */
+  users = signal<AdminUser[]>([]);
 
   readonly f = fmt;
   readonly money = money;
@@ -167,7 +169,10 @@ export class AdminOverview {
   data = signal<Overview | null>(null);
   err = signal('');
 
-  constructor() { this.load(); }
+  constructor() {
+    this.load();
+    this.http.get<{ users: AdminUser[] }>('/api/admin/users').subscribe({ next: d => this.users.set(d.users), error: () => {} });
+  }
 
   setSpan(s: string) {
     if (s === this.span()) return;
