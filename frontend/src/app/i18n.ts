@@ -3068,6 +3068,7 @@ const TR: Record<string, string> = {
   'Reading the web page {url}': '{url} web sayfası okunuyor',
   'Could not read the web page': 'Web sayfası okunamadı',
   'Read the web page {title}': '{title} web sayfası okundu',
+  'Jina tokens': 'token',
 };
 
 export function t(text: string): string {

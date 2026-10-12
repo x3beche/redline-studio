@@ -55,10 +55,10 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
           <b>{{ spent() == null ? '–' : fmt.count(spent()!) }}</b><small>{{ 'tokens, by the balance' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="tone(u()?.reader?.success_rate)"><span>Reader · 14d</span>
           <b>{{ fmt.count(u()?.reader?.requests ?? 0) }}</b>
-          <small>{{ u()?.reader?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.reader?.tokens ?? 0) }} {{ 'tokens' | t }}</small></div>
+          <small>{{ u()?.reader?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.reader?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="tone(u()?.search?.success_rate)"><span>Search · 14d</span>
           <b>{{ fmt.count(u()?.search?.requests ?? 0) }}</b>
-          <small>{{ u()?.search?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.search?.tokens ?? 0) }} {{ 'tokens' | t }}</small></div>
+          <small>{{ u()?.search?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.search?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
       </div>
 
       @if (canEdit) {
@@ -97,7 +97,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
           <div class="st-table-wrap">
             <table class="st-table">
               <thead><tr><th>{{ 'when' | t }}</th><th>API</th><th>{{ 'target' | t }}</th><th>{{ 'result' | t }}</th>
-                <th>{{ 'who' | t }}</th><th class="r">ms</th><th class="r">{{ 'characters' | t }}</th><th class="r">{{ 'tokens' | t }}</th></tr></thead>
+                <th>{{ 'who' | t }}</th><th class="r">ms</th><th class="r">{{ 'characters' | t }}</th><th class="r">{{ 'Tokens' | t }}</th></tr></thead>
               <tbody>
                 @for (r of more() ? us.log : us.log.slice(0, 8); track $index) {
                   <tr [title]="r.error || ''">
