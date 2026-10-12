@@ -55,7 +55,7 @@ export const WORKSPACES: Workspace[] = [
   },
   {
     id: 'mfr',
-    label: 'Supply',
+    label: 'Product Catalog',
     blurb: 'Makers whose catalogs you keep, read from their own sites: add one by its address, watch it '
          + 'explored, search its products - and Chat looks here when you need a part from a maker.',
     ready: true,
@@ -101,11 +101,13 @@ export const WORKSPACES: Workspace[] = [
 const KEY = 'redline.workspace';
 
 /** A tab's name in the address where it is not its id: the Chat is ?ws=chat,
- *  Supply is ?ws=supply (their ids, and old links, stay commandcode and mfr - both open them). */
-const URL_NAME: Partial<Record<Workspace['id'], string>> = { commandcode: 'chat', mfr: 'supply' };
+ *  Catalog is ?ws=catalog (their ids, and old links, stay commandcode and mfr - both open them;
+ *  so does ?ws=supply, its name for a while). */
+const URL_NAME: Partial<Record<Workspace['id'], string>> = { commandcode: 'chat', mfr: 'catalog' };
 export function urlName(id: Workspace['id']): string { return URL_NAME[id] ?? id; }
+const OLD_NAMES: Record<string, Workspace['id']> = { supply: 'mfr' };
 function fromUrl(name: string | null): string | null {
-  return (Object.entries(URL_NAME).find(([, n]) => n === name)?.[0]) ?? name;
+  return (Object.entries(URL_NAME).find(([, n]) => n === name)?.[0]) ?? (name ? OLD_NAMES[name] : undefined) ?? name;
 }
 
 export function currentWorkspace(): Workspace['id'] {

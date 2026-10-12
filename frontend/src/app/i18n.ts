@@ -2076,6 +2076,8 @@ const TR: Record<string, string> = {
   'Read a taste palette': 'Tadım paleti oku',
   'Parts drawer': 'Parça çekmecesi',
   'Room notes': 'Oda notları',
+  'Product Catalog': 'Ürün Kataloğu',
+  'The makers\' catalogs saved in Product Catalog.': 'Ürün Kataloğu\'nda kayıtlı üretici katalogları.',
   'Supply': 'Tedarik',
   'The makers\' catalogs saved in Supply.': 'Tedarik\'te kayıtlı üretici katalogları.',
   'Read the pages again': 'Sayfaları yeniden oku',
