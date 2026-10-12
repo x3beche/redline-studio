@@ -188,11 +188,32 @@ export class DmStore {
     this.started = true;
     this.refresh();
     void this.connect();
+    if (!this.hooked) {
+      this.hooked = true;
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.resync(false); });
+      window.addEventListener('online', () => this.resync(true));
+    }
   }
   stop() {
     this.started = false;
     this.abort?.abort();
     this.state.set(null);
+  }
+
+  /** When the live stream last said anything - a keep-alive every 10 s at least. */
+  private beat = 0;
+  private hooked = false;
+  /** Back on the page or the network: a stream quiet for 12 s (or any, back
+   *  online) is not trusted - opened again, and the state read again for
+   *  what came meanwhile. */
+  private resync(force: boolean) {
+    if (!this.started) return;
+    if (force || Date.now() - this.beat > 12_000) {
+      this.abort?.abort();
+      if (this.again) clearTimeout(this.again);
+      void this.connect();
+    }
+    this.refresh();
   }
 
   refresh() {
@@ -209,6 +230,11 @@ export class DmStore {
     const ctl = new AbortController();
     this.abort = ctl;
     let wait = 1500;
+    // Silent for 25 s - the API reloaded behind the dev server's proxy, which
+    // can leave the stream open and empty for ever: given up, opened again.
+    let dead = false;
+    this.beat = Date.now();
+    const dog = setInterval(() => { if (Date.now() - this.beat > 25_000) { dead = true; ctl.abort(); } }, 5000);
     try {
       const r = await fetch('/api/dm/live', { credentials: 'same-origin', signal: ctl.signal, headers: { Accept: 'text/event-stream' } });
       if (r.status === 401 || r.status === 403) { this.started = false; return; }   // signed out, or no account to write from
@@ -219,6 +245,7 @@ export class DmStore {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        this.beat = Date.now();
         buf += dec.decode(value, { stream: true });
         let i: number;
         while ((i = buf.indexOf('\n\n')) >= 0) {
@@ -232,8 +259,11 @@ export class DmStore {
       }
     } catch {
       wait = 5000;
+    } finally {
+      clearInterval(dog);
     }
-    if (ctl.signal.aborted || !this.started) return;
+    if ((ctl.signal.aborted && !dead) || !this.started || this.abort !== ctl) return;
+    if (dead) this.refresh();                                 // what came while it was silent
     if (this.again) clearTimeout(this.again);
     this.again = setTimeout(() => void this.connect(), wait);
   }

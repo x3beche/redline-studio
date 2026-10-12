@@ -147,6 +147,8 @@ export interface LlmModel { id: string; name: string; context: number | null; an
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
   gen?: string; live?: CcWatch[]; thinking?: string; steps?: CcStep[];
+  /** A text or thinking piece: where in the whole it goes (pieces a page has already are skipped). */
+  at?: number;
   /** {type: queue}: the queue as it stands; in the hello, the same nested. */
   queue?: CcQueued[] | CcQueueState; paused?: boolean; why?: string | null; queued?: CcQueued;
 }
@@ -209,8 +211,8 @@ export class CcApi {
    *  the answer comes back piece by piece through `on`. */
   say(id: string, body: { text: string; provider: string; model: string; edit?: string; mentions?: MentionRef[]; client?: string },
       signal: AbortSignal,
-      on: (ev: CcEvent) => void) {
-    return this.sse(`/api/cc/chats/${id}/messages`, body, signal, on);
+      on: (ev: CcEvent) => void, beat?: () => void) {
+    return this.sse(`/api/cc/chats/${id}/messages`, body, signal, on, beat);
   }
 
   /** A line while an answer is being written: it waits on the server (202),
@@ -248,8 +250,8 @@ export class CcApi {
 
   /** The last answer written again, with this model. */
   regenerate(id: string, body: { provider: string; model: string; client?: string }, signal: AbortSignal,
-             on: (ev: CcEvent) => void) {
-    return this.sse(`/api/cc/chats/${id}/regenerate`, body, signal, on);
+             on: (ev: CcEvent) => void, beat?: () => void) {
+    return this.sse(`/api/cc/chats/${id}/regenerate`, body, signal, on, beat);
   }
 
   /** `beat`: anything at all arrived, a keep-alive too - how a live stream knows it is not dead. */
@@ -288,6 +290,22 @@ export class CcApi {
 const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openrouter', name: 'OpenRouter' },
                    { id: 'claude', name: 'Claude API' }, { id: 'opencode-go', name: 'OpenCode Go' }];
 const UNDO_MS = 6000;
+/** The server says something every 10 s on a stream (a keep-alive at
+ *  least). Nothing for this long and the stream is dead though still open -
+ *  how an API reload behind the dev server's proxy leaves it - and is
+ *  given up: the page follows the answer on the live stream instead. */
+const STALL_MS = 25_000;
+/** Back on the page (or the network): a stream quiet for this long is
+ *  not trusted, and opened again. */
+const QUIET_MS = 12_000;
+
+/** `have` with a piece that goes at `at` in the whole: what it has already
+ *  skipped; null when pieces before it never came (read it all again). */
+export function fit(have: string, text: string, at?: number): string | null {
+  if (at == null || at === have.length) return have + text;
+  if (at > have.length) return null;
+  return have + text.slice(have.length - at);
+}
 
 /** Line drawings, 24 units square, stroked in the text colour - the same
  *  hand as the top bar's tab icons (topbar.ts), whose PCB, 3D and Command
@@ -371,7 +389,8 @@ type Ask = { text: string; label: string; go: () => void };
 @Component({
   selector: 'app-room-commandcode',
   imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView],
-  host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
+  host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
+          '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
      (the one they chose on their Profile, or a series colour picked by name -
@@ -1214,6 +1233,8 @@ export class RoomCommandCode implements OnDestroy {
   private liveFor: string | null = null;
   private liveTimer: ReturnType<typeof setTimeout> | null = null;
   private liveTries = 0;
+  /** When the live stream last said anything, a keep-alive too. */
+  private liveBeat = 0;
   private gone = false;
   /** Lines waiting for the answer being written (the server's queue). */
   queue = signal<CcQueued[]>([]);
@@ -2025,8 +2046,8 @@ export class RoomCommandCode implements OnDestroy {
     this.picked.set([]);
     this.closeMentions();
     this.setText('');
-    await this.run(c, (sig, on) => this.api.say(c.id, { text, provider: this.provider(), model: this.model(), edit,
-                                                         mentions, client: this.client }, sig, on),
+    await this.run(c, (sig, on, beat) => this.api.say(c.id, { text, provider: this.provider(), model: this.model(), edit,
+                                                               mentions, client: this.client }, sig, on, beat),
                    () => {
                      if (!this.text()) this.setText(text);
                      if (!this.picked().length) this.picked.set(picked);
@@ -2041,13 +2062,14 @@ export class RoomCommandCode implements OnDestroy {
     if (this.watch().length) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
     if (model) this.model.set(model);
     if (!this.model()) return;
-    await this.run(c, (sig, on) => this.api.regenerate(c.id, { provider: this.provider(), model: this.model(), client: this.client },
-                                                        sig, on));
+    await this.run(c, (sig, on, beat) => this.api.regenerate(c.id, { provider: this.provider(), model: this.model(), client: this.client },
+                                                              sig, on, beat));
   }
 
   /** This page's own answer, in conversation `c` - keyed by it all the way:
    *  what streams back lands in `c` whichever conversation is open by then. */
-  private async run(c: CcChat, call: (sig: AbortSignal, on: (ev: CcEvent) => void) => Promise<void>, failed?: () => void) {
+  private async run(c: CcChat, call: (sig: AbortSignal, on: (ev: CcEvent) => void, beat: () => void) => Promise<void>,
+                    failed?: () => void) {
     const id = c.id;
     const here = () => this.openId() === id;
     this.error.set(null);
@@ -2058,6 +2080,14 @@ export class RoomCommandCode implements OnDestroy {
     let started = false;
     let finished = false;
     let left = false;
+    // Silent too long (a keep-alive comes every 10 s), or a piece missing:
+    // given up, and the answer followed on the live stream from where it is.
+    let stalled = false;
+    const stall = () => { if (!stalled) { stalled = true; abort.abort(); } };
+    const watch = { beat: Date.now(), stall };
+    this.runWatch.set(id, watch);
+    const dog = setInterval(() => { if (Date.now() - watch.beat > STALL_MS) stall(); }, 5000);
+    const put = (have: string, ev: CcEvent) => { const n = fit(have, ev.text ?? '', ev.at); if (n === null) stall(); return n ?? have; };
     try {
       await call(abort.signal, ev => {
         if (ev.type === 'user') {
@@ -2067,10 +2097,10 @@ export class RoomCommandCode implements OnDestroy {
                                                    ...(ev.message ? [ev.message] : [])] }));
           if (here()) this.scroll();
         } else if (ev.type === 'thinking') {
-          this.setRun(id, r => r && this.sped({ ...r, thinking: r.thinking + (ev.text ?? ''), t1: r.t1 ?? Date.now() }));
+          this.setRun(id, r => r && this.sped({ ...r, thinking: put(r.thinking, ev), t1: r.t1 ?? Date.now() }));
           if (here()) { this.stickThink(); this.scroll(true); }
         } else if (ev.type === 'text') {
-          this.setRun(id, r => r && this.sped({ ...r, text: r.text + (ev.text ?? ''), t1: r.t1 ?? Date.now() }));
+          this.setRun(id, r => r && this.sped({ ...r, text: put(r.text, ev), t1: r.t1 ?? Date.now() }));
           if (here()) this.scroll(true);
         } else if (ev.type === 'steps') {
           this.setRun(id, r => r && { ...r, steps: ev.steps ?? [] });
@@ -2088,16 +2118,18 @@ export class RoomCommandCode implements OnDestroy {
           this.inChat(id, x => ({ ...x, title: ev.title! }));
           this.chats.update(l => l.map(x => x.id === id ? { ...x, title: ev.title! } : x));
         }
-      });
+      }, () => { watch.beat = Date.now(); });
     } catch (e) {
-      left = (e as Error).name === 'AbortError';
-      if (!left && !started) {
+      left = (e as Error).name === 'AbortError' && !stalled;
+      if (!left && !started && !stalled) {
         if (here()) { this.error.set((e as Error).message); failed?.(); }
         else this.runErrors.set(id, (e as Error).message);
       }
       // Cut once it had started (the API reloaded, the network dropped):
       // the answer is still being written on the server - followed below.
     } finally {
+      clearInterval(dog);
+      if (this.runWatch.get(id) === watch) this.runWatch.delete(id);
       this.setRun(id, () => null);
       if (this.aborts.get(id) === abort) this.aborts.delete(id);
       this.refresh();
@@ -2105,8 +2137,30 @@ export class RoomCommandCode implements OnDestroy {
         next: x => { if (this.openId() === x.id && !this.live()) { this.chat.set(x); this.scroll(); } }, error: () => {} });
       // Not seen to the end here: the live stream picks it up where it is
       // (and does by itself when the conversation is opened again later).
-      if (started && !finished && !left && here()) this.relisten(id);
+      if ((started || stalled) && !finished && !left && here()) this.relisten(id);
     }
+  }
+
+  /** This page's own answers being streamed: when each last heard anything, and how to give it up. */
+  private runWatch = new Map<string, { beat: number; stall: () => void }>();
+
+  /** Back on the page, or on the network: a stream that has been quiet is
+   *  not trusted (a sleeping laptop, a changed network, a reload of the API
+   *  leave it open and silent) - given up and opened again, and the
+   *  conversation read again for what happened meanwhile. `force` (back
+   *  online): every stream, quiet or not. */
+  resync(force: boolean) {
+    if (!force && document.visibilityState !== 'visible') return;
+    const id = this.openId();
+    if (!id || this.gone) return;
+    const quiet = (at: number) => force || Date.now() - at > QUIET_MS;
+    const own = this.runWatch.get(id);
+    if (own) {
+      if (quiet(own.beat)) own.stall();                       // its end follows the live stream (`run`)
+      return;
+    }
+    if (quiet(this.liveBeat)) this.relisten(id);
+    this.reread(id);
   }
 
   /** This page's own answer in conversation `id`: changed, or ended (null). */
@@ -2234,8 +2288,10 @@ export class RoomCommandCode implements OnDestroy {
 
   /** The live stream again, from its hello: what is being written, as far as it got. */
   private relisten(id: string) {
+    const had = this.watch().length > 0;
     this.liveFor = null;
     this.connectLive(id);
+    if (had) this.reread(id);                                 // one that ended meanwhile shows all the same
   }
 
   // ---- watching: answers others are having written --------------------------
@@ -2265,12 +2321,13 @@ export class RoomCommandCode implements OnDestroy {
     // leave the stream open and silent for ever: after 25 s of nothing it is
     // given up and opened again.
     let last = Date.now(), dead = false;
+    this.liveBeat = last;
     const watchdog = setInterval(() => {
-      if (Date.now() - last > 25_000) { dead = true; ctl.abort(); }
+      if (Date.now() - last > STALL_MS) { dead = true; ctl.abort(); }
     }, 5000);
     try {
       await this.api.live(id, ctl.signal, ev => { heard = true; this.liveTries = 0; this.onLive(id, ev); },
-                          () => { last = Date.now(); });
+                          () => { last = this.liveBeat = Date.now(); });
     } catch (e) {
       status = (e as { status?: number }).status ?? 0;
       if ((e as Error).name === 'AbortError' && !dead) { clearInterval(watchdog); return; }
@@ -2280,6 +2337,9 @@ export class RoomCommandCode implements OnDestroy {
     if (dead) heard = false;                                  // not a goodbye: back off
     this.liveAbort = null;
     if (status === 404 || status === 403) return;              // gone, or not ours to watch
+    // Away while answers were being written here: the conversation is read
+    // meanwhile, so one that ended shows without the stream.
+    if (!heard && this.watch().length) this.reread(id);
     const wait = heard ? 300 : Math.min(30_000, 1000 * 2 ** Math.min(this.liveTries, 5)) * (0.75 + Math.random() / 2);
     this.liveTries++;
     this.liveTimer = setTimeout(() => {
@@ -2329,8 +2389,11 @@ export class RoomCommandCode implements OnDestroy {
       }
       case 'text': case 'thinking': {
         const k = ev.type === 'text' ? 'text' : 'thinking';
-        if (!this.watch().some(w => w.gen === ev.gen)) return;
-        this.watch.update(l => l.map(w => w.gen === ev.gen ? this.sped({ ...w, [k]: w[k] + (ev.text ?? ''), t1: w.t1 ?? Date.now() }) : w));
+        const w0 = this.watch().find(w => w.gen === ev.gen);
+        if (!w0) return;
+        const next = fit(w0[k], ev.text ?? '', ev.at);
+        if (next === null) { this.relisten(id); return; }      // pieces missed: from the hello again
+        this.watch.update(l => l.map(w => w.gen === ev.gen ? this.sped({ ...w, [k]: next, t1: w.t1 ?? Date.now() }) : w));
         if (k === 'thinking') this.stickThink();
         this.scroll(true);
         break;
@@ -2374,7 +2437,14 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   private reread(id: string) {
-    this.api.get(id).subscribe({ next: x => { if (this.openId() === x.id && !this.live()) this.chat.set(x); }, error: () => {} });
+    const asked = new Set(this.watch().map(w => w.gen));      // not one that started after this was asked
+    this.api.get(id).subscribe({ next: x => {
+      if (this.openId() !== x.id) return;
+      if (!this.live()) this.chat.set(x);
+      // Answers watched that have ended meanwhile (the stream missed it): gone.
+      const ended = (w: CcWatch) => asked.has(w.gen) && w.gen !== x.gen;
+      if (this.watch().some(ended)) this.watch.update(l => l.filter(w => !ended(w)));
+    }, error: () => {} });
   }
 
   // ---- speed: tokens per second, time to first token ----------------------

@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import secrets
 import time
@@ -1058,10 +1059,16 @@ class Hub:
 
     def piece(self, key: str, gen: str, kind: str, text: str) -> None:
         st = (self.live.get(key) or {}).get(gen)
+        ev = {"type": kind, "gen": gen, "text": text}
         if st is not None:
             # Whole: the thinking is shown in full, never its tail.
-            st["text" if kind == "text" else "thinking"] += text
-        self.publish(key, {"type": kind, "gen": gen, "text": text})
+            k = "text" if kind == "text" else "thinking"
+            # `at`: where in the whole it goes. A page that has more already
+            # (its hello's snapshot held this piece) skips what it has; one
+            # that has less missed some, and reads it all again.
+            ev["at"] = len(st[k])
+            st[k] += text
+        self.publish(key, ev)
 
     def end(self, key: str, gen: str, ev: dict) -> None:
         got = self.live.get(key) or {}
@@ -1092,6 +1099,13 @@ async def live(cid: str, request: Request):
     doc = await _load(cid)                             # this workspace's, and not in the trash
     key = live_key(cid)
     q = HUB.subscribe(key)
+    # The answers so far, taken with the queue opened (nothing awaited in
+    # between): every piece after them is in the queue, none of them twice.
+    # Taken in the stream instead, it came after the response's headers were
+    # sent - a wait in which pieces reached both the queue and the snapshot,
+    # and the page showed them twice.
+    hello = {"type": "hello", "live": HUB.snapshot(key), "watchers": HUB.watchers(key),
+             "queue": queue_event(doc), "ping": LIVE_PING}
     # An answer being written by a runner this process has not followed yet
     # (written before a reload, say): followed now, its start - with the
     # answer so far - comes as the first event after the hello.
@@ -1099,8 +1113,7 @@ async def live(cid: str, request: Request):
 
     async def events():
         try:
-            yield _sse({"type": "hello", "live": HUB.snapshot(key), "watchers": HUB.watchers(key),
-                        "queue": queue_event(doc)})
+            yield _sse(hello)
             opened = time.monotonic()
             while True:
                 try:
@@ -1127,6 +1140,7 @@ async def live(cid: str, request: Request):
 # ---- following an answer a runner is writing (backend/ccgen.py) --------------
 
 TAIL = 0.2                       # seconds between looks at the answer being written
+_log = logging.getLogger("uvicorn.error")
 BUSY = "an answer is being written in this conversation - wait for it, or stop it"
 _TASKS: set[asyncio.Task] = set()  # the title waits, held so they are not collected
 
@@ -1150,79 +1164,95 @@ async def _tail(key: str, cid: str, db) -> None:
     me = asyncio.current_task()
     gid: str | None = None
     grace = 0.0                  # after an answer: a moment to see the queued line's answer start
+    fails = 0                    # looks in a row that failed
     try:
         while True:
-            if gid is None:
-                HUB.poked.discard(key)
-                chat = await db[COLL].find_one({"_id": cid})
-                gen = await ccgen.get(db, chat["gen"]) if chat and chat.get("gen") else None
-                if gen is None or gen.get("status") != "running":
-                    if key in HUB.poked:
-                        continue
-                    if time.monotonic() < grace and (chat or {}).get("queue") and not chat.get("queue_paused"):
-                        await asyncio.sleep(TAIL)
-                        continue
-                    return
-                gid = gen["_id"]
-                if gid not in (HUB.live.get(key) or {}):
-                    # From where it got: a page that came late, or after a
-                    # reload, gets the answer so far in the start.
-                    HUB.begin(key, ccgen.state(gen))
-                    if chat.get("queue") is not None or chat.get("queue_rev"):
-                        HUB.publish(key, queue_event(chat))     # a waiting line may have just gone
-            else:
-                await asyncio.sleep(TAIL)
-                gen = await ccgen.get(db, gid)
-            if gen is None:
-                HUB.end(key, gid, {"type": "error", "error": "the answer went missing"})
-                gid = None
-                continue
-            if ccgen.dead(gen):
-                gen = await ccgen.lose(db, gen, ccgen.GONE)
-            st = (HUB.live.get(key) or {}).get(gid) or {}
-            if st and not st.get("first_at") and gen.get("first_at"):
-                # When the first token came, on the server's clock: the
-                # pages watching work out the time to it without their own.
-                now = ccgen.state(gen)
-                st["first_at"] = now["first_at"]
-                HUB.publish(key, {"type": "timing", "gen": gid, "started_at": now["started_at"], "first_at": now["first_at"]})
-            for kind in ("thinking", "text"):
-                have, got = len(st.get(kind) or ""), gen.get(kind) or ""
-                if len(got) > have:
-                    HUB.piece(key, gid, kind, got[have:])
-            if st is not None and (gen.get("steps") or []) != (st.get("steps") or []):
-                # The tools the model used, as they run (backend/chat_tools):
-                # the whole list each time - a few short rows.
-                st["steps"] = gen.get("steps") or []
-                HUB.publish(key, {"type": "steps", "gen": gid, "steps": st["steps"]})
-            if ((gen.get("status") == "running" or not gen.get("want_title"))
-                    and gen.get("title") and gen["title"] != st.get("title")):
-                # Renamed while it is written (`rename`: by hand, or the
-                # rename_chat tool) - said before its end. The title an
-                # answer names its conversation with comes after (_titled).
-                st["title"] = gen["title"]
-                HUB.publish(key, {"type": "title", "gen": gid, "title": gen["title"]})
-            if gen.get("status") == "running":
-                continue
-            answer = gen.get("answer") or ccgen.partial(gen)
-            if gen.get("status") == "failed":
-                HUB.publish(key, {"type": "error", "gen": gid, "error": answer.get("error")})
-            # Kept by now (ccgen.finish), so a page that reads the
-            # conversation then finds the answer in it.
-            HUB.end(key, gid, {"type": "done", "message": public(answer)})
-            after = await db[COLL].find_one({"_id": cid})
-            if (after or {}).get("queue_rev"):                # a queue was ever used here: how it stands now
-                grace = time.monotonic() + 8.0
-                HUB.publish(key, queue_event(after))
-            if gen.get("naming"):
-                task = asyncio.ensure_future(_titled(key, gid, db))
-                _TASKS.add(task)
-                task.add_done_callback(_TASKS.discard)
-            else:
-                if gen.get("title"):                   # named before this looked
+            try:
+                if gid is None:
+                    HUB.poked.discard(key)
+                    chat = await db[COLL].find_one({"_id": cid})
+                    gen = await ccgen.get(db, chat["gen"]) if chat and chat.get("gen") else None
+                    if gen is None or gen.get("status") != "running":
+                        if key in HUB.poked:
+                            continue
+                        if time.monotonic() < grace and (chat or {}).get("queue") and not chat.get("queue_paused"):
+                            await asyncio.sleep(TAIL)
+                            continue
+                        return
+                    gid = gen["_id"]
+                    if gid not in (HUB.live.get(key) or {}):
+                        # From where it got: a page that came late, or after a
+                        # reload, gets the answer so far in the start.
+                        HUB.begin(key, ccgen.state(gen))
+                        if chat.get("queue") is not None or chat.get("queue_rev"):
+                            HUB.publish(key, queue_event(chat))     # a waiting line may have just gone
+                else:
+                    await asyncio.sleep(TAIL)
+                    gen = await ccgen.get(db, gid)
+                if gen is None:
+                    HUB.end(key, gid, {"type": "error", "error": "the answer went missing"})
+                    gid = None
+                    continue
+                if ccgen.dead(gen):
+                    gen = await ccgen.lose(db, gen, ccgen.GONE)
+                fails = 0
+                st = (HUB.live.get(key) or {}).get(gid) or {}
+                if st and not st.get("first_at") and gen.get("first_at"):
+                    # When the first token came, on the server's clock: the
+                    # pages watching work out the time to it without their own.
+                    now = ccgen.state(gen)
+                    st["first_at"] = now["first_at"]
+                    HUB.publish(key, {"type": "timing", "gen": gid, "started_at": now["started_at"], "first_at": now["first_at"]})
+                for kind in ("thinking", "text"):
+                    have, got = len(st.get(kind) or ""), gen.get(kind) or ""
+                    if len(got) > have:
+                        HUB.piece(key, gid, kind, got[have:])
+                if st is not None and (gen.get("steps") or []) != (st.get("steps") or []):
+                    # The tools the model used, as they run (backend/chat_tools):
+                    # the whole list each time - a few short rows.
+                    st["steps"] = gen.get("steps") or []
+                    HUB.publish(key, {"type": "steps", "gen": gid, "steps": st["steps"]})
+                if ((gen.get("status") == "running" or not gen.get("want_title"))
+                        and gen.get("title") and gen["title"] != st.get("title")):
+                    # Renamed while it is written (`rename`: by hand, or the
+                    # rename_chat tool) - said before its end. The title an
+                    # answer names its conversation with comes after (_titled).
+                    st["title"] = gen["title"]
                     HUB.publish(key, {"type": "title", "gen": gid, "title": gen["title"]})
-                HUB.publish(key, {"type": "named", "gen": gid})
-            gid = None
+                if gen.get("status") == "running":
+                    continue
+                answer = gen.get("answer") or ccgen.partial(gen)
+                if gen.get("status") == "failed":
+                    HUB.publish(key, {"type": "error", "gen": gid, "error": answer.get("error")})
+                # Kept by now (ccgen.finish), so a page that reads the
+                # conversation then finds the answer in it.
+                HUB.end(key, gid, {"type": "done", "message": public(answer)})
+                ended, gid = gid, None                 # said: a failure below does not say it again
+                after = await db[COLL].find_one({"_id": cid})
+                if (after or {}).get("queue_rev"):                # a queue was ever used here: how it stands now
+                    grace = time.monotonic() + 8.0
+                    HUB.publish(key, queue_event(after))
+                if gen.get("naming"):
+                    task = asyncio.ensure_future(_titled(key, ended, db))
+                    _TASKS.add(task)
+                    task.add_done_callback(_TASKS.discard)
+                else:
+                    if gen.get("title"):                   # named before this looked
+                        HUB.publish(key, {"type": "title", "gen": ended, "title": gen["title"]})
+                    HUB.publish(key, {"type": "named", "gen": ended})
+            except asyncio.CancelledError:
+                raise
+            except Exception:                          # noqa: BLE001 - a database hiccup, say
+                # Not the end of it: a follower that died here left every
+                # page watching on keep-alives alone, the answer never
+                # coming until the page was loaded again. It looks again.
+                fails += 1
+                _log.exception("following the answer in %s failed (%d); looking again", cid, fails)
+                if fails >= 30:                        # not a hiccup: the pages read the conversation
+                    if gid is not None:
+                        HUB.end(key, gid, {"type": "error", "error": "the answer could not be followed - read the conversation again"})
+                    return
+                await asyncio.sleep(1.0)
     finally:
         if HUB.tails.get(key) is me:
             HUB.tails.pop(key, None)
@@ -1300,7 +1330,10 @@ async def _begin(db, cid: str, gen: dict, first: dict) -> StreamingResponse:
                 elif kind == "steps":
                     yield _sse({"type": "steps", "steps": ev.get("steps") or []})
                 elif kind in ("thinking", "text"):
-                    yield _sse({"type": kind, "text": ev.get("text") or ""})
+                    out = {"type": kind, "text": ev.get("text") or ""}
+                    if ev.get("at") is not None:
+                        out["at"] = ev["at"]
+                    yield _sse(out)
                 elif kind == "error":
                     yield _sse({"type": "error", "error": ev.get("error")})
                 elif kind == "done":
