@@ -2900,10 +2900,11 @@ a.tcv-ico { text-decoration: none; }
    column of times, a dot for the kind of line, and the line itself. Colour
    is the dot's; the text stays ink so a screen of errors is still read. */
 .tcv-logp { display: block; min-width: 0; }
-.tcv-logp-head { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; min-width: 0; cursor: pointer; outline: none; }
+.tcv-logp-head { display: flex; align-items: stretch; gap: 0; height: 36px; padding: 0 0 0 12px; min-width: 0; cursor: pointer; outline: none; }
+.tcv-logp-head > .tcv-logp-title, .tcv-logp-head > .tcv-logp-count, .tcv-logp-head > .tcv-logp-run { align-self: center; margin-right: 8px; }
 .tcv-logp-head:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
-.tcv-logp-ibtn { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0;
-  color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer;
+.tcv-logp-ibtn { display: inline-grid; place-items: center; flex: none; width: 36px; height: 100%; padding: 0;
+  color: var(--ink-dim); background: none; border: 0; border-left: 1px solid var(--line); border-radius: 0; cursor: pointer;
   transition: background-color .12s, color .12s; }
 .tcv-logp-ibtn:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 .tcv-logp-ibtn[data-on] { color: var(--accent); }
@@ -2917,17 +2918,20 @@ a.tcv-ico { text-decoration: none; }
 .tcv-logp-count { flex: none; font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
 .tcv-logp-run { flex: none; font-size: 11px; color: var(--accent); }
 .tcv-logp-gap { flex: 1; min-width: 8px; }
-.tcv-logp-seg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
-.tcv-logp-seg button { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; font-size: 11.5px;
+/* The head's right end is cut into cells by full-height hairlines - the
+   kinds with their counts, the filter, the buttons - not boxes in a box. */
+.tcv-logp-seg { display: flex; flex: none; }
+.tcv-logp-seg button { display: inline-flex; align-items: center; gap: 6px; min-width: 116px; height: 100%; padding: 0 14px; font-size: 12px;
+  border-left: 1px solid var(--line) !important;
   color: var(--ink-dim); background: none; border: 0; cursor: pointer; white-space: nowrap;
   transition: background-color .12s, color .12s; }
-.tcv-logp-seg button + button { border-left: 1px solid var(--line); }
 .tcv-logp-seg button:hover { color: var(--ink); background: var(--hover); }
-.tcv-logp-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
-.tcv-logp-seg em { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; font-style: normal; opacity: .7; }
-.tcv-logp-search { display: flex; align-items: center; gap: 5px; flex: 0 1 200px; min-width: 110px; height: 24px; padding: 0 7px;
-  color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; cursor: text; }
-.tcv-logp-search:focus-within { border-color: var(--accent); }
+.tcv-logp-seg button[data-on] { color: var(--ink-bright); background: var(--hover); box-shadow: inset 0 -2px 0 var(--accent); }
+/* One type for the whole head: names at 12px, figures in the same mono as the line count, pushed to the cell's right. */
+.tcv-logp-seg em { margin-left: auto; padding-left: 10px; font: 11px 'IBM Plex Mono', ui-monospace, monospace; font-style: normal; color: var(--ink-dim); }
+.tcv-logp-search { display: flex; align-items: center; gap: 6px; flex: 0 1 220px; min-width: 120px; height: 100%; padding: 0 12px;
+  color: var(--ink-dim); background: none; border: 0; border-left: 1px solid var(--line); cursor: text; }
+.tcv-logp-search:focus-within { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
 .tcv-logp-search svg { flex: none; width: 12px; height: 12px; }
 .tcv-logp-search input { flex: 1; min-width: 0; height: 100%; padding: 0; font-size: 11.5px; color: var(--ink);
   background: none; border: 0; outline: none; }
@@ -2976,7 +2980,7 @@ a.tcv-ico { text-decoration: none; }
   .tcv-logp-head { height: 44px; }
   /* Narrow: the kinds are their dots and counts, the search goes. */
   .tcv-logp-count, .tcv-logp-search, .tcv-logp-seg button:not(:first-child) .tcv-logp-segl { display: none; }
-  .tcv-logp-seg button { height: 30px; }
+  .tcv-logp-seg button { min-width: 0; padding: 0 12px; }
 }
 .tcv-log-side:has(> .contents:empty) { display: none; }
 
