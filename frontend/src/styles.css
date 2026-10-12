@@ -3020,6 +3020,11 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
    so the card does not bring a second one. */
 .tcv-frame-task .tcv-task > .tcv-card { border: 0; border-radius: 0; background: transparent; padding: 0; }
 
+/* Every other scroller - modals, sheets, menus - gets the same thin
+   themed bar instead of the browser's own; the rules below are more
+   specific and keep their hover colours. */
+* { scrollbar-width: thin; scrollbar-color: var(--tcv-scrollbar-thumb) transparent; }
+
 /* Scrollbars in a room's frame are the 3D tree's: thin, a faint thumb on
    no track, brighter under the mouse - the viewer's own tcv_scroller rule
    and its colours, so the column reads the same in every room. */
