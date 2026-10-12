@@ -210,6 +210,7 @@ const TR: Record<string, string> = {
   'Select': 'Seç',
   'Unpin': 'Sabitlemeyi kaldır',
   'Pin': 'Sabitle',
+  'Name it again from the conversation': 'Başlığı sohbetten yeniden yaz',
   'No archived conversations.': 'Arşivlenmiş sohbet yok.',
   'Copy conversation': 'Sohbeti kopyala',
   'Export as Markdown': 'Markdown olarak indir',

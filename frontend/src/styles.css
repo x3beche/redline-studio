@@ -3451,6 +3451,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   max-height: 90px; overflow: hidden; border-left: 2px solid var(--line); padding-left: 8px; }
 .tcv-cc-pulse { color: var(--accent); animation: tcv-cc-pulse 1.2s ease-in-out infinite; }
 @keyframes tcv-cc-pulse { 50% { opacity: .35; } }
+.tcv-cc-ib.tcv-cc-busy { animation: tcv-cc-pulse 1s ease-in-out infinite; }
 .tcv-cc-copy { padding: 0 4px; font-size: 12px; color: var(--ink-dim); background: none; border: 0; cursor: pointer; }
 .tcv-cc-copy:hover { color: var(--accent); }
 .tcv-cc-compose { flex: none; }

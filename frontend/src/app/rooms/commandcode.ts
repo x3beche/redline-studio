@@ -164,6 +164,7 @@ export class CcApi {
   patch(id: string, p: { title?: string; provider?: string; model?: string; pinned?: boolean; archived?: boolean }) {
     return this.http.patch<CcChat>(`/api/cc/chats/${id}`, p);
   }
+  retitle(id: string) { return this.http.post<{ title: string }>(`/api/cc/chats/${id}/retitle`, {}); }
   remove(id: string) { return this.http.delete(`/api/cc/chats/${id}`); }
   removeMany(ids: string[]) { return this.http.post<Many>('/api/cc/chats/bulk-delete', { ids }); }
   // The trash: back out of it, or gone for good.
@@ -293,6 +294,7 @@ const I = {
   plus: 'M12 5v14 M5 12h14',
   search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2',
   pin: 'M9 3h6 M10 3v6.5L7 13h10l-3-3.5V3 M12 13v8',
+  retitle: 'M4 6h10 M4 11h7 M4 16h5 M14 20l1-3.5L20.5 11l2.5 2.5L17.5 19z',
   archive: 'M4 4h16v4H4z M5.5 8v12h13V8 M10 12h4',
   unarchive: 'M4 4h16v4H4z M5.5 8v12h13V8 M12 18v-6 M9.5 14.5L12 12l2.5 2.5',
   trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
@@ -548,6 +550,9 @@ type Ask = { text: string; label: string; go: () => void };
               </div>
             } @else if (!c.deleted_at && auth.can('draw') && !selecting()) {
               <div class="tcv-cc-itemacts">
+                <button class="tcv-cc-ib" (click)="retitle(c); $event.stopPropagation()" [disabled]="naming().has(c.id)"
+                        [class.tcv-cc-busy]="naming().has(c.id)" [title]="'Name it again from the conversation' | t">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.retitle }" /></button>
                 <button class="tcv-cc-ib" (click)="togglePin(c); $event.stopPropagation()" [class.on]="c.pinned"
                         [title]="(c.pinned ? 'Unpin' : 'Pin') | t">
                   <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.pin }" /></button>
@@ -1636,6 +1641,22 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   togglePin(c: CcChat) { this.setFlags(c, { pinned: !c.pinned }); }
+
+  /** Conversations being named again by the summary model, from all they hold. */
+  naming = signal<Set<string>>(new Set());
+  retitle(c: CcChat) {
+    const mark = (on: boolean) => this.naming.update(s => { const n = new Set(s); if (on) n.add(c.id); else n.delete(c.id); return n; });
+    mark(true);
+    this.api.retitle(c.id).subscribe({
+      next: r => {
+        mark(false);
+        const upd = (x: CcChat) => x.id === c.id ? { ...x, title: r.title } : x;
+        this.chats.update(l => l.map(upd));
+        this.chat.update(x => x && upd(x));
+      },
+      error: e => { mark(false); this.error.set(this.msg(e)); },
+    });
+  }
 
   toggleArchive(c: CcChat) {
     const archived = !c.archived;

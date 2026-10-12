@@ -115,6 +115,11 @@ TITLE_PROMPT = (
     f"{TITLE_WORDS} words, in the language of the message. Reply with the title only: "
     "no quotes, no Markdown, no full stop at the end."
 )
+RETITLE_PROMPT = (
+    "Write a title for the conversation below: what it is about as a whole, not only how it began. At most "
+    f"{TITLE_WORDS} words, in the language the person writes in. Reply with the title only: "
+    "no quotes, no Markdown, no full stop at the end."
+)
 
 
 def _db():
@@ -434,15 +439,17 @@ def fallback_title(text: str) -> str:
     return " ".join((text or "").split())[:TITLE_CHARS] or DEFAULT_TITLE
 
 
-async def make_title(first: str, answer: str = "") -> tuple[str, dict]:
+async def make_title(first: str, answer: str = "", whole: str = "") -> tuple[str, dict]:
     """A short title from the summary model, or the first line cut short.
+    `whole`: the conversation so far, to name it by all of it (Retitle).
     Returns the title and what the call used (empty when there was none)."""
     prov, model = llm.route("summary")
-    if first.strip() and llm.key(prov):
+    if (first.strip() or whole) and llm.key(prov):
         try:
-            prompt = first[:2000] + (f"\n\n(The answer began: {answer[:600]})" if answer else "")
+            prompt = whole or first[:2000] + (f"\n\n(The answer began: {answer[:600]})" if answer else "")
             d = await asyncio.wait_for(llm.complete(
-                [{"role": "system", "content": TITLE_PROMPT}, {"role": "user", "content": prompt}],
+                [{"role": "system", "content": RETITLE_PROMPT if whole else TITLE_PROMPT},
+                 {"role": "user", "content": prompt}],
                 job="summary", max_tokens=40, temperature=0.2), TITLE_TIMEOUT)
             got = clean_title(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
             if got:
@@ -840,6 +847,38 @@ async def delete_chat(cid: str, forever: str = "0") -> dict:
     if not await _trash(db, cid):
         raise HTTPException(404, cid)
     return {"deleted": cid, "trash": True, "days": TRASH_DAYS}
+
+
+def gist(msgs: list[dict], budget: int = 6000) -> str:
+    """The conversation, short, for naming it: each line clipped, the person's
+    lines longer than the answers, and the newest kept when it is too long."""
+    out = []
+    for m in msgs:
+        c = m.get("content")
+        if not isinstance(c, str) or not c.strip() or m["role"] not in ("user", "assistant"):
+            continue
+        cut = 600 if m["role"] == "user" else 300
+        out.append(("Person: " if m["role"] == "user" else "Answer: ") + " ".join(c.split())[:cut])
+    text = "\n".join(out)
+    return text if len(text) <= budget else text[:1500] + "\n...\n" + text[-(budget - 1500):]
+
+
+@router.post("/chats/{cid}/retitle")
+async def retitle(cid: str) -> dict:
+    """Name the conversation again by the summary model, from all of it."""
+    db = _db()
+    doc = await _load(cid)
+    whole = gist(doc.get("messages") or [])
+    if not whole:
+        raise HTTPException(400, "there is nothing in it to name it by")
+    title, used = await make_title("", whole=whole)
+    if not used:
+        raise HTTPException(503, "the summary model did not answer - see Settings > LLM settings")
+    await llm.record(db, provider=used.pop("provider"), model=used.pop("model"),
+                     surface="chat", kind="cc-title", used=used)
+    if await rename(db, cid, title) is None:
+        raise HTTPException(404, cid)
+    return {"title": title}
 
 
 @router.post("/chats/{cid}/restore")

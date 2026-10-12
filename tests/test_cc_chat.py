@@ -679,3 +679,29 @@ def test_the_line_being_answered_says_the_time(monkeypatch):
 def test_now_line_names_the_zone():
     line = cc_chat.now_line("UTC")
     assert line.startswith("It is ") and line.endswith("(UTC, UTC+00:00).")
+
+
+def test_retitle_names_it_again_from_all_of_it(env, monkeypatch):
+    db, state = env
+    seed(db, messages=[msg("a", "user", "what is this about?"), msg("b", "assistant", "A fan."),
+                       msg("c", "user", "türkçe yazar mısın")], title="what is this about?")
+    seen = {}
+
+    async def complete(messages, **kw):
+        seen["system"], seen["user"] = messages[0]["content"], messages[1]["content"]
+        return {"choices": [{"message": {"content": "\"Fan hakkında sohbet.\""}}], "usage": {},
+                "provider": "openrouter", "model": "cheap"}
+    monkeypatch.setattr(llm, "complete", complete)
+    assert run(cc_chat.retitle("c1")) == {"title": "Fan hakkında sohbet"}
+    assert db.coll.rows["c1"]["title"] == "Fan hakkında sohbet"
+    assert "as a whole" in seen["system"] and "türkçe yazar mısın" in seen["user"] and "Answer: A fan." in seen["user"]
+    assert state["recorded"] == ["cc-title"]
+
+
+def test_retitle_keeps_the_title_when_the_model_does_not_answer(env):
+    db, state = env
+    seed(db, messages=[msg("a", "user", "q")], title="Old")
+    state["title"] = RuntimeError("down")
+    with pytest.raises(HTTPException) as e:
+        run(cc_chat.retitle("c1"))
+    assert e.value.status_code == 503 and db.coll.rows["c1"]["title"] == "Old"
