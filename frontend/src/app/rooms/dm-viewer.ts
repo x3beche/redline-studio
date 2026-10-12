@@ -195,17 +195,18 @@ const LAST_TAB: Record<string, string> = {};
                 </div>
                 <aside class="dmv-side">
                   <div class="st-tiles dmv-tiles2">
-                    <div class="st-tile dmv-wide"><span>{{ 'Size' | t }}</span><b>{{ m.size || '–' }}</b><small>{{ 'bounding box, mm' | t }}</small></div>
+                    <div class="st-tile"><span>{{ 'Size' | t }}</span><b class="dmv-tilewrap">{{ m.size || '–' }}</b><small>{{ 'bounding box, mm' | t }}</small></div>
                     <div class="st-tile"><span>{{ 'Parts' | t }}</span><b>{{ m.parts }}</b><small>{{ fmt('{n} groups', { n: m.groups }) }}</small></div>
                     <div class="st-tile"><span>{{ 'Version' | t }}</span><b>{{ c['version'] != null ? 'v' + c['version'] : '–' }}</b>
-                      <small>{{ c['built'] ? fmt('built v{v}', { v: c['built'].version }) : ('not built' | t) }}</small></div>
+                      <small>{{ c['built'] ? fmt('built v{v}', { v: c['built'].version }) + (c['built'].secs ? ' · ' + c['built'].secs + ' s' : '') : ('not built' | t) }}</small></div>
                     <div class="st-tile"><span>{{ 'Imports' | t }}</span><b>{{ m.imports }}</b><small>{{ fmt('{n} sources sent', { n: m.files.length }) }}</small></div>
-                    @if (c['built']?.secs) { <div class="st-tile"><span>{{ 'Build time' | t }}</span><b>{{ c['built'].secs }} s</b><small>{{ shortDate(c['built'].at) }}</small></div> }
                   </div>
                   <div class="dmv-tree" role="tree">
                     <div class="dmv-treehead"><b>{{ 'Part tree' | t }}</b>
                       @if (tree().length) { <span class="st-sub">{{ 'click to isolate' | t }}</span> }
                       @if (m.groups) { <button class="st-more dmv-treeall" (click)="shutAll(m.nodes)">{{ (partsShut().size ? 'Expand all' : 'Collapse all') | t }}</button> }</div>
+                    <!-- the tiles and this head stay put; only the list scrolls -->
+                    <div class="dmv-treelist">
                     @for (n of shownNodes(m.nodes); track n.path) {
                       <div class="dmv-noderow" role="treeitem" [attr.aria-expanded]="n.leaf ? null : !partsShut().has(n.path)" [style.--layout-depth]="n.depth">
                         <!-- a group folds like a folder in the code tree; the name still isolates it -->
@@ -221,6 +222,7 @@ const LAST_TAB: Record<string, string> = {};
                         </button>
                       </div>
                     } @empty { <p class="st-hint">{{ 'No parts were listed.' | t }}</p> }
+                    </div>
                   </div>
                   @if (c['uses']?.length) {
                     <div class="dmv-chips"><span class="st-sub">{{ 'Uses' | t }}</span>
@@ -431,25 +433,75 @@ const LAST_TAB: Record<string, string> = {};
             @case ('board') {
               @let f = bf();
               @let bs = boardStats();
+              <!-- four tabs, each the whole body: 3D, Layout and Schematic with their figures in a column beside, Code -->
               @if (tab() === '3d') {
-                <div class="dmv-stage dmv-fill dmv-3dboard"><app-board-3d [src]="blob(d, 'board3d')" /></div>
+                <div class="dmv-stage dmv-fill dmv-3dboard">
+                  @if (d.blobs['board3d']) { <app-board-3d [src]="blob(d, 'board3d')" /> }
+                  @else { <p class="dmv-none">{{ 'No 3D view was sent with it - it had not been built, or its view was too big.' | t }}</p> }
+                </div>
               } @else if (tab() === 'schematic') {
-                <div class="dmv-stagecol dmv-fill">
+              <div class="dmv-split dmv-split-board dmv-fill">
+                <div class="dmv-stagecol">
                   @if (sheets().length > 1) {
                     <div class="st-seg dmv-views" role="group" [attr.aria-label]="'Sheets' | t">
                       @for (v of sheets(); track v.id) { <button [class.on]="sheet() === v.id" (click)="sheetView.set(v.id)">{{ v.label | t }}</button> }
                     </div>
                   }
-                  @if (sheet(); as v) {
-                    <div class="dmv-stage dmv-pcb">
+                  <div class="dmv-stage dmv-pcb">
+                    @if (sheet(); as v) {
                       @for (x of [v]; track x) { <app-file-view [file]="pictures()[x]" [src]="blob(d, x)" [upscale]="true" /> }
-                    </div>
-                  }
+                    } @else { <p class="dmv-none">{{ 'No schematic was sent with it - it had not been drawn yet.' | t }}</p> }
+                  </div>
                 </div>
+                <aside class="dmv-side">
+                  <div class="st-tiles dmv-tiles2">
+                    <div class="st-tile"><span>{{ 'Parts' | t }}</span><b>{{ f.schematic?.parts ?? '–' }}</b><small>{{ fmt('{n} BOM lines', { n: bs.groups.length }) }}</small></div>
+                    <div class="st-tile"><span>{{ 'Sheets' | t }}</span><b>{{ f.schematic?.sheets?.length ?? '–' }}</b><small>{{ f.schematic ? fmt('{n} symbols', { n: f.schematic.symbols ?? 0 }) : '' }}&nbsp;</small></div>
+                    <div class="st-tile"><span>{{ 'Wires' | t }}</span><b>{{ f.schematic?.wires ?? '–' }}</b><small>&nbsp;</small></div>
+                    <div class="st-tile"><span>{{ 'Nets' | t }}</span><b>{{ f.net_count ?? f.nets?.length ?? '–' }}</b>
+                      <small>{{ f.single?.length ? fmt('{n} single-pin nets', { n: f.single.length }) : '' }}&nbsp;</small></div>
+                  </div>
+                  <!-- the tiles stay put; the netlist and the BOM below scroll -->
+                  <div class="dmv-sidescroll">
+                    @if (f.schematic?.sheets?.length) {
+                      <div class="dmv-chips">@for (s of f.schematic.sheets; track $index) { <span class="dmv-chip">{{ s.name }} <b>{{ s.parts }}</b></span> }</div>
+                    }
+                    @if (f.counts || f.nets?.length) {
+                      <section class="st-card">
+                        <div class="st-card-head"><h3>{{ 'Netlist' | t }}</h3><span class="st-sub">{{ fmt('{n} nets', { n: f.net_count ?? f.nets?.length ?? 0 }) }}</span></div>
+                        <div class="st-card-body">
+                          @if (countPairs(f.counts).length) {
+                            <div class="st-tiles tight">@for (kv of countPairs(f.counts); track kv[0]) { <div class="st-tile"><span>{{ kv[0] | t }}</span><b>{{ kv[1] }}</b></div> }</div>
+                          }
+                          @if (f.nets?.length) { <span class="st-sub">{{ 'Nets by size (pins)' | t }}</span><app-bar-list [rows]="netRows(f.nets)" [mono]="true" /> }
+                          @if (f.single?.length) {
+                            <span class="st-sub">{{ fmt('{n} single-pin nets', { n: f.single.length }) }}</span>
+                            <div class="dmv-chips dmv-muted">@for (s of f.single.slice(0, 40); track $index) { <span class="dmv-chip">{{ s }}</span> }</div>
+                          }
+                        </div>
+                      </section>
+                    }
+                    @if (bs.groups.length) {
+                      <section class="st-card">
+                        <div class="st-card-head"><h3>{{ 'Bill of materials' | t }}</h3><span class="st-sub">{{ fmt('{n} lines · {m} parts', { n: bomShown().length, m: bs.parts }) }}</span></div>
+                        <div class="st-card-body"><input class="tst-in dmv-search dmv-sidesearch" type="search" [placeholder]="'Search the BOM' | t" [value]="bomQ()" (input)="bomQ.set($any($event.target).value)"></div>
+                        <table class="st-table dmv-sidebom">
+                          <thead><tr><th class="r">{{ 'Qty' | t }}</th><th>{{ 'Designators' | t }}</th><th>LCSC</th></tr></thead>
+                          <tbody>@for (g of bomShown(); track $index) {
+                            <tr><td class="r mono">{{ g.n }}</td>
+                              <td class="give">{{ g.refs }}<small>{{ g.value !== g.lcsc ? g.value : '' }}{{ g.value !== g.lcsc && g.footprint ? ' · ' : '' }}{{ g.footprint }}</small></td>
+                              <td class="mono">@if (g.lcsc) { <a class="st-link" [href]="'https://www.lcsc.com/product-detail/' + g.lcsc + '.html'" target="_blank" rel="noopener noreferrer">{{ g.lcsc }}</a> }</td></tr>
+                          } @empty { <tr><td colspan="3" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }</tbody>
+                        </table>
+                      </section>
+                    }
+                  </div>
+                </aside>
+              </div>
               } @else if (tab() === 'code') {
                 <app-dm-code class="dmv-fill" [files]="sourceFiles()" height="100%" />
               } @else {
-              <div class="dmv-split dmv-split-board">
+              <div class="dmv-split dmv-split-board dmv-fill">
                 <div class="dmv-stagecol">
                   @if (boardViews().length > 1) {
                     <div class="st-seg dmv-views" role="group" [attr.aria-label]="'View' | t">
@@ -476,100 +528,55 @@ const LAST_TAB: Record<string, string> = {};
                       <b>{{ f.route ? f.route.unrouted ?? 0 : '–' }}</b><small>{{ (f.route ? (f.route.unrouted ? 'connections left' : 'every connection routed') : 'not routed') | t }}</small></div>
                     <div class="st-tile"><span>{{ 'Version' | t }}</span><b>{{ f.version != null ? 'v' + f.version : '–' }}</b><small>{{ f.saved_at ? fmt('saved {w}', { w: shortDate(f.saved_at) }) : (f.folder || '') }}&nbsp;</small></div>
                   </div>
-                  @let drcTone = f.drc ? (f.drc.error_count ? 'danger' : f.drc.warning_count ? 'warn' : 'ok') : null;
-                  <section class="dmv-panel" [attr.data-tone]="drcTone">
-                    <div class="dmv-panelhead"><b>DRC</b>
-                      @if (f.drc) {
-                        <span class="st-tag" [attr.data-tone]="f.drc.error_count ? 'danger' : 'ok'">{{ fmt('{n} errors', { n: f.drc.error_count ?? 0 }) }}</span>
-                        <span class="st-tag" [attr.data-tone]="f.drc.warning_count ? 'warn' : null">{{ fmt('{n} warnings', { n: f.drc.warning_count ?? 0 }) }}</span>
-                        @if (f.drc.unconnected) { <span class="st-tag" data-tone="danger">{{ fmt('{n} unconnected', { n: f.drc.unconnected }) }}</span> }
-                      } @else { <span class="st-sub">{{ 'not checked' | t }}</span> }</div>
-                    @if (ruleRows(f.drc).length) { <app-bar-list [rows]="ruleRows(f.drc)" /> }
-                    @if (f.drc?.examples?.length) {
-                      <ul class="dmv-examples">@for (x of f.drc.examples.slice(0, 6); track $index) { <li>{{ x }}</li> }</ul>
+                  <!-- the tiles stay put; the checks and the rules below scroll -->
+                  <div class="dmv-sidescroll">
+                    @let drcTone = f.drc ? (f.drc.error_count ? 'danger' : f.drc.warning_count ? 'warn' : 'ok') : null;
+                    <section class="dmv-panel" [attr.data-tone]="drcTone">
+                      <div class="dmv-panelhead"><b>DRC</b>
+                        @if (f.drc) {
+                          <span class="st-tag" [attr.data-tone]="f.drc.error_count ? 'danger' : 'ok'">{{ fmt('{n} errors', { n: f.drc.error_count ?? 0 }) }}</span>
+                          <span class="st-tag" [attr.data-tone]="f.drc.warning_count ? 'warn' : null">{{ fmt('{n} warnings', { n: f.drc.warning_count ?? 0 }) }}</span>
+                          @if (f.drc.unconnected) { <span class="st-tag" data-tone="danger">{{ fmt('{n} unconnected', { n: f.drc.unconnected }) }}</span> }
+                        } @else { <span class="st-sub">{{ 'not checked' | t }}</span> }</div>
+                      @if (ruleRows(f.drc).length) { <app-bar-list [rows]="ruleRows(f.drc)" /> }
+                      @if (f.drc?.examples?.length) {
+                        <ul class="dmv-examples">@for (x of f.drc.examples.slice(0, 6); track $index) { <li>{{ x }}</li> }</ul>
+                      }
+                    </section>
+                    <section class="dmv-panel" [attr.data-tone]="f.erc ? (f.erc.error_count ? 'danger' : f.erc.warning_count ? 'warn' : 'ok') : null">
+                      <div class="dmv-panelhead"><b>ERC</b>
+                        @if (f.erc) {
+                          <span class="st-tag" [attr.data-tone]="f.erc.error_count ? 'danger' : 'ok'">{{ fmt('{n} errors', { n: f.erc.error_count ?? 0 }) }}</span>
+                          <span class="st-tag" [attr.data-tone]="f.erc.warning_count ? 'warn' : null">{{ fmt('{n} warnings', { n: f.erc.warning_count ?? 0 }) }}</span>
+                        } @else { <span class="st-sub">{{ 'not checked' | t }}</span> }</div>
+                      @if (ruleRows(f.erc).length) { <app-bar-list [rows]="ruleRows(f.erc)" /> }
+                      @if (f.erc?.examples?.length) {
+                        <ul class="dmv-examples">@for (x of f.erc.examples.slice(0, 6); track $index) { <li>{{ x }}</li> }</ul>
+                      }
+                    </section>
+                    @if (bs.byPrefix.length) {
+                      <section class="st-card"><div class="st-card-head"><h3>{{ 'Parts by kind' | t }}</h3><span class="st-sub">{{ fmt('{n} parts', { n: bs.parts }) }}</span></div>
+                        <div class="st-card-body"><app-bar-list [rows]="bs.byPrefix" /></div></section>
                     }
-                  </section>
-                  <section class="dmv-panel" [attr.data-tone]="f.erc ? (f.erc.error_count ? 'danger' : f.erc.warning_count ? 'warn' : 'ok') : null">
-                    <div class="dmv-panelhead"><b>ERC</b>
-                      @if (f.erc) {
-                        <span class="st-tag" [attr.data-tone]="f.erc.error_count ? 'danger' : 'ok'">{{ fmt('{n} errors', { n: f.erc.error_count ?? 0 }) }}</span>
-                        <span class="st-tag" [attr.data-tone]="f.erc.warning_count ? 'warn' : null">{{ fmt('{n} warnings', { n: f.erc.warning_count ?? 0 }) }}</span>
-                      } @else { <span class="st-sub">{{ 'not checked' | t }}</span> }</div>
-                    @if (ruleRows(f.erc).length) { <app-bar-list [rows]="ruleRows(f.erc)" /> }
-                    @if (f.erc?.examples?.length) {
-                      <ul class="dmv-examples">@for (x of f.erc.examples.slice(0, 6); track $index) { <li>{{ x }}</li> }</ul>
+                    @if (f.rules) {
+                      <section class="st-card">
+                        <div class="st-card-head"><h3>{{ 'Design rules' | t }}</h3><span class="st-sub">{{ fmt('{n} net classes', { n: f.rules.classes?.length ?? 0 }) }}</span></div>
+                        <table class="st-table dmv-sidebom">
+                          <thead><tr><th>{{ 'Class' | t }}</th><th class="r">{{ 'Track' | t }}</th><th class="r">{{ 'Clearance' | t }}</th><th class="r">{{ 'Via' | t }}</th><th class="r">{{ 'Drill' | t }}</th></tr></thead>
+                          <tbody>@for (r of f.rules.classes; track $index) {
+                            <tr><td class="give">{{ r.name }}<small>{{ classNets(r) }}</small></td><td class="r mono">{{ r.track }}</td><td class="r mono">{{ r.clearance }}</td><td class="r mono">{{ r.via }}</td><td class="r mono">{{ r.drill }}</td></tr>
+                          }</tbody>
+                        </table>
+                        @if (limitPairs(f.rules.board).length) {
+                          <div class="st-card-body"><span class="st-sub">{{ 'Board limits, mm' | t }}</span>
+                            <div class="dmv-chips">@for (kv of limitPairs(f.rules.board); track kv[0]) { <span class="dmv-chip">{{ kv[0] | t }} <b>{{ kv[1] }}</b></span> }
+                              @for (p of f.rules.pours ?? []; track $index) { <span class="dmv-chip">{{ 'Pour' | t }} <b>{{ p.net }}</b> {{ (p.layers ?? []).join(', ') }}</span> }</div></div>
+                        }
+                      </section>
                     }
-                  </section>
+                  </div>
                 </aside>
               </div>
-              <div class="dmv-grid3">
-                <div class="dmv-stack">
-                @if (f.schematic) {
-                  <section class="st-card">
-                    <div class="st-card-head"><h3>{{ 'Schematic' | t }}</h3><span class="st-sub">{{ fmt('{n} sheets', { n: f.schematic.sheets?.length ?? 0 }) }}</span></div>
-                    <div class="st-card-body">
-                      <div class="st-tiles tight">
-                        <div class="st-tile"><span>{{ 'Parts' | t }}</span><b>{{ f.schematic.parts ?? '–' }}</b></div>
-                        <div class="st-tile"><span>{{ 'Wires' | t }}</span><b>{{ f.schematic.wires ?? '–' }}</b></div>
-                        <div class="st-tile"><span>{{ 'Symbols' | t }}</span><b>{{ f.schematic.symbols ?? '–' }}</b></div>
-                      </div>
-                      @if (f.schematic.sheets?.length) {
-                        <div class="dmv-chips">@for (s of f.schematic.sheets; track $index) { <span class="dmv-chip">{{ s.name }} <b>{{ s.parts }}</b></span> }</div>
-                      }
-                    </div>
-                  </section>
-                }
-                @if (bs.byPrefix.length) {
-                  <section class="st-card"><div class="st-card-head"><h3>{{ 'Parts by kind' | t }}</h3><span class="st-sub">{{ fmt('{n} parts', { n: bs.parts }) }}</span></div>
-                    <div class="st-card-body"><app-bar-list [rows]="bs.byPrefix" /></div></section>
-                }
-                </div>
-                @if (f.counts || f.nets?.length) {
-                  <section class="st-card">
-                    <div class="st-card-head"><h3>{{ 'Netlist' | t }}</h3><span class="st-sub">{{ fmt('{n} nets', { n: f.net_count ?? f.nets?.length ?? 0 }) }}</span></div>
-                    <div class="st-card-body">
-                      @if (countPairs(f.counts).length) {
-                        <div class="st-tiles tight">@for (kv of countPairs(f.counts); track kv[0]) { <div class="st-tile"><span>{{ kv[0] | t }}</span><b>{{ kv[1] }}</b></div> }</div>
-                      }
-                      @if (f.nets?.length) { <span class="st-sub">{{ 'Nets by size (pins)' | t }}</span><app-bar-list [rows]="netRows(f.nets)" [mono]="true" /> }
-                      @if (f.single?.length) {
-                        <span class="st-sub">{{ fmt('{n} single-pin nets', { n: f.single.length }) }}</span>
-                        <div class="dmv-chips dmv-muted">@for (s of f.single.slice(0, 40); track $index) { <span class="dmv-chip">{{ s }}</span> }</div>
-                      }
-                    </div>
-                  </section>
-                }
-                @if (f.rules) {
-                  <section class="st-card">
-                    <div class="st-card-head"><h3>{{ 'Design rules' | t }}</h3><span class="st-sub">{{ fmt('{n} net classes', { n: f.rules.classes?.length ?? 0 }) }}</span></div>
-                    <div class="st-table-wrap"><table class="st-table">
-                      <thead><tr><th>{{ 'Class' | t }}</th><th class="r">{{ 'Track' | t }}</th><th class="r">{{ 'Clearance' | t }}</th><th class="r">{{ 'Via' | t }}</th><th class="r">{{ 'Drill' | t }}</th><th>{{ 'Nets' | t }}</th></tr></thead>
-                      <tbody>@for (r of f.rules.classes; track $index) {
-                        <tr><td>{{ r.name }}</td><td class="r mono">{{ r.track }}</td><td class="r mono">{{ r.clearance }}</td><td class="r mono">{{ r.via }}</td><td class="r mono">{{ r.drill }}</td>
-                          <td class="give dim">{{ classNets(r) }}</td></tr>
-                      }</tbody>
-                    </table></div>
-                    @if (limitPairs(f.rules.board).length) {
-                      <div class="st-card-body"><span class="st-sub">{{ 'Board limits, mm' | t }}</span>
-                        <div class="dmv-chips">@for (kv of limitPairs(f.rules.board); track kv[0]) { <span class="dmv-chip">{{ kv[0] | t }} <b>{{ kv[1] }}</b></span> }
-                          @for (p of f.rules.pours ?? []; track $index) { <span class="dmv-chip">{{ 'Pour' | t }} <b>{{ p.net }}</b> {{ (p.layers ?? []).join(', ') }}</span> }</div></div>
-                    }
-                  </section>
-                }
-              </div>
-              @if (bs.groups.length) {
-                <section class="st-card">
-                  <div class="st-card-head"><h3>{{ 'Bill of materials' | t }}</h3><span class="st-sub">{{ fmt('{n} lines · {m} parts', { n: bomShown().length, m: bs.parts }) }}</span>
-                    <span class="st-right"><input class="tst-in dmv-search" type="search" [placeholder]="'Search the BOM' | t" [value]="bomQ()" (input)="bomQ.set($any($event.target).value)"></span></div>
-                  <div class="dmv-bom"><table class="st-table">
-                    <thead><tr><th class="r">{{ 'Qty' | t }}</th><th>{{ 'Designators' | t }}</th><th>{{ 'Value' | t }}</th><th>{{ 'Footprint' | t }}</th><th>LCSC</th></tr></thead>
-                    <tbody>@for (g of bomShown(); track $index) {
-                      <tr><td class="r mono">{{ g.n }}</td><td class="give">{{ g.refs }}</td><td>{{ g.value !== g.lcsc ? g.value : '' }}</td><td class="dim">{{ g.footprint }}</td>
-                        <td class="mono">@if (g.lcsc) { <a class="st-link" [href]="'https://www.lcsc.com/product-detail/' + g.lcsc + '.html'" target="_blank" rel="noopener noreferrer">{{ g.lcsc }}</a> }</td></tr>
-                    } @empty { <tr><td colspan="5" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }</tbody>
-                  </table></div>
-                </section>
-              }
               }
             }
 
@@ -694,23 +701,22 @@ export class DmViewer {
   tabs = computed<{ id: string; label: string }[]>(() => {
     const d = this.data();
     if (!d) return [];
-    const c = d.data, b = d.blobs;
-    if (d.kind === 'model') return [{ id: 'view', label: 'View' }, ...(Object.keys(c['models'] ?? {}).length ? [{ id: 'code', label: 'Code' }] : [])];
-    if (d.kind === 'board') return [...(b['board3d'] ? [{ id: '3d', label: '3D' }] : []), { id: 'layout', label: 'Layout' },
-      ...(b['schematic'] || Object.keys(b).some(k => k.startsWith('sheet-')) ? [{ id: 'schematic', label: 'Schematic' }] : []),
-      ...(Object.keys(c['sources'] ?? {}).length ? [{ id: 'code', label: 'Code' }] : [])];
+    const c = d.data;
+    // things made of code: the picture and the code, each tab the whole body; a board has three pictures
+    if (d.kind === 'model') return [{ id: 'view', label: 'View' }, { id: 'code', label: 'Code' }];
+    if (d.kind === 'board') return [{ id: '3d', label: '3D' }, { id: 'layout', label: 'Layout' }, { id: 'schematic', label: 'Schematic' }, { id: 'code', label: 'Code' }];
     if (d.kind === 'file' && c['preview'] === 'markdown' && c['text']) return [{ id: 'rendered', label: 'Rendered' }, { id: 'source', label: 'Source' }];
-    if (d.kind === 'firmware') return [{ id: 'overview', label: 'Overview' }, ...(Object.keys(c['sources'] ?? {}).length ? [{ id: 'code', label: 'Code' }] : [])];
+    if (d.kind === 'firmware') return [{ id: 'overview', label: 'Overview' }, { id: 'code', label: 'Code' }];
     return [];
   });
   tab = computed(() => {
     const d = this.data(), tabs = this.tabs();
     if (!d || !tabs.length) return '';
     const want = this.chosen()[d.kind];
-    return tabs.some(x => x.id === want) ? want : d.kind === 'board' && tabs.some(x => x.id === 'layout') ? 'layout' : tabs[0].id;
+    return tabs.some(x => x.id === want) ? want : d.kind === 'board' ? 'layout' : tabs[0].id;
   });
   /** A view that fills the body (code, a 3D, a drawing) - the body itself does not scroll then. */
-  full = computed(() => ['code', '3d', 'schematic'].includes(this.tab()) || (this.data()?.kind === 'model' && this.tab() === 'view')
+  full = computed(() => ['code', '3d', 'schematic', 'layout'].includes(this.tab()) || (this.data()?.kind === 'model' && this.tab() === 'view')
     || (this.data()?.kind === 'file' && !!this.data()?.blobs['file']));
   setTab(id: string) {
     const k = this.data()?.kind;

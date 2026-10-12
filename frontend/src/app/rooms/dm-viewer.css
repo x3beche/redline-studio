@@ -32,6 +32,7 @@
 .dmv-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .dmv-pad { padding: 0 10px 10px; }
 .dmv-none { margin: 0; padding: 24px; font-size: 12.5px; color: var(--ink-dim); text-align: center; }
+.dmv-stage > .dmv-none { margin: auto; }
 .dim { color: var(--ink-dim); }
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
@@ -73,11 +74,23 @@
 .dmv-stage-btn { position: absolute; left: 8px; top: 8px; z-index: 2; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .dmv-pcb { background: var(--pcb-bg); }
-.dmv-side { min-width: 0; max-height: min(58vh, 600px); overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 10px;
-  padding-right: 2px; }
+.dmv-side { min-width: 0; max-height: min(58vh, 600px); overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+/* the column holds still: tiles and heads stay in view, the one long part (the tree's list, the board's checks) scrolls */
+.dmv-side > * { flex: none; }
+.dmv-side > .dmv-tree { flex: 1 1 auto; min-height: 0; }
+.dmv-side > .dmv-sidescroll { flex: 0 1 auto; min-height: 0; }
+.dmv-sidescroll { overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
+.dmv-sidescroll > * { flex: none; }
 .dmv-split-board .dmv-side { max-height: calc(min(58vh, 600px) + 34px); }
-.dmv-tree { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.dmv-treehead { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 11px;
+.dmv-split-board { grid-template-columns: minmax(0, 1fr) 400px; }
+/* the side's tables: a second line under the name instead of more columns */
+.dmv-sidebom td.r:first-child, .dmv-sidebom th.r:first-child { width: 1%; white-space: nowrap; }
+.dmv-sidesearch { width: 100%; max-width: none; flex: none; }
+.dmv-sidebom td small { display: block; font-size: 10.5px; color: var(--ink-dim); overflow-wrap: anywhere; }
+.dmv-tree { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  overflow: hidden; }
+.dmv-treelist { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 2px 0; }
+.dmv-treehead { flex: none; display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 11px;
   text-transform: uppercase; letter-spacing: .06em; }
 .dmv-treehead .st-sub { text-transform: none; letter-spacing: 0; }
 /* a row: the fold arrow (groups only), then the name that isolates */
@@ -160,11 +173,15 @@ button.dmv-twist:hover { color: var(--ink); background: var(--hover); }
 
 @media (max-width: 1000px) {
   .dmv-split, .dmv-split-fw, .dmv-grid2, .dmv-prod { grid-template-columns: minmax(0, 1fr); }
-  .dmv-side, .dmv-split-board .dmv-side { max-height: none; overflow: visible; }
+  .dmv-side, .dmv-split-board .dmv-side { max-height: none; }
+  .dmv-treelist, .dmv-sidescroll { max-height: 360px; }
   .dmv-prod .mf-dgal { position: static; }
   .dmv-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dmv-body[data-full] > .dmv-split { grid-template-rows: minmax(0, 1fr) minmax(0, 40%); }
+  /* under the picture there is no room to hold the tiles still: the column scrolls as one */
   .dmv-body[data-full] .dmv-side { overflow-y: auto; }
+  .dmv-body[data-full] .dmv-side > * { flex: none; }
+  .dmv-body[data-full] .dmv-treelist, .dmv-body[data-full] .dmv-sidescroll { max-height: none; overflow: visible; }
 }
 @media (max-width: 640px) {
   .dmv { width: 100vw; height: 100dvh; border-radius: 0; border: 0; }
@@ -181,6 +198,5 @@ button.dmv-twist:hover { color: var(--ink); background: var(--hover); }
   .dmv-search { max-width: none; }
   .dmv-grid3 { grid-template-columns: minmax(0, 1fr); }
   .dmv-tiles .tsh-dtile { grid-column: 1 / -1; }
-  .dmv-tree { max-height: 360px; overflow-y: auto; }
 }
 .dmv-bad { color: var(--danger); }

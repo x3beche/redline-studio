@@ -3313,6 +3313,8 @@ const TR: Record<string, string> = {
   'Netlist': 'Netlist',
   'Nets by size (pins)': 'Boyutuna göre netler (pin)',
   'No layout was sent with it - it had not been laid out yet.': 'Onunla yerleşim gönderilmedi - henüz yerleştirilmemişti.',
+  'No schematic was sent with it - it had not been drawn yet.': 'Onunla şema gönderilmedi - henüz çizilmemişti.',
+  '{n} symbols': '{n} sembol',
   'No movements were sent with it.': 'Onunla hareket gönderilmedi.',
   'No parts were listed.': 'Parça listelenmedi.',
   'No source was sent with it.': 'Onunla kaynak kod gönderilmedi.',
