@@ -348,7 +348,7 @@ async def usage(days: int = 7) -> dict:
 
     from . import lcsc
 
-    days = max(1, min(days, 30))
+    days = max(1, min(days, 90))
     step = 3600 if days <= 2 else 86400
     now = time.time()
     t0 = int((now - days * 86400) // step * step)
@@ -402,6 +402,15 @@ async def usage(days: int = 7) -> dict:
             "recent": [{k: r.get(k) for k in ("at", "who", "kind", "target", "source", "status", "via", "ms", "bytes", "error")}
                        for r in rows[:30]],
             "state": {**st, "asks_in_window": st.get("used")}}
+
+
+@router.get("/overview")
+async def overview(days: int = 7) -> dict:
+    """The data traffic of every outside lookup together - Local, Proxy and
+    Jina in the same buckets, by consumer, with the proxy's bill and Jina's
+    tokens (netoverview.py)."""
+    from . import netoverview
+    return await netoverview.overview(days)
 
 
 def _pct(xs: list[float], q: float) -> float | None:

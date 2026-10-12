@@ -7,7 +7,8 @@ import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
 import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
 import { Prefs } from './preferences';
-import { JinaSettingsPanel, foldKeep, foldLoad } from './jina-settings';
+import { JinaSettingsPanel, TrafficPeriod, foldKeep, foldLoad } from './jina-settings';
+import { TrafficOverview } from './traffic-overview';
 import { RouteOrder } from './route-order';
 import { SelectOption, UiSelect } from './ui-select';
 
@@ -68,18 +69,17 @@ const CONSUMERS = [
   { id: 'parts', label: 'Drawer', about: 'LCSC / EasyEDA part lookups (JSON, so no Jina)' },
 ];
 const LAST_TEST = 'redline.settings.proxy.lastTest';
-const PERIODS = [{ days: 1, label: '24h' }, { days: 7, label: '7d' }, { days: 30, label: '30d' }];
 const HEALTH = [0, 5, 15, 30, 60, 180, 1440];
 const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + ' s' : Math.round(v) + ' ms';
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect],
+  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
   styleUrl: './settings.css',
   template: `
-<ng-template #period>
+<ng-template #periodSeg>
   <div class="st-seg">
-    @for (x of periods; track x.days) { <button [class.on]="days() === x.days" (click)="setDays(x.days)">{{ x.label }}</button> }
+    @for (x of period.periods; track x.days) { <button [class.on]="period.days() === x.days" (click)="period.set(x.days)">{{ x.label }}</button> }
   </div>
 </ng-template>
 
@@ -89,44 +89,15 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
     {{ 'Jina AI reads web pages and searches the web for the Product Catalog and the Chat.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
-  <!-- Status at a glance -->
-  <div class="st-tiles tight">
-    <div class="st-tile" [attr.data-tone]="d.active ? 'ok' : 'dim'"><span>{{ 'Proxy' | t }}</span>
-      <b>{{ (d.active ? 'On' : 'Off') | t }}</b>
-      <small [title]="d.country || ''">{{ d.active ? proxyUse() + ' · ' : '' }}{{ d.country ? d.country.toUpperCase() : ('anywhere' | t) }}</small></div>
-    @if (u(); as us) {
-      @if (us.metered; as m) {
-        <div class="st-tile hero" [title]="'measured on the wire between this machine and the proxy: TLS, headers and CONNECT included - what 2Captcha bills' | t">
-          <span>{{ 'Traffic via proxy (measured)' | t }} · {{ periodLabel() }}</span>
-          <b>{{ f.bytes(m.total) }}</b>
-          <small>{{ us.cost ? '≈ ' + money(us.cost.usd) + ' · ' : '' }}{{ 'app payload' | t }} {{ f.bytes(m.payload_bytes) }}</small></div>
-      } @else {
-        <div class="st-tile hero"><span>{{ 'Traffic via proxy' | t }} · {{ periodLabel() }}</span>
-          <b>{{ f.bytes(us.totals.bytes_proxy) }}</b>
-          <small>{{ us.cost ? '≈ ' + money(us.cost.usd) + ' · ' : '' }}{{ us.totals.proxy }} {{ 'lookups through it' | t }}</small></div>
-      }
-    }
-    <div class="st-tile" [attr.data-tone]="refusedNow() ? 'warn' : 'ok'"><span>{{ 'EasyEDA' | t }}</span>
-      <b>{{ refusedNow() ? ('refusing' | t) : ('answering' | t) }}</b>
-      <small [title]="st()?.refused_why || ''">{{ refusedNow() ? ('until' | t) + ' ' + when(st()?.refused_until) + (st()?.refused_why ? ' · ' + st()?.refused_why : '')
-               : budgetText() }}</small></div>
-    @if (u()?.health; as h) {
-      <div class="st-tile" [attr.data-tone]="h.last ? (h.last.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Exit health' | t }}</span>
-        <b>{{ h.uptime == null ? (h.every_minutes ? ('waiting' | t) : ('off' | t)) : pct1(h.uptime) }}</b>
-        <small>{{ h.checks }} {{ 'checks' | t }}{{ h.every_minutes ? ' · ' + ('every' | t) + ' ' + h.every_minutes + ' min' : '' }}</small></div>
-    } @else {
-      <div class="st-tile" [attr.data-tone]="lastTest() ? (lastTest()!.exits[0]?.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Last test' | t }}</span>
-        @if (lastTest(); as lt) {
-          <b>{{ lt.exits[0]?.ok ? lt.exits[0].ip : ('failed' | t) }}</b><small>{{ when(lt.at) }}</small>
-        } @else { <b>{{ 'not tested' | t }}</b><small>{{ 'in this browser' | t }}</small> }
-      </div>
-    }
-  </div>
-
   <!-- Which way each lookup tries first, and next -->
   <section class="st-card">
     <div class="st-card-head"><h3>{{ 'Route order' | t }}</h3>
-      <span class="st-sub">{{ 'each lookup tries the first route that is on; when it is refused or cannot reach the site, the next' | t }}</span></div>
+      <span class="st-sub">{{ 'each lookup tries the first route that is on; when it is refused or cannot reach the site, the next' | t }}</span>
+      @if (st()) {
+        <span class="st-right ro-state" [title]="st()?.refused_why || ''">EasyEDA
+          <span class="st-tag" [attr.data-tone]="refusedNow() ? 'warn' : 'ok'">{{ (refusedNow() ? 'refusing' : 'answering') | t }}</span>
+          <span class="st-sub">{{ refusedNow() ? ('until' | t) + ' ' + when(st()?.refused_until) : budgetText() }}</span></span>
+      }</div>
     <div class="st-card-body ro-rows">
       @for (c of consumers; track c.id) {
         @if (d.routes.consumers[c.id]; as rc) {
@@ -150,6 +121,10 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       <h3>{{ 'Proxy' | t }}</h3>
     </button>
       <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ d.active ? proxyUse() : ((d.configured ? 'in no route order' : 'Not set up') | t) }}{{ d.host ? ' · ' + d.host : '' }}</span>
+      @if (traffic(); as tr) {
+        <span class="pv-right pv-meta" [title]="'through the proxy in this period, measured on the wire, and what it costs' | t">
+          <b class="mono">{{ f.bytes(tr.bytes) }}</b>{{ tr.usd != null ? ' · ≈ ' + money(tr.usd) : '' }} · {{ period.label() }}</span>
+      }
     </div>
     @if (open()) {
     <div class="st-card-body">
@@ -222,21 +197,12 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
           }
         </div>
       }
-    </div>
-    }
-  </section>
 
-  <!-- Jina AI: reading web pages and searching, its key and its calls -->
-  <app-jina-settings />
-
-  @if (u(); as us) {
-    <!-- Where the lookups came out, and how fast -->
-    <div class="st-card">
-      <div class="st-card-head"><h3>{{ 'Exits' | t }}</h3>
+      <!-- Where the proxied lookups came out, and how fast -->
+      <div class="st-sec-head"><span class="st-sec-title">{{ 'Exits' | t }}</span>
         <span class="st-sub">{{ 'where the proxied lookups came out, and how fast' | t }}</span>
-        <div class="st-right"><ng-container [ngTemplateOutlet]="period" /></div>
-      </div>
-      <div class="st-card-body">
+        <div class="st-right"><ng-container [ngTemplateOutlet]="periodSeg" /></div></div>
+      @if (u(); as us) {
         <div class="st-tiles six">
           <div class="st-tile"><span>{{ 'Exit addresses' | t }}</span><b>{{ us.exits?.distinct_ips ?? 0 }}</b>
             <small>{{ us.exits?.identified ?? 0 }} {{ 'identified' | t }}</small></div>
@@ -252,6 +218,17 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
             <small>p95 {{ msOr(us.latency?.proxy?.p95_ms) }}</small></div>
           <div class="st-tile"><span>{{ 'Latency direct' | t }}</span><b>{{ msOr(us.latency?.direct?.p50_ms) }}</b>
             <small>p95 {{ msOr(us.latency?.direct?.p95_ms) }}</small></div>
+          @if (us.health; as h) {
+            <div class="st-tile" [attr.data-tone]="h.last ? (h.last.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Exit health' | t }}</span>
+              <b>{{ h.uptime == null ? (h.every_minutes ? ('waiting' | t) : ('off' | t)) : pct1(h.uptime) }}</b>
+              <small>{{ h.checks }} {{ 'checks' | t }}{{ h.every_minutes ? ' · ' + ('every' | t) + ' ' + h.every_minutes + ' min' : '' }}</small></div>
+          } @else {
+            <div class="st-tile" [attr.data-tone]="lastTest() ? (lastTest()!.exits[0]?.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Last test' | t }}</span>
+              @if (lastTest(); as lt) {
+                <b>{{ lt.exits[0]?.ok ? lt.exits[0].ip : ('failed' | t) }}</b><small>{{ when(lt.at) }}</small>
+              } @else { <b>{{ 'not tested' | t }}</b><small>{{ 'in this browser' | t }}</small> }
+            </div>
+          }
         </div>
         @if (us.exits?.identified) {
           <div class="st-charts">
@@ -286,17 +263,11 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
             · {{ 'median' | t }} {{ msOr(us.health!.p50_ms) }}
           </p>
         }
-      </div>
-    </div>
-  }
+      } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> } @else { <div class="st-empty">{{ 'Loading…' | t }}</div> }
 
-  <!-- The lookups and the traffic -->
-  <div class="st-card">
-    <div class="st-card-head"><h3>{{ 'Lookups' | t }}</h3>
-      <span class="st-sub">{{ 'EasyEDA / LCSC, from the request journal' | t }}</span>
-      <div class="st-right"><ng-container [ngTemplateOutlet]="period" /></div>
-    </div>
-    <div class="st-card-body">
+      <!-- The EasyEDA / LCSC lookups and what the proxy carried -->
+      <div class="st-sec-head"><span class="st-sec-title">{{ 'Lookups' | t }}</span>
+        <span class="st-sub">{{ 'EasyEDA / LCSC, from the request journal' | t }}</span></div>
       @if (u(); as us) {
         <div class="st-tiles six">
           <div class="st-tile"><span>{{ 'Lookups' | t }}</span><b>{{ f.count(us.totals.lookups) }}</b>
@@ -405,7 +376,14 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         {{ '2Captcha bills the traffic that goes through the proxy. Its balance is on 2Captcha\\'s own dashboard - Workbench keeps no 2Captcha API key.' | t }}
         <a href="https://2captcha.com/enterpage" target="_blank" rel="noopener">2captcha.com ↗</a></p>
     </div>
-  </div>
+    }
+  </section>
+
+  <!-- Jina AI: reading web pages and searching, its key and its calls -->
+  <app-jina-settings />
+
+  <!-- Jina AI's and the proxy's traffic together, always in sight -->
+  <app-traffic-overview />
   @if (!canEdit) {
     @if (msg(); as m) { <p class="st-msg">{{ m }}</p> }
     @if (err(); as e) { <p class="st-err">{{ e }}</p> }
@@ -422,7 +400,6 @@ export class ProxySettingsPanel {
   readonly f = fmt;
   readonly fms = ms;
   readonly when = when;
-  readonly periods = PERIODS;
   readonly health = HEALTH;
   healthOpts = computed<SelectOption[]>(() => this.health.map(m => ({ value: '' + m,
     label: m ? t('every') + ' ' + (m >= 60 ? m / 60 + ' h' : m + ' min') : t('Off') })));
@@ -451,7 +428,8 @@ export class ProxySettingsPanel {
   lastTest = signal<LastTest | null>(this.readLast());
   msg = signal<string | null>(null);
   err = signal<string | null>(null);
-  days = signal<number>(this.readDays());
+  /** The period of every figure on the page, one for all (jina-settings.ts). */
+  readonly period = inject(TrafficPeriod);
   u = signal<ProxyUsage | null>(null);
   usageErr = signal<string | null>(null);
   table = signal<'proxy' | 'all'>('proxy');
@@ -479,17 +457,22 @@ export class ProxySettingsPanel {
     const used = s.asks_in_window ?? s.used ?? 0;
     return `${used} / ${s.budget} ${t('asks')} · ${fmt.secs(s.window_s ?? 0)}`;
   });
-  periodLabel = computed(() => PERIODS.find(p => p.days === this.days())?.label ?? this.days() + 'd');
+  /** The proxy's traffic in the period, for the folded card's line: on the wire when metered. */
+  traffic = computed(() => {
+    const us = this.u();
+    if (!us) return null;
+    return { bytes: us.metered ? us.metered.total : us.totals.bytes_proxy, usd: us.cost ? us.cost.usd : null };
+  });
 
   constructor() {
     this.http.get<ProxySettings>('/api/proxy/settings').subscribe({
       next: d => this.take(d), error: e => this.err.set(this.text(e)),
     });
     effect(() => {
-      const d = this.days();
+      const d = this.period.days();
       this.usageErr.set(null);
       this.http.get<ProxyUsage>(`/api/proxy/usage?days=${d}`).subscribe({
-        next: r => { if (this.days() === d) this.u.set(r); },
+        next: r => { if (this.period.days() === d) this.u.set(r); },
         error: e => this.usageErr.set(t('The usage figures did not load') + ` (${e?.status ?? '?'}).`),
       });
     });
@@ -497,15 +480,6 @@ export class ProxySettingsPanel {
 
   private readLast(): LastTest | null {
     try { return JSON.parse(localStorage.getItem(LAST_TEST) ?? 'null'); } catch { return null; }
-  }
-  private readDays(): number {
-    try { return Number(localStorage.getItem('redline.settings.proxy.days')) || 7; } catch { return 7; }
-  }
-  setDays(d: number) {
-    if (d === this.days()) return;
-    this.u.set(null);
-    this.days.set(d);
-    try { localStorage.setItem('redline.settings.proxy.days', String(d)); } catch { /* private window */ }
   }
 
   pct(n: number, of: number) { return of ? Math.round(100 * n / of) + '%' : '–'; }

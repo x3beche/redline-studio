@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
@@ -33,6 +33,29 @@ export function foldLoad(key: string): boolean | null {
 }
 export function foldKeep(key: string, v: boolean): void {
   try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* private window */ }
+}
+
+/** The period every figure on Settings > Proxy & Data covers - the proxy's
+ *  sections, Jina's calls and the data traffic at the foot - one choice for
+ *  all of them, kept in this browser. */
+export const PERIODS = [{ days: 1, label: '24h' }, { days: 7, label: '7d' }, { days: 30, label: '30d' }, { days: 90, label: '90d' }];
+const PERIOD_KEY = 'redline.settings.proxy.days';
+@Injectable({ providedIn: 'root' })
+export class TrafficPeriod {
+  readonly periods = PERIODS;
+  days = signal<number>(TrafficPeriod.read());
+  label = computed(() => PERIODS.find(p => p.days === this.days())?.label ?? this.days() + 'd');
+  private static read(): number {
+    try {
+      const v = Number(localStorage.getItem(PERIOD_KEY));
+      return PERIODS.some(p => p.days === v) ? v : 7;
+    } catch { return 7; }
+  }
+  set(d: number) {
+    if (d === this.days()) return;
+    this.days.set(d);
+    try { localStorage.setItem(PERIOD_KEY, String(d)); } catch { /* private window */ }
+  }
 }
 
 @Component({
@@ -73,10 +96,10 @@ export function foldKeep(key: string, v: boolean): void {
                  @else { {{ a()?.error || ('Jina\\'s dashboard' | t) }} }</small></div>
         <div class="st-tile" [title]="'the balance\\'s drop over the days Workbench looked at it' | t"><span>{{ 'Used' | t }} · 14d</span>
           <b>{{ spent() == null ? '–' : fmt.count(spent()!) }}</b><small>{{ 'tokens, by the balance' | t }}</small></div>
-        <div class="st-tile" [attr.data-tone]="tone(u()?.reader?.success_rate)"><span>Reader · 14d</span>
+        <div class="st-tile" [attr.data-tone]="tone(u()?.reader?.success_rate)"><span>Reader · {{ period.label() }}</span>
           <b>{{ fmt.count(u()?.reader?.requests ?? 0) }}</b>
           <small>{{ u()?.reader?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.reader?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
-        <div class="st-tile" [attr.data-tone]="tone(u()?.search?.success_rate)"><span>Search · 14d</span>
+        <div class="st-tile" [attr.data-tone]="tone(u()?.search?.success_rate)"><span>Search · {{ period.label() }}</span>
           <b>{{ fmt.count(u()?.search?.requests ?? 0) }}</b>
           <small>{{ u()?.search?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.search?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
       </div>
@@ -94,6 +117,11 @@ export function foldKeep(key: string, v: boolean): void {
         </div>
       }
 
+      <div class="st-sec-head"><span class="st-sec-title">{{ 'Calls' | t }}</span>
+        <span class="st-sub">{{ 'Workbench\\'s own count, Reader and Search apart' | t }}</span>
+        <div class="st-right"><div class="st-seg">
+          @for (x of period.periods; track x.days) { <button [class.on]="period.days() === x.days" (click)="period.set(x.days)">{{ x.label }}</button> }
+        </div></div></div>
       @if (u(); as us) {
         <div class="st-charts">
           @for (api of apis; track api.id) {
@@ -130,7 +158,7 @@ export function foldKeep(key: string, v: boolean): void {
                     <td class="r mono">{{ r.tokens ? fmt.count(r.tokens) : '–' }}</td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="8" class="dim">{{ 'No Jina calls in the last 14 days.' | t }}</td></tr>
+                  <tr><td colspan="8" class="dim">{{ 'No Jina calls in this period.' | t }}</td></tr>
                 }
               </tbody>
             </table>
@@ -157,6 +185,7 @@ export class JinaSettingsPanel {
   open = computed(() => this.opened() ?? !!this.s()?.set);
   toggle() { const v = !this.open(); this.opened.set(v); foldKeep('redline.settings.jina.open', v); }
   readonly fmt = fmt;
+  readonly period = inject(TrafficPeriod);
   readonly ms = ms;
   readonly when = when;
   readonly apis: { id: 'reader' | 'search'; name: string; about: string }[] = [
@@ -198,15 +227,23 @@ export class JinaSettingsPanel {
     return used;
   });
 
-  constructor() { this.load(); }
+  constructor() {
+    this.load();
+    // The calls follow the page's period (TrafficPeriod).
+    effect(() => {
+      const d = this.period.days();
+      this.usageErr.set(null);
+      this.http.get<Usage>(`/api/jina/usage?days=${d}`).subscribe({
+        next: u => { if (this.period.days() === d) this.u.set(u); },
+        error: e => this.usageErr.set(t('The usage figures did not load') + ` (${e?.status ?? '?'}).`),
+      });
+    });
+  }
 
   private load() {
     this.http.get<JinaSettings>('/api/jina/settings').subscribe({
       next: s => { this.s.set(s); if (s.set) this.account(false); else this.a.set(null); },
       error: e => this.err.set(this.text(e)),
-    });
-    this.http.get<Usage>('/api/jina/usage?days=14').subscribe({
-      next: u => this.u.set(u), error: e => this.usageErr.set(t('The usage figures did not load') + ` (${e?.status ?? '?'}).`),
     });
   }
   private account(refresh: boolean) {

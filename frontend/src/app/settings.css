@@ -73,6 +73,20 @@
 .st-right { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .st-card-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .st-sec-title { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-dim); }
+/* A section of a card with figures of its own (Proxy > Exits, Lookups; Jina > Calls):
+   its title, a line on what it counts and the period, on one row over a rule. */
+.st-sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0;
+  margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.st-sec-head .st-sec-title { color: var(--ink); font-weight: 600; }
+/* Route order: EasyEDA's state beside the card's title. */
+.ro-state { font-size: 11px; color: var(--ink-dim); gap: 6px; }
+/* Data traffic: a hero and seven figures on one row on a wide screen. */
+.st-tiles.tr-tiles { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+.tr-split { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.tr-split > div { display: flex; justify-content: space-between; gap: 8px; min-width: 0; font-size: 11px; color: var(--ink); }
+.tr-split > div > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-split small { flex: none; font-size: 10.5px; color: var(--ink-dim); }
+.pv-head .pv-right.pv-meta b { font-weight: 600; color: var(--ink); }
 .st-hint { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ink-dim); }
 .st-hint a, .st-link { color: var(--accent); text-decoration: none; }
 .st-hint a:hover, .st-link:hover { text-decoration: underline; }

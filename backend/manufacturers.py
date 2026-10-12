@@ -613,6 +613,7 @@ class Fetcher:
         self.at = 0                                     # where a request starts in the order
         self.switched_at: str | None = None
         self.jina_since: str | None = None
+        self.rescued_jina = 0                           # refused or unreachable, then read by Jina
         self.stats = {"direct": {"requests": 0, "bytes": 0, "refused": 0},
                       "proxy": {"requests": 0, "bytes": 0, "refused": 0},
                       "jina": {"requests": 0, "bytes": 0, "refused": 0, "failed": 0, "tokens": 0}}
@@ -674,6 +675,7 @@ class Fetcher:
                     self.switched_at = self.switched_at or _now()
                 elif route == "jina":
                     self.jina_since = self.jina_since or _now()
+                    self.rescued_jina += 1
             if page and route != "jina" and "jina" in routes[i + 1:] and self._thin(got):
                 # Written by its script: a later Jina reads it, this once.
                 j = await self._jina(url, allowed, attempt="fallback")
@@ -2175,7 +2177,9 @@ async def _traffic(db, fetcher: Fetcher, track: Tracker) -> None:
     s = fetcher.stats
     t = {"requests_direct": s["direct"]["requests"], "bytes_direct": s["direct"]["bytes"],
          "requests_proxy": s["proxy"]["requests"], "bytes_proxy": s["proxy"]["bytes"],
-         "refused": s["direct"]["refused"] + s["proxy"]["refused"]}
+         "refused": s["direct"]["refused"] + s["proxy"]["refused"], "refused_direct": s["direct"]["refused"]}
+    if fetcher.rescued_jina:
+        t["rescued_jina"] = fetcher.rescued_jina
     if fetcher.switched_at:
         t["proxy_since"] = fetcher.switched_at
     j = s.get("jina") or {}
