@@ -107,17 +107,6 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         }
       </div>
     }
-    @if (auth.can('draw')) {
-      <label class="tcv-fm-linkto">
-        <span>{{ 'New uploads go with board' | t }}</span>
-        <select class="tcv-fm-select" [value]="linkTo()" (change)="linkTo.set($any($event.target).value)">
-          <option value="">{{ '(no board)' | t }}</option>
-          @for (b of boards(); track b._id) {
-            <option [value]="b._id" [selected]="b._id === linkTo()">{{ b.title || b._id }}</option>
-          }
-        </select>
-      </label>
-    }
   </aside>
 
   <!-- RIGHT: where you are, and what is in it -->
@@ -561,7 +550,6 @@ export class RoomFiles implements OnDestroy {
   kind = signal('');
   board = signal('');
   /** Which board a new file goes with: the one last open in the PCB room. */
-  linkTo = signal<string>(this.picked.board() ?? '');
 
   // ---- what is picked
   selected = signal<Set<string>>(new Set());
@@ -1275,7 +1263,7 @@ export class RoomFiles implements OnDestroy {
     this.error.set(null);
     this.progress.set(0);
     this.uploading.set(files.length === 1 ? files[0].name : `${files.length} ${t('files')}`);
-    const ctx = { room: this.linkTo() ? 'pcb' : 'files', ...(this.linkTo() ? { board: this.linkTo() } : {}) };
+    const ctx = { room: 'files' };
     this.api.upload(files, ctx, '', folder).subscribe({
       next: ev => {
         if (ev.type === HttpEventType.UploadProgress && ev.total) {

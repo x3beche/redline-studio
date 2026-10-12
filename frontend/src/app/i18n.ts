@@ -1019,6 +1019,7 @@ const TR: Record<string, string> = {
   'Full names': 'Tam adlar',
   'Short names': 'Kısa adlar',
   'Icons + short': 'Simge + kısa ad',
+  'Icons + full names': 'Simge + tam ad',
   'Icons only': 'Yalnızca simge',
   'More': 'Daha fazla',
   'More tabs': 'Diğer sekmeler',

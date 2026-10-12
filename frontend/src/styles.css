@@ -4891,8 +4891,6 @@ rl-task-block { display: block; }
 .tcv-fm-side .tcv-notes-chip em { font-style: normal; opacity: .65; margin-left: 2px; }
 .tcv-fm-side .tcv-fm-quiet { padding: 2px 2px; }
 .tcv-fm-side .tcv-fm-foot { margin-top: auto; border-top: 1px solid var(--line); }
-.tcv-fm-linkto { display: flex; flex-direction: column; gap: 4px; margin: 0 10px; padding-top: 14px; font-size: 11px;
-  color: var(--ink-dim); }
 
 /* the right panel */
 .tcv-fm-main { position: relative; overflow: hidden; padding: 0; gap: 0; }

@@ -19,9 +19,10 @@ import { LANG } from './i18n';
  *  more item in the order (MORE), at the end by default, just before
  *  Settings; it is never hidden, and is drawn only when something is under it.
  */
-export type TopbarDisplay = 'full' | 'short' | 'icons' | 'icon';
+export type TopbarDisplay = 'full' | 'iconsfull' | 'short' | 'icons' | 'icon';
 export const TOPBAR_DISPLAYS: { id: TopbarDisplay; label: string }[] = [
   { id: 'full', label: 'Full names' },
+  { id: 'iconsfull', label: 'Icons + full names' },
   { id: 'short', label: 'Short names' },
   { id: 'icons', label: 'Icons + short' },
   { id: 'icon', label: 'Icons only' },
@@ -226,11 +227,11 @@ export class TopBar {
 
   icon(id: string): string { return ICON[id] ?? ICON_ANY; }
   short(w: Workspace): string { return SHORT[w.id] ?? w.label; }
-  showIcon = computed(() => this.display() === 'icons' || this.display() === 'icon');
+  showIcon = computed(() => ['icons', 'iconsfull', 'icon'].includes(this.display()));
   /** The words on a tab, or '' with icons only (the name is then its title). */
   text(w: Workspace): string {
     const d = this.display();
-    return d === 'full' ? w.label : d === 'icon' ? '' : this.short(w);
+    return d === 'full' || d === 'iconsfull' ? w.label : d === 'icon' ? '' : this.short(w);
   }
   title(w: Workspace): string { return w.blurb + (w.id === 'notes' ? ' (Alt+N)' : ''); }
 
