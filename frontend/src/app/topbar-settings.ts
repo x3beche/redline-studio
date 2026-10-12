@@ -26,9 +26,9 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
     .tb-prev-end { margin-left: auto; }
     .tb-prev-gap + .tb-prev-end { margin-left: 0; }
     .tb-rows { display: flex; flex-direction: column; }
-    .tb-cc-opts { grid-column: 3 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-bottom: 2px; }
+    .tb-cc-opts { grid-column: 4 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-bottom: 2px; }
     .tb-cc-hint { flex-basis: 100%; font-size: 10.5px; color: var(--ink-dim); }
-    .tb-row { display: grid; grid-template-columns: 18px 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+    .tb-row { display: grid; grid-template-columns: 18px 30px 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
       padding: 6px 10px; border-top: 1px solid var(--line); outline: none; background: var(--surface); }
     .tb-row:first-child { border-top: 0; }
     .tb-row:focus-visible { box-shadow: inset 2px 0 0 var(--accent); background: var(--surface-2); }
@@ -41,6 +41,8 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
     .tb-row[data-fixed] .tb-handle { cursor: default; opacity: .4; }
     .tb-row-ico.tb-row-more { font-size: 15px; letter-spacing: 0; }
     .tb-more-n { justify-self: start; }
+    .tb-row > .tcv-switch { justify-self: center; }
+    .tb-sw-none { width: 30px; }
     .tb-more-n[data-tone="dim"] { opacity: .6; }
     .tb-row-ico { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line);
       border-radius: 5px; background: var(--surface-2); color: var(--ink-dim); }
@@ -55,15 +57,15 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
     .tb-arrow:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
     .tb-arrow:disabled { opacity: .35; cursor: default; }
     @media (max-width: 768px) {
-      .tb-row { grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "ico name arrows" "ico show show"; row-gap: 6px; }
+      .tb-row { grid-template-columns: 30px 26px minmax(0, 1fr) auto; grid-template-areas: "sw ico name arrows" "sw ico more more"; row-gap: 6px; }
+      .tb-row > .tcv-switch, .tb-sw-none { grid-area: sw; }
       .tb-handle { display: none; }
       .tb-row-ico { grid-area: ico; }
       .tb-row-name { grid-area: name; }
-      .tb-row .st-seg, .tb-row .tb-more-n { grid-area: show; justify-self: start; }
+      .tb-row .tb-more-n { grid-area: more; justify-self: start; }
       .tb-arrows { grid-area: arrows; }
       .tb-arrow { width: 40px; height: 36px; }
       .tb-cc-opts { grid-column: 1 / -1; grid-row: 3; }
-      .tb-row .st-seg button { padding: 7px 14px; }
     }
   `],
   template: `
@@ -138,6 +140,11 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
              (dragover)="dragOver($event, e.id)" (drop)="drop($event)"
              (keydown)="key($event, e.id)">
           <span class="tb-handle" aria-hidden="true" [title]="'Drag to move' | t">⋮⋮</span>
+          @if (e.id === more) { <span class="tb-sw-none"></span> } @else {
+            <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="!e.hidden" [attr.data-on]="e.hidden ? null : 1"
+                    [attr.aria-label]="('Show in the top bar' | t) + ': ' + (name(e.id) | t)" [title]="(e.hidden ? 'Hidden - under More' : 'Shown in the top bar') | t"
+                    (click)="bar.setHidden(e.id, !e.hidden)"></button>
+          }
           <span class="tb-row-ico" aria-hidden="true">
             @if (e.id === gap) { ↔ } @else if (e.id === more) { <span class="tb-row-more">⋯</span> } @else { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
           </span>
@@ -151,12 +158,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
           @if (e.id === more) {
             <span class="st-badge tb-more-n" [attr.data-tone]="hiddenCount() ? null : 'dim'"
                   [title]="'Hidden tabs under More' | t">{{ hiddenCount() }} {{ (hiddenCount() === 1 ? 'tab under it' : 'tabs under it') | t }}</span>
-          } @else {
-          <div class="st-seg">
-            <button type="button" [class.on]="!e.hidden" [attr.aria-pressed]="!e.hidden" (click)="bar.setHidden(e.id, false)">{{ 'Show' | t }}</button>
-            <button type="button" [class.on]="e.hidden" [attr.aria-pressed]="e.hidden" (click)="bar.setHidden(e.id, true)">{{ 'Hide' | t }}</button>
-          </div>
-          }
+          } @else { <span></span> }
           <span class="tb-arrows">
             <button type="button" class="tb-arrow" [disabled]="first" (click)="bar.step(e.id, -1)"
                     [attr.aria-label]="('Move up' | t) + ': ' + (name(e.id) | t)" [title]="'Move up' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
@@ -187,6 +189,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
       }
       <div class="tb-row" role="listitem" data-fixed>
         <span class="tb-handle" aria-hidden="true">⋮⋮</span>
+        <button class="tcv-switch" type="button" role="switch" aria-checked="true" data-on="1" disabled [attr.aria-label]="'Settings' | t"></button>
         <span class="tb-row-ico" aria-hidden="true">⚙</span>
         <span class="tb-row-name"><b>{{ 'Settings' | t }}</b><span>{{ 'always shown, always at the far right' | t }}</span></span>
         <span class="st-badge">{{ 'fixed' | t }}</span>
