@@ -97,7 +97,9 @@ TOOL = Tool(
     about="Adds things on hand to the inventory; the same thing already kept is topped up, not doubled.",
     description="Add things the person has on hand to their inventory (the Inventory tab) - one or several in "
                 "`items`. Each needs a name (or a Product Catalog product / LCSC part to take it from) and a "
-                "quantity with its unit; give where it is kept, its category, part numbers and maker when known. "
+                "quantity with its unit; give where it is kept, its category, part numbers and maker when known. Its "
+                "type (filament, screw, electronic...) is worked out from its name - give `type` only when the "
+                "person says it or the name would not tell. "
                 "An item that is already kept - the same MPN or LCSC number, or the same name in the same unit - "
                 "is merged: its quantity goes up by this one's and the answer says so; it is never doubled. When "
                 "the thing came from the Product Catalog (manufacturer_search) or LCSC (lcsc_search, drawer_*), "

@@ -334,3 +334,149 @@ def test_the_catalog_routes(db):  # noqa: F811
     for m, p in (("POST", "/api/inventory/from-catalog"), ("POST", "/api/inventory/from-catalog/bulk")):
         assert access.allowed("reviewer", access.action(m, p)) and not access.allowed("viewer", access.action(m, p))
     assert access.page_allowed("GET", "/api/inventory/stock")
+
+
+# ---------------------------------------------------------------- types
+
+from backend import inventory_types as kinds  # noqa: E402
+
+
+@pytest.mark.parametrize("name, extra, want", [
+    ("Robo90 Gri ECO PLA Filament - 1.75mm - 1 Kg", {}, ("filament", "")),
+    ("PETG 1.75 mm black", {}, ("filament", "")),
+    ("Elegoo standard UV resin 1 kg", {}, ("resin", "")),
+    ("M3x8 DIN 912 hex socket screw", {}, ("screw", "")),
+    ("Vida M4 x 12 havşa başlı", {}, ("screw", "")),
+    ("DIN 7991 M5", {}, ("screw", "")),
+    ("M3 nut", {}, ("nut", "")),
+    ("M3 nylock somun", {}, ("nut", "")),
+    ("M3 washer", {}, ("washer", "")),
+    ("M3 pul DIN 125", {}, ("washer", "")),
+    ("Heat-set insert M3x5x4", {}, ("insert", "")),
+    ("M3 brass standoff 10 mm", {}, ("fastener", "")),
+    ("M3x10 brass standoff", {}, ("fastener", "")),
+    ("M3x8 screw", {"category": "Fasteners"}, ("screw", "")),
+    ("0805 10k resistor", {}, ("electronic", "resistor")),
+    ("100nF 0603", {}, ("electronic", "capacitor")),
+    ("IRL540N", {"mpn": "IRL540NPBF"}, ("electronic", "transistor")),
+    ("Red LED 3mm", {}, ("electronic", "led")),
+    ("JST XH 4 pin", {}, ("electronic", "connector")),
+    ("whatever it is", {"lcsc": "C25744"}, ("electronic", "")),
+    ("ESP32-C3 module", {}, ("module", "")),
+    ("Arduino Nano", {}, ("module", "")),
+    ("Silicone wire 22 AWG red", {}, ("cable", "")),
+    ("Heat shrink 3mm", {"unit": "m"}, ("consumable", "")),
+    ("Solder wire 0.8 mm", {}, ("consumable", "")),
+    ("Soldering iron tips", {}, ("tool", "")),
+    ("Hex key set", {}, ("tool", "")),
+    ("608ZZ bearing", {}, ("mechanical", "")),
+    ("Rulman 608", {}, ("mechanical", "")),
+    ("Menteşe 20mm", {}, ("mechanical", "")),
+    ("T8 lead screw 300 mm", {}, ("mechanical", "")),
+    ("Fan 40mm", {}, ("electronic", "motor")),
+    ("Mystery box", {}, ("other", "")),
+    ("Bits and bobs", {"category": "Filament"}, ("filament", "")),
+])
+def test_the_type_is_worked_out_from_what_an_item_says(name, extra, want):
+    assert kinds.derive({"name": name, **extra}) == want
+
+
+def test_an_lcsc_part_looked_at_before_says_its_own_kind(tmp_path):
+    import json
+
+    from backend import lcsc
+    part = lcsc.LOOK / "C21190"
+    part.mkdir()
+    (part / "component.json").write_text(json.dumps({"success": True, "result": {
+        "title": "0603WAF1001T5E", "tags": ["Resistors"],
+        "dataStr": {"head": {"c_para": {"package": "R0603", "Value": "1kΩ", "Manufacturer Part": "0603WAF1001T5E"}}},
+        "szlcsc": {"image": "https://example/x.jpg"}}}))
+    info = kinds.lcsc_info("c21190")
+    assert info == {"category": "Resistors", "package": "R0603", "value": "1kΩ", "mpn": "0603WAF1001T5E",
+                    "title": "0603WAF1001T5E", "has_photo": True, "photo": False}
+    assert kinds.lcsc_info("C999") is None and kinds.lcsc_info("nope") is None
+    d = {"name": "something", "lcsc": "C21190", "quantity": 50}
+    o = inv.out({"_id": "i1", **d})
+    assert (o["type"], o["subtype"], o["type_auto"]) == ("electronic", "resistor", True)
+    assert o["facts"] == {"package": "0603", "value": "1kΩ", "mpn": "0603WAF1001T5E", "lcsc_category": "Resistors"}
+    assert o["photo"] is False and o["photo_known"] is True and o["images"] == []
+    (part / "photo.jpg").write_bytes(b"jpg")
+    assert inv.out({"_id": "i1", **d})["photo"] is True
+
+
+def test_what_a_types_card_shows():
+    f = kinds.facts({"name": "Robo90 Gri ECO PLA Filament - 1.75mm - 1 Kg", "quantity": 2, "unit": "pcs"}, "filament")
+    assert (f["material"], f["diameter"], f["colour"], f["spool_g"], f["weight_g"]) == ("PLA", 1.75, "grey", 1000, 2000)
+    assert (f["full_spools"], f["current_g"], f["current_pct"]) == (1, 1000, 100)
+    f = kinds.facts({"name": "PETG siyah 1.75mm 1kg", "quantity": 650, "unit": "g"}, "filament")
+    assert (f["material"], f["colour"], f["current_g"], f["current_pct"]) == ("PETG", "black", 650, 65)
+    f = kinds.facts({"name": "PLA+ white", "quantity": 1.25, "unit": "kg"}, "filament")
+    assert (f["material"], f["spool_stated"], f["full_spools"], f["current_g"]) == ("PLA+", False, 1, 250)
+    f = kinds.facts({"name": "M3x8 DIN 912 A2 screw", "quantity": 200}, "screw")
+    assert f == {"thread": "M3", "length": 8, "size": "M3x8", "standard": "DIN 912", "head": "Socket cap",
+                 "drive": "Hex socket", "material": "Stainless"}
+    f = kinds.facts({"name": "Heat-set insert M3x5x4 brass"}, "insert")
+    assert (f["size"], f["material"]) == ("M3x5x4", "Brass")
+    assert kinds.facts({"name": "M4 nylock nut"}, "nut")["form"] == "Nylock"
+    assert kinds.facts({"name": "0805 10k resistor"}, "electronic", "resistor") == {"package": "0805", "value": "10k"}
+    assert kinds.facts({"name": "100nF 0603 X7R"}, "electronic", "capacitor") == {"package": "0603", "value": "100nF"}
+    assert kinds.facts({"name": "Silicone wire 22 AWG 10m"}, "cable") == {"gauge": "22 AWG", "length": "10 m"}
+
+
+def test_a_type_set_by_hand_wins_and_is_kept():
+    fake = FakeDb()
+    a, _ = run(inv.add(fake, {"name": "Mystery box", "quantity": 1}, ME))
+    assert inv.out(a)["type"] == "other" and inv.out(a)["type_auto"] is True
+    a = run(inv.patch(fake, a["_id"], {"type": "Tools"}, ME))
+    o = inv.out(a)
+    assert (o["type"], o["type_auto"], o["type_set"]) == ("tool", False, "tool")
+    assert a["log"][-1]["fields"] == ["type"]
+    a = run(inv.patch(fake, a["_id"], {"type": "electronic", "subtype": "fan"}, ME))
+    assert (inv.out(a)["type"], inv.out(a)["subtype"]) == ("electronic", "motor")
+    a = run(inv.patch(fake, a["_id"], {"type": "", "subtype": ""}, ME))       # back to the worked-out one
+    assert (inv.out(a)["type"], inv.out(a)["type_auto"]) == ("other", True)
+    with pytest.raises(ValueError, match="not a type"):
+        inv.clean({"name": "x", "type": "spaceship"})
+    with pytest.raises(ValueError, match="not a component kind"):
+        inv.clean({"name": "x", "subtype": "flux capacitor"})
+    assert inv.clean({"name": "x", "type": "Screws"})["type"] == "screw"
+    assert inv.clean({"name": "x", "type": "auto"})["type"] == ""
+    # Old items have no type field at all: they get one, and listing filters by it.
+    run(fake["inventory"].insert_one({"_id": "old", "name": "M3x8 screw", "quantity": 100, "unit": "pcs"}))
+    run(fake["inventory"].insert_one({"_id": "old2", "name": "0805 10k resistor", "quantity": 100, "unit": "pcs"}))
+    assert [d["_id"] for d in run(inv.listing(fake, type="screw"))] == ["old"]
+    assert [d["_id"] for d in run(inv.listing(fake, type="electronic/resistor"))] == ["old2"]
+    assert [d["_id"] for d in run(inv.listing(fake, q="screws"))] == ["old"]          # the type's label is searched
+    assert inv.stats(run(inv.everything(fake)))["types"] == {"screw": 1, "electronic": 1, "other": 1}
+
+
+def test_types_through_the_api(db):  # noqa: F811
+    a = person(db, "a")
+    ty = a.get("/api/inventory/types").json()
+    assert [x["id"] for x in ty["types"]][:3] == ["filament", "resin", "screw"] and ty["subtypes"][0]["id"] == "resistor"
+    r = a.post("/api/inventory", json={"name": "PLA 1.75mm red 1kg", "quantity": 0.4, "unit": "kg"}).json()["item"]
+    assert (r["type"], r["type_auto"], r["facts"]["colour"], r["facts"]["current_pct"]) == ("filament", True, "red", 40)
+    s = a.post("/api/inventory", json={"name": "Bolt pack", "quantity": 3, "type": "screw"}).json()["item"]
+    assert (s["type"], s["type_auto"]) == ("screw", False)
+    assert a.post("/api/inventory", json={"name": "x", "quantity": 1, "type": "spaceship"}).status_code == 400
+    assert [x["id"] for x in a.get("/api/inventory?type=screw").json()] == [s["id"]]
+    it = a.patch(f"/api/inventory/{r['id']}", json={"type": "resin"}).json()
+    assert (it["type"], it["type_auto"]) == ("resin", False)
+    it = a.patch(f"/api/inventory/{r['id']}", json={"type": ""}).json()
+    assert (it["type"], it["type_auto"]) == ("filament", True)
+    assert a.get("/api/inventory/stats").json()["types"] == {"filament": 1, "screw": 1}
+    assert [x.get("type") for x in a.get("/api/inventory/export").json()["items"]] == ["screw", None]   # by name
+
+
+def test_a_catalog_products_pictures_come_with_its_item(db):  # noqa: F811
+    a = person(db, "a")
+    a.post("/api/inventory", json={"name": "tmp", "quantity": 1})
+    ws_a = next(iter(db["inventory"].docs.values()))["workspace_id"]
+    run(scope.ScopedDb(db, ws_a)["manufacturers"].insert_one({"_id": "r90", "name": "Robo90", "products": [
+        {"id": "p1", "name": "PLA Gri 1.75mm 1 Kg", "image": "https://x/a.jpg", "images": ["https://x/a.jpg", "https://x/b.jpg"],
+         "category": "Filament"}]}))
+    r = a.post("/api/inventory/from-catalog", json={"manufacturer": "r90", "product": "p1", "quantity": 2}).json()["item"]
+    assert r["images"] == ["https://x/a.jpg", "https://x/b.jpg"] and r["type"] == "filament"
+    listed = {x["id"]: x for x in a.get("/api/inventory").json()}
+    assert listed[r["id"]]["images"] == ["https://x/a.jpg", "https://x/b.jpg"]
+    assert a.get(f"/api/inventory/{r['id']}").json()["images"][0] == "https://x/a.jpg"

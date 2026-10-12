@@ -5,7 +5,8 @@ their quantities and where they are."""
 from __future__ import annotations
 
 from .. import inventory as inv
-from . import Ctx, Result, Tool, clip
+from .. import inventory_types as kinds
+from . import Ctx, Result, Tool, ToolError, clip
 from ._inventory import amount, line
 
 SHOW = 80
@@ -16,13 +17,20 @@ async def run(ctx: Ctx, args: dict) -> Result:
     cat = str(args.get("category") or "").strip()
     loc = str(args.get("location") or "").strip()
     low = bool(args.get("low"))
+    typ = str(args.get("type") or "").strip()
+    if typ:
+        try:
+            head_, _, tail_ = typ.partition("/")
+            typ = kinds.type_id(head_) + (f"/{kinds.subtype_id(tail_)}" if tail_ else "")
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
     try:
         limit = max(1, min(int(args.get("limit") or SHOW), 300))
     except (TypeError, ValueError):
         limit = SHOW
     every = await inv.everything(ctx.db)
-    rows = await inv.listing(ctx.db, q, cat, loc, low)
-    what = ", ".join(x for x in (f"\"{q}\"" if q else "", f"category {cat}" if cat else "",
+    rows = await inv.listing(ctx.db, q, cat, loc, low, typ)
+    what = ", ".join(x for x in (f"\"{q}\"" if q else "", f"type {typ}" if typ else "", f"category {cat}" if cat else "",
                                  f"at {loc}" if loc else "", "low only" if low else "") if x)
     if not every:
         return Result(text="The inventory is empty: nothing has been added in the Inventory tab yet.",
@@ -30,9 +38,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
     if not rows:
         st = inv.stats(every)
         text = (f"No item of the {len(every)} in the inventory matches {what}. Try fewer or other words."
+                + (f" Types: {', '.join(f'{k} ({n})' for k, n in st['types'].items())}." if st["types"] else "")
                 + (f" Categories: {', '.join(st['categories'][:30])}." if st["categories"] else "")
                 + (f" Places: {', '.join(st['locations'][:30])}." if st["locations"] else ""))
-        return Result(text=text, say="Nothing on hand matches {q}", vars={"q": q or cat or loc or "low"}, summary="no match")
+        return Result(text=text, say="Nothing on hand matches {q}", vars={"q": q or typ or cat or loc or "low"},
+                      summary="no match")
     head = (f"{len(rows)} of {len(every)} item(s)" + (f" for {what}" if what else "")
             + ". Read one in full (with its log) with inventory_read and its id:\n")
     text = head + "\n".join(line(d) for d in rows[:limit])
@@ -48,13 +58,18 @@ TOOL = Tool(
     label="Search the inventory",
     about="Lists or searches what is on hand, with quantities and where each thing is.",
     description="The person's inventory (the Inventory tab): the things they have on hand, each with its quantity and "
-                "unit, where it is kept (shelf, bin, box), category, part numbers (MPN, LCSC) and maker; an item at or "
-                "below its minimum is LOW. Without arguments it lists everything. `query`: words of the name, part "
-                "numbers, maker, place, notes or tags; `category`, `location`: only those; `low`: only the low ones. "
+                "unit, where it is kept (shelf, bin, box), its type (filament, screw, nut, washer, insert, electronic "
+                "with its kind - resistor, ic, connector... -, module, cable, mechanical, tool, consumable, other), "
+                "category, part numbers (MPN, LCSC) and maker; an item at or below its minimum is LOW. Without "
+                "arguments it lists everything. `query`: words of the name, part numbers, maker, place, notes or tags; "
+                "`type`: only that type (\"screw\", or \"electronic/resistor\" for a kind); `category`, `location`: "
+                "only those; `low`: only the low ones. "
                 "Use it when asked what they have, how many, or where something is - and before adding, to find the "
                 "item already kept.",
     schema={"type": "object", "properties": {
         "query": {"type": "string", "description": "Words to look for"},
+        "type": {"type": "string", "description": "Only this type: " + ", ".join(kinds.TYPE_IDS)
+                 + "; electronic/<kind> for one kind (" + ", ".join(kinds.SUBTYPE_IDS) + ")"},
         "category": {"type": "string", "description": "Only this category"},
         "location": {"type": "string", "description": "Only items whose place holds this"},
         "low": {"type": "boolean", "description": "Only items at or below their minimum"},

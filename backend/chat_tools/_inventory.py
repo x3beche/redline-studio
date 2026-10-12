@@ -8,6 +8,7 @@ the tab."""
 from __future__ import annotations
 
 from .. import inventory as inv
+from .. import inventory_types as kinds
 from . import ToolError
 from ._rights import need  # noqa: F401 - the inventory tools' too
 from ._things import find
@@ -22,6 +23,11 @@ ITEM_PROPS = {
                                               "sheet, bag - or another short word"},
     "location": {"type": "string", "description": "Where it is kept: shelf, bin, box (free text)"},
     "category": {"type": "string", "description": "e.g. Fasteners, MOSFETs, Connectors, Filament"},
+    "type": {"type": "string", "enum": ["", *kinds.TYPE_IDS],
+             "description": "What kind of thing it is; leave it out (or \"\") and it is worked out from the name, "
+                            "category and part number - set it only when the person says or it would come out wrong"},
+    "subtype": {"type": "string", "enum": ["", *kinds.SUBTYPE_IDS],
+                "description": "For an electronic component: its kind (resistor, capacitor, ic, connector...)"},
     "mpn": {"type": "string", "description": "The maker's part number"},
     "lcsc": {"type": "string", "description": "The LCSC part number, like C25744"},
     "manufacturer": {"type": "string", "description": "Who makes it"},
@@ -69,6 +75,8 @@ def line(d: dict) -> str:
     for k, label in (("category", "category"), ("mpn", "MPN"), ("lcsc", "LCSC"), ("manufacturer", "maker")):
         if d.get(k):
             bits.append(f"{label} {d[k]}")
+    t, sub, _ = inv.kind_of(d)
+    bits.append(f"type {t}" + (f"/{sub}" if sub else ""))
     return "  ".join(bits)
 
 

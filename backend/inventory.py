@@ -25,6 +25,12 @@ Items belong to the workspace (backend/scope.py) like the notes and the
 taste palettes; reading them is looking, keeping or changing them is the
 right to draw (backend/access.py), and deleting someone else's item needs
 the right to delete.
+
+Every item has a type - filament, screws, nuts, an electronic component
+(with its kind: resistor, IC...), a module, cable... (backend/inventory_types.py).
+A person may set it; else it is worked out from the item's own words each
+time it is read, so items kept before types existed have one too. The
+Inventory groups by it, and the Chat can search by it.
 """
 
 from __future__ import annotations
@@ -40,6 +46,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from . import access, actors
+from . import inventory_types as kinds
 
 router = APIRouter(prefix="/api/inventory")
 
@@ -66,7 +73,7 @@ LCSC_RE = re.compile(r"^C\d{1,12}$")
 
 # The fields a person sets, and how long each may be.
 TEXT = {"name": 160, "unit": 16, "location": 120, "category": 80, "mpn": 80, "lcsc": 16, "manufacturer": 120,
-        "board": 120, "notes": 4000, "currency": 8}
+        "board": 120, "notes": 4000, "currency": 8, "type": 24, "subtype": 24}
 FIELDS = (*TEXT, "quantity", "min_stock", "price", "tags", "catalog")
 _FOLD = str.maketrans("ıİşŞğĞçÇöÖüÜ", "iissggccoouu")
 
@@ -166,6 +173,10 @@ def clean(raw: dict, partial: bool = False) -> dict:
                 out[k] = currency_of(v)
             elif k == "lcsc":
                 out[k] = lcsc_of(v)
+            elif k == "type":
+                out[k] = kinds.type_id(v)
+            elif k == "subtype":
+                out[k] = kinds.subtype_id(v)
             elif k == "notes":
                 out[k] = str(v or "").strip()[:n]
             else:
@@ -247,17 +258,29 @@ def _log(doc: dict, line: dict) -> list[dict]:
 
 # ---- reading -------------------------------------------------------------------
 
+def kind_of(d: dict) -> tuple[str, str, bool]:
+    """(type, subtype, worked out) - see backend/inventory_types.py."""
+    return kinds.type_of(d, kinds.lcsc_info(d.get("lcsc") or ""))
+
+
 def _hay(d: dict) -> str:
     cat = d.get("catalog") or {}
+    t, s, _ = kind_of(d)
     return fold(" ".join(str(x or "") for x in (
         d.get("name"), d.get("mpn"), d.get("lcsc"), d.get("manufacturer"), d.get("category"), d.get("location"),
         d.get("board"), d.get("notes"), " ".join(d.get("tags") or []), cat.get("manufacturer_name"),
-        cat.get("product_name"), cat.get("sku"))))
+        cat.get("product_name"), cat.get("sku"), t, kinds.LABEL.get(t), s, kinds.SUBLABEL.get(s))))
 
 
-def matches(d: dict, q: str = "", category: str = "", location: str = "", low: bool = False) -> bool:
+def matches(d: dict, q: str = "", category: str = "", location: str = "", low: bool = False,
+            type: str = "") -> bool:  # noqa: A002 - the API's word
     if low and not is_low(d):
         return False
+    if type:
+        want = type.split("/", 1)
+        t, s, _ = kind_of(d)
+        if t != kinds.type_id(want[0]) or (len(want) > 1 and want[1] and s != kinds.subtype_id(want[1])):
+            return False
     if category and fold(d.get("category")) != fold(category):
         return False
     if location and fold(location) not in fold(d.get("location")):
@@ -273,9 +296,10 @@ async def everything(db) -> list[dict]:
     return [d async for d in db[COLL].find({}).sort("name", 1)]
 
 
-async def listing(db, q: str = "", category: str = "", location: str = "", low: bool = False) -> list[dict]:
-    """The items that match, by name."""
-    rows = [d for d in await everything(db) if matches(d, q, category, location, low)]
+async def listing(db, q: str = "", category: str = "", location: str = "", low: bool = False,
+                  type: str = "") -> list[dict]:  # noqa: A002
+    """The items that match, by name. `type`: a type, or "electronic/resistor"."""
+    rows = [d for d in await everything(db) if matches(d, q, category, location, low, type)]
     rows.sort(key=lambda d: fold(d.get("name")))
     return rows
 
@@ -403,7 +427,12 @@ def stats(rows: list[dict]) -> dict:
     units: dict[str, float] = {}
     for d in rows:
         units[d.get("unit") or "pcs"] = units.get(d.get("unit") or "pcs", 0) + float(d.get("quantity") or 0)
+    types: dict[str, int] = {}
+    for d in rows:
+        t = kind_of(d)[0]
+        types[t] = types.get(t, 0) + 1
     return {"items": len(rows), "low": sum(1 for d in rows if is_low(d)),
+            "types": {k: types[k] for k in kinds.TYPE_IDS if k in types},
             "out": sum(1 for d in rows if float(d.get("quantity") or 0) <= 0),
             "units": {k: round(v, 6) for k, v in units.items()}, "value": value,
             "categories": sorted({d["category"] for d in rows if d.get("category")}, key=fold),
@@ -454,7 +483,7 @@ async def add(db, raw: dict, by: dict | None = None, reason: str = "", merge: bo
     if after > MAX_QTY:
         raise ValueError("the quantity is out of range")
     fill = {k: f[k] for k in ("location", "category", "mpn", "lcsc", "manufacturer", "board", "currency", "catalog",
-                              "min_stock", "price") if f.get(k) not in (None, "", []) and have.get(k) in (None, "", [])}
+                              "min_stock", "price", "type", "subtype") if f.get(k) not in (None, "", []) and have.get(k) in (None, "", [])}
     tags = tags_of([*(have.get("tags") or []), *(f.get("tags") or [])])
     line = _line(now, who, "merged", delta=f["quantity"], after=after,
                  reason=str(reason or "")[:300] or "added again", filled=sorted(fill) or None)
@@ -552,7 +581,7 @@ async def remove(db, iid: str) -> bool:
 # ---- sharing: the inventory as a file --------------------------------------------
 
 KEEP = ("name", "quantity", "unit", "location", "category", "mpn", "lcsc", "manufacturer", "board", "min_stock",
-        "price", "currency", "notes", "tags", "catalog")
+        "price", "currency", "notes", "tags", "catalog", "type", "subtype")
 
 
 def export_doc(rows: list[dict]) -> dict:
@@ -592,9 +621,24 @@ async def import_doc(db, data: dict, by: dict | None = None) -> dict:
 
 # ---- the API --------------------------------------------------------------------
 
-def out(d: dict, full: bool = True) -> dict:
+def out(d: dict, full: bool = True, pictures: dict | None = None) -> dict:
+    """An item as the API gives it: its fields, its type (the person's or
+    worked out - `type_auto`; `type_set` is the person's own, "" for none),
+    what its type's card shows (`facts`), the pictures it can be shown
+    with - its catalog product's (`images`) and whether the LCSC part's
+    photo is on disk (`photo`) or can be fetched (`photo_known`) - and,
+    `full`, its log, newest first."""
     o = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "log")}
     o["id"] = d["_id"]
+    info = kinds.lcsc_info(d.get("lcsc") or "")
+    t, s, auto = kinds.type_of(d, info)
+    o["type"], o["subtype"], o["type_auto"] = t, s, auto
+    o["type_set"] = d.get("type") or ""
+    o["facts"] = kinds.facts(d, t, s, info)
+    link = linked_to(d)
+    o["images"] = (pictures or {}).get(link, []) if link else []
+    o["photo"] = bool(info and info.get("photo"))
+    o["photo_known"] = bool(info and (info.get("photo") or info.get("has_photo")))
     o["low"] = is_low(d)
     o["value"] = round(float(d["price"]) * float(d.get("quantity") or 0), 2) if d.get("price") is not None else None
     log = d.get("log") or []
@@ -620,6 +664,8 @@ class ItemIn(BaseModel):
     notes: str = ""
     tags: list[str] | str = []
     catalog: dict | None = None
+    type: str = ""
+    subtype: str = ""
     reason: str = ""
     merge: bool = True
 
@@ -640,6 +686,8 @@ class ItemPatch(BaseModel):
     notes: str | None = None
     tags: list[str] | str | None = None
     catalog: dict | None = None
+    type: str | None = None
+    subtype: str | None = None
     reason: str = ""
 
 
@@ -684,9 +732,39 @@ def _400(exc: ValueError):
     raise HTTPException(400, str(exc)) from exc
 
 
+async def pictures(db, rows: list[dict]) -> dict[tuple[str, str], list[str]]:
+    """The pictures of the catalog products these items link to, in one
+    read of the makers they name: {(maker, product): [urls]}."""
+    want: dict[str, set[str]] = {}
+    for d in rows:
+        link = linked_to(d)
+        if link:
+            want.setdefault(link[0], set()).add(link[1])
+    got: dict[tuple[str, str], list[str]] = {}
+    if not want:
+        return got
+    async for m in db["manufacturers"].find({"_id": {"$in": list(want)}}, {"products": 1}):
+        for p in m.get("products") or []:
+            if p.get("id") in want.get(m["_id"], ()):
+                urls = [u for u in dict.fromkeys([p.get("image"), *(p.get("images") or [])]) if u]
+                got[(m["_id"], p["id"])] = urls[:12]
+    return got
+
+
 @router.get("")
-async def api_list(q: str = "", category: str = "", location: str = "", low: bool = False):
-    return [out(d, full=False) for d in await listing(_db(), q, category, location, low)]
+async def api_list(q: str = "", category: str = "", location: str = "", low: bool = False,
+                   type: str = ""):  # noqa: A002 - the address's word
+    db = _db()
+    rows = await listing(db, q, category, location, low, type)
+    pics = await pictures(db, rows)
+    return [out(d, full=False, pictures=pics) for d in rows]
+
+
+@router.get("/types")
+async def api_types():
+    """The types and an electronic component's kinds, in their order."""
+    return {"types": [{"id": k, "label": v} for k, v in kinds.TYPES],
+            "subtypes": [{"id": k, "label": v} for k, v in kinds.SUBTYPES]}
 
 
 @router.get("/stats")
@@ -716,7 +794,7 @@ async def api_create(body: ItemIn):
         doc, merged = await add(_db(), raw, actors.current(), body.reason, body.merge)
     except ValueError as exc:
         _400(exc)
-    return {"item": out(doc), "merged": merged}
+    return {"item": out(doc, pictures=await pictures(_db(), [doc])), "merged": merged}
 
 
 @router.post("/bulk")
@@ -743,7 +821,7 @@ async def api_from_catalog(body: FromCatalogIn):
                                          body.location, body.note, actors.current())
     except ValueError as exc:
         _400(exc)
-    return {"item": out(doc), "merged": merged}
+    return {"item": out(doc, pictures=await pictures(_db(), [doc])), "merged": merged}
 
 
 @router.post("/from-catalog/bulk")
@@ -775,10 +853,11 @@ async def api_bulk_delete(body: IdsIn):
 
 @router.get("/{iid}")
 async def api_get(iid: str):
-    d = await get(_db(), iid)
+    db = _db()
+    d = await get(db, iid)
     if not d:
         _404(iid)
-    return out(d)
+    return out(d, pictures=await pictures(db, [d]))
 
 
 @router.patch("/{iid}")
@@ -790,7 +869,7 @@ async def api_patch(iid: str, body: ItemPatch):
         _400(exc)
     if not d:
         _404(iid)
-    return out(d)
+    return out(d, pictures=await pictures(_db(), [d]))
 
 
 @router.post("/{iid}/adjust")
@@ -801,7 +880,7 @@ async def api_adjust(iid: str, body: AdjustIn):
         _400(exc)
     if not d:
         _404(iid)
-    return out(d)
+    return out(d, pictures=await pictures(_db(), [d]))
 
 
 @router.delete("/{iid}")

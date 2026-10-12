@@ -37,10 +37,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
 TOOL = Tool(
     name="inventory_edit", package="inventory", level="change", order=24, default=False,
     label="Edit an inventory item",
-    about="Changes an item's name, place, category, part numbers, links, minimum, price, notes or tags.",
+    about="Changes an item's name, place, type, category, part numbers, links, minimum, price, notes or tags.",
     description="Change fields of an inventory item: `set` holds the fields and their new values (name, unit, "
-                "location, category, mpn, lcsc, manufacturer, board, catalog, min_stock, price, currency, notes, "
-                "tags; an empty value clears one). Not the quantity - that is inventory_adjust, with a reason. "
+                "location, category, type, subtype, mpn, lcsc, manufacturer, board, catalog, min_stock, price, currency, "
+                "notes, tags; an empty value clears one - an empty type goes back to the one worked out). Not the "
+                "quantity - that is inventory_adjust, with a reason. "
                 "`item`: its id (inventory_search) or name. Use it only when asked to change an item.",
     schema={"type": "object", "properties": {
         "item": {"type": "string", "description": "The item's id or name"},
