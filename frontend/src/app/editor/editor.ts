@@ -28,7 +28,8 @@ import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { LinksCard, PinIcon } from '../rooms/links';
 import { Releases } from '../rooms/releases';
-import { ModelFacts, ModelHealth } from './model-health';
+import { DrawingStatus, ModelFacts, ModelHealth } from './model-health';
+import { DrawingLayout } from './drawing-layout';
 import { LogPanel } from '../rooms/log-panel';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
@@ -56,7 +57,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, DecimalPipe, DrawingLayout, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -109,6 +110,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
   /** The releases of the model's project (rooms/releases.ts). */
   releasing = signal(false);
+  /** The drawing layout editor is open, on this drawing status (model-health.ts "Edit layout"). */
+  drawLayout = signal<DrawingStatus | null>(null);
 
   /** The model's technical drawing, made from its STEP, in a tab of its own. */
   /** The technical drawing is being made (a few seconds). */
@@ -1343,7 +1346,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (bb?.max && bb?.min) size = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z];
     } catch { /* not rendered */ }
     if (size && !size.every(n => isFinite(n) && n >= 0)) size = null;
-    this.modelFacts.set({ parts: v?.parts.length ?? 0, size });
+    this.modelFacts.set({ parts: v?.parts.length ?? 0, size, names: [...(v?.parts ?? [])], groups: [...(v?.groups ?? [])] });
   }
   /** The open model's build, how far along (buildPct). */
   activePct = computed(() => { const m = this.activeEntry(); return m ? this.buildPct(m) : null; });

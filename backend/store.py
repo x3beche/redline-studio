@@ -317,7 +317,7 @@ async def save_model(db, model_id: str, source: str) -> dict:
         doc["stale"] = existing.get("sha256") != doc["sha256"] or bool(existing.get("stale"))
         # What the model is as a component - its version, its pins, what
         # its last build used, a rebuild in flight - outlives a save.
-        for k in ("version", "pins", "built", "link", "build_secs"):
+        for k in ("version", "pins", "built", "link", "build_secs", "drawing_layout"):
             if k in existing:
                 doc[k] = existing[k]
     else:

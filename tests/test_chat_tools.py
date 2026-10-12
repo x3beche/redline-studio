@@ -161,7 +161,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert len(calcs) > 100 and not any(t["on"] for t in calcs)
     on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
-                  "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True,
+                  "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True, "drawing_layout": False,
                   "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
                   "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
                   "catalog_remove_product": True, "catalog_add_maker": False,
@@ -171,7 +171,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
                   "web_search": True, "web_read": True, "clock": True}
-    assert [t["package"] for t in got["tools"]][:11] == ["general"] * 3 + ["cad"] + ["pcb"] * 7     # General, then the tabs
+    assert [t["package"] for t in got["tools"]][:12] == ["general"] * 3 + ["cad"] * 2 + ["pcb"] * 7     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)

@@ -27,6 +27,9 @@ export interface ModelFacts {
   parts: number;
   /** Overall size along x, y, z, in mm. */
   size: [number, number, number] | null;
+  /** Its part names in order (NAMES) and its tree's groups. */
+  names?: string[];
+  groups?: string[];
 }
 
 interface Release {
@@ -35,7 +38,7 @@ interface Release {
 }
 
 /** backend/release.py drawing_status. */
-interface DrawingStatus {
+export interface DrawingStatus {
   id: string;
   state: 'no_step' | 'none' | 'scheduled' | 'queued' | 'making' | 'ready' | 'failed';
   pct?: number | null; stage?: string | null; started_at?: string | null;
@@ -43,7 +46,9 @@ interface DrawingStatus {
   built: { version: number | null; at: string | null };
   step?: { sha: string; bytes: number };
   key?: string;
-  made?: { at: string; pdf_bytes: number; preview: boolean; sheet?: string; scale?: string; views?: string[] };
+  layout?: { custom: boolean; version: number; key: string };
+  made?: { at: string; pdf_bytes: number; preview: boolean; sheet?: string; scale?: string; views?: string[];
+           layout?: string; boxes?: any[]; parts?: string[]; unmatched?: string[] };
   failed?: { reason: string; at: string };
 }
 
@@ -205,6 +210,7 @@ function day(iso: string): string {
             <span>{{ 'Made' | t }}</span><span [title]="made.at">{{ day(made.at) }}@if (d.built.version) { · {{ 'of' | t }} v{{ d.built.version }} }@if (d.step) { · STEP {{ d.step.sha.slice(0, 8) }} }</span>
             @if (made.scale) { <span>{{ 'Sheet' | t }}</span><span>{{ made.sheet | t }} · {{ made.scale }}</span> }
             @if (made.views?.length) { <span>{{ 'Views' | t }}</span><span>{{ viewNames(made.views!) }}</span> }
+            <span>{{ 'Layout' | t }}</span><span>{{ (d.layout?.custom ? 'own' : 'automatic') | t }}</span>
             <span>PDF</span><span>{{ size(made.pdf_bytes) }}</span>
           </div>
         } @else if (d.state === 'no_step') {
@@ -224,6 +230,7 @@ function day(iso: string): string {
               <button class="tcv-btn" (click)="make(!!d.made)" [disabled]="asking()">
                 {{ (d.made ? 'Make again' : 'Make now') | t }}</button>
             }
+            <button class="tcv-btn" (click)="layout.emit(d)" [title]="'Choose the sheet, the views and their sizes' | t">{{ 'Edit layout' | t }}</button>
           </div>
         }
       </div>
@@ -248,6 +255,8 @@ export class ModelHealth implements OnDestroy {
   build = output<void>();
   release = output<void>();
   releases = output<void>();
+  /** "Edit layout": the editor opens the layout editor (drawing-layout.ts). */
+  layout = output<DrawingStatus>();
 
   readonly day = day;
   releasesList = signal<Release[]>([]);
@@ -290,6 +299,9 @@ export class ModelHealth implements OnDestroy {
   }
 
   ngOnDestroy() { clearTimeout(this.timer); }
+
+  /** Read the drawing's status again (the layout editor made a new one). */
+  refresh() { const id = this.id(); if (id) this.status(id); }
 
   /** Where the drawing is; asked again every second while it is being
    *  made or waits its turn, every half minute while it is due. */

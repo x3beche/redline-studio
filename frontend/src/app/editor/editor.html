@@ -548,12 +548,21 @@
          facts, the project's releases and its technical drawing, moved
          into the tab as it is. -->
     <div #modelHealth class="tcv-model-host">
-      <app-model-health [entry]="activeEntry()" [facts]="modelFacts()" [pct]="activePct()"
-                        [canBuild]="auth.can('run')" [releasing]="releasing()"
+      <app-model-health #health [entry]="activeEntry()" [facts]="modelFacts()" [pct]="activePct()"
+                        [canBuild]="auth.can('run')" [releasing]="releasing()" (layout)="drawLayout.set($event)"
                         (build)="buildActive()" (release)="releasing.set(true)" (releases)="releasing.set(true)" />
     </div>
     @if (releasing() && activeModel()) {
       <app-releases animate.leave="tcv-leave" [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
+    }
+    <!-- The technical drawing's layout editor (drawing-layout.ts), from the Model tab. -->
+    @if (drawLayout(); as d) {
+      @if (activeEntry(); as m) {
+        <app-drawing-layout animate.leave="tcv-leave" [model]="m.id" [title]="m.title" [status]="d"
+                            [names]="modelFacts()?.names ?? []" [groups]="modelFacts()?.groups ?? []" [size]="modelFacts()?.size ?? null"
+                            [canSave]="auth.can('edit')" [canMake]="auth.can('run')"
+                            (closed)="drawLayout.set(null)" (made)="health.refresh()" />
+      }
     }
 
     <!-- The code view's switch: in the viewer's toolbar, just left of the

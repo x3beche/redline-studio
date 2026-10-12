@@ -33,7 +33,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import ato, kicad, lcsc, limits, store
+from . import ato, drawlayout, kicad, lcsc, limits, store
 
 COLL = "releases"
 BUCKET = "releases"
@@ -65,20 +65,25 @@ _PROGRESS_LINE = re.compile(r"^@progress (\d+) (.*)$")
 
 
 async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str, ident: str, sha: str,
-                  preview: bool = False, on_progress=None) -> str | None:
+                  preview: bool = False, on_progress=None, spec: dict | None = None) -> str | None:
     """A technical drawing of a STEP, in the drawing container. None if it
     was made; otherwise why not. With `preview`, a small PNG of the sheet
     and a JSON of what it holds beside `out` too (a release has no use for
-    them). `on_progress(pct, stage)` hears how far tools/techdraw.py is."""
+    them). `on_progress(pct, stage)` hears how far tools/techdraw.py is.
+    `spec`: the model's layout (backend/drawlayout.py for_drawing), else
+    the sheet is laid out by itself."""
     work = Path(tempfile.mkdtemp(prefix="redline-draw-"))
     try:
         os.chmod(work, 0o777)
         (work / "model.step").write_bytes(step)
+        if spec:
+            (work / "spec.json").write_text(json.dumps(spec))
         argv = ["docker", "run", "--rm", *limits.box(), "--network", "none",
                 "--user", f"{os.getuid()}:{os.getgid()}",
                 "-v", f"{work}:/work", "-v", f"{ROOT / 'tools'}:/tools:ro", DRAW_IMAGE,
                 "/work/model.step", "/work/drawing.pdf", "--title", title, "--project", project,
-                "--tag", tag, "--id", ident, "--sha", sha, *(["--png", "/work/drawing.png", "--info", "/work/drawing.json"] if preview else [])]
+                "--tag", tag, "--id", ident, "--sha", sha, *(["--png", "/work/drawing.png", "--info", "/work/drawing.json"] if preview else []),
+                *(["--spec", "/work/spec.json"] if spec else [])]
         proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.STDOUT, limit=1 << 20)
         text: list[str] = []
@@ -119,9 +124,16 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _kept(meta: dict, suffix: str = ".pdf") -> Path:
-    """Where a model's drawing is kept: by its STEP's fingerprint."""
-    return DRAWINGS / f"{meta['sha256'][:24]}-v{DRAW_VERSION}{suffix}"
+def _key(meta: dict, layout: str = "") -> str:
+    """A kept drawing's name: its STEP's fingerprint, and its layout's when
+    it has one of its own (drawlayout.digest) - a changed layout is a new
+    drawing, the automatic one's is still there."""
+    return f"{meta['sha256'][:24]}-v{DRAW_VERSION}" + (f"-l{layout}" if layout else "")
+
+
+def _kept(meta: dict, suffix: str = ".pdf", layout: str = "") -> Path:
+    """Where a model's drawing is kept."""
+    return DRAWINGS / f"{_key(meta, layout)}{suffix}"
 
 
 # What each model's drawing is doing, for the 3D room's Model tab: being
@@ -141,16 +153,18 @@ _STARTED: set[asyncio.Task] = set()
 async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False) -> bytes:
     """A model's technical drawing on its own, for the 3D room: made once
     per STEP (kept by the STEP's fingerprint), with its PNG preview.
-    `again` makes it anew even if it is kept."""
+    `again` makes it anew even if it is kept. With the model's layout, if
+    it has one (backend/drawlayout.py) - kept apart by it."""
     asked = time.time()
-    doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1})
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1, "drawing_layout": 1})
     if not doc:
         raise KeyError(model_id)
     meta = (doc.get("artifacts") or {}).get("step")
     if not meta:
         raise LookupError("this model has no STEP to draw from - its script does not export one")
     DRAWINGS.mkdir(parents=True, exist_ok=True)
-    kept = _kept(meta)
+    spec = drawlayout.for_drawing(doc.get("drawing_layout"))
+    kept = _kept(meta, layout=drawlayout.digest((doc.get("drawing_layout") or {}).get("spec")))
     if kept.exists() and not again:
         return kept.read_bytes()
     async with _MAKING.setdefault(kept.name, asyncio.Lock()):
@@ -171,7 +185,7 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
             for _ in range(2):
                 why = await drawing(step, kept, title=doc.get("title") or model_id.split("/")[-1],
                                     project=model_id.split("/")[0], tag=tag, ident=model_id,
-                                    sha=doc.get("sha256") or "", preview=True, on_progress=heard)
+                                    sha=doc.get("sha256") or "", preview=True, on_progress=heard, spec=spec)
                 if not (why and "exit 139" in why):
                     break
         except Exception as exc:                    # noqa: BLE001 - said on the tab, then raised
@@ -187,14 +201,19 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
 async def model_drawing_preview(db, model_id: str) -> bytes | None:
     """The PNG preview of a model's drawing if it is already made, else
     None - never made here: the preview only shows what is there."""
-    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1})
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "drawing_layout.spec": 1})
     if not doc:
         raise KeyError(model_id)
     meta = (doc.get("artifacts") or {}).get("step")
     if not meta:
         return None
-    png = _kept(meta, ".png")
-    return png.read_bytes() if png.exists() and _kept(meta).exists() else None
+    lay = _layout_key(doc)
+    png = _kept(meta, ".png", lay)
+    return png.read_bytes() if png.exists() and _kept(meta, layout=lay).exists() else None
+
+
+def _layout_key(doc: dict) -> str:
+    return drawlayout.digest((doc.get("drawing_layout") or {}).get("spec"))
 
 
 def _sheet(info: Path) -> dict:
@@ -204,7 +223,9 @@ def _sheet(info: Path) -> dict:
         got = json.loads(info.read_text())
     except (OSError, ValueError):
         return {}
-    return {k: got.get(k) for k in ("sheet", "scale", "views")}
+    return {k: got.get(k) for k in ("sheet", "scale", "views", "layout", "boxes", "parts", "unmatched", "extents",
+                                    "size_mm")
+            if k in got}
 
 
 def _iso(t: float) -> str:
@@ -217,7 +238,7 @@ async def drawing_status(db, model_id: str) -> dict:
     scheduled_at), queued, making (pct, stage), ready, failed; with what
     is made (when, its size, the sheet) and the last failure, if any, for
     the model's current STEP only."""
-    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "built": 1})
+    doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "built": 1, "drawing_layout": 1})
     if not doc:
         raise KeyError(model_id)
     built = doc.get("built") or {}
@@ -229,13 +250,16 @@ async def drawing_status(db, model_id: str) -> dict:
         return out
     sha = meta["sha256"]
     out["step"] = {"sha": sha[:12], "bytes": meta.get("bytes")}
-    kept, png = _kept(meta), _kept(meta, ".png")
+    lay = _layout_key(doc)
+    layout = doc.get("drawing_layout") or {}
+    out["layout"] = {"custom": bool(lay), "version": layout.get("version", 0), "key": lay}
+    kept, png = _kept(meta, layout=lay), _kept(meta, ".png", lay)
     # Its preview's address changes with the drawing, so it is kept for good.
-    out["key"] = f"{sha[:24]}-v{DRAW_VERSION}"
+    out["key"] = _key(meta, lay)
     if kept.exists():
         st = kept.stat()
         out["made"] = {"at": _iso(st.st_mtime), "pdf_bytes": st.st_size, "preview": png.exists(),
-                       **_sheet(_kept(meta, ".json"))}
+                       **_sheet(_kept(meta, ".json", lay))}
     live = _STATE.get(model_id)
     if live and live.get("sha") in (None, sha):
         if live["state"] == "failed":
@@ -498,7 +522,8 @@ async def _board(db, bid: str, out: Path, log) -> dict:
 # ---------------------------------------------------------------- models
 
 async def _model(db, mid: str, out: Path, tag: str, project: str, log) -> dict:
-    doc = await db.models.find_one({"_id": mid}, {"artifacts": 1, "title": 1, "sha256": 1, "stale": 1})
+    doc = await db.models.find_one({"_id": mid}, {"artifacts": 1, "title": 1, "sha256": 1, "stale": 1,
+                                                  "drawing_layout": 1})
     name = mid.split("/")[-1]
     info: dict = {"id": mid, "title": doc.get("title") or name, "files": [], "problems": []}
     arts = doc.get("artifacts") or {}
@@ -517,7 +542,8 @@ async def _model(db, mid: str, out: Path, tag: str, project: str, log) -> dict:
         info["problems"].append("no STEP: the model's script does not export one (export_step in the script adds it)")
     else:
         why = await drawing(step, dest / f"{name}-drawing.pdf", title=info["title"], project=project, tag=tag,
-                            ident=mid, sha=doc.get("sha256") or "")
+                            ident=mid, sha=doc.get("sha256") or "",
+                            spec=drawlayout.for_drawing(doc.get("drawing_layout")))
         if why:
             info["problems"].append(f"technical drawing: {why}")
         log(f"  {mid}: {'STEP, drawing' if not why else 'STEP (no drawing)'}")

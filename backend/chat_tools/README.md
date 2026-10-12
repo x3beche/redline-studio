@@ -64,6 +64,10 @@ through the workspace, and the list of them when the name fits nothing).
   board_stats.py), `model_read` (cc_context.py `model_parts`), `bom_cost`
   (bom_cost.py, offers on disk only), `firmware_build` (the firmware's
   build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
+- `drawing_layout` (change, off; package `cad`): a 3D model's technical
+  drawing layout read, set (the whole spec, checked by backend/drawlayout.py)
+  or put back to automatic, as the layout editor's PUT does, and with
+  `make` the drawing made again with it.
 - `pdf_make` (change, on; package `files`): a document the model writes in
   Markdown, printed as a PDF in Workbench's white theme (backend/pdfdoc.py:
   headless Chromium in its container, no network) and kept in Files >

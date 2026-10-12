@@ -78,6 +78,9 @@ export class OcpViewer {
   display!: Display;
   viewer!: Viewer;
   parts: string[] = [];
+  /** The tree's groups under the model (a component's node: "Base", "Fan
+   *  Module"), for the drawing layout's parts list. */
+  groups: string[] = [];
   /** The wheel on the Clip tab's plane sliders, and its step control. */
   clipWheel: ClipWheel | null = null;
   /** The reverse switch beside each clip plane. */
@@ -187,11 +190,14 @@ export class OcpViewer {
     const shapes = isInstancedFormat(raw) ? decodeInstancedFormat(raw) : raw.shapes ?? raw;
 
     const states: Record<string, [number, number]> = {};
+    const groups: string[] = [];
     const walk = (node: any) => {
       if (node?.state) states[node.id] = node.state;
+      if (node !== shapes && node?.parts?.length && node.name) groups.push(String(node.name));
       (node?.parts ?? []).forEach(walk);
     };
     walk(shapes);
+    this.groups = [...new Set(groups)];
 
     // The model's own part names (NAMES). A model that uses components has
     // them under one node each (backend/assembly.py), so the tree's top
