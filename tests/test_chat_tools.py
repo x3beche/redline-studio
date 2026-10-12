@@ -161,7 +161,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": False,
                   "datasheet_get": False, "datasheet_read": True, "basic_tool": True, "board_read": True,
                   "model_read": True, "bom_cost": True, "firmware_build": True, "file_read": True,
-                  "room_note": False}
+                  "taste_read": True, "room_note": False}
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -172,7 +172,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search",
                                                                 "datasheet_read", "basic_tool", "board_read",
                                                                 "model_read", "bom_cost", "firmware_build",
-                                                                "file_read"}
+                                                                "file_read", "taste_read"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
@@ -752,6 +752,27 @@ def test_model_read_pages_its_source_and_says_its_build(env, monkeypatch):
     assert " 600  x599 = 599" in p3.text and "ask for page" not in p3.text
     with pytest.raises(ToolError, match="no 3D model 'gear'"):
         run(tool.run(Ctx(db=db), {"model": "gear"}))
+
+
+def test_taste_read_lists_the_palettes_and_reads_one(env):
+    raw, _ = env
+    db = cc_chat._db()
+    tool = _tool("taste_read")
+    assert run(tool.run(Ctx(db=db), {})).say == "No taste palettes here"
+    raw["taste_palettes"].rows["p1"] = {
+        "_id": "p1", "workspace_id": "default", "name": "Taste of iot-fan", "description": "Rules for the fan",
+        "updated_at": "2026-10-11", "attached": [{"kind": "model", "id": "iot-fan/parts/lid"}],
+        "items": [{"id": "a", "domain": "mechanical", "strength": "must", "text": "Walls 2 mm", "why": "strength"},
+                  {"id": "b", "domain": "pcb", "strength": "avoid", "text": "No vias in pads"}]}
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 1 and "Taste of iot-fan" in listed.text and "Rules for the fan" in listed.text
+    assert "2 items (Mechanical 1, PCB 1; 1 must, 1 avoid)" in listed.text
+    got = run(tool.run(Ctx(db=db), {"palette": "iot-fan"}))                 # by words of its name
+    assert got.vars["name"] == "Taste of iot-fan"
+    assert "- MUST: Walls 2 mm (why: strength)" in got.text and "- AVOID: No vias in pads" in got.text
+    assert "attached to model iot-fan/parts/lid" in got.text
+    with pytest.raises(ToolError, match="taste palette"):
+        run(tool.run(Ctx(db=db), {"palette": "gearbox"}))
 
 
 def test_bom_cost_prices_flags_and_cuts(env, monkeypatch):

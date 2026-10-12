@@ -24,11 +24,12 @@ const TAG = 'M3 11V4h7l10 10-7 7z M7 7h1v1H7z';
 const BUILD = 'M4 5h16v14H4z M7 9l3 3-3 3 M12 15h5';
 const FILE = 'M6 3h8l4 4v14H6z M14 3v4h4';
 const NOTE = 'M5 4h14v12l-4 4H5z M15 20v-4h4 M8 9h8 M8 12h5';
+const SWATCH = 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z';
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
-  basic_tool: CALC, board_read: BOARD, model_read: CUBE, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
+  basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
   room_note: NOTE,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }

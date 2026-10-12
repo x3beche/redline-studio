@@ -162,7 +162,9 @@ SYSTEM_NOTE = (
     "calculator, rather than working them out in your head. For this workspace's own things - its boards "
     "(board_read; their cost: bom_cost), 3D models (model_read), firmware builds (firmware_build) and "
     "files (file_read) - read them with those tools before answering about them; each lists what there "
-    "is when called without an id. Leave a note in a room's queue (room_note) only when asked to."
+    "is when called without an id. The person's design taste - their own rules, kept as taste palettes - "
+    "is read with taste_read: read it when they ask about their taste or rules, or before advising on a "
+    "design. Leave a note in a room's queue (room_note) only when asked to."
 )
 
 
