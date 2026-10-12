@@ -7,7 +7,7 @@ import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
 import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
 import { Prefs } from './preferences';
-import { JinaSettingsPanel } from './jina-settings';
+import { JinaSettingsPanel, foldKeep, foldLoad } from './jina-settings';
 
 /** Settings > Proxy & Data: a second way out for EasyEDA's part lookups
  *  (backend/netproxy.py). Only those go through it - the model providers
@@ -110,19 +110,26 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
     }
   </div>
 
-  <!-- The settings -->
-  <div class="st-card">
-    <div class="st-card-head"><h3>{{ 'Proxy' | t }}</h3>
-      <span class="st-sub">{{ modeAbout() | t }}</span>
-      <div class="st-right">
+  <!-- The settings, folded like an LLM provider's card: open while a proxy is set up -->
+  <section class="st-card pv" [attr.data-open]="open() ? 1 : null">
+    <div class="pv-head">
+    <button type="button" class="pv-toggle" (click)="toggle()" [attr.aria-expanded]="open()"
+            [attr.aria-label]="(open() ? 'Collapse' : 'Expand') | t">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="open() ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+      <h3>{{ 'Proxy' | t }}</h3>
+    </button>
+      <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ (d.active ? (d.active === 'always' ? 'always' : 'when refused') : 'Off') | t }}{{ d.host ? ' · ' + d.host : '' }}</span>
+      <span class="pv-right">
         <div class="st-seg" role="group" [attr.aria-label]="'Proxy mode' | t">
           @for (m of modes; track m.id) {
             <button [class.on]="mode() === m.id" [disabled]="!canEdit" (click)="setMode(m.id)">{{ m.label | t }}</button>
           }
         </div>
-      </div>
+      </span>
     </div>
+    @if (open()) {
     <div class="st-card-body">
+      <p class="pv-line">{{ modeAbout() | t }}</p>
       <div class="st-sec-title">{{ 'Connection' | t }}</div>
       <div class="st-grid">
         <label class="st-f" style="grid-column: span 2"><span>{{ 'Host' | t }}</span>
@@ -196,7 +203,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         </div>
       }
     </div>
-  </div>
+    }
+  </section>
 
   <!-- Jina AI: reading web pages and searching, its key and its calls -->
   <app-jina-settings />
@@ -399,6 +407,10 @@ export class ProxySettingsPanel {
   readonly modes: { id: Mode; label: string }[] = [
     { id: 'off', label: 'Off' }, { id: 'fallback', label: 'When refused' }, { id: 'always', label: 'Always' }];
   data = signal<ProxySettings | null>(null);
+  /** The proxy card opened or closed by hand in this browser; otherwise open while a proxy is set up. */
+  private opened = signal<boolean | null>(foldLoad('redline.settings.proxy.open'));
+  open = computed(() => this.opened() ?? !!(this.data()?.active || this.data()?.host));
+  toggle() { const v = !this.open(); this.opened.set(v); foldKeep('redline.settings.proxy.open', v); }
   host = signal('');
   port = signal<string | number>('');
   user = signal('');

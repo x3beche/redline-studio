@@ -27,17 +27,37 @@ interface Usage { days: number; reader: ApiUsage; search: ApiUsage;
 
 const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v / 1000).toFixed(1) + ' s' : Math.round(v) + ' ms';
 
+/** A settings card opened or closed by hand, kept in this browser; null when never touched. */
+export function foldLoad(key: string): boolean | null {
+  try { const v = localStorage.getItem(key); return v == null ? null : v === '1'; } catch { return null; }
+}
+export function foldKeep(key: string, v: boolean): void {
+  try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* private window */ }
+}
+
 @Component({
   selector: 'app-jina-settings',
   imports: [T, TimeChart],
   styleUrl: './settings.css',
   template: `
-<div class="st-card">
-  <div class="st-card-head"><h3>Jina AI</h3>
-    <span class="st-sub">{{ 'Reader reads a web page - its script run on Jina\\'s side - as Markdown; Search searches the web. For the Product Catalog\\'s crawler and the Chat.' | t }}</span>
-    <div class="st-right"><a class="st-link" href="https://jina.ai/api-dashboard/key-manager" target="_blank" rel="noopener">jina.ai ↗</a></div>
+<section class="st-card pv" [attr.data-open]="open() ? 1 : null">
+  <div class="pv-head">
+    <button type="button" class="pv-toggle" (click)="toggle()" [attr.aria-expanded]="open()"
+            [attr.aria-label]="(open() ? 'Collapse' : 'Expand') | t">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="open() ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+      <h3>Jina AI</h3>
+    </button>
+    @if (s(); as st) {
+      @if (st.set) {
+        <span class="pv-key-hint" [title]="'API key saved here' | t"><i></i>{{ st.hint }}</span>
+        @if (a()?.balance; as b) { <span class="pv-meta">{{ fmt.count(b.total) }} {{ 'tokens left' | t }}</span> }
+      } @else { <span class="pv-meta" data-tone="warn">{{ 'no key' | t }}</span> }
+    }
+    <span class="pv-right"><a class="st-link" href="https://jina.ai/api-dashboard/key-manager" target="_blank" rel="noopener">jina.ai ↗</a></span>
   </div>
+  @if (open()) {
   <div class="st-card-body">
+    <p class="pv-line">{{ 'Reader reads a web page - its script run on Jina\\'s side - as Markdown; Search searches the web. For the Product Catalog\\'s crawler and the Chat.' | t }}</p>
     @if (s(); as st) {
       <div class="st-tiles tight">
         <div class="st-tile" [attr.data-tone]="st.set ? 'ok' : 'dim'"><span>{{ 'API key' | t }}</span>
@@ -125,12 +145,17 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
       <div class="st-empty">{{ err() || ('Loading…' | t) }}</div>
     }
   </div>
-</div>`,
+  }
+</section>`,
 })
 export class JinaSettingsPanel {
   private http = inject(HttpClient);
   private auth = inject(Auth);
   readonly canEdit = this.auth.can('settings');
+  /** Opened or closed by hand in this browser; otherwise open while a key is set. */
+  private opened = signal<boolean | null>(foldLoad('redline.settings.jina.open'));
+  open = computed(() => this.opened() ?? !!this.s()?.set);
+  toggle() { const v = !this.open(); this.opened.set(v); foldKeep('redline.settings.jina.open', v); }
   readonly fmt = fmt;
   readonly ms = ms;
   readonly when = when;

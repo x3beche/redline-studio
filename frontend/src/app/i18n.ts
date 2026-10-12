@@ -2075,6 +2075,7 @@ const TR: Record<string, string> = {
   'Read a 3D model': '3D model oku',
   'Read a taste palette': 'Tadım paleti oku',
   'Date and time': 'Tarih ve saat',
+  'tokens left': 'token kaldı',
   'Says the date and time now, here or in another time zone.': 'Şu anki tarihi ve saati söyler, burada ya da başka bir saat diliminde.',
   'Reading the clock': 'Saate bakılıyor',
   'Could not read the clock': 'Saate bakılamadı',
