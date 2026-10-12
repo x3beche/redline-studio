@@ -82,6 +82,8 @@ interface ToolPage extends CcTool {
 interface ToolsUsage {
   tools: Record<string, { uses: number; done: number; week: number; week_done?: number }>; mine: number;
   days: { day: string; by: Record<string, number> }[];
+  /** The period these buckets are (day, week, month, year): the axis says it, not the choice still loading. */
+  span?: string;
 }
 
 /** The Chat tab's tools, where a conversation is shown (rooms/commandcode.ts),
@@ -255,7 +257,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
                   </span></span>
               }
             </div>
-            <div class="ct-bars-axis mono"><span>{{ when(u.days[0].day) }}</span><span>{{ when(u.days[mid(u)].day) }}</span><span>{{ (period() === 'day' ? 'now' : period() === 'year' ? 'this month' : 'today') | t }}</span></div>
+            <div class="ct-bars-axis mono"><span>{{ when(u.days[0].day) }}</span><span>{{ when(u.days[mid(u)].day) }}</span><span>{{ (u.span === 'day' ? 'now' : u.span === 'year' ? 'this month' : 'today') | t }}</span></div>
             <!-- By package, not by tool: forty colours read as none. A package's tools are in its tooltip. -->
             <div class="ct-legend">
               @for (s of top14(u); track s.name) {
