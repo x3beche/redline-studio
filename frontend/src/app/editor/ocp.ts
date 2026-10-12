@@ -80,7 +80,7 @@ export class OcpViewer {
   clipWheel: ClipWheel | null = null;
   /** The reverse switch beside each clip plane. */
   clipReverse: ClipReverse | null = null;
-  /** The model's moving parts and their panel (motions.ts). */
+  /** The model's moving parts and their Motion tab (motions.ts). */
   motions: Motions | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
@@ -103,9 +103,18 @@ export class OcpViewer {
       tools: true, glass: false, pinning: false,
       measureTools: true, externalMeasurementBackend: false,
       selectTool: true, explodeTool: true, zscaleTool: false,
-      zebraTool: true, studioTool: true,
+      // The side panel's tabs are Tree, Clip, (Motion,) Studio: Zebra and
+      // Material are left out. The viewer still has both - a note's view
+      // keeps and puts back their settings, and a note drawn on one of them
+      // still opens on it - there is just no tab to switch to them by hand.
+      zebraTool: false, studioTool: true,
     };
     this.display = new Display(this.container, opts);
+    // Zebra goes with its option; Material has none, so its tab is hidden
+    // the way the viewer hides one: the flex:1 span around it, or the
+    // strip would keep an empty slot.
+    const material = this.container.querySelector<HTMLElement>('.tcv_tab_material');
+    if (material) (material.parentElement ?? material).style.display = 'none';
     // The toolbar's icons hang off data-theme, which the viewer only sets on
     // its first render: with no model yet the buttons were blank frames.
     if (!this.container.hasAttribute('data-theme')) this.container.setAttribute('data-theme', opts.theme);
@@ -176,11 +185,15 @@ export class OcpViewer {
       centerGrid: false,
     } as any);
     this.rendered = true;
-    // Its moving parts at their rest pose. tools/render.py's shot starts
-    // no spin: a picture is taken at the rest pose.
+    // Its moving parts as they were last set on this model's Motion tab,
+    // else at their rest pose. tools/render.py's shot starts no spin and
+    // takes nothing kept: a picture is taken at the rest pose.
     if (this.motions) {
       this.motions.still = !!this.shot;
-      try { this.motions.setup(this.viewer, envelope.motions); }
+      // Kept per model (what was last set on its Motion tab): the model's
+      // id, from /api/models/<id>/viewer.json.
+      const key = /\/api\/models\/(.+)\/viewer\.json/.exec(url)?.[1] ?? null;
+      try { this.motions.setup(this.viewer, envelope.motions, key && decodeURIComponent(key)); }
       catch (e) { console.warn('motions not set up', e); }
     }
     this.clipWheel?.ensure();
@@ -483,6 +496,8 @@ export class OcpViewer {
       // The display remembers the helper checkbox and puts it back on
       // every switch to the clip tab, over whatever was set before.
       if (clip && v.display) v.display.lastPlaneState = !!clip.helpers;
+      // The note's tab, not the Motion tab's panel over it.
+      this.motions?.showTab(false);
       if (v.state?.get('activeTab') !== tab) v.setActiveTab(tab);
       if (clip) v.setClipPlaneHelpers(!!clip.helpers);
     });

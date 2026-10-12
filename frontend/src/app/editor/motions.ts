@@ -76,6 +76,20 @@ const FPS = 30;
 /** Above this the blades alias into a slow crawl at FPS frames a second. */
 const SHOWN_RPM = 60;
 
+/** What the person last set on a model's Motion tab, per model, in
+ *  localStorage: kept over a reload and over signing out and in (auth.ts
+ *  drops only its ACCOUNT_KEYS on a change of account). */
+const KEPT = 'redline.motion.';
+
+interface Kept {
+  /** The Motion tab was the one on show. */
+  open?: boolean;
+  values?: Record<string, number>;
+  auto?: Record<string, boolean>;
+  rpm?: Record<string, number>;
+  playing?: Record<string, boolean>;
+}
+
 const reducedMotion = () => {
   try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 };
@@ -101,10 +115,16 @@ export class Motions {
   /** Explode is on, or the view is frozen: nothing moves. */
   private suspended = false;
   private held = false;
+  /** The Motion tab in the viewer's side panel, and what it shows. */
+  private tab: HTMLElement | null = null;
   private panel: HTMLElement | null = null;
+  /** The Motion tab is the one on show. */
+  private open = false;
   private acc = 0;
   /** No spin starts by itself (tools/render.py's shot, reduced motion). */
   still = false;
+  /** The model on show, the key its kept settings are under. */
+  private key: string | null = null;
 
   constructor(private root: HTMLElement) {
     root.addEventListener('wheel', this.onWheel, { passive: false });
@@ -115,9 +135,10 @@ export class Motions {
   // ---------------------------------------------------------------- set up
 
   /** A freshly rendered model: its motions at their rest pose. */
-  setup(viewer: any, specs: MotionSpec[] | null | undefined) {
+  setup(viewer: any, specs: MotionSpec[] | null | undefined, key: string | null = null) {
     this.clear();
     this.viewer = viewer;
+    this.key = key;
     this.specs = Array.isArray(specs) ? specs.filter(s => s && s.name && s.kind) : [];
     if (!this.specs.length) return;
     let groups: Record<string, any>;
@@ -166,10 +187,63 @@ export class Motions {
         this.flexes.push({ spec: s, group: groups[s.parts[0]], mesh: null, drawnAt: null });
       }
     }
+    // What the person last set here, before the first pose is drawn: a
+    // paused fan stays paused, a sweep switched off stays off. Never in a
+    // shot, which is taken at the rest pose.
+    const kept = this.still ? null : this.kept();
+    if (kept) this.takeKept(kept);
     this.wrapViewer(viewer);
     this.buildPanel();
     this.apply();
+    if (kept?.open) this.showTab(true);
     this.kick();
+  }
+
+  private kept(): Kept | null {
+    if (!this.key) return null;
+    try {
+      const k = JSON.parse(localStorage.getItem(KEPT + this.key) ?? 'null');
+      return k && typeof k === 'object' ? k as Kept : null;
+    } catch { return null; }
+  }
+
+  /** Kept settings over the defaults, each checked against the model as
+   *  it is now: a motion it no longer has is skipped, a value is clamped. */
+  private takeKept(k: Kept) {
+    const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
+    for (const s of this.specs) {
+      if (s.kind === 'range' && s.range) {
+        const [lo, hi] = s.range;
+        const v = k.values?.[s.name];
+        if (num(v)) this.values[s.name] = Math.min(Math.max(v!, lo), hi);
+        if (typeof k.auto?.[s.name] === 'boolean') this.auto[s.name] = k.auto[s.name];
+        if (this.auto[s.name]) this.sweepFrom(s);
+      } else if (s.kind === 'spin') {
+        const max = Math.max(1, Math.round(Math.abs(s.rpm ?? SHOWN_RPM)));
+        const r = k.rpm?.[s.name];
+        if (num(r)) this.rpm[s.name] = Math.min(Math.max(Math.abs(r!), 1), max) * Math.sign(s.rpm ?? 1);
+        if (typeof k.playing?.[s.name] === 'boolean') this.playing[s.name] = k.playing[s.name];
+      }
+    }
+  }
+
+  /** Keep what the person has just set (called from their own actions
+   *  only - a note's view going in or a model switch is not kept). */
+  private remember() {
+    if (!this.key || this.still || !this.specs.length) return;
+    const k: Kept = { open: this.open, values: {}, auto: {}, rpm: {}, playing: {} };
+    for (const s of this.specs) {
+      if (s.kind === 'range') { k.values![s.name] = this.values[s.name] ?? 0; k.auto![s.name] = !!this.auto[s.name]; }
+      else if (s.kind === 'spin') { k.rpm![s.name] = Math.abs(this.rpm[s.name] ?? 0); k.playing![s.name] = !!this.playing[s.name]; }
+    }
+    try { localStorage.setItem(KEPT + this.key, JSON.stringify(k)); } catch { /* private window, full */ }
+  }
+
+  /** Start a sweep from where the slider is, not from the low end. */
+  private sweepFrom(s: MotionSpec) {
+    if (!s.range) return;
+    const [lo, hi] = s.range, f = ((this.values[s.name] ?? 0) - lo) / (hi - lo || 1);
+    this.sweepT[s.name] = (Math.acos(Math.min(Math.max(1 - 2 * f, -1), 1)) / Math.PI) * SWEEP_S / 2;
   }
 
   /** The model is going: put every group back, take the tubes out. */
@@ -183,8 +257,14 @@ export class Motions {
     this.specs = [];
     this.values = {}; this.phase = {}; this.playing = {}; this.rpm = {}; this.auto = {};
     this.sweepT = {};
+    // Back to the viewer's own tabs before the tab goes: a model without
+    // motions lands on Tree (the viewer's clear() switches to it anyway).
+    this.showTab(false);
+    this.tab?.remove();
     this.panel?.remove();
+    this.tab = null;
     this.panel = null;
+    this.key = null;
   }
 
   /** The explode switch and the render hook, once per viewer. */
@@ -215,6 +295,17 @@ export class Motions {
       } catch { /* never in the way of a repaint */ }
       return update(marker, notify);
     };
+    // Any of the viewer's own tabs switched to (a click, a note's view
+    // going in) hides the Motion tab's panel. The activeTab subscription
+    // calls the display's method through `this`, so the wrap is seen.
+    const display = v.display;
+    if (display?.switchToTab) {
+      const switchToTab = display.switchToTab.bind(display);
+      display.switchToTab = (newTab: string, oldTab?: string) => {
+        switchToTab(newTab, oldTab);
+        this.showTab(false);
+      };
+    }
   }
 
   // ---------------------------------------------------------------- the pose
@@ -486,30 +577,67 @@ export class Motions {
 
   private label(s: MotionSpec): string { return s.label || s.name; }
 
+  /** The Motion tab, in the viewer's tab strip after Clip, and its panel
+   *  in the side panel's scroller beside the tree and the clip sliders. A
+   *  row per spin (play, speed) and per hand-set motion (slider, value,
+   *  auto, back to the built pose), each a label and value line over a
+   *  full-width slider. Only for a model with something to set. */
   private buildPanel() {
-    const view = this.root.querySelector('.tcv_cad_view');
+    const side = this.root.querySelector('.tcv_cad_tree');
+    const nav = side?.querySelector('.tcv_tabnav');
+    const box = side?.querySelector('.tcv_box_content');
     const rows = this.specs.filter(s => s.kind !== 'flex');
-    if (!view || !rows.length) return;
+    if (!side || !nav || !box || !rows.length) return;
+
+    // The tab is built like the viewer's own: an <input type=button> in a
+    // flex:1 span, so it takes its share of the strip, is reached with Tab
+    // and pressed with Enter or Space like the others.
+    const wrap = document.createElement('span');
+    wrap.className = 'tcv_tooltip tcv-motion-tabwrap';
+    wrap.style.flex = '1';
+    const tab = document.createElement('input');
+    tab.type = 'button';
+    tab.className = 'tcv_tab_motion tcv_tab tcv_tab-right tcv_tab-unselected';
+    tab.style.width = '100%';
+    tab.setAttribute('aria-controls', 'tcv-motion-panel');
+    tab.addEventListener('click', () => { this.showTab(true); this.remember(); });
+    wrap.appendChild(tab);
+    const clipTab = nav.querySelector('.tcv_tab_clip')?.parentElement;
+    nav.insertBefore(wrap, clipTab?.nextSibling ?? null);
+    // A click on any of the viewer's tabs leaves Motion - also Tree while
+    // Tree is the viewer's tab already, which switches nothing in it.
+    if (!(nav as any).__redlineMotionTab) {
+      (nav as any).__redlineMotionTab = true;
+      nav.addEventListener('click', e => {
+        const t = e.target as HTMLElement;
+        if (t.classList?.contains('tcv_tab') && !t.classList.contains('tcv_tab_motion') && this.open) {
+          this.showTab(false);
+          this.remember();
+        }
+      }, true);
+    }
+
     const el = document.createElement('div');
     el.className = 'tcv-motion';
+    el.id = 'tcv-motion-panel';
     el.setAttribute('role', 'group');
-    el.innerHTML = '<div class="tcv-motion-head"><span class="tcv-motion-title"></span>' +
-      '<button type="button" class="tcv-motion-fold" aria-expanded="true">−</button></div>' +
-      '<div class="tcv-motion-body"></div>';
-    const body = el.querySelector('.tcv-motion-body')!;
     for (const s of rows) {
       const row = document.createElement('div');
       row.className = 'tcv-motion-row';
       row.dataset['motion'] = s.name;
       row.dataset['kind'] = s.kind;
+      const head = document.createElement('div');
+      head.className = 'tcv-motion-head';
       const name = document.createElement('span');
       name.className = 'tcv-motion-name';
       name.textContent = this.label(s);
+      const val = document.createElement('span');
+      val.className = 'tcv-motion-val';
       if (s.kind === 'spin') {
         const play = document.createElement('button');
         play.type = 'button';
         play.className = 'tcv-motion-play';
-        play.addEventListener('click', () => this.play(s.name, !this.playing[s.name]));
+        play.addEventListener('click', () => { this.play(s.name, !this.playing[s.name]); this.remember(); });
         const speed = document.createElement('input');
         speed.type = 'range';
         speed.className = 'tcv-motion-speed';
@@ -520,10 +648,10 @@ export class Motions {
         speed.addEventListener('input', () => {
           this.rpm[s.name] = Number(speed.value) * Math.sign(s.rpm ?? 1);
           this.paintValues();
+          this.remember();
         });
-        const val = document.createElement('span');
-        val.className = 'tcv-motion-val';
-        row.append(play, name, speed, val);
+        head.append(name, val, play);
+        row.append(head, speed);
       } else {
         const range = document.createElement('input');
         range.type = 'range';
@@ -537,21 +665,17 @@ export class Motions {
           this.set(s.name, Number(range.value));
           this.paint();
           this.kick();
+          this.remember();
         });
-        const val = document.createElement('span');
-        val.className = 'tcv-motion-val';
         const autoBtn = document.createElement('button');
         autoBtn.type = 'button';
         autoBtn.className = 'tcv-motion-auto';
         autoBtn.addEventListener('click', () => {
           this.auto[s.name] = !this.auto[s.name];
-          if (this.auto[s.name] && s.range) {
-            // Start the sweep from where the slider is, not from the low end.
-            const [lo, hi] = s.range, f = (this.values[s.name] - lo) / (hi - lo || 1);
-            this.sweepT[s.name] = (Math.acos(Math.min(Math.max(1 - 2 * f, -1), 1)) / Math.PI) * SWEEP_S / 2;
-          }
+          if (this.auto[s.name]) this.sweepFrom(s);
           this.paint();
           this.kick();
+          this.remember();
         });
         const reset = document.createElement('button');
         reset.type = 'button';
@@ -562,36 +686,60 @@ export class Motions {
           this.set(s.name, s.default ?? 0);
           this.paint();
           this.kick();
+          this.remember();
         });
-        row.append(name, range, val, autoBtn, reset);
+        head.append(name, val, autoBtn, reset);
+        row.append(head, range);
       }
-      body.appendChild(row);
+      el.appendChild(row);
     }
     if (this.flexes.length) {
       const note = document.createElement('div');
       note.className = 'tcv-motion-note';
-      body.appendChild(note);
+      el.appendChild(note);
     }
-    const fold = el.querySelector<HTMLButtonElement>('.tcv-motion-fold')!;
-    fold.addEventListener('click', () => {
-      const shut = el.dataset['shut'] !== '1';
-      el.dataset['shut'] = shut ? '1' : '0';
-      fold.textContent = shut ? '+' : '−';
-      fold.setAttribute('aria-expanded', String(!shut));
-    });
-    view.appendChild(el);
+    box.appendChild(el);
+    this.tab = wrap;
     this.panel = el;
     this.relabel();
+  }
+
+  /** Show the Motion tab's panel, or go back to the viewer's own tab.
+   *  The viewer has no tab of ours, so it stays on Tree underneath (the
+   *  plain view: no clipping, no studio) and the side panel hides its
+   *  tree and toggles while Motion is on (styles.css). */
+  showTab(on: boolean) {
+    const side = this.root.querySelector<HTMLElement>('.tcv_cad_tree');
+    const tab = this.tab?.querySelector<HTMLInputElement>('input');
+    if (on && (!this.panel || !tab)) return;
+    if (on === this.open) return;
+    const v = this.viewer;
+    if (on && v?.state?.get?.('activeTab') !== 'tree') {
+      try { v.setActiveTab('tree'); } catch { /* not rendered yet */ }
+    }
+    this.open = on;
+    if (side) side.dataset['motion'] = on ? '1' : '0';
+    tab?.classList.toggle('tcv_tab-selected', on);
+    tab?.classList.toggle('tcv_tab-unselected', !on);
+    tab?.setAttribute('aria-pressed', String(on));
+    // The viewer's own tab under it looks unselected while Motion is on,
+    // and selected again after.
+    const active = v?.state?.get?.('activeTab');
+    const own = active ? this.root.querySelector<HTMLElement>(`.tcv_tab_${active}`) : null;
+    own?.classList.toggle('tcv_tab-selected', !on);
+    own?.classList.toggle('tcv_tab-unselected', on);
   }
 
   /** The words, in the language on now. */
   relabel() {
     const el = this.panel;
     if (!el) return;
+    const tab = this.tab?.querySelector<HTMLInputElement>('input');
+    if (tab) {
+      tab.value = t('Motion');
+      tab.title = t('Moving parts are shown only: nothing checks that they do not collide.');
+    }
     el.setAttribute('aria-label', t('Motion'));
-    el.querySelector('.tcv-motion-title')!.textContent = t('Motion');
-    el.title = t('Moving parts are shown only: nothing checks that they do not collide.');
-    el.querySelector('.tcv-motion-fold')!.setAttribute('title', t('Fold'));
     el.querySelectorAll<HTMLElement>('.tcv-motion-row').forEach(row => {
       const s = this.specs.find(x => x.name === row.dataset['motion']);
       if (!s) return;
@@ -602,7 +750,9 @@ export class Motions {
         row.querySelector('.tcv-motion-range')!.setAttribute('aria-label', `${this.label(s)} (°)`);
         row.querySelector('.tcv-motion-auto')!.textContent = t('auto');
         row.querySelector('.tcv-motion-auto')!.setAttribute('title', t('Sweep back and forth by itself'));
-        row.querySelector('.tcv-motion-reset')!.setAttribute('title', t('Back to the pose the model is built in') + ` (${s.default ?? 0}°)`);
+        const back = t('Back to the pose the model is built in') + ` (${s.default ?? 0}°)`;
+        row.querySelector('.tcv-motion-reset')!.setAttribute('title', back);
+        row.querySelector('.tcv-motion-reset')!.setAttribute('aria-label', back);
         row.title = t('Set by hand. Mouse wheel over the slider: 1°, Shift: 10°.');
       }
     });
@@ -687,5 +837,6 @@ export class Motions {
     this.set(name, next);
     this.paint();
     this.kick();
+    this.remember();
   };
 }
