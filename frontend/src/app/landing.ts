@@ -249,7 +249,7 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: '3D parts', snap: '3d', crops: [[700, 160, 860, 860]], min: 0, lbl: '3D Drawing · the Station assembly',
       lead: 'Three assemblies built from 26 models. Change one part, and everything that uses it is rebuilt.',
       facts: [['Notes', '58', '57 applied'], ['Assemblies', '3', 'Station, Base, Fan Module'], ['Build', '113-150 s', 'an assembly, from source']] },
-    { name: 'Circuit board', snap: 'pcb', crops: [[585, 170, 1000, 640]], min: 0, lbl: 'PCB Design · the iot-fan board, routed by TraceMaker',
+    { name: 'Circuit board', snap: 'pcb', crops: [[573, 171, 905, 641]], min: 0, lbl: 'PCB Design · the iot-fan board, routed by TraceMaker',
       lead: 'Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.',
       facts: [['Size', '95.5 × 58.7 mm', '91 parts, 48 different'], ['Copper', '1,014 tracks', '179 vias · 2.87 m'], ['Parts cost', '$20.51', 'a board, ordering 10 · ERC 0']] },
     { name: 'Firmware', snap: 'fw', crops: [[562, 462, 430, 360], [562, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
