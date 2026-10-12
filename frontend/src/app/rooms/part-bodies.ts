@@ -4,6 +4,7 @@ import { Selection } from '../selection';
 import { T, t } from '../i18n';
 import { BodySource, BodySpec, PartBodyView } from './part-body-view';
 import { fetchJson, specUrl } from './part-assets';
+import { Confirm } from '../confirm';
 
 /** One of a part's 3D bodies (backend/bodies.py listing). */
 export interface PartBody {
@@ -293,8 +294,9 @@ export class PartBodiesCard {
                    error: e => this.fail(e) });
   }
 
-  unbind(b: PartBody) {
-    if (!confirm(t('Unbind this body from the part? The model stays in the 3D room.') + `\n\n${b.name} - ${b.model}`)) return;
+  async unbind(b: PartBody) {
+    if (!await Confirm.ask({ title: t('Unbind "{x}" from the part?').replace('{x}', b.name),
+      text: b.model + '\n' + t('The model stays in the 3D room.'), ok: t('Unbind'), danger: true })) return;
     this.busy.set(true);
     this.http.delete(this.url('/' + encodeURIComponent(b.slug))).subscribe({
       next: () => { if (this.pick() === b.slug) this.pick.set('lcsc'); this.done(t('Unbound') + ': ' + b.name); },

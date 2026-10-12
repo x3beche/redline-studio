@@ -22,10 +22,11 @@ import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
+import { ConfirmHost } from './confirm';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -134,7 +135,10 @@ import { CcTabUsage } from './cc-usage';
 <app-palette />
 } @else if (auth.state()) {
   <app-landing />
-}`,
+}
+<!-- The one question box (confirm.ts): every "Delete …?" and name-asking
+     in the app awaits it, signed in or not. -->
+<app-confirm />`,
 })
 export class App {
   private picked = inject(Selection);

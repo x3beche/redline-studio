@@ -7,6 +7,7 @@ import { when } from './llm-settings';
 import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
 import { Agents, SeedOs, seedLine, seenAgo } from './agent-status';
+import { Confirm } from './confirm';
 
 /** One agent's token as the server lists it - never the token, never its hash. */
 export interface AgentToken {
@@ -348,16 +349,16 @@ export class TokensSettingsPanel implements OnDestroy {
     });
   }
 
-  revoke(x: AgentToken) {
-    if (!confirm(t('Revoke this token? The agent using it is stopped at once; the token stays listed.') + ' ' + x.name)) return;
+  async revoke(x: AgentToken) {
+    if (!await Confirm.ask({ title: t('Revoke "{x}"?').replace('{x}', x.name),
+      text: t('The agent using it is stopped at once; the token stays listed.'), ok: t('Revoke'), danger: true })) return;
     this.act(this.http.delete(`/api/agent-tokens/${encodeURIComponent(x.id)}`), x);
   }
 
-  remove(x: AgentToken) {
-    const q = x.status === 'active'
-      ? t('Delete this token for good? It is still active: it is revoked first, and the agent using it is stopped at once. Its usage counts go with it; the audit trail keeps what it did.')
-      : t('Delete this token for good? Its usage counts go with it; the audit trail keeps what it did.');
-    if (!confirm(q + ' ' + x.name)) return;
+  async remove(x: AgentToken) {
+    const text = (x.status === 'active' ? t('It is still active: it is revoked first, and the agent using it is stopped at once.') + '\n' : '')
+      + t('Its usage counts go with it; the audit trail keeps what it did.');
+    if (!await Confirm.ask({ title: t('Delete "{x}" for good?').replace('{x}', x.name), text, ok: t('Delete'), danger: true })) return;
     this.act(this.http.delete(`/api/agent-tokens/${encodeURIComponent(x.id)}?purge=1`), x);
   }
 

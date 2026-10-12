@@ -5,6 +5,7 @@ import { LANG, T, t } from './i18n';
 import { Auth } from './auth';
 import { Avatar } from './avatar';
 import { reportError } from './error-report';
+import { Confirm } from './confirm';
 
 /** Settings > Admin panel: the accounts on this server (backend/admin.py),
  *  for the owner and the admins - opened from the account menu.
@@ -377,8 +378,10 @@ export class AdminUsersPanel {
     this.busy.set(false);
   }
 
-  disable(u: AdminUser) {
-    if (!confirm(t('Disable this account? It is signed out everywhere at once and its agent tokens stop working.') + `\n\n${u.name} <${u.email}>`)) return;
+  async disable(u: AdminUser) {
+    if (!await Confirm.ask({ title: t('Disable {name}?').replace('{name}', u.name),
+      text: `${u.email}\n` + t('It is signed out everywhere at once and its agent tokens stop working.'),
+      ok: t('Disable'), danger: true })) return;
     this.patch(u, { disabled: true }, 'Disabled: signed out everywhere, its agent tokens stopped.');
   }
 
@@ -428,7 +431,9 @@ export class AdminUsersPanel {
 
   async remove(u: AdminUser) {
     const data = this.holds() > 0 && this.withData();
-    if (!confirm(t('Delete this account for good?') + `\n\n${u.name} <${u.email}>` + (data ? '\n\n' + t('Their data is deleted too.') : ''))) return;
+    if (!await Confirm.ask({ title: t('Delete {name} for good?').replace('{name}', u.name),
+      text: u.email + (data ? '\n' + t('Their data is deleted too.') : ''),
+      ok: t('Delete'), danger: true })) return;
     this.busy.set(true); this.delErr.set('');
     try {
       await firstValueFrom(this.http.delete(`/api/admin/users/${u.id}` + (data ? '?with_data=1' : '')));

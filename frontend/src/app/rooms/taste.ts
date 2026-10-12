@@ -4,6 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
+import { Confirm } from '../confirm';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -1051,8 +1052,9 @@ export class RoomTaste implements OnDestroy {
   }
   pin(p: Palette) { this.api.patch(p.id, { pinned: !p.pinned }).subscribe({ next: () => this.read(), error: this.failed('Could not save it.') }); }
 
-  remove(p: Palette) {
-    if (!confirm(t('Delete this palette and its items?') + `\n\n${p.name}`)) return;
+  async remove(p: Palette) {
+    if (!await Confirm.ask({ title: t('Delete "{x}"?').replace('{x}', p.name),
+      text: t('The palette and its items are deleted.'), ok: t('Delete'), danger: true })) return;
     this.api.remove(p.id).subscribe({
       next: () => { this.openId.set(null); this.read(); },
       error: this.failed('Could not delete it.'),

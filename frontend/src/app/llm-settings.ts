@@ -9,6 +9,7 @@ import { CcUsage, day, inSpan, span } from './cc-usage';
 import { CcCompact, CcPeriod, OrCompact, OrUsage, OwnCompact, OwnUsage } from './provider-usage';
 import { SuggestConf } from './rooms/suggest';
 import { ModelPicker } from './model-picker';
+import { Confirm } from './confirm';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -517,8 +518,9 @@ export class LlmSettingsPanel {
     this.put({ keys: { [p]: v } }, t('Key saved.'), () => { this.setDraft(p, ''); this.loadModels(); });
   }
 
-  clearKey(p: string) {
-    if (!confirm(t('Forget this key? Jobs that use this provider stop until a new key is saved.'))) return;
+  async clearKey(p: string) {
+    if (!await Confirm.ask({ title: t('Forget the {p} key?').replace('{p}', this.data()?.providers[p]?.name ?? p),
+      text: t('Jobs that use this provider stop until a new key is saved.'), ok: t('Forget'), danger: true })) return;
     this.put({ keys: { [p]: null } }, t('Key removed.'));
   }
 

@@ -33,6 +33,7 @@ import { Auth } from '../auth';
 import { Agents, SeedOs, seedLine, seenAgo } from '../agent-status';
 import { Prefs } from '../preferences';
 import { startFold, whenSettled } from '../fold';
+import { Confirm } from '../confirm';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -997,8 +998,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  newFolder(parent: string) {
-    const name = prompt(t('Folder name (letters, digits, - , _):'));
+  async newFolder(parent: string) {
+    const name = await Confirm.input({ title: t('New folder'), text: t('Letters, digits, - and _.'), placeholder: t('Folder name'), ok: t('Create') });
     if (!name) return;
     this.cat.newFolder(name, parent).subscribe({
       next: () => this.loadCatalog(),
@@ -1172,10 +1173,10 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** The guide's "new assembly": a model in the project's assemblies/
    *  (made with it), to import parts and boards into. */
-  newAssembly() {
+  async newAssembly() {
     const g = this.guideAt();
     if (!g) return;
-    const name = prompt(t('Assembly name (letters, digits, - , _):'));
+    const name = await Confirm.input({ title: t('New assembly'), text: t('Letters, digits, - and _.') + `\n${g.assemblies}/`, ok: t('Create') });
     if (!name) return;
     this.makeModel(`${g.assemblies}/${name}`, name);
   }
@@ -1398,9 +1399,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  newModel(folder: string) {
+  async newModel(folder: string) {
     const into = this.partsOf(folder);
-    const name = prompt(t('Model name (letters, digits, - , _):') + (into ? `\n${into}/` : ''));
+    const name = await Confirm.input({ title: t('New model'), text: t('Letters, digits, - and _.') + (into ? `\n${into}/` : ''), ok: t('Create') });
     if (!name) return;
     this.makeModel(into ? `${into}/${name}` : name, name);
   }
@@ -2274,8 +2275,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  remove(r: Revision) {
-    if (!confirm(`Delete this revision?\n\n"${r.comment}"`)) return;
+  async remove(r: Revision) {
+    if (!await Confirm.ask({ title: t('Delete this revision?'), text: `"${r.comment}"`, ok: t('Delete'), danger: true })) return;
     this.api.remove(r.id).subscribe({
       next: () => { this.flash('revision deleted'); this.refresh(); this.pollHealth(); },
       error: () => this.flash('delete failed'),

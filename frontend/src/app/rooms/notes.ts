@@ -4,8 +4,9 @@ import {
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
-import { T } from '../i18n';
+import { T, t } from '../i18n';
 import { NoteDoc } from './note-doc';
+import { Confirm } from '../confirm';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -577,8 +578,9 @@ export class RoomNotes implements OnDestroy {
     navigator.clipboard?.writeText(n.text).then(() => { this.copied.set(true); setTimeout(() => this.copied.set(false), 1500); });
   }
 
-  remove(n: Note) {
-    if (!confirm(`Delete "${n.title || 'this note'}"?`)) return;
+  async remove(n: Note) {
+    if (!await Confirm.ask({ title: n.title ? t('Delete "{x}"?').replace('{x}', n.title) : t('Delete this note?'),
+      text: t('The note is deleted for good.'), ok: t('Delete'), danger: true })) return;
     this.api.remove(n.id).subscribe({
       next: () => { this.openId.set(null); this.read(); },
       error: (e: HttpErrorResponse) => this.say(typeof e.error?.detail === 'string' ? e.error.detail : 'could not delete it'),

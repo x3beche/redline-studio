@@ -8,9 +8,10 @@ import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
 import { Catalog, FolderNode, ModuleRow, ModuleTarget } from '../api';
 import { Selection } from '../selection';
-import { T } from '../i18n';
+import { T, t as tr } from '../i18n';
 import { insertImport } from './links';
 import { themeIsLight } from '../../theme';
+import { Confirm } from '../confirm';
 
 /** The source behind what is on screen, in VS Code's editor (Monaco): the
  *  3D room's models are build123d (Python), the PCB room's boards atopile.
@@ -546,9 +547,10 @@ export class CodeView implements OnDestroy {
     this.current.set(t);
   }
 
-  closeTab(t: Tab, ev?: Event) {
+  async closeTab(t: Tab, ev?: Event) {
     ev?.stopPropagation();
-    if (t.dirty && !confirm(`${t.name} has unsaved changes. Close it anyway?`)) return;
+    if (t.dirty && !await Confirm.ask({ title: tr('Close "{x}" without saving?').replace('{x}', t.name),
+      text: tr('Its unsaved changes are lost.'), ok: tr('Close without saving'), danger: true })) return;
     const rest = this.tabs().filter(x => x !== t);
     if (this.current() === t) {
       const i = this.tabs().indexOf(t);
@@ -661,9 +663,10 @@ export class CodeView implements OnDestroy {
     });
   }
 
-  close() {
+  async close() {
     const dirty = this.tabs().filter(t => t.dirty).map(t => t.name);
-    if (dirty.length && !confirm(`Unsaved changes in ${dirty.join(', ')}. Close without saving?`)) return;
+    if (dirty.length && !await Confirm.ask({ title: tr('Close without saving?'),
+      text: tr('Unsaved changes in {x} are lost.').replace('{x}', dirty.join(', ')), ok: tr('Close without saving'), danger: true })) return;
     this.closed.emit();
   }
 

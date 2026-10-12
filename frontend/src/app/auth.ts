@@ -5,6 +5,7 @@ import { catchError, throwError } from 'rxjs';
 import { T, t } from './i18n';
 import { Prefs } from './preferences';
 import { Avatar } from './avatar';
+import { Confirm } from './confirm';
 
 /** Signing in, on the page's side (backend/auth.py).
  *
@@ -450,8 +451,9 @@ export class SignIn {
     this.auth.loadAccounts();
   }
 
-  signOutAll() {
-    if (!confirm(t('Sign out of every account on this device? Each one is removed from this browser and needs its password next time.'))) return;
+  async signOutAll() {
+    if (!await Confirm.ask({ title: t('Sign out of every account on this device?'),
+      text: t('Each one is removed from this browser and needs its password next time.'), ok: t('Sign out'), danger: true })) return;
     this.auth.forgetAll();
   }
 

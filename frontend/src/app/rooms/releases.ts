@@ -2,8 +2,9 @@ import { Component, OnDestroy, effect, inject, input, output, signal, untracked 
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { Auth } from '../auth';
-import { T } from '../i18n';
+import { T, t } from '../i18n';
 import { money } from '../money';
+import { Confirm } from '../confirm';
 
 /** Releases: a project packed as it stands, under a tag, to make
  *  (backend/release.py). The list of what was released - each one kept
@@ -132,8 +133,9 @@ export class Releases implements OnDestroy {
       });
   }
 
-  remove(r: Release) {
-    if (!confirm(`Delete ${r.project} ${r.tag}? The zip goes with it.`)) return;
+  async remove(r: Release) {
+    if (!await Confirm.ask({ title: t('Delete "{x}"?').replace('{x}', `${r.project} ${r.tag}`),
+      text: t('The zip goes with it.'), ok: t('Delete'), danger: true })) return;
     this.http.delete(`/api/releases/${r.id}`).subscribe({ next: () => this.load() });
   }
 

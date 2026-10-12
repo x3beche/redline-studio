@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { T, t } from './i18n';
 import { Langs, TgLangPicker } from './telegram-langs';
+import { Confirm } from './confirm';
 
 /** The bot's profile, set from here rather than @BotFather (backend/tgbot/
  *  profile.py): its name, description, short description and picture, per
@@ -232,7 +233,7 @@ export class TelegramProfilePanel {
     this.lang.set(code);
     this.load([...this.added()]);
   }
-  removeLang(l: string) {
+  async removeLang(l: string) {
     const d = this.p()!;
     if (!d.with_text.includes(l)) {           // only added here: nothing on Telegram yet
       this.added.update(a => a.filter(x => x !== l));
@@ -240,7 +241,8 @@ export class TelegramProfilePanel {
       if (this.lang() === l) this.lang.set('default');
       return;
     }
-    if (!confirm(t('Take this language\'s texts off Telegram? Its speakers will see the default.') + ' ' + this.langs.label(l))) return;
+    if (!await Confirm.ask({ title: t('Take the {lang} texts off Telegram?').replace('{lang}', this.langs.label(l)),
+      text: t('Its speakers will see the default texts.'), ok: t('Remove'), danger: true })) return;
     this.busy.set('lang');
     this.http.delete<Profile>(`/api/telegram/profile/lang/${l}`).subscribe({
       next: p => { this.busy.set(null); this.added.update(a => a.filter(x => x !== l)); this.dropDrafts(l); this.p.set(p);
@@ -369,8 +371,8 @@ export class TelegramProfilePanel {
   useDefault() { this.clearPick(); this.file = null; this.preview.set('/api/telegram/profile/photo/default'); }
   clearPick() { const p = this.preview(); if (p?.startsWith('blob:')) URL.revokeObjectURL(p); this.preview.set(null); this.file = null; }
 
-  removePhoto() {
-    if (!confirm(t('Remove the bot\'s picture?'))) return;
+  async removePhoto() {
+    if (!await Confirm.ask({ title: t('Remove the bot\'s picture?'), ok: t('Remove'), danger: true })) return;
     this.busy.set('photo');
     this.http.delete<Profile>('/api/telegram/profile/photo').subscribe({
       next: d => { this.busy.set(null); this.p.set(d); this.stamp.set(Date.now()); this.changed.emit(); },

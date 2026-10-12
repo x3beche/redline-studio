@@ -5,6 +5,7 @@ import { T, t } from './i18n';
 import { when } from './llm-settings';
 import { TelegramProfilePanel } from './telegram-profile';
 import { Langs, TgLangPicker } from './telegram-langs';
+import { Confirm } from './confirm';
 
 /** Settings > Telegram (backend/tgbot/): one bot for the whole server, and
  *  each person's own link to it.
@@ -501,11 +502,13 @@ export class TelegramSettingsPanel implements OnDestroy {
       () => { this.token.set(''); this.open.set(3); });
   }
   forget = signal(false);
-  removeBot() {
+  async removeBot() {
     const d = this.s()!;
-    const what = t('Remove @{bot} from Redline? Every linked chat is told and unlinked, and the token is forgotten.').replace('{bot}', d.bot.username ?? '')
-      + (this.forget() ? '\n\n' + t('The message log and the counters are deleted too.') : '');
-    if (!confirm(what)) return;
+    if (!await Confirm.ask({
+      title: t('Remove @{bot} from Redline?').replace('{bot}', d.bot.username ?? ''),
+      text: t('Every linked chat is told and unlinked, and the token is forgotten.')
+        + (this.forget() ? '\n' + t('The message log and the counters are deleted too.') : ''),
+      ok: t('Remove'), danger: true })) return;
     this.call('remove', this.http.delete<TgState>(`/api/telegram/bot?forget=${this.forget()}`), t('The bot is removed from Redline.'),
       () => { this.open.set(1); this.code.set(null); this.testResult.set(null); });
   }
@@ -534,8 +537,8 @@ export class TelegramSettingsPanel implements OnDestroy {
       error: e => { this.busy.set(null); this.err.set(this.text(e)); },
     });
   }
-  unlinkMe() {
-    if (!confirm(t('Unlink your Telegram? Nothing more is sent to it.'))) return;
+  async unlinkMe() {
+    if (!await Confirm.ask({ title: t('Unlink your Telegram?'), text: t('Nothing more is sent to it.'), ok: t('Unlink'), danger: true })) return;
     this.call('unlink', this.http.delete<TgState>('/api/telegram/link'), t('Unlinked.'));
   }
   flip(id: string) { this.call('pref', this.http.put<TgState>('/api/telegram/me', { prefs: { [id]: !this.prefOn(id) } })); }

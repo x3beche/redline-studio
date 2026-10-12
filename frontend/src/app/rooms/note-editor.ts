@@ -10,6 +10,7 @@ import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PmNode } from '@tiptap/pm/model';
 import { t } from '../i18n';
+import { Confirm } from '../confirm';
 
 /** The note editor: TipTap (ProseMirror) reading and writing Markdown.
  *
@@ -36,8 +37,9 @@ export const SLASH_ITEMS: SlashItem[] = [
   { id: 'code', label: 'Code block', hint: '```', keys: 'code block pre kod', run: e => e.chain().focus().toggleCodeBlock().run() },
   { id: 'hr', label: 'Divider', hint: '---', keys: 'divider rule hr line ayırıcı çizgi', run: e => e.chain().focus().setHorizontalRule().run() },
   { id: 'img', label: 'Image', hint: 'from a link', keys: 'image picture resim görsel', run: e => {
-    const src = prompt(t('Image address (https://…)'));
-    if (src && /^https?:\/\//.test(src)) e.chain().focus().setImage({ src }).run();
+    Confirm.input({ title: t('Image address (https://…)'), placeholder: 'https://', ok: t('Insert') }).then(src => {
+      if (src && /^https?:\/\//.test(src)) e.chain().focus().setImage({ src }).run();
+    });
   } },
 ];
 
