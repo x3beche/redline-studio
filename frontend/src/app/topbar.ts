@@ -39,7 +39,7 @@ const KEY = 'redline.topbar';
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
 const SHORT: Record<string, string> = {
   cad: '3D', pcb: 'PCB', firmware: 'FW',
-  notes: 'Notes', taste: 'Taste', mfr: 'Makers', commandcode: 'Chat', files: 'Files', tools: 'Tools',
+  notes: 'Notes', taste: 'Taste', mfr: 'Supply', commandcode: 'Chat', files: 'Files', tools: 'Tools',
 };
 
 /** A line drawing for each tab, 24 units square, drawn with the text colour. */
