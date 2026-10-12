@@ -59,7 +59,7 @@ export class Snap implements AfterViewInit, OnDestroy {
 }
 
 type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean;
-              crops: { src: string; crop: number[]; page?: number[]; fit?: boolean }[] };
+              crops: { src: string; crop: number[]; page?: number[]; fit?: boolean; frame?: number[] }[] };
 
 @Component({
   selector: 'app-landing',
@@ -116,7 +116,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   <div class="feats rv">
     @for (f of draws; track f.name) {
       <article class="feat" [class.wide]="f.wide">
-        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : (c.frame ?? f.w)" [alt]="f.name" /> }</div>
         <h3>{{ f.name }}</h3>
         <p class="lead">{{ f.lead }}</p>
         <p class="lbl">{{ f.lbl }}</p>
@@ -191,7 +191,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   <div class="feats rv">
     @for (f of themes; track f.name) {
       <article class="feat" [class.wide]="f.wide">
-        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : (c.frame ?? f.w)" [alt]="f.name" /> }</div>
         <h3>{{ f.name }}</h3>
         <p class="lead">{{ f.lead }}</p>
         <p class="lbl">{{ f.lbl }}</p>
@@ -228,7 +228,7 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   <div class="feats rv">
     @for (f of proxy; track f.name) {
       <article class="feat" [class.wide]="f.wide">
-        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : f.w" [alt]="f.name" /> }</div>
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="0" [frame]="c.fit ? null : (c.frame ?? f.w)" [alt]="f.name" /> }</div>
         <h3>{{ f.name }}</h3>
         <p class="lead">{{ f.lead }}</p>
         <p class="lbl">{{ f.lbl }}</p>
@@ -308,16 +308,15 @@ export class Landing implements AfterViewInit, OnDestroy {
    *  row is shown at one scale - the card's width is `w` page pixels - so
    *  their text is one size; `fit` views (the model, the board) fill it. */
   draws: Card[] = [
-    { name: 'Draw on the model', w: 430, lbl: '3D Drawing · draw mode on the Station: seven tools, four inks',
+    { name: 'Draw on the model', w: 470, lbl: '3D Drawing · draw mode on the Station: seven tools, four inks',
       lead: 'Hold the view, circle what is wrong and say it in a line. The picture and the camera go with the note to the 3D agent.',
-      crops: [{ src: 'draw3d', crop: [1158, 46, 386, 36] }, { src: 'draw3d', crop: [760, 190, 660, 760], fit: true }] },
-    { name: 'Draw on the board', w: 430, lbl: 'PCB Design · the same pen on the iot-fan board, and the comment box',
-      lead: 'The same pen over the layout. Write in your own language; Auto English turns the note into English for the agent.',
-      crops: [{ src: 'drawpcb', crop: [1076, 46, 384, 36] }, { src: 'drawpcb', crop: [590, 170, 1000, 640], fit: true },
-              { src: 'drawpcb', crop: [1613, 95, 298, 185] }] },
-    { name: 'A note becomes a task', w: 430, lbl: '3D Drawing · the queue, a drawn note in it, and Working now',
-      lead: 'Saved as a draft, then queued. Each note keeps its drawing and its status; Working now shows what runs.',
-      crops: [{ src: 'hero', crop: [1613, 284, 298, 284] }, { src: 'hero', crop: [9, 958, 248, 112] }] },
+      crops: [{ src: 'draw3d', crop: [1158, 46, 438, 36] }, { src: 'draw3d', crop: [662, 162, 860, 860], fit: true }] },
+    { name: 'Draw on the board', w: 470, lbl: 'PCB Design · the same pen on the iot-fan board',
+      lead: 'The same pen over the layout: circle the part, point where it should go, and say it in your own language.',
+      crops: [{ src: 'drawpcb', crop: [1072, 46, 438, 36] }, { src: 'drawpcb', crop: [586, 180, 984, 620], frame: [984, 984] }] },
+    { name: 'A note becomes a task', w: 470, lbl: '3D Drawing · a drawn note in the queue',
+      lead: 'Auto English turns it into English for the agent. Saved as a draft, then queued; the note keeps its drawing and its status.',
+      crops: [{ src: 'hero', crop: [1620, 327, 284, 228], frame: [470, 507] }] },
   ];
   themes: Card[] = [
     { name: 'And your own', w: 430, lbl: 'Settings · Appearance, the light themes, worn in GitHub Light',
