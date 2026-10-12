@@ -6,7 +6,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
-import { T, t } from '../i18n';
+import { LANG, T, t } from '../i18n';
 import { NoteDoc } from './note-doc';
 import { Confirm } from '../confirm';
 import { ContextMenu } from '../context-menu';
@@ -14,6 +14,8 @@ import { Skeleton } from '../skeleton';
 import { Marquee } from '../marquee';
 import { SelectionBar } from '../selection-bar';
 import { EmptyState } from '../empty-state';
+import { NgTemplateOutlet } from '@angular/common';
+import { NOTE_TEMPLATES, NoteTemplate } from './note-templates';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -252,16 +254,24 @@ const NOTE_ICONS = {
   send: 'M12 19V5 M6 11l6-6 6 6',
   copy: 'M9 9h11v11H9z M15 9V4H4v11h5',
   trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
+  note: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5',
 };
 
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [EmptyState, Skeleton, T, NoteDoc, Marquee, SelectionBar],
+  imports: [EmptyState, Skeleton, T, NoteDoc, Marquee, SelectionBar, NgTemplateOutlet],
   host: { '(document:keydown)': 'key($event)' },
   styles: [`
 .tcv-notes-row[data-picked] { background: color-mix(in srgb, var(--marquee) 14%, transparent); border-left-color: var(--marquee); }
 .tcv-notes-row[data-picked]:hover { background: color-mix(in srgb, var(--marquee) 20%, transparent); }
+/* Notes to start from: the Chat's empty-conversation cards, four to a row in a centred column. */
+.tcv-notes-hello { width: 100%; max-width: 980px; margin-left: auto; margin-right: auto; }
+.tcv-notes-hello .tcv-cc-starters { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.tcv-notes-hello-under { margin-top: 10px; }
+.tcv-notes-hello-head { font-size: 11px; color: var(--ink-dim); }
+.tcv-notes-hello-under .tcv-cc-starters { margin-top: 8px; }
+@media (max-width: 768px) { .tcv-notes-hello .tcv-cc-starters { grid-template-columns: minmax(0, 1fr); } }
 `],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
@@ -393,22 +403,36 @@ const NOTE_ICONS = {
             }
         </app-note-doc>
       </article>
+      @if (creating() && !draft().trim()) {
+        <div class="tcv-notes-hello tcv-notes-hello-under">
+          <div class="tcv-notes-hello-head">{{ 'Or start from a template' | t }}</div>
+          <ng-container *ngTemplateOutlet="starts" />
+        </div>
+      }
     } @else if (!loaded()) {
       <div class="tcv-note"><wb-skel kind="text" [count]="7" /></div>
     } @else {
-      <div class="tcv-notes-tips">
-        <p><b>Writing a note should take no time.</b> Press <b>New note</b> (or N) and type - no title, folder or form. Double-click a note to change it.</p>
-        <ul>
-          <li><b>Alt+N</b> anywhere in Workbench opens a small box; you stay where you are, and the note remembers the room and what was open.</li>
-          <li><code>#tag</code> to find it later, <code>&#64;controller</code> to point at a board or model.</li>
-          <li><code>- [ ] check the fan clearance</code> becomes a box to tick; <b>To-do</b> collects the open ones.</li>
-          <li>🎙 to speak it instead (where the browser can listen).</li>
-          <li><b>Send to agent</b> hands a note to a room's agent as a message.</li>
-        </ul>
+      <!-- Nothing open: notes to start from, as the Chat's examples on an empty conversation. -->
+      <div class="tcv-cc-hello tcv-notes-hello">
+        <div class="tcv-cc-hello-mark"><svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.note" /></svg></div>
+        <h2>{{ (auth.can('draw') ? 'Start from a template' : 'No notes yet') | t }}</h2>
+        <p>{{ 'N new note · Alt+N anywhere' | t }}</p>
+        @if (auth.can('draw')) { <ng-container *ngTemplateOutlet="starts" /> }
       </div>
     }
   </section>
-</div>`,
+</div>
+
+<ng-template #starts>
+  <div class="tcv-cc-starters">
+    @for (p of templates; track p.id) {
+      <button class="tcv-cc-starter" (click)="fromTemplate(p)">
+        <span class="tcv-cc-starter-area"><svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="p.icon" /></svg> {{ p.name | t }}</span>
+        <span class="tcv-cc-starter-text">{{ p.line | t }}</span>
+      </button>
+    }
+  </div>
+</ng-template>`,
 })
 export class RoomNotes implements OnDestroy {
   private api = inject(NotesApi);
@@ -418,6 +442,7 @@ export class RoomNotes implements OnDestroy {
   readonly filters = [{ id: '', label: 'All' }, { id: 'pinned', label: 'Pinned' },
                       { id: 'todo', label: 'To-do' }, { id: 'mine', label: 'Mine' }];
   readonly agentRooms = AGENT_ROOMS;
+  readonly templates = NOTE_TEMPLATES;
   q = signal('');
   tag = signal('');
   only = signal('');
@@ -437,6 +462,8 @@ export class RoomNotes implements OnDestroy {
   /** A new note being written: not kept until it has words. */
   creating = signal(false);
   private keeping = false;
+  /** The text a template put in a new note: left as it is, it is not kept. */
+  private template = '';
   /** The note whose "send to an agent" menu is open in the list. */
   sendFor = signal<string | null>(null);
   auth = inject(Auth);
@@ -494,7 +521,7 @@ export class RoomNotes implements OnDestroy {
       this.notes.set(ed ? ns.map(n => n.id === ed ? { ...n, text: this.draft() } : n) : ns);
       // Picked notes that are gone (deleted, filtered away) are no longer picked.
       if (this.sel().size) this.sel.set(new Set([...this.sel()].filter(id => ns.some(n => n.id === id))));
-      if (!this.openId() && ns.length && !this.q()) this.openId.set(ns[0].id);
+      if (!this.openId() && !this.creating() && ns.length && !this.q()) this.openId.set(ns[0].id);
       this.loaded.set(true);
     }, error: () => this.loaded.set(true) });
     this.api.tags().subscribe(t => this.tags.set(t));
@@ -518,8 +545,18 @@ export class RoomNotes implements OnDestroy {
     this.openId.set(null);
     this.editingId = null;
     this.draft.set('');
+    this.template = '';
     this.creating.set(true);
     this.editing.set(true);
+  }
+
+  /** A new note holding a template's text, in the editor as any new note:
+   *  kept once something in it is changed. */
+  fromTemplate(p: NoteTemplate) {
+    const text = (LANG() === 'tr' ? p.tr : p.en).replace('{date}', new Date().toISOString().slice(0, 10));
+    const start = () => { this.newNote(); this.template = text; this.draft.set(text); };
+    // From under an empty new note: a fresh editor, with the cursor at the end, not the old one's selection.
+    if (this.creating()) { this.done(); setTimeout(start); } else start();
   }
 
   typed(text: string) {
@@ -531,7 +568,7 @@ export class RoomNotes implements OnDestroy {
   private saveDraft(then?: () => void) {
     const id = this.editingId, text = this.draft();
     if (this.creating() && !id) {                       // a new note's first words: keep it now
-      if (!text.trim() || this.keeping) { then?.(); return; }
+      if (!text.trim() || text === this.template || this.keeping) { then?.(); return; }
       this.keeping = true;
       this.saving.set(true);
       this.api.create(text).subscribe({

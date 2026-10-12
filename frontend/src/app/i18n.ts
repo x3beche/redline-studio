@@ -3510,6 +3510,17 @@ const TR: Record<string, string> = {
   'Made by itself {n} min after a build': 'Derlemeden {n} dk sonra kendiliğinden yapılır', 'next at': 'sıradaki',
   'part': 'parça', 'parts': 'parça', 'Built against older': 'Eski sürümlerine göre derlendi',
   'No STEP: the script does not export one': 'STEP yok: betik dışa aktarmıyor',
+  // Notes to start from (rooms/note-templates.ts).
+  'Start from a template': 'Bir şablondan başlayın', 'No notes yet': 'Henüz not yok',
+  'N new note · Alt+N anywhere': 'N yeni not · Alt+N her yerden', 'Or start from a template': 'Ya da bir şablondan başlayın',
+  'Design change': 'Tasarım değişikliği', 'What changed and why, with what follows': 'Ne değişti, neden ve ardından ne yapılacak',
+  'Problem found': 'Bulunan sorun', 'Where it happens, the steps, expected and actual': 'Nerede oluyor, adımlar, beklenen ve olan',
+  'Boxes to tick; To-do collects the open ones': 'İşaretlenecek kutular; Yapılacak açık olanları toplar',
+  'Meeting notes': 'Toplantı notları', 'Who was there, what was decided, who does what': 'Kimler vardı, ne kararlaştırıldı, kim ne yapacak',
+  'Parts to order': 'Sipariş edilecek parçalar', 'Part, quantity and LCSC link, ticked when ordered': 'Parça, adet ve LCSC bağlantısı; sipariş verilince işaretlenir',
+  'Test log': 'Test kaydı', 'Setup, measurements and the result': 'Düzen, ölçümler ve sonuç',
+  'Idea': 'Fikir', 'One line and #idea, to find it again later': 'Tek satır ve #fikir, sonra yeniden bulmak için',
+  'For the agent': 'Ajan için', 'A request; Send to an agent hands it to a room\'s agent': 'Bir istek; Bir ajana gönder ile bir odanın ajanına iletilir',
 };
 
 export function t(text: string): string {
