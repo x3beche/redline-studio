@@ -35,6 +35,8 @@ import { Agents, SeedOs, seedLine, seenAgo } from '../agent-status';
 import { Prefs } from '../preferences';
 import { startFold, whenSettled } from '../fold';
 import { Confirm } from '../confirm';
+import { ContextMenu, MenuEntry } from '../context-menu';
+import { urlName } from '../workspaces';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -2221,6 +2223,66 @@ export class Editor implements AfterViewInit, OnDestroy {
     return (n.firmware ?? []).filter(f => !here.has(f.board));
   }
   openFirmware(f: { id: string }) { this.picked.openFirmware(f.id); }
+
+  /** The tree's right-click menus: a row's hover buttons, with names, and
+   *  a new tab on the address each room already reads (?model, ?board, ?fw). */
+  private newTab(params: Record<string, string>) {
+    const url = new URL(location.origin + location.pathname);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    window.open(url.toString(), '_blank', 'noopener');
+  }
+  private ask = (what: string) => Confirm.ask({ title: t('Delete "{x}"?').replace('{x}', what), ok: t('Delete'), danger: true });
+  modelMenu(e: MouseEvent, m: ModelEntry) {
+    const edit = this.auth.can('edit');
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'cube', kbd: 'Enter', run: () => { this.pickModel(m); this.phoneShut(); } },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ model: m.id }) },
+      { label: 'Copy path', icon: 'doc', run: () => navigator.clipboard?.writeText(m.id).then(() => this.flash(t('Copied'))) },
+      { sep: true },
+      edit && { label: 'Move to another folder', icon: 'move', run: () => this.armMove(m, new Event('menu')) },
+      this.auth.can('run') && { label: 'Rebuild', icon: 'rotate', run: () => this.rebuild(m, new Event('menu')) },
+      { sep: true },
+      this.auth.can('delete') && { label: 'Delete', icon: 'trash', danger: true, run: async () => {
+        if (!await this.ask(m.title)) return;
+        this.deleting.set(m.id);            // armed: the next call deletes, as the row's second click does
+        this.armDelete(m, new Event('menu'));
+      } },
+    ]);
+  }
+  boardMenu(e: MouseEvent, b: { id: string; title: string }) {
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'board', kbd: 'Enter', run: () => { this.openBoard(b); this.phoneShut(); } },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: urlName('pcb'), board: b.id }) },
+      { sep: true },
+      this.auth.can('edit') && { label: 'Move to another folder', icon: 'move', run: () => this.armMoveBoard(b, new Event('menu')) },
+      { sep: true },
+      this.auth.can('delete') && { label: 'Delete', icon: 'trash', danger: true, run: async () => {
+        if (!await this.ask(b.title)) return;
+        this.deleting.set(b.id);
+        this.armDeleteBoard(b, new Event('menu'));
+      } },
+    ]);
+  }
+  firmwareMenu(e: MouseEvent, f: { id: string }) {
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'code', kbd: 'Enter', run: () => { this.openFirmware(f); this.phoneShut(); } },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: urlName('firmware'), fw: f.id }) },
+    ]);
+  }
+  folderMenu(e: MouseEvent, path: string, depth: number) {
+    if (this.moving()) { e.preventDefault(); return; }
+    const edit = this.auth.can('edit');
+    const items: (MenuEntry | false)[] = [
+      { label: this.folded(path) ? 'Unfold' : 'Fold', icon: this.folded(path) ? 'down' : 'right', run: () => this.foldFolder(path, new MouseEvent('click')) },
+      { sep: true },
+      edit && { label: depth === 1 ? 'New model in its parts folder' : 'New model', icon: 'cube', run: () => this.newModel(path) },
+      edit && { label: 'New folder', icon: 'newfolder', run: () => this.newFolder(path) },
+      edit && { label: 'Bring in a CAD file', icon: 'upload', run: () => this.pickCad(path) },
+      { sep: true },
+      this.auth.can('delete') && { label: 'Delete the folder', icon: 'trash', danger: true, run: () => this.dropFolder(path, new Event('menu')) },
+    ];
+    ContextMenu.open(e, items);
+  }
 
   /** A .pcb belongs to the board room; opening one goes there. */
   openBoard(b: { id: string }) { this.picked.openBoard(b.id); }

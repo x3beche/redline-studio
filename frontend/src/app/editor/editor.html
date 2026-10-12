@@ -821,7 +821,7 @@
     <div class="group relative flex cursor-pointer items-center justify-between rounded px-1 py-0.5"
          [style.margin-left.px]="(depth - 1) * 10"
          [style.outline]="moving() ? '1px dashed var(--accent)' : 'none'"
-         (click)="moving() ? moveTo(n.path, $event) : foldFolder(n.path, $event)">
+         (click)="moving() ? moveTo(n.path, $event) : foldFolder(n.path, $event)" (contextmenu)="folderMenu($event, n.path, depth)">
       <!-- A folder was dimmer than the files in it, which is backwards:
            it is the thing you read first to find them. -->
       <span class="tcv-folder min-w-0 truncate">
@@ -859,7 +859,7 @@
   }
   @if (!folded(n.path)) {
   @for (b of n.boards ?? []; track b.id) {
-    <div (click)="openBoard(b); phoneShut()"
+    <div (click)="openBoard(b); phoneShut()" (contextmenu)="boardMenu($event, b)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10"
          [style.background]="inView(b.id, 'board') ? 'var(--accent-deep)' : 'transparent'">
@@ -897,7 +897,7 @@
       </span>
     </div>
     @for (f of fwOf(n, b.id); track f.id) {
-    <div (click)="openFirmware(f); phoneShut()"
+    <div (click)="openFirmware(f); phoneShut()" (contextmenu)="firmwareMenu($event, f)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10 + 12"
          [style.background]="inView(f.id, 'firmware') ? 'var(--accent-deep)' : 'transparent'"
@@ -921,7 +921,7 @@
     }
   }
   @for (f of fwLoose(n); track f.id) {
-    <div (click)="openFirmware(f); phoneShut()"
+    <div (click)="openFirmware(f); phoneShut()" (contextmenu)="firmwareMenu($event, f)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10 + 0"
          [style.background]="inView(f.id, 'firmware') ? 'var(--accent-deep)' : 'transparent'"
@@ -944,7 +944,7 @@
     </div>
   }
   @for (m of n.models; track m.id) {
-    <div (click)="pickModel(m); phoneShut()"
+    <div (click)="pickModel(m); phoneShut()" (contextmenu)="modelMenu($event, m)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10"
          [style.background]="inView(m.id, 'model') ? 'var(--accent-deep)' : 'transparent'">

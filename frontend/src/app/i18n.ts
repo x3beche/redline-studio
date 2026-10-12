@@ -3407,6 +3407,17 @@ const TR: Record<string, string> = {
   'Models by folder': 'Klasöre göre modeller',
   'No boards in it.': 'İçinde kart yok.',
   'top': 'üst düzey',
+  // the shared right-click menu (context-menu.ts) on the lists and the tree
+  'Open in new tab': 'Yeni sekmede aç',
+  'Copy path': 'Yolu kopyala',
+  'Move to another folder': 'Başka bir klasöre taşı',
+  'Rebuild': 'Yeniden derle',
+  'New model in its parts folder': 'Parça klasöründe yeni model',
+  'Delete the folder': 'Klasörü sil',
+  'Copy the text': 'Metni kopyala',
+  'Send to the {x} agent': '{x} ajanına gönder',
+  'Name it again': 'Başlığı yeniden yaz',
+  'Unfold': 'Katlamayı aç',
 };
 
 export function t(text: string): string {

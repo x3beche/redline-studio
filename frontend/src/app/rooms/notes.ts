@@ -7,6 +7,7 @@ import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { NoteDoc } from './note-doc';
 import { Confirm } from '../confirm';
+import { ContextMenu } from '../context-menu';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -289,7 +290,7 @@ const NOTE_ICONS = {
         <div class="tcv-notes-group">{{ g.name | t }}</div>
         @for (n of g.notes; track n.id) {
           <div class="tcv-cc-item tcv-notes-row" role="button" tabindex="0" [attr.data-on]="n.id === openId() ? 1 : null"
-               (click)="openId.set(n.id)" (keydown.enter)="openId.set(n.id)">
+               (click)="openId.set(n.id)" (keydown.enter)="openId.set(n.id)" (contextmenu)="noteMenu($event, n)">
             <div class="tcv-cc-itemtext">
               <div class="tcv-cc-itemtop">
                 @if (n.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.pin" /></svg> }
@@ -562,6 +563,20 @@ export class RoomNotes implements OnDestroy {
     const todo = { open: marks.filter(m => m === ' ').length, done: marks.filter(m => m !== ' ').length };
     this.replace({ ...n, text, todo });
     this.api.update(n.id, { text }).subscribe(r => this.replace(r));
+  }
+
+  /** A note's right-click menu in the list: its row's buttons, with names. */
+  noteMenu(e: MouseEvent, n: Note) {
+    const draw = this.auth.can('draw');
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'doc', kbd: 'Enter', run: () => this.openId.set(n.id) },
+      draw && { label: n.pinned ? 'Unpin' : 'Pin', icon: NOTE_ICONS.pin, run: () => this.pin(n) },
+      { label: 'Copy the text', icon: NOTE_ICONS.copy, run: () => this.copy(n) },
+      { sep: true },
+      ...(draw ? this.agentRooms.map(r => ({ label: t('Send to the {x} agent').replace('{x}', t(this.roomName(r))), icon: NOTE_ICONS.send, run: () => this.send(n, r) })) : []),
+      { sep: true },
+      draw && { label: 'Delete', icon: NOTE_ICONS.trash, kbd: 'Del', danger: true, run: () => this.remove(n) },
+    ]);
   }
 
   pin(n: Note) { this.api.update(n.id, { pinned: !n.pinned }).subscribe(() => this.read()); }

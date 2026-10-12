@@ -18,6 +18,8 @@ import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
 import { FileModal, FileModalHost, fileIdOf } from './file-modal';
+import { ContextMenu } from '../context-menu';
+import { Confirm } from '../confirm';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { ModelPicker } from '../model-picker';
 import { DmApi, DmStore } from '../dm';
@@ -553,6 +555,7 @@ type Ask = { text: string; label: string; go: () => void };
           <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
                [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
+               (contextmenu)="chatMenu($event, c)"
                [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')
                         + (c.deleted_at ? ' · ' + ('deleted' | t) + ' ' + stamp(c.deleted_at) : '')">
             @if (selecting()) {
@@ -1708,6 +1711,42 @@ export class RoomCommandCode implements OnDestroy {
       },
       error: e => { mark(false); this.error.set(this.msg(e)); },
     });
+  }
+
+  /** A conversation's right-click menu in the list: what its row's buttons and the header do, for this one. */
+  chatMenu(e: MouseEvent, c: CcChat) {
+    if (this.selecting()) { e.preventDefault(); return; }
+    const draw = this.auth.can('draw'), row = e.currentTarget as HTMLElement;
+    if (c.deleted_at) {
+      if (!this.mayDelete(c)) { e.preventDefault(); return; }
+      ContextMenu.open(e, [
+        { label: 'Restore', icon: I.restore, run: () => this.restoreChats([c]) },
+        { sep: true },
+        { label: 'Delete forever', icon: I.trash, danger: true, run: () => this.askPurge([c]) },
+      ]);
+      return;
+    }
+    ContextMenu.open(e, [
+      { label: 'Open', icon: I.chat, kbd: 'Enter', run: () => row.click() },
+      draw && { label: 'Rename', icon: I.edit, kbd: 'F2', run: () => this.renameChat(c) },
+      draw && { label: 'Name it again', icon: I.retitle, disabled: this.naming().has(c.id), run: () => this.retitle(c) },
+      { sep: true },
+      draw && { label: c.pinned ? 'Unpin' : 'Pin', icon: I.pin, run: () => this.togglePin(c) },
+      draw && { label: c.archived ? 'Unarchive' : 'Archive', icon: c.archived ? I.unarchive : I.archive, run: () => this.toggleArchive(c) },
+      { label: 'Export as Markdown', icon: I.download,
+        run: () => this.chat()?.id === c.id ? this.exportChat() : this.open(c.id, null, () => this.exportChat()) },
+      { sep: true },
+      this.mayDelete(c) && { label: 'Delete', icon: I.trash, kbd: 'Del', danger: true, run: () => this.deleteChats([c]) },
+    ]);
+  }
+  /** Rename from the list, without opening it: the header's title field does the same for the open one. */
+  async renameChat(c: CcChat) {
+    const title = await Confirm.input({ title: t('Rename'), value: t(c.title), ok: t('Rename'), placeholder: t('New name') });
+    if (!title || title === c.title || title === t(c.title)) return;
+    const upd = (x: CcChat) => x.id === c.id ? { ...x, title } : x;
+    this.chats.update(l => l.map(upd));
+    this.chat.update(x => x && upd(x));
+    this.api.patch(c.id, { title }).subscribe({ next: () => this.refresh(), error: err => this.error.set(this.msg(err)) });
   }
 
   toggleArchive(c: CcChat) {

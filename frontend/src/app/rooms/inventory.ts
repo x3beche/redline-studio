@@ -6,6 +6,8 @@ import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
 import { DmSendButton } from '../dm';
+import { ContextMenu } from '../context-menu';
+import { SelectionBar } from '../selection-bar';
 import { SelectOption, UiSelect } from '../ui-select';
 import { TimeChart, TimeData, fmt as chartFmt } from './charts';
 
@@ -211,9 +213,9 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet],
+  imports: [T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
-  host: { '(document:keydown)': 'key($event)', '(document:click)': 'menu.set(null)', '(document:scroll)': 'menu.set(null)', '(window:resize)': 'menu.set(null)' },
+  host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
   <!-- LEFT: the types, and the places -->
@@ -368,14 +370,6 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
           </section>
         }
       } @else {
-        @if (picked().size) {
-          <div class="inv-selbar">
-            <span>{{ fmt('{n} selected', { n: picked().size }) }}</span>
-            <button class="tcv-btn" (click)="exportItems(selectedItems())">{{ 'Export' | t }}</button>
-            @if (can()) { <button class="tcv-btn tst-del" (click)="removeSelected()">{{ 'Delete' | t }}</button> }
-            <button class="st-more" (click)="clearPicked()">{{ 'Clear' | t }}</button>
-          </div>
-        }
         <div class="st-table-wrap inv-twrap">
           <table class="st-table inv-table">
             <thead><tr>
@@ -606,21 +600,13 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
         </div>
       </div>
     }
+    <!-- the table's ticked rows, floating over the list -->
+    <wb-selbar [count]="picked().size" (clear)="clearPicked()">
+      <button class="tcv-btn" (click)="exportItems(selectedItems())">{{ 'Export' | t }}</button>
+      @if (can()) { <button class="tcv-btn tst-del" (click)="removeSelected()">{{ 'Delete' | t }}</button> }
+    </wb-selbar>
   </section>
 </div>
-<!-- An item's right-click menu, on the cards and the table's rows -->
-@if (menu(); as mn) {
-  <div class="tcv-fm-menu mf-menu" role="menu" [style.left.px]="mn.x" [style.top.px]="mn.y" (click)="$event.stopPropagation()" (contextmenu)="$event.preventDefault()">
-    <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); openItem(mn.i.id)"><span>{{ 'Open' | t }}</span></button>
-    @if (mn.i.catalog?.url) { <a class="tcv-fm-menu-item" role="menuitem" [href]="mn.i.catalog!.url" target="_blank" rel="noopener noreferrer" (click)="menu.set(null)"><span>{{ 'Open its page' | t }}</span><kbd>↗</kbd></a> }
-    @if (can()) {
-      <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); openItem(mn.i.id, 'adjust')"><span>{{ 'Adjust the quantity' | t }}</span></button>
-      <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); openItem(mn.i.id, 'edit')"><span>{{ 'Edit' | t }}</span></button>
-      <div class="tcv-fm-menu-sep"></div>
-      <button class="tcv-fm-menu-item" role="menuitem" data-danger (click)="menu.set(null); remove(mn.i)"><span>{{ 'Delete' | t }}</span><kbd>Del</kbd></button>
-    }
-  </div>
-}
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-i>
   <button class="mf-card inv-card" [attr.data-fam]="family(i.type)" (click)="openItem(i.id)" (contextmenu)="openMenu($event, i)" [title]="i.name">
@@ -726,7 +712,6 @@ export class RoomInventory implements OnDestroy {
   linkProducts = signal<{ id: string; name: string; sku: string; url: string }[]>([]);
   broken = signal<Set<string>>(new Set());
   shot = signal<string | null>(null);
-  menu = signal<{ x: number; y: number; i: Item } | null>(null);
   /** The add row's fields. */
   form = signal({ name: '', quantity: '', unit: '', location: '', category: '', mpn: '', lcsc: '', min: '', type: '' });
   setF(k: FormKey, v: string) { this.form.update(f => ({ ...f, [k]: v })); }
@@ -1008,11 +993,17 @@ export class RoomInventory implements OnDestroy {
     this.sel.room.set('pcb');
     setTimeout(() => this.sel.ask('part', code), 50);
   }
+  /** An item's right-click menu, on the cards and the table's rows. */
   openMenu(e: MouseEvent, i: Item) {
-    e.preventDefault();
-    e.stopPropagation();
-    const w = 230, h = this.can() ? 170 : 80;
-    this.menu.set({ x: Math.min(e.clientX, innerWidth - w - 8), y: Math.min(e.clientY, innerHeight - h - 8), i });
+    const can = this.can(), url = i.catalog?.url;
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openItem(i.id) },
+      !!url && { label: 'Open its page', icon: 'open', kbd: '↗', run: () => window.open(url!, '_blank', 'noopener,noreferrer') },
+      can && { label: 'Adjust the quantity', icon: 'list', run: () => this.openItem(i.id, 'adjust') },
+      can && { label: 'Edit', icon: 'edit', run: () => this.openItem(i.id, 'edit') },
+      { sep: true },
+      can && { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.remove(i) },
+    ]);
   }
 
   // ---- adding
@@ -1212,10 +1203,8 @@ export class RoomInventory implements OnDestroy {
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape') {
-      if (this.menu()) { this.menu.set(null); return; }
       if (this.iid() && !document.querySelector('.wb-sel-pop')) { this.closeItem(); return; }
     }
-    if ((e.key === 'Delete' || e.key === 'Del') && this.menu() && this.can()) { const i = this.menu()!.i; this.menu.set(null); this.remove(i); return; }
     if (e.key === '/' && !typing && !this.iid()) { e.preventDefault(); this.search()?.nativeElement.focus(); }
   }
 

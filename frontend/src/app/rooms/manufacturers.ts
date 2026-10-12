@@ -11,6 +11,8 @@ import { RouteOrder, routeLine } from '../route-order';
 import { DmSendButton } from '../dm';
 import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { Marquee } from '../marquee';
+import { ContextMenu } from '../context-menu';
+import { SelectionBar } from '../selection-bar';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -238,9 +240,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee],
+  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
-  host: { '(document:keydown)': 'key($event)', '(document:click)': 'menu.set(null)', '(document:scroll)': 'menu.set(null)', '(window:resize)': 'menu.set(null)' },
+  host: { '(document:keydown)': 'key($event)' },
   template: `
 <!-- How the next run goes out: the default order, or one of its own (the route order below) -->
 <ng-template #fetchSeg let-maker="maker">
@@ -485,12 +487,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <input class="tst-in mf-find" [placeholder]="'Find a product: name, code, size, material' | t" [value]="pq()"
                  (input)="pq.set($any($event.target).value)" (keydown.escape)="pq.set('')">
           <wb-select class="mf-csel" label="Category" [options]="productCatOpts()" [value]="cat()" (pick)="cat.set($event)" />
-          @if (picked_().size) {
-            <span class="mf-selbar">{{ fmt('{n} selected', { n: picked_().size }) }}
-              @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
-              <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
-              <button class="tcv-btn" (click)="pickAll(false)">{{ 'Clear' | t }}</button></span>
-          }
           <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span>
           <ng-container *ngTemplateOutlet="layoutT" />
           @if (can()) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
@@ -526,7 +522,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </div>
         }
         @if (m.products?.length && layout() === 'grid') {
-          <ng-container *ngTemplateOutlet="selBar" />
           <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
               >
             @for (p of found().slice(0, shownRows()); track p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: asItem(p, m) }" /> }
@@ -622,7 +617,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         </div>
         @if (grid(); as g) {
           @if (layout() === 'grid') {
-            <ng-container *ngTemplateOutlet="selBar" />
             <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
                 >
               @for (p of g.items; track p.maker.id + p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: p }" /> }
@@ -872,20 +866,19 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         </div>
       </div>
     }
+    <!-- the selection, floating over the grid: the grid's (a box drawn, Ctrl/Shift-clicks) or the maker table's ticks -->
+    <wb-selbar [count]="layout() === 'grid' ? gsel().size : 0" (clear)="clearSel()">
+      <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
+      @if (can()) { <button class="tcv-btn tst-del" (click)="deleteSelected()" [disabled]="saving()">{{ 'Delete' | t }}</button> }
+    </wb-selbar>
+    @if (view() === 'maker' && maker(); as m) {
+      <wb-selbar [count]="layout() === 'table' ? picked_().size : 0" (clear)="pickAll(false)">
+        @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
+        <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
+      </wb-selbar>
+    }
   </section>
 </div>
-<!-- A product's right-click menu, on the grid's cards and the table's rows -->
-@if (menu(); as mn) {
-  <div class="tcv-fm-menu mf-menu" role="menu" [style.left.px]="mn.x" [style.top.px]="mn.y" (click)="$event.stopPropagation()" (contextmenu)="$event.preventDefault()">
-    <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); openDetail(mn.p)"><span>{{ 'Open' | t }}</span></button>
-    @if (mn.p.url) { <a class="tcv-fm-menu-item" role="menuitem" [href]="mn.p.url" target="_blank" rel="noopener noreferrer" (click)="menu.set(null)"><span>{{ 'Open its page' | t }}</span><kbd>↗</kbd></a> }
-    @if (can()) {
-      <button class="tcv-fm-menu-item" role="menuitem" (click)="menu.set(null); editFromDetail(mn.p)"><span>{{ 'Edit' | t }}</span></button>
-      <div class="tcv-fm-menu-sep"></div>
-      <button class="tcv-fm-menu-item" role="menuitem" data-danger (click)="menu.set(null); deleteFromDetail(mn.p)"><span>{{ 'Delete' | t }}</span><kbd>Del</kbd></button>
-    }
-  </div>
-}
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-p>
   <button class="mf-card" [attr.data-key]="keyOf(p)" [attr.data-on]="gsel().has(keyOf(p)) ? 1 : null" [attr.aria-pressed]="gsel().has(keyOf(p))"
@@ -918,17 +911,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     <button [class.on]="layout() === 'grid'" (click)="layout.set('grid')" [title]="'Grid' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.grid" /></svg>{{ 'Grid' | t }}</button>
     <button [class.on]="layout() === 'table'" (click)="layout.set('table')" [title]="'Table' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.rows" /></svg>{{ 'Table' | t }}</button>
   </div>
-</ng-template>
-<ng-template #selBar>
-  @if (gsel().size) {
-    <div class="mf-selbar" role="toolbar" [attr.aria-label]="'Selection' | t">
-      <b>{{ fmt('{n} selected', { n: gsel().size }) }}</b>
-      <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
-      @if (can()) { <button class="tcv-btn tst-del" (click)="deleteSelected()" [disabled]="saving()">{{ 'Delete' | t }}</button> }
-      <button class="tcv-btn" (click)="clearSel()">{{ 'Clear' | t }}</button>
-      <span class="st-sub">{{ 'Drag on an empty spot to select; Ctrl or Shift adds' | t }}</span>
-    </div>
-  }
 </ng-template>
 <ng-template #stockFields>
           <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Quantity' | t">
@@ -1307,12 +1289,16 @@ export class RoomMfr implements OnDestroy {
     this.cols.set(v);
     try { localStorage.setItem('redline.catalog.cols', String(v)); } catch { /* private window */ }
   }
-  /** The right-click menu: where, and on which product. */
-  menu = signal<{ x: number; y: number; p: GridItem } | null>(null);
+  /** A product's right-click menu, on the grid's cards and the table's rows. */
   openMenu(e: MouseEvent, p: GridItem) {
-    e.preventDefault();
-    const w = 220, h = this.can() ? 150 : 80;
-    this.menu.set({ x: Math.min(e.clientX, innerWidth - w - 8), y: Math.min(e.clientY, innerHeight - h - 8), p });
+    const can = this.can();
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openDetail(p) },
+      !!p.url && { label: 'Open its page', icon: 'open', kbd: '↗', run: () => window.open(p.url!, '_blank', 'noopener,noreferrer') },
+      can && { label: 'Edit', icon: 'edit', run: () => this.editFromDetail(p) },
+      { sep: true },
+      can && { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.deleteFromDetail(p) },
+    ]);
   }
   deleteFromDetail(d: GridItem) {
     this.sure(t('Delete this product?'), d.name).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
@@ -1758,10 +1744,8 @@ export class RoomMfr implements OnDestroy {
 
   key(e: KeyboardEvent) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
-    if (e.key === 'Escape' && this.menu()) { this.menu.set(null); return; }
     if (e.key === 'Escape' && this.gsel().size && !this.detail()) { this.gsel.set(new Set()); return; }
-    if (e.key === 'Delete' && this.gsel().size && !this.menu() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }
-    if (e.key === 'Delete' && this.menu() && this.can()) { const p = this.menu()!.p; this.menu.set(null); this.deleteFromDetail(p); return; }
+    if (e.key === 'Delete' && this.gsel().size && !ContextMenu.isOpen() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }
     if (e.key === 'Escape' && this.detail() && !typing) { this.closeDetail(); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); (this.gridSearch() ?? this.search()).nativeElement.focus(); }
   }

@@ -14,6 +14,7 @@ import {
 } from './files-model';
 import { pdfFirstPage } from './pdf-reader';
 import { MeshThumbs } from './mesh-thumb';
+import { ContextMenu, MenuEntry } from '../context-menu';
 
 export { FilesApi } from './files-model';
 export type { StoredFile } from './files-model';
@@ -32,7 +33,7 @@ export type { StoredFile } from './files-model';
 
 type Item = { key: string; folder?: FileFolder; file?: StoredFile };
 type SortKey = 'name' | 'date' | 'size' | 'kind';
-interface MenuItem { label?: string; icon?: string; run?: () => void; danger?: boolean; sep?: boolean; hint?: string }
+type MenuItem = MenuEntry;
 type Dialog =
   | { type: 'new-folder'; name: string; busy?: boolean; error?: string }
   | { type: 'move'; files: string[]; folders: string[]; to: string; busy?: boolean; error?: string }
@@ -50,7 +51,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 @Component({
   selector: 'app-room-files',
   imports: [T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect],
-  host: { '(document:keydown)': 'globalKey($event)', '(document:click)': 'menu.set(null)' },
+  host: { '(document:keydown)': 'globalKey($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
   <!-- a 3D file's picture is grey shading: this gives it the theme's model colour (styles.css .tcv-fm-solid) -->
@@ -392,22 +393,6 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
     }
   </ng-template>
 
-  <!-- the right-click menu -->
-  @if (menu(); as m) {
-    <div class="tcv-fm-menu" role="menu" [style.left.px]="m.x" [style.top.px]="m.y" (click)="$event.stopPropagation()"
-         (keydown.escape)="menu.set(null)">
-      @for (it of m.items; track $index) {
-        @if (it.sep) { <div class="tcv-fm-menu-sep" role="separator"></div> }
-        @else {
-          <button role="menuitem" class="tcv-fm-menu-item" [attr.data-danger]="it.danger ? 1 : null"
-                  (click)="menu.set(null); it.run!()">
-            <i [fmIcon]="it.icon || 'file'"></i><span>{{ it.label! | t }}</span>@if (it.hint) { <kbd>{{ it.hint }}</kbd> }
-          </button>
-        }
-      }
-    </div>
-  }
-
   <!-- dialogs -->
   @if (dialog(); as d) {
     <div class="tcv-fm-scrim" (click)="dialog.set(null)" (keydown.escape)="dialog.set(null)">
@@ -544,7 +529,6 @@ export class RoomFiles implements OnDestroy {
   focusKey = signal<string | null>(null);
   renaming = signal<string | null>(null);
   renameTo = signal('');
-  menu = signal<{ x: number; y: number; items: MenuItem[] } | null>(null);
   dialog = signal<Dialog | null>(null);
   preview = signal<string | null>(null);
 
@@ -994,7 +978,6 @@ export class RoomFiles implements OnDestroy {
 
   /** The preview's keys, wherever the focus is: arrows step, Esc closes. */
   globalKey(e: KeyboardEvent) {
-    if (e.key === 'Escape' && this.menu()) { this.menu.set(null); return; }
     if (e.key === 'Escape' && this.dialog()) { this.dialog.set(null); return; }
     const d = this.dialog();
     if (e.key === 'Enter' && d?.type === 'confirm' && !(e.target as HTMLElement).closest('button, input, textarea, select')) {
@@ -1019,34 +1002,25 @@ export class RoomFiles implements OnDestroy {
     const keys = fromButton && this.preview() ? [key] : this.selKeys().length ? this.selKeys() : [key];
     const items = this.menuFor(keys);
     if (!items.length) return;
-    this.place(e, items);
+    ContextMenu.open(e, items);
   }
   backgroundMenu(e: MouseEvent) {
     if ((e.target as HTMLElement).closest('[data-key]')) return;
     e.preventDefault();
     this.clearSel();
-    const all: MenuItem = { label: 'Select all', icon: 'grid', hint: 'Ctrl+A',
+    const all: MenuItem = { label: 'Select all', icon: 'grid', kbd: 'Ctrl+A',
                             run: () => this.selected.set(new Set(this.items().map(i => i.key))) };
-    if (!this.auth.can('draw') || this.filtering()) { if (this.items().length) this.place(e, [all]); return; }
-    this.place(e, [
+    if (!this.auth.can('draw') || this.filtering()) { if (this.items().length) ContextMenu.open(e, [all]); return; }
+    ContextMenu.open(e, [
       { label: 'New folder', icon: 'newfolder', run: () => this.newFolder() },
       { label: 'Upload files', icon: 'upload', run: () => (document.querySelector('.tcv-fm-head input[type=file]') as HTMLInputElement)?.click() },
-      ...(this.items().length ? [{ sep: true }, all] : []),
+      ...(this.items().length ? [{ sep: true } as MenuItem, all] : []),
     ]);
   }
   sendMenu(e: MouseEvent, f: StoredFile) {
     e.stopPropagation();
-    this.place(e, this.rooms.map(r => ({ label: `Send to ${ROOM_LABEL[r] ?? r}`, icon: 'send',
-                                         hint: r === this.suggest(f) ? '★' : undefined, run: () => this.send(f, r) })));
-  }
-  private place(e: MouseEvent, items: MenuItem[]) {
-    const w = 236, h = items.reduce((n, i) => n + (i.sep ? 9 : 32), 10);
-    let x = e.clientX, y = e.clientY;
-    if (e.type === 'click' && e.currentTarget instanceof HTMLElement) {
-      const r = e.currentTarget.getBoundingClientRect();
-      x = r.right - w; y = r.bottom + 4;
-    }
-    this.menu.set({ x: Math.max(4, Math.min(x, innerWidth - w - 4)), y: Math.max(4, Math.min(y, innerHeight - h - 4)), items });
+    ContextMenu.open(e, this.rooms.map(r => ({ label: `Send to ${ROOM_LABEL[r] ?? r}`, icon: 'send',
+                                         kbd: r === this.suggest(f) ? '★' : undefined, run: () => this.send(f, r) })));
   }
   private menuFor(keys: string[]): MenuItem[] {
     const draw = this.auth.can('draw'), edit = this.auth.can('edit');
@@ -1055,39 +1029,39 @@ export class RoomFiles implements OnDestroy {
     const out: MenuItem[] = [];
     if (keys.length === 1 && files.length === 1) {
       const f = files[0];
-      if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', hint: 'Enter', run: () => this.open(f) });
+      if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.open(f) });
       out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) });
       if (draw) {
-        out.push({ sep: true }, { label: 'Rename', icon: 'edit', hint: 'F2', run: () => this.startRename('f:' + f.id) },
+        out.push({ sep: true }, { label: 'Rename', icon: 'edit', kbd: 'F2', run: () => this.startRename('f:' + f.id) },
                  { label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) });
       }
       if (edit && (f.kind === 'step' || f.kind === 'mesh')) out.push({ label: 'Add to project', icon: 'project', run: () => this.startAdd(f) });
       if (draw) {
         out.push({ sep: true });
         for (const r of this.rooms) {
-          out.push({ label: `Send to ${ROOM_LABEL[r] ?? r}`, icon: 'send', hint: r === this.suggest(f) ? '★' : undefined,
+          out.push({ label: `Send to ${ROOM_LABEL[r] ?? r}`, icon: 'send', kbd: r === this.suggest(f) ? '★' : undefined,
                      run: () => this.send(f, r) });
         }
         out.push({ label: 'Ask Chat about this file', icon: 'chat',
                    run: () => this.picked.askCc({ action: 'new', mention: { kind: 'file', id: f.id, label: f.name } }) });
       }
       out.push({ sep: true }, { label: 'Details', icon: 'info', run: () => { this.details.set(true); this.save(); } });
-      if (draw) out.push({ label: 'Delete', icon: 'trash', hint: 'Del', danger: true, run: () => this.askDelete(keys) });
+      if (draw) out.push({ label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.askDelete(keys) });
     } else if (keys.length === 1 && dirs.length === 1) {
       const d = dirs[0];
-      out.push({ label: 'Open', icon: 'open', hint: 'Enter', run: () => this.go(d.id) },
+      out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.go(d.id) },
                { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), d.name + '.zip') });
       if (draw) {
-        out.push({ sep: true }, { label: 'Rename', icon: 'edit', hint: 'F2', run: () => this.startRename('d:' + d.id) },
+        out.push({ sep: true }, { label: 'Rename', icon: 'edit', kbd: 'F2', run: () => this.startRename('d:' + d.id) },
                  { label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) },
-                 { sep: true }, { label: 'Delete', icon: 'trash', hint: 'Del', danger: true, run: () => this.askDelete(keys) });
+                 { sep: true }, { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.askDelete(keys) });
       }
     } else {
       out.push({ label: 'Download as ZIP', icon: 'download',
                  run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') });
       if (draw) {
         out.push({ label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) },
-                 { sep: true }, { label: 'Delete', icon: 'trash', hint: 'Del', danger: true, run: () => this.askDelete(keys) });
+                 { sep: true }, { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.askDelete(keys) });
       }
     }
     return out;

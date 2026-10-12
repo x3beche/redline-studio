@@ -6,7 +6,8 @@ import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { SelectOption, UiSelect } from '../ui-select';
 import { Confirm } from '../confirm';
-import { DmSendButton } from '../dm';
+import { DmSendButton, DmStore, SHARE_ICON } from '../dm';
+import { ContextMenu } from '../context-menu';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -217,6 +218,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
       }
       @for (p of palettes(); track p.id) {
         <button class="tcv-notes-item" [attr.data-on]="p.id === openId() && mode() === 'palette' ? 1 : null" (click)="openPalette(p.id)"
+                (contextmenu)="paletteMenu($event, p)"
                 [title]="p.attached.length ? fmt('on {p}', { p: attachedLine(p) }) : ''">
           <span class="tcv-notes-item-top">
             @if (p.pinned) { <span class="tcv-notes-pin" [title]="'Pinned' | t">●</span> }
@@ -1045,6 +1047,19 @@ export class RoomTaste implements OnDestroy {
   describe(p: Palette, description: string) {
     if (description.trim() === p.description) return;
     this.api.patch(p.id, { description: description.trim() }).subscribe({ next: r => this.replace(r), error: this.failed('Could not save it.') });
+  }
+  private dms = inject(DmStore);
+  /** A palette's right-click menu in the list: what its page's buttons do. */
+  paletteMenu(e: MouseEvent, p: Palette) {
+    const can = this.can(), dm = this.dms.enabled() && this.dms.people().length > 0;
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openPalette(p.id) },
+      can && { label: p.pinned ? 'Unpin' : 'Pin', icon: 'M9 3h6 M10 3v6.5L7 13h10l-3-3.5V3 M12 13v8', run: () => this.pin(p) },
+      { label: 'Export', icon: 'download', run: () => this.exportPalette(p) },
+      dm && { label: 'Send to…', icon: SHARE_ICON, run: () => this.dms.sendTo.set({ kind: 'taste', id: p.id, label: p.name }) },
+      { sep: true },
+      can && { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.remove(p) },
+    ]);
   }
   pin(p: Palette) { this.api.patch(p.id, { pinned: !p.pinned }).subscribe({ next: () => this.read(), error: this.failed('Could not save it.') }); }
 
