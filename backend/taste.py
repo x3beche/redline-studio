@@ -534,8 +534,6 @@ def block(doc: dict, limit: int = BLOCK_CHARS, product: str | None = None, note:
         lines.append(f"Reference renders of the source ({len(refs)}; look at them before designing - "
                      f"`revisions.py taste {doc['_id']}` writes them to disk): "
                      + ", ".join(f"{r.get('view')} of {r.get('model') or '?'} {ref_path(doc['_id'], r)}" for r in refs))
-    if doc.get("measures"):
-        lines.append("Measured on the source: " + _clip(doc["measures"], 1500).replace("\n", "; "))
     if doc.get("notice"):
         lines.append("Note: " + doc["notice"])
     if not items:
@@ -560,6 +558,9 @@ def block(doc: dict, limit: int = BLOCK_CHARS, product: str | None = None, note:
                         "background only, not carried over to another product." if on is False else
                         "only for that product or a new version of it."))
         group(specific)
+    if doc.get("measures"):
+        # Last: the numbers behind the items, for whoever needs more than their examples.
+        lines.append("Measured on the source's own parts: " + _clip(doc["measures"], 900).replace("\n", "; "))
     text = "\n".join(lines)
     if len(text) <= limit:
         return text
