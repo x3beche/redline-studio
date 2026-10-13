@@ -85,6 +85,11 @@ through the workspace, and the list of them when the name fits nothing).
   rename, said to every open tab), `chat_list` and `chat_read` (the
   conversations, as the list and opening one show them) and `chat_archive`
   (change, off).
+- `analytics_read` (General, read, on): the Analytics room's figures -
+  the very answer `GET /api/insights` gives the page (insights.py
+  `overview_cached`, kept per workspace and range), with the right that GET
+  needs; a compact overview, or one `section` (costs, llm, tokens, runs,
+  notes, api, budget) or `project` in full, in the display currency.
 - Notes (the Notes tab, notes.py): `notes_search`, `note_read`; and, off
   by default, `note_write`, `note_todo` (tick or untick one to-do),
   `note_edit` - with the rights the Notes API's routes need (`_notes.py`).

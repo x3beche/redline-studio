@@ -790,7 +790,9 @@ export class RoomAnalyze implements OnDestroy {
   readonly everys = DASH_EVERYS;
   readonly everyOpts: SelectOption[] = this.everys.map(e => ({ value: '' + e.s, label: e.label }));
 
-  range = signal(recall('range', '7d'));
+  // A link (?ws=analyze&range=30d&project=x, as the Chat's analytics_read gives one) wins over what
+  // this browser kept.
+  range = signal(fromLink('range', DASH_RANGES.map(r => r.id)) ?? recall('range', '7d'));
   every = signal(+recall('every', '60'));
   shut = signal<Set<string>>(new Set(JSON.parse(recall('shut', '[]'))));
   data = signal<Insights | null>(null);
@@ -860,7 +862,7 @@ export class RoomAnalyze implements OnDestroy {
   openQ = signal<string | null>(null);
 
   // ---- one project ----
-  project = signal(recall('project', ''));
+  project = signal(fromLink('project') ?? recall('project', ''));
   projectNames = computed(() => Object.keys(this.data()?.project_detail ?? {}).sort());
   setProject(p: string) { this.project.set(p); keep('project', p); }
   kindsLine(pd: ProjectDetail): string {
@@ -1051,6 +1053,12 @@ export class RoomAnalyze implements OnDestroy {
   readonly money: Fmt = fmt.money;
 }
 
+/** ?range= or ?project= in the address, when it opened this room (one of `known`, if given). */
+function fromLink(key: string, known?: string[]): string | null {
+  const q = new URLSearchParams(location.search);
+  const v = q.get('ws') === 'analyze' ? q.get(key) : null;
+  return v && (!known || known.includes(v)) ? v : null;
+}
 function recall(key: string, fallback: string): string {
   try { return localStorage.getItem('redline.analytics.' + key) ?? fallback; } catch { return fallback; }
 }

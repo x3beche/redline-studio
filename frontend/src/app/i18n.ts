@@ -2571,6 +2571,13 @@ const TR: Record<string, string> = {
   'Renaming this chat': 'Sohbet yeniden adlandırılıyor',
   'Could not rename this chat': 'Sohbet yeniden adlandırılamadı',
   'Renamed this chat to “{title}”': 'Sohbetin adı “{title}” olarak değiştirildi',
+  // the Analytics room's figures (backend/chat_tools/analytics_read.py)
+  'Read Analytics': 'Analitiği oku',
+  'Reads the Analytics room\'s figures: spend, models, tokens and cache, builds, notes, API, budget.': 'Analitik odasının rakamlarını okur: harcama, modeller, tokenlar ve önbellek, derlemeler, notlar, API, bütçe.',
+  'Reading Analytics': 'Analitik okunuyor',
+  'Could not read Analytics': 'Analitik okunamadı',
+  'Read Analytics: {section}, {range}': 'Analitik okundu: {section}, {range}',
+  'Read Analytics for {project}, {range}': '{project} için Analitik okundu, {range}',
   // the Chat's own (backend/chat_tools/chat_list.py, chat_read, chat_archive)
   'List the conversations': 'Sohbetleri listele',
   'Lists the Chat\'s conversations, newest first, or finds them by words in their titles and lines.': 'Sohbet\'teki konuşmaları en yeniden başlayarak listeler ya da başlıklarındaki ve satırlarındaki kelimelerle bulur.',

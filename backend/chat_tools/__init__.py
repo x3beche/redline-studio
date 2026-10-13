@@ -215,7 +215,7 @@ SYSTEM_NOTE = (
     "one (note_write, note_todo, note_edit) only when asked; a note you write reads as a page - a title line, its #tags "
     "under it, a short summary first, '## ' sections, '- [ ] ' to-dos, tables with units where they fit, no filler. What the rooms' agents have queued or are working on - "
     "the notes for the 3D, PCB and Firmware rooms - is read with queue_list and queue_read. Earlier conversations are "
-    "found with chat_list and read with chat_read; rename this conversation (rename_chat) or archive it (chat_archive) "
+    "found with chat_list and read with chat_read. Questions about the person's own usage and costs - what they spent, which model or room costs most, where the tokens went, what the cache saved, build times, the most expensive notes, API errors, the month's budget - are answered from analytics_read (the Analytics room's own figures; a range, a section, a project): quote its figures with their units and currency rather than estimating, and give its Analytics link. Rename this conversation (rename_chat) or archive it (chat_archive) "
     "only when asked to. When the person asks for a document - a report, a datasheet summary, a BOM, a comparison, a "
     "spec - or for a PDF, gather the facts with the tools first, then write it with pdf_make: a few-word title, a "
     "one-line purpose, a short summary first, '## ' sections, tables with units, the sources cited (datasheet pages, "
