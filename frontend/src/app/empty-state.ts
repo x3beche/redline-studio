@@ -31,7 +31,7 @@ import { Icon } from './rooms/files-model';
 <div class="wb-empty-act"><ng-content /></div>
 `,
   styles: `
-.wb-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 440px; margin: 72px auto 0;
+.wb-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 440px; margin: 56px auto;  /* as much room under it as over it */
   padding: 0 16px; text-align: center; color: var(--ink-dim); grid-column: 1 / -1; }   /* a whole row in a grid of cards */
 .wb-empty-ico { color: var(--ink-dim); margin-bottom: 4px; }
 .wb-empty-ico svg { width: 36px; height: 36px; stroke-width: 1.2; }

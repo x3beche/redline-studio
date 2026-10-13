@@ -682,7 +682,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <wb-empty icon="table" [compact]="m.view === 'linked'" [class.mf-empty-pad]="m.view === 'linked'" [text]="m.view === 'linked' ? linkedEmpty(m.id) : m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
+          <wb-empty icon="table" [text]="m.view === 'linked' ? linkedEmpty(m.id) : m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
         }
       </section>
 
