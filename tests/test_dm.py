@@ -282,7 +282,10 @@ def test_only_the_conversation_reads_what_was_sent(db):
 def test_add_makes_a_new_thing_in_the_readers_space(db):
     put(db, space("u-ayse"), "taste_palettes", {"_id": "tp1", "name": "Quiet", "description": "calm", "items": [
         {"id": "s1", "text": "matte", "domain": "mechanical", "strength": "must",
-         "source": {"kind": "model", "id": "fan/base", "label": "Fan base"}}]})
+         "source": {"kind": "model", "id": "fan/base", "label": "Fan base"}},
+        {"id": "s2", "text": "Corners R4", "domain": "form", "strength": "must", "applies_to": "visible",
+         "exception": "inside the base", "example": "case R4", "layer": "specific"}],
+        "priority": "Looks first on visible faces."})
     put(db, space("u-ayse"), "notes", {"_id": "n1", "title": "Tolerances", "text": "# Tolerances\n0.2 mm"})
     put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "M3 screw", "quantity": 40, "unit": "pcs"})
     put(db, space("u-ayse"), "manufacturers", {"_id": "m1", "name": "Acme", "domain": "acme.com", "url": "https://acme.com/",
@@ -300,6 +303,10 @@ def test_add_makes_a_new_thing_in_the_readers_space(db):
     tp = run(bdb["taste_palettes"].find_one({"_id": r.json()["id"]}))
     assert tp["name"] == "Quiet (2)" and r.json()["label"] == "Quiet (2)"      # Bora had a Quiet already
     assert tp["items"][0]["text"] == "matte" and tp["items"][0]["source"] == "manual"
+    # A sent palette keeps what a palette file keeps: scope, exception, example, layer, the priority rule.
+    s2 = tp["items"][1]
+    assert (s2["applies_to"], s2["exception"], s2["example"], s2["layer"]) == ("visible", "inside the base", "case R4", "specific")
+    assert tp.get("priority") == "Looks first on visible faces."
     assert tp["by"]["id"] == "u-bora" and tp["workspace_id"] == space("u-bora")
     note = run(bdb["notes"].find_one({"_id": b.post(f"/api/dm/items/{snaps[1]}/add").json()["id"]}))
     assert "0.2 mm" in note["text"]

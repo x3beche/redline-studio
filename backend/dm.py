@@ -775,11 +775,25 @@ async def snapshot(it: dict, chat: str, mid: str, by: dict, at: str) -> str:
 
 
 async def _snap_taste(db, ref):
+    """A palette as sent: everything its export file holds - each statement
+    with its scope, exception, example and layer, the priority rule, where
+    it came from, the measurements - and its reference renders, copied so
+    the sent palette keeps them whatever happens to the sender's."""
+    from . import store, taste
     d = await db["taste_palettes"].find_one({"_id": ref})
     if not d:
         return None
-    return ({"name": d.get("name") or "", "description": d.get("description") or "",
-             "items": [_plain(i, ("text", "domain", "strength", "why")) for i in d.get("items") or []]}, {}, "")
+    data = await taste.export_doc(db, d)
+    refs = []
+    for r in data.pop("references", []):
+        try:
+            import base64
+            shot = await store.put_shot(db, base64.b64decode(r.pop("png")))
+        except Exception:                               # noqa: BLE001 - a lost picture is left out
+            continue
+        refs.append({**r, "gridfs_id": shot["gridfs_id"]})
+    data["references"] = refs
+    return (data, {}, "")
 
 
 async def _snap_note(db, ref):
@@ -1148,7 +1162,24 @@ async def _add_taste(dst, d, by, from_who):
     async def taken(n):
         return bool(await dst[taste.COLL].find_one({"name": n}, {"_id": 1}))
     name = await _free(taken, data.get("name") or d["label"])
-    doc = await taste.create(dst, name, data.get("description") or "", data.get("items") or [], by=by)
+    # Made as a palette file is imported: scopes, layers, examples, the
+    # priority rule and the renders come along (a message from before has
+    # only the statements, and reads as it always did).
+    from . import store
+    import base64
+    pics = []
+    for r in data.get("references") or []:
+        try:
+            png = await store.get_shot(dst, r["gridfs_id"])
+        except Exception:                               # noqa: BLE001 - a lost picture is left out
+            continue
+        pics.append({k: v for k, v in r.items() if k != "gridfs_id"} | {"png": base64.b64encode(png).decode()})
+    # The sender's project is not in this space: where a statement came from reads as given by hand.
+    items = [{k: v for k, v in i.items() if k != "source"} for i in data.get("items") or [] if isinstance(i, dict)]
+    doc = await taste.import_doc(dst, {"format": taste.FORMAT, "version": 2, **{k: v for k, v in data.items()
+                                                                                 if k not in ("format", "version")},
+                                       "items": items,
+                                       "name": name, "references": pics, "by": from_who or ""}, by)
     return {"id": doc["_id"], "label": doc["name"]}
 
 
