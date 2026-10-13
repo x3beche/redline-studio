@@ -43,12 +43,12 @@ export interface McmApi { filled: boolean; connected: boolean; wired: boolean; a
 export const LINKED: Record<string, { name: string; noun: string; key: string; how: string; caution: string;
   find: string; line: string; paste: RegExp; site: string; accept: string; empty: string }> = {
   mcmaster: {
-    name: 'McMaster-Carr', noun: 'part', key: 'Part number', how: 'CAD → 3-D STEP → Save', caution: '',
+    name: 'McMaster-Carr', noun: 'part', key: 'Part number', how: 'CAD → 3-D STEP → Download, then drop it on this page', caution: '',
     find: 'Describe a part (M3x10 stainless socket head screw), or paste a part number or link',
-    line: 'Open a part\'s page for its STEP - CAD → 3-D STEP → Save - and drop the file on the saved part.',
+    line: 'Open a part\'s page for its STEP - CAD → 3-D STEP → Download - and drop the file anywhere on this page: its part number is in the file name.',
     paste: /^\s*(\d{3,5}[A-Za-z]{1,2}\d{1,4}|https?:\/\/(www\.)?mcmaster\.com\/\S*\d{3,5}[A-Za-z]{1,2}\d{1,4}\S*)\s*$/,
     site: 'mcmaster.com', accept: '.step,.stp,.zip',
-    empty: 'Find a part above and save it; then drop the STEP you download from its page on it.',
+    empty: 'Find a part above, download its STEP there, and drop the file anywhere on this page - the part is saved with it.',
   },
   grabcad: {
     name: 'GrabCAD', noun: 'model', key: 'Model', how: 'Open → Download files (needs a free GrabCAD login) → pick the STEP',
@@ -198,6 +198,52 @@ export class LinkedDesk {
     this.changed.update(n => n + 1);
     return gone > 0;
   }
+  /** A file dragged over the page (not over an item's own drop box). */
+  pageDrop = signal(false);
+  /** Files dropped on the page whose name says no part number: which part they are. */
+  asking = signal<{ src: string; files: File[] } | null>(null);
+  /** The part number a file's name carries (McMaster names its STEP "92000A120_Pan Head ….STEP"). */
+  keyFromName(src: string, name: string): string | null {
+    if (src !== 'mcmaster') return null;
+    const m = /(?:^|[^A-Za-z0-9])(\d{3,5}[A-Za-z]{1,2}\d{1,4})(?=[^A-Za-z0-9]|$)/.exec(name);
+    return m ? m[1].toUpperCase() : null;
+  }
+  /** Files dropped anywhere on the page: each kept with the part its name
+   *  names - saved first if it is new - and the rest asked about. */
+  async dropOnPage(list: FileList | File[] | null) {
+    const src = this.src(), fs = [...(list ?? [])];
+    this.pageDrop.set(false);
+    if (!fs.length || !this.canEdit()) return;
+    const byKey = new Map<string, File[]>(), unknown: File[] = [];
+    for (const f of fs) {
+      const k = this.keyFromName(src, f.name);
+      if (k) byKey.set(k, [...(byKey.get(k) ?? []), f]); else unknown.push(f);
+    }
+    for (const [k, files] of byKey) {
+      const it = await this.ensure(src, k);
+      if (it) await this.upload(it, files);
+    }
+    if (unknown.length) this.asking.set({ src, files: unknown });
+  }
+  /** The asked-about files kept with the part (or model) typed for them. */
+  async keepAsked(key: string) {
+    const a = this.asking();
+    const k = key.trim();
+    if (!a || !k) return;
+    const it = await this.ensure(a.src, k);
+    if (!it) return;
+    this.asking.set(null);
+    await this.upload(it, a.files);
+  }
+  /** The saved item for a key, saving it first when it is new. */
+  private async ensure(src: string, key: string): Promise<LinkedItem | null> {
+    try {
+      const r = await firstValueFrom(this.http.post<{ part: LinkedItem; new: boolean }>(`${this.base(src)}/parts`, { key }));
+      if (r.new) Toast.show(fmt('{k} saved', { k: r.part.key }), { tone: 'ok' });
+      this.changed.update(n => n + 1);
+      return r.part;
+    } catch (e) { Toast.show(why(e, 'Could not save it.'), { tone: 'danger' }); return null; }
+  }
   /** Files dropped on an item: a STEP, a mesh, or the ZIP the site gave. */
   async upload(it: LinkedItem, list: FileList | File[] | null) {
     const fs = [...(list ?? [])];
@@ -251,6 +297,7 @@ const TINT = `
 @Component({
   selector: 'wb-linked-head',
   imports: [T, Skeleton],
+  host: { '(document:dragover)': 'over($event)', '(document:dragleave)': 'leave($event)', '(document:drop)': 'drop($event)' },
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './linked.css'],
   template: TINT + `
 <header class="tst-head ln-head">
@@ -264,6 +311,22 @@ const TINT = `
     @if (src() === 'mcmaster') { <button class="st-more" (click)="toSettings()" [title]="'McMaster-Carr API access: Settings > Proxy & Data' | t">{{ 'API access' | t }}</button> }
   </div>
 </header>
+@if (desk.pageDrop()) {
+  <div class="ln-pagedrop" aria-hidden="true"><div>
+    <b>{{ (src() === 'mcmaster' ? 'Drop the STEP: its part number is read from the file name, and the part is saved with it.' : 'Drop the files: you will be asked which model they are.') | t }}</b>
+  </div></div>
+}
+@if (desk.asking(); as a) {
+  <section class="st-card mf-pageadd ln-ask">
+    <div class="mf-addrow mf-ctl">
+      <span class="mf-label mf-rowlabel">{{ (src() === 'mcmaster' ? 'Which part?' : 'Which model?') | t }}</span>
+      <span class="st-sub mf-pagenote" [title]="names(a.files)">{{ names(a.files) }}</span>
+      <input #askIn class="tst-in" [placeholder]="(src() === 'mcmaster' ? 'Its part number, e.g. 92000A120' : 'Its GrabCAD library link') | t" (keydown.enter)="desk.keepAsked(askIn.value)">
+      <button class="tcv-btn tcv-btn-accent" (click)="desk.keepAsked(askIn.value)">{{ 'Keep them' | t }}</button>
+      <button class="tcv-btn" (click)="desk.asking.set(null)">{{ 'Cancel' | t }}</button>
+    </div>
+  </section>
+}
 <section class="st-card mf-pageadd ln-find" role="search">
   <!-- One slim row like the other forms of the catalog: what it does, the words, the button. -->
   <div class="mf-addrow mf-ctl">
@@ -340,6 +403,20 @@ const TINT = `
 })
 export class LinkedHead {
   readonly desk = inject(LinkedDesk);
+  private files(e: DragEvent) { return !!e.dataTransfer && [...e.dataTransfer.types].includes('Files'); }
+  /** Files dragged over the page, not over an item's own drop box: the page takes them. */
+  over(e: DragEvent) {
+    if (!this.files(e) || !this.desk.canEdit() || (e.target as HTMLElement)?.closest?.('.ln-drop')) return;
+    e.preventDefault();
+    this.desk.pageDrop.set(true);
+  }
+  leave(e: DragEvent) { if (!e.relatedTarget) this.desk.pageDrop.set(false); }
+  drop(e: DragEvent) {
+    if (!this.files(e) || (e.target as HTMLElement)?.closest?.('.ln-drop')) return;
+    e.preventDefault();
+    this.desk.dropOnPage(e.dataTransfer?.files ?? null);
+  }
+  names(fs: File[]) { return fs.map(f => f.name).join(', '); }
   private prefs = inject(Prefs);
   readonly src = input.required<string>();
   readonly url = input<string>('');

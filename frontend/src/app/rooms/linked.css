@@ -98,3 +98,12 @@ p.ln-caution { margin: 0; font-size: 12px; }
 .ln-ghosts { margin-top: 10px; }
 .ln-ghost { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 @media (prefers-reduced-motion: reduce) { .ln-spin, .ln-steps li[data-state="run"] i { animation: none; } }
+
+/* A file dragged over a source's page: the whole page takes it. */
+.ln-pagedrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); pointer-events: none; animation: ln-fade .1s ease-out both; }
+.ln-pagedrop > div { max-width: 520px; padding: 22px 26px; text-align: center; font-size: 13px; color: var(--ink);
+  background: var(--surface-2); border: 2px dashed var(--accent); border-radius: 10px; }
+@keyframes ln-fade { from { opacity: 0; } }
+.ln-ask .mf-pagenote { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ln-pagedrop { animation: none; } }
