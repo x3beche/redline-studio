@@ -275,13 +275,15 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
 /* LCSC, the parts drawer as a seller (backend/catalog_lcsc.py): a part's own line on its card, its
    table, adding from LCSC, and the drawer's cabinet (parts-drawer.ts) as a third way to see them */
 .mf-card-part { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; min-width: 0; font-size: 10.5px; color: var(--ink-dim); }
-.mf-card-lcsc .mf-card-img { width: 100%; box-sizing: border-box; }
+.mf-card-lcsc .mf-card-img { width: 100%; box-sizing: border-box; background: var(--surface-2); }
+.mf-fpthumb { display: block; width: 34px; height: 34px; overflow: hidden; border-radius: 3px; }
 .mf-card-part > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .mf-partstable .pdw-badge, .mf-card-part .pdw-badge { font-style: normal; }
 .mf-partstable tbody tr { cursor: pointer; }
 .mf-partstable tbody tr:hover td { background: var(--hover); }
 .mf-partstable td { vertical-align: middle; }
-.mf-partstable td.give { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-partstable td.give { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-partstable td.mf-pt-cat { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mf-pulse-row td { animation: mf-pulse-row .5s ease-in-out 3; }
 @keyframes mf-pulse-row { 50% { background: var(--accent-deep); } }
 .mf-lcscadd { display: flex; flex-direction: column; gap: 6px; }
@@ -292,6 +294,9 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
 .mf-hits tbody tr { cursor: pointer; }
 .mf-hits tbody tr:hover td { background: var(--hover); }
 .mf-cabinet { padding: 8px 10px; }
-.mf-cabinet .pdw-tray { max-height: min(60vh, 560px); }
-.mf-cabinet .pdw-bins { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.mf-cabinet-home { padding: 0; }
 @media (prefers-reduced-motion: reduce) { .mf-pulse-row td { animation: none; } }
+/* the list on the left: the built-in sources, then the workspace's own sites; a run going is a dot */
+.mf-side-group { display: block; padding: 10px 12px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-dim); }
+.mf-side-dot { margin: 0 0 0 6px; }

@@ -2525,9 +2525,14 @@ async def part_preview(lcsc_id: str):
 
 
 @app.get("/api/parts/{lcsc_id}/footprint.svg")
-async def part_footprint(lcsc_id: str):
-    return Response(await _look(lcsc.drawing, lcsc_id, lcsc.FOOTPRINT),
-                    media_type="image/svg+xml", headers=_INERT_SVG)
+async def part_footprint(lcsc_id: str, layer: str = ""):
+    """The footprint as EasyEDA draws it; with `layer` (pads, silk) one layer
+    of it as a mask, for a thumbnail the page paints (backend/catalog_lcsc.py)."""
+    svg = await _look(lcsc.drawing, lcsc_id, lcsc.FOOTPRINT)
+    if layer in ("pads", "silk"):
+        from . import catalog_lcsc
+        svg = catalog_lcsc.footprint_layer(svg, layer)
+    return Response(svg, media_type="image/svg+xml", headers=_INERT_SVG)
 
 
 @app.get("/api/parts/{lcsc_id}/symbol.svg")

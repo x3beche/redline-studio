@@ -3620,7 +3620,10 @@ const TR: Record<string, string> = {
   'Copy the LCSC number': 'LCSC numarasını kopyala', 'Remove this part from the drawer?': 'Bu parça çekmeceden çıkarılsın mı?',
   'Remove {n} parts from the drawer?': '{n} parça çekmeceden çıkarılsın mı?', '{n} could not be removed': '{n} tanesi çıkarılamadı',
   '{c} copied': '{c} kopyalandı', '{n} LCSC numbers copied': '{n} LCSC numarası kopyalandı', 'Open on LCSC': 'LCSC\'de aç',
-  'the parts kept for boards': 'kartlar için saklanan parçalar', 'parts drawer': 'parça çekmecesi',
+  'Built-in': 'Yerleşik', 'Your sites': 'Sizin siteleriniz',
+  '{n} in stock': '{n} stokta',
+  'Uncategorised': 'Kategorisiz', 'full view': 'tam görünüm', 'pins': 'pinler', 'the pins could not be read': 'pinler okunamadı',
+  'close every drawer': 'tüm çekmeceleri kapat', 'open every drawer': 'tüm çekmeceleri aç', 'close all': 'hepsini kapat', 'open all': 'hepsini aç',
 };
 
 export function t(text: string): string {

@@ -4734,6 +4734,31 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
 .pdw-bin.pdw-seen { border-color: var(--accent); }
 .pdw-bin.pdw-pulse { animation: pdw-pulse .5s ease-in-out 3; }
 @keyframes pdw-pulse { 50% { border-color: var(--accent); background: var(--hover); } }
+.pdw-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+/* With a picture (the Product Catalog's LCSC seller): the picture beside the words, and the selection */
+.pdw-bin.pdw-thumbed { flex-direction: row; align-items: center; gap: 8px; padding: 5px 7px 5px 5px; }
+.pdw-thumb { flex: none; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; overflow: hidden;
+  border-radius: 3px; background: var(--shot-bg); }
+.pdw-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.pdw-bin.pdw-sel { border-color: var(--marquee); box-shadow: 0 0 0 1px var(--marquee); }
+/* The large bins of a wide page (the Product Catalog's LCSC seller); the board room keeps the small ones */
+.pdw-big .pdw-tray { max-height: min(72vh, 760px); padding: 6px 8px 8px; }
+.pdw-big .pdw-bins { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+.pdw-big .pdw-bin.pdw-thumbed { align-items: flex-start; gap: 10px; padding: 6px 8px 6px 6px; }
+.pdw-big .pdw-thumb { width: 104px; height: 104px; }
+.pdw-big .pdw-text { gap: 2px; }
+.pdw-big .pdw-top { align-items: flex-start; }
+.pdw-big .pdw-value { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal;
+  font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+.pdw-big .pdw-sub { font-size: 11px; }
+.pdw-big .pdw-meta { flex-wrap: wrap; row-gap: 2px; font-size: 10.5px; }
+.pdw-big .pdw-pkg { flex: 0 1 auto; }
+.pdw-big .pdw-badge { font-size: 9.5px; line-height: 13px; }
+.pdw-extra { font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pdw-dot { display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%; background: var(--ok); }
+.pdw-dot[data-s="out"] { background: var(--danger); }
+.pdw-thumb > img { width: 100%; height: 100%; object-fit: contain; }
+.pdw-big .pdw-pins { font-size: 11px; }
 
 .pdw-top { display: flex; align-items: baseline; gap: 4px; }
 .pdw-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

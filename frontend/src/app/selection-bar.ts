@@ -14,7 +14,9 @@ import { T, t } from './i18n';
  *  pane's bottom and the bar hangs above that point, centred. While it is
  *  up it takes the bar's height at the end of the pane, so the last row can
  *  be scrolled clear of it. It slides up when the count leaves 0 and back
- *  down when it returns to it, showing the last count on the way out. */
+ *  down when it returns to it, showing the last count on the way out. Hidden,
+ *  it sinks only to the pane's bottom edge, not below it: further down it
+ *  would be scrollable overflow and give every list a scrollbar. */
 @Component({
   selector: 'wb-selbar',
   imports: [T],
@@ -32,7 +34,7 @@ import { T, t } from './i18n';
 .wb-selbar-bar { position: absolute; left: 50%; bottom: 12px; display: flex; align-items: center; gap: 6px; max-width: calc(100% - 24px);
   padding: 6px 6px 6px 14px; font-size: 12px; color: var(--ink); white-space: nowrap;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px var(--shadow-soft);
-  transform: translate(-50%, calc(100% + 16px)); opacity: 0; visibility: hidden;
+  transform: translate(-50%, 12px); opacity: 0; visibility: hidden;
   transition: transform 140ms ease-in, opacity 140ms ease-in, visibility 0s linear 140ms; }
 :host([data-on]) .wb-selbar-bar { pointer-events: auto; transform: translate(-50%, 0); opacity: 1; visibility: visible;
   transition: transform 140ms ease-out, opacity 140ms ease-out, visibility 0s; }

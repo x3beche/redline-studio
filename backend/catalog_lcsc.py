@@ -1,28 +1,26 @@
 """LCSC as a seller in the Product Catalog: the parts drawer, shown as a maker.
 
-The drawer (backend/lcsc.py, `/api/parts`) stays the one place the parts
-are kept. The catalog lists them as the products of a maker that is not in
+A built-in source (backend/catalog_builtin.py). The drawer (backend/lcsc.py,
+`/api/parts`) stays the one place the parts are kept. The catalog lists them as the products of a maker that is not in
 the `manufacturers` collection - "LCSC" (lcsc.com), id `lcsc` - built on
 each ask from the drawer and from what the cached EasyEDA record of each
 part says (read from disk, nothing asked of LCSC): its price and stock as
-last seen, its pictures, its pins. The drawer's groups are its categories
+last seen, its pins; its picture is its footprint, drawn by the page. The drawer's groups are its categories
 (the branch: Capacitors, Resistors, Microcontrollers ...).
 
 Nothing about it is written through the catalog's routes: a part is added
-and dropped as before (`/api/parts-add`, `DELETE /api/parts/{C}`), and the
-maker's own writes (explore, edit, delete) find no manufacturer `lcsc` and
-say 404. `manufacturers.listing` - which Chat's manufacturer_search reads -
-leaves it out; the drawer has its own tools.
+and dropped as before (`/api/parts-add`, `DELETE /api/parts/{C}`).
+`manufacturers.listing` - which Chat's manufacturer_search reads - leaves
+it out; the drawer has its own tools. Each workspace sees its own drawer.
 """
 
 from __future__ import annotations
 
 import json
-import logging
+import re
 
 from . import lcsc
-
-log = logging.getLogger(__name__)
+from .catalog_builtin import Source, register
 
 MID = "lcsc"
 SITE = "https://www.lcsc.com"
@@ -36,20 +34,57 @@ def _record(part: str) -> dict:
     return raw.get("result", raw) if isinstance(raw, dict) else {}
 
 
-def _pictures(part: str, rec: dict) -> list[str]:
-    """The part's pictures, best first: the photo the server keeps (EasyEDA's
-    image host answers it), LCSC's own (it answers a browser, not the
-    server), EasyEDA's copy by number, and the footprint, which every kept
-    part has - the page drops what does not load."""
-    shot = ((rec.get("szlcsc") or {}).get("image") or "").strip()
-    url = "https:" + shot if shot.startswith("//") else shot
-    out = []
-    if (lcsc.LOOK / part / "photo.jpg").exists() or "lceda.cn" in url:
-        out.append(f"/api/parts/{part}/photo.jpg")
-    elif url:
-        out += [url.replace("/96x96/", "/224x224/"), url]
-    out += [f"https://image.lceda.cn/szlcsc/{part}.jpg", f"/api/parts/{part}/footprint.svg"]
-    return list(dict.fromkeys(out))
+# ---- the footprint, one layer at a time, for a thumbnail drawn in the page's colours ----
+#
+# Every kept part has a footprint (a photo only some), so the catalog shows
+# that for each, the same way: the page paints the copper and the silkscreen
+# in its own theme through these two drawings used as masks (CSS mask-image)
+# - only their shapes count. Read from EasyEDA's SVG (only ever parsed, its
+# markup never passed on): the copper of the pads (top, bottom, through) with
+# the drill holes cut out, or the top silkscreen's lines.
+
+_SHAPES = {"polygon", "polyline", "path", "circle", "ellipse", "rect", "line"}
+_KEEP = ("points", "d", "cx", "cy", "r", "rx", "ry", "x", "y", "x1", "y1", "x2", "y2",
+         "width", "height", "stroke-width", "stroke-linecap", "stroke-linejoin", "fill", "transform")
+_COPPER, _SILK = {"1", "2", "11"}, {"3"}
+
+
+def footprint_layer(svg: bytes, layer: str) -> bytes:
+    """EasyEDA's footprint as a mask of one layer: 'pads' or 'silk'."""
+    import xml.etree.ElementTree as ET
+    from xml.sax.saxutils import quoteattr
+
+    root = ET.fromstring(svg)
+    tag = lambda e: e.tag.rsplit("}", 1)[-1]
+    want = _COPPER if layer == "pads" else _SILK
+    shapes, holes = [], []
+
+    def walk(e, inherited: str | None, top: bool):
+        lay = e.get("layerid", inherited)
+        for c in e:
+            t = tag(c)
+            if t == "g":
+                walk(c, c.get("layerid", lay), False)
+                continue
+            if t not in _SHAPES or (top and t == "rect"):
+                continue   # the black background
+            attrs = " ".join(f"{k}={quoteattr(c.get(k))}" for k in _KEEP if c.get(k) is not None)
+            if c.get("c_padhole"):
+                holes.append(f"<{t} {attrs}/>")
+            elif c.get("layerid", lay) in want:
+                shapes.append(f"<{t} {attrs}/>")
+    walk(root, None, True)
+    box = re.sub(r"[^0-9.\s-]", "", root.get("viewBox") or "0 0 1 1")
+    if layer == "pads" and holes:
+        x, y, w, h = (box.split() + ["0", "0", "1", "1"])[:4]
+        cut = (f'<mask id="h"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#fff"/>'
+               f'<g fill="#000" stroke="#000">{"".join(holes)}</g></mask>')
+        body = f'{cut}<g mask="url(#h)">{"".join(shapes)}</g>'
+    else:
+        body = "".join(shapes)
+    paint = 'fill="#000" stroke="#000"' if layer == "pads" else 'fill="none" stroke="#000"'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{box}" preserveAspectRatio="xMidYMid meet" {paint}>'
+            f'{body}</svg>').encode()
 
 
 def _pin_count(rec: dict) -> int | None:
@@ -74,7 +109,6 @@ def product(row: dict) -> dict:
     value, mpn = row.get("value"), row.get("mpn")
     package = para.get("package") or (row.get("name") or "").split("_")[0] or None
     pins = _pin_count(rec)
-    pics = _pictures(c, rec)
     price = shop.get("price")
     stock = shop.get("stock")
     specs = {k: v for k, v in (("Value", value), ("Package", package), ("Manufacturer", row.get("maker")),
@@ -89,7 +123,9 @@ def product(row: dict) -> dict:
         "id": c, "name": name, "category": row.get("branch") or row.get("group") or "Other",
         "description": rec.get("description") or rec.get("title") or "", "specs": specs,
         "sku": c, "url": shop.get("url") or f"{SITE}/product-detail/{c}.html",
-        "image": pics[0], "images": pics[1:],
+        # One look for every part: its footprint (the page draws it from footprint.svg?layer=);
+        # the photo stays in the part card.
+        "image": f"/api/parts/{c}/footprint.svg", "images": [],
         **({"price": {"amount": float(price), "currency": "USD", "vat": None}}
            if isinstance(price, (int, float)) else {}),
         **({"stock": "in" if stock > 0 else "out", "stock_qty": int(stock)}
@@ -103,23 +139,12 @@ def product(row: dict) -> dict:
     }
 
 
-async def maker(db, always: bool = False) -> dict | None:
-    """The drawer as a manufacturers document (manufacturers.out shapes it);
-    None while the drawer is empty, unless asked for by its id (`always`).
-    A drawer that cannot be read leaves the catalog as it is."""
-    try:
-        rows = await lcsc.known(db)
-    except Exception:
-        log.exception("the parts drawer could not be read for the catalog")
-        rows = []
-    if not rows and not always:
-        return None
-    products = [product(r) for r in rows]
-    cats = sorted({p["category"] for p in products})
-    first = min((r.get("at") or "" for r in rows), default="") or None
-    return {"_id": MID, "name": "LCSC", "url": SITE, "domain": "lcsc.com", "virtual": "drawer",
-            "notes": "", "summary": "The parts drawer: electronic parts kept from LCSC, with their footprint, "
-                                   "symbol and 3D model on the server, where a board can reach them.",
-            "categories": cats, "docs": [], "products": products, "by": {"name": "LCSC"},
-            "created_at": first, "updated_at": max((r.get("at") or "" for r in rows), default="") or None,
-            "explored_at": None}
+async def products(db) -> list[dict]:
+    """The asking workspace's drawer (lcsc.held_by), as catalog products."""
+    return [product(r) for r in await lcsc.known(db)]
+
+
+register(Source(
+    id=MID, name="LCSC", domain="lcsc.com", url=SITE, view="drawer", products=products,
+    summary="The parts drawer: electronic parts kept from LCSC, with their footprint, "
+            "symbol and 3D model on the server, where a board can reach them."))
