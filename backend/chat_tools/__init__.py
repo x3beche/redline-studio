@@ -221,7 +221,11 @@ SYSTEM_NOTE = (
     "one-line purpose, a short summary first, '## ' sections, tables with units, the sources cited (datasheet pages, "
     "LCSC numbers), no filler; then link the file it returns in your answer. For what is not in this workspace - a "
     "maker's site, a product or a standard on the web - search the web (web_search: titles, addresses and snippets) "
-    "and read the page you need (web_read) before quoting it, and link the pages you use. You do not know today's "
+    "and read the page you need (web_read) before quoting it, and link the pages you use. For a bought mechanical "
+    "part - a screw, a bearing, a standoff - find it on McMaster-Carr (mcmaster_find), and for a ready CAD model of "
+    "a part or product look in GrabCAD's library (grabcad_find): both are web searches, never the sites, and give "
+    "each one's page and what to click there for its STEP; give those links with that hint (for GrabCAD, say to "
+    "check the model's licence), and save the ones the person wants (mcmaster_save, grabcad_save). You do not know today's "
     "date or the time: when they matter - a date asked for, how long ago, a deadline, \"today\" - read them with "
     "clock first and never guess them."
 )

@@ -1,0 +1,75 @@
+/* McMaster-Carr and GrabCAD in the Product Catalog (linked.ts): the search
+   front and centre, its results as cards filling the width, the saved item
+   in full with its drop zone. */
+.ln-head { align-items: flex-end; }
+.ln-counts { display: flex; align-items: center; gap: 10px; }
+
+.ln-find { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.ln-bar { position: relative; display: flex; gap: 8px; align-items: stretch; }
+.ln-bar-ico { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: var(--ink-dim); pointer-events: none; }
+.ln-in { flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 12px 0 38px; font: inherit; font-size: 14.5px; color: var(--ink-bright);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; outline: none; box-sizing: border-box; }
+.ln-in:focus { border-color: var(--accent); }
+.ln-go { flex: none; height: 40px; padding: 0 16px; font-size: 13px; }
+.ln-how { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); }
+.ln-caution { margin: 0 0 0 6px; font-weight: 500; color: var(--ink); }
+p.ln-caution { margin: 0; font-size: 12px; }
+.ln-res-head { display: flex; align-items: center; gap: 8px; }
+.ln-res-head .st-more { margin: 0 0 0 auto; }
+.ln-none { margin: 0; font-size: 12.5px; color: var(--ink-dim); }
+
+.ln-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.ln-hit { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 10px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 5px; }
+.ln-hit[data-saved] { border-color: var(--ok); }
+.ln-hit-top { display: flex; align-items: center; gap: 6px; }
+.ln-key { font-size: 13px; font-weight: 600; color: var(--accent); }
+.ln-hit-title { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 13px; line-height: 1.35; color: var(--ink-bright); }
+.ln-hit-by { font-size: 11.5px; }
+.ln-specs { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 11.5px; color: var(--ink); }
+.ln-hit-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.ln-hit-foot .tcv-btn:last-child { margin-left: auto; }
+.ln-open, .ln-link a.tcv-btn { display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
+.ln-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); }
+
+/* the saved item in full */
+.ln-pic { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; aspect-ratio: 4 / 3;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.ln-pic img { width: 100%; height: 100%; object-fit: contain; padding: 10px; box-sizing: border-box; }
+.ln-cube { width: 54px; height: 54px; fill: none; stroke: var(--ink-dim); stroke-width: 1.2; stroke-linejoin: round; }
+.ln-drop { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 14px 10px; text-align: center; cursor: pointer;
+  font-size: 12px; color: var(--ink-dim); border: 1.5px dashed var(--line); border-radius: 5px;
+  transition: border-color .15s ease, background-color .15s ease; }
+.ln-drop b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.ln-drop:hover, .ln-drop[data-on] { border-color: var(--accent); background: var(--hover); }
+.ln-drop[data-busy] { opacity: .7; pointer-events: none; }
+.ln-files tr[data-main] td:first-child a { font-weight: 600; }
+.ln-agent { margin: 0; font-size: 11.5px; line-height: 1.4; }
+.ln-agent code { font-size: 11px; color: var(--ink); }
+.ln-title { width: 100%; font-size: 18px; line-height: 1.3; resize: none; box-sizing: border-box; }
+.ln-card .mf-dseller .st-more { margin: 0; }
+.ln-hit-how { margin-top: auto; padding-top: 2px; }
+.ln-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ln-link .ln-hint { white-space: normal; }
+.ln-apinote { flex-basis: 100%; font-size: 11.5px; }
+.ln-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ln-fields label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ln-fields .ln-wide { grid-column: span 3; }
+.ln-fields .ln-full { grid-column: 1 / -1; }
+.ln-fields .tst-in, .ln-fields .tst-desc { width: 100%; box-sizing: border-box; }
+
+/* rows */
+.ln-thumb { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 30px; }
+.ln-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.ln-thumb svg { width: 22px; height: 22px; fill: none; stroke: var(--ink-dim); stroke-width: 1.2; }
+.ln-table tbody tr { cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) { .ln-drop { transition: none; } }
+@media (max-width: 700px) {
+  .ln-bar { flex-wrap: wrap; }
+  .ln-go { flex: 1 1 100%; }
+  .ln-results { grid-template-columns: minmax(0, 1fr); }
+  .ln-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ln-fields .ln-wide { grid-column: span 1; }
+}

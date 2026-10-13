@@ -142,6 +142,11 @@ app.include_router(manufacturers_api.router)
 # Inventory: what is on hand, how many and where (backend/inventory.py).
 from . import inventory as inventory_api  # noqa: E402
 app.include_router(inventory_api.router)
+# McMaster-Carr and GrabCAD: parts and models found through a web search, never
+# read from their sites, saved with the CAD files the person downloaded (backend/linked.py).
+from . import linked, mcmaster  # noqa: E402
+app.include_router(linked.router)
+app.include_router(mcmaster.router)
 
 
 def _raw_db():

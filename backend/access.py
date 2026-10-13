@@ -139,6 +139,20 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/manufacturers/.+", "draw"),
     ("PUT", "/api/manufacturers/.+", "draw"),
     ("DELETE", "/api/manufacturers/.+", "draw"),
+    # McMaster-Carr and GrabCAD (backend/linked.py): saving a part or a
+    # model, its notes and its CAD files is like the catalog's; a search
+    # costs Jina tokens, so it is too; a CAD file into a project as a model
+    # changes the design, as Files' "Add to project"; the routes keep
+    # removing someone else's to those who may delete
+    ("POST", "/api/linked/{}/parts/{}/to-model", "edit"),
+    ("GET", "/api/linked/{}/search", "draw"),
+    ("POST", "/api/linked/{}/parts(/.*)?", "draw"),
+    ("PATCH", "/api/linked/{}/parts/{}", "draw"),
+    ("DELETE", "/api/linked/{}/parts/{}", "draw"),
+    # the McMaster-Carr API's credentials are the server's, like Jina's key
+    ("PUT", "/api/mcmaster/settings", "settings"),
+    ("POST", "/api/mcmaster/(settings/cert|test)", "settings"),
+    ("DELETE", "/api/mcmaster/settings/cert", "settings"),
     # the inventory (backend/inventory.py): like notes - adding items (one,
     # several, a file), changing them and their quantities; the routes keep
     # deleting someone else's item to those who may delete. Reading the

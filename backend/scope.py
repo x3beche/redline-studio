@@ -48,6 +48,8 @@ SCOPED = frozenset({
     "catalog_checks",
     # what is on hand: items, quantities, where they are (backend/inventory.py)
     "inventory",
+    # parts and models saved from McMaster-Carr and GrabCAD, with their CAD files (backend/linked.py)
+    "linked_parts",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

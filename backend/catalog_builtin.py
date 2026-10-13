@@ -9,9 +9,11 @@ it by its id and leaves it out of the overview. It is never in the
 delete) find nothing under its id and say 404; its products change where
 they come from.
 
-LCSC is the first: the parts drawer (backend/catalog_lcsc.py). JLCMC and
-other component sources are added the same way: a module that calls
-`register` at import, and its name in `_MODULES`.
+LCSC is the first: the parts drawer (backend/catalog_lcsc.py). McMaster-Carr
+and GrabCAD are search-and-link sources (backend/linked.py: found through a
+web search, saved by the person with the CAD files they downloaded; view
+"linked"). JLCMC and other component sources are added the same way: a
+module that calls `register` at import, and its name in `_MODULES`.
 """
 
 from __future__ import annotations
@@ -70,6 +72,6 @@ async def makers(db) -> list[dict]:
 
 
 # The modules that register a source.
-_MODULES = ("catalog_lcsc",)
+_MODULES = ("catalog_lcsc", "mcmaster", "grabcad")
 for _m in _MODULES:
     import_module(f"{__package__}.{_m}")

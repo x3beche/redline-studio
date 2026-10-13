@@ -301,6 +301,9 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
   text-transform: uppercase; color: var(--ink-dim); }
 .mf-side-dot { margin: 0 0 0 6px; }
 
+/* McMaster-Carr and GrabCAD's empty catalog (compact: 24px above, 12px below): as much room above the icon as below the line */
+.mf-empty-pad { display: block; padding: 26px 0 38px; }
+
 /* a price or a stock read with a doubt on it: an amber mark on the card and the row, the reasons in the product;
    where each value was read, "Wrong" and the right value; "Re-read all products" and its report */
 .mf-doubt { display: inline-block; margin: 0 0 0 6px; padding: 0 5px; font-size: 10px; font-weight: 600; line-height: 15px;

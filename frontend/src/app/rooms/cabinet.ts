@@ -63,8 +63,9 @@ export interface CabinetItem {
   badge?: { text: string; on: boolean; tip: string } | null;
   /** Its price, and whether the seller has it. */
   note?: string | null; stock?: 'in' | 'out' | null;
-  /** Its picture: an LCSC part's footprint, or a product's photos, best first. */
-  thumb?: { lcsc?: string; srcs?: string[] } | null;
+  /** Its picture: an LCSC part's footprint, or a product's photos, best first; `solid` a CAD file's
+   *  grey picture, tinted as in Files (styles.css .tcv-fm-solid). */
+  thumb?: { lcsc?: string; srcs?: string[]; solid?: boolean } | null;
   /** An LCSC number whose pins can be listed in the bin. */
   pins?: string | null;
   removable?: boolean;
@@ -125,7 +126,7 @@ interface Pin { number: string; name: string }
                            (appInView)="it.pins && loadPins(it.pins)">
                         <span class="pdw-thumb">
                           @if (it.thumb?.lcsc; as c) { <wb-fp [lcsc]="c" /> }
-                          @else if (src(it); as s) { <img [src]="s" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(s)"> }
+                          @else if (src(it); as s) { <img [class.tcv-fm-solid]="!!it.thumb?.solid" [src]="s" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(s)"> }
                         </span>
                         <div class="pdw-text">
                           <div class="pdw-top">

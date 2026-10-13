@@ -164,13 +164,14 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True, "drawing_layout": False,
                   "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
                   "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
-                  "catalog_remove_product": True, "catalog_add_maker": False,
+                  "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
                   "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
                   "inventory_edit": False, "inventory_remove": True,
                   "room_note": False, "queue_list": True, "queue_read": True, "notes_search": True, "note_read": True,
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
-                  "web_search": True, "web_read": True, "clock": True}
+                  "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
+                  "clock": True}
     assert [t["package"] for t in got["tools"]][:12] == ["general"] * 3 + ["cad"] * 2 + ["pcb"] * 7     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
@@ -183,12 +184,12 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "datasheet_get", "datasheet_read", "board_read", "model_read",
                                                                 "firmware_build", "manufacturer_search", "rename_chat",
                                                                 "catalog_read_page", "catalog_add_product",
-                                                                "catalog_remove_product",
+                                                                "catalog_remove_product", "mcmaster_save", "grabcad_save",
                                                                 "inventory_search", "inventory_read", "inventory_add",
                                                                 "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "notes_search", "note_read",
                                                                 "chat_list", "chat_read", "pdf_make", "web_search",
-                                                                "web_read", "clock"}
+                                                                "web_read", "mcmaster_find", "grabcad_find", "clock"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))

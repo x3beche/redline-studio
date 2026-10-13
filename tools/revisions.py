@@ -48,6 +48,14 @@ datasheet (backend/files.py); through the server, like `board`:
     python tools/revisions.py files mkdir <a/b>                    a folder (and its parents)
     python tools/revisions.py files mv <id|folder> <folder|/>      move a file or a folder
 
+Bought and downloaded parts - saved in the Product Catalog's McMaster-Carr
+and GrabCAD sources with the STEP the person downloaded (backend/linked.py);
+through the server, like `files`:
+
+    python tools/revisions.py linked [--source mcmaster|grabcad] [--all]   the ones with a CAD file
+    python tools/revisions.py linked to-model mcmaster:91290A115 --folder lamp/purchased [--title T]
+                                                                   one as a model of its own (import it by name)
+
 Reading a PDF - a datasheet in Files, a part's datasheet, or one on disk
 (backend/pdftext.py); ids go through the server, a local path is read here:
 
@@ -2183,6 +2191,44 @@ async def cmd_files(args):
             print(f"kept {d['name']} as {d['id']} ({d['kind']}, {d['bytes']} bytes)")
 
 
+# ---------------------------------------------------------------- bought and downloaded parts
+
+def cmd_linked(args):
+    """The parts and models saved from McMaster-Carr and GrabCAD (Product
+    Catalog, backend/linked.py), with the CAD file the person dropped on
+    each - labelled by part number or GrabCAD slug - and one into a project
+    as a model of its own (as `files to-model`, named mcmaster_<part> or
+    grabcad_<slug>, so a design imports it by that name)."""
+    sources = [args.source] if args.source else ["mcmaster", "grabcad"]
+    if args.what == "to-model":
+        if not args.target or ":" not in args.target or not args.folder:
+            raise ApiError("linked to-model <source>:<key> --folder F (e.g. mcmaster:91290A115 --folder lamp/purchased)")
+        src, key = args.target.split(":", 1)
+        body = {"folder": args.folder, **({"title": args.title} if args.title else {})}
+        got = api_call(f"/api/linked/{_q(src)}/parts/{_q(key)}/to-model", "POST", body, timeout=300)
+        print(f"model {got['model']} ({got['title']}) from {got['upload']} - building (job {got.get('build_job')})")
+        return
+    shown = 0
+    for src in sources:
+        for p in api_call(f"/api/linked/{_q(src)}/parts"):
+            cad = p.get("cad")
+            if not cad and not args.all:
+                continue
+            shown += 1
+            extra = " · ".join(x for x in (p.get("author") and f"by {p['author']}",
+                                           p.get("licence") and f"licence {p['licence']}",
+                                           p.get("quantity") is not None and f"qty {p['quantity']}") if x)
+            print(f"{src}:{p['key']:<28} {p.get('title') or '-'}" + (f"  ({extra})" if extra else ""))
+            print(f"    {p['url']}")
+            if cad:
+                print(f"    CAD: {cad['name']} ({cad['kind']}, {cad['bytes'] // 1024} kB, file {cad['file']})"
+                      + (f" + {len(p.get('files') or []) - 1} more" if len(p.get("files") or []) > 1 else ""))
+            else:
+                print("    no CAD file yet - the person downloads it from the page and drops it on the part")
+    if not shown:
+        print("no saved parts with a CAD file" + ("" if args.all else " (--all lists those without one too)"))
+
+
 # ---------------------------------------------------------------- firmware
 
 def _fw_state(fid: str) -> Path:
@@ -2521,6 +2567,17 @@ def main() -> None:
                                     "to-model: the catalog folder it goes in")
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
+    s = sub.add_parser("linked", help="bought and downloaded parts: McMaster-Carr and GrabCAD, saved in the "
+                                      "Product Catalog with their STEP (backend/linked.py)")
+    s.add_argument("what", nargs="?", default="list", choices=["list", "to-model"],
+                   help="list (the default): the saved ones with a CAD file; "
+                        "to-model <source>:<key> --folder F [--title T]: one as a model in a project")
+    s.add_argument("target", nargs="?", help="to-model: mcmaster:<part number> or grabcad:<slug>")
+    s.add_argument("--source", choices=["mcmaster", "grabcad"], help="list: only this source")
+    s.add_argument("--all", action="store_true", help="list: also the ones without a CAD file yet")
+    s.add_argument("--folder", help="to-model: the catalog folder it goes in (e.g. lamp/purchased)")
+    s.add_argument("--title", help="to-model: the model's name (default: the source, key and title)")
+    s.set_defaults(fn=cmd_linked, sync=True)
     s = sub.add_parser("pdf", help="read a PDF: its text, or a page as a picture "
                                    "(a Files id, an LCSC number's datasheet, or a local file)")
     s.add_argument("what", choices=["text", "page"],

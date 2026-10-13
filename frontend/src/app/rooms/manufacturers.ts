@@ -20,6 +20,7 @@ import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
+import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked } from './linked';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -94,6 +95,8 @@ export interface Product {
   source?: 'manual'; edited?: boolean;
   /** An LCSC part of the parts drawer (the LCSC seller, backend/catalog_lcsc.py): what only a part has. */
   part?: PartFacts;
+  /** A part or model saved from McMaster-Carr or GrabCAD (backend/linked.py, linked.ts). */
+  linked?: LinkedItem;
 }
 export interface PartFacts {
   lcsc: string; value: string | null; mpn: string | null; maker: string | null; package: string | null;
@@ -124,7 +127,8 @@ export interface Maker {
   products?: Product[]; by: { id?: string; name?: string }; created_at: string; updated_at: string;
   explored_at: string | null; last_run: LastRun | null;
   /** A built-in source (backend/catalog_builtin.py): every workspace has it, read by the system -
-   *  nothing to explore, rename or delete; `view` says how its products show ('drawer': the parts drawer). */
+   *  nothing to explore, rename or delete; `view` says how its products show ('drawer': the parts drawer;
+   *  'linked': McMaster-Carr or GrabCAD, found through a web search - linked.ts). */
   builtin?: boolean; view?: string;
 }
 export interface MfrStep {
@@ -306,6 +310,7 @@ const I = {
   grid: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
   rows: 'M4 6h16 M4 12h16 M4 18h16',
   drawer: 'M4 4h16v16H4z M4 12h16 M10 8h4 M10 16h4',
+  cube: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
 };
 const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '',
                                     price: '', currency: 'TRY', vat: '', stock: '', stock_qty: '' };
@@ -314,8 +319,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb],
-  providers: [PartDesk],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable],
+  providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -358,7 +363,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <span class="tcv-notes-item-top">
               <span class="tcv-notes-item-title">{{ m.name }}@if (runOf(m); as r) { @if (isActiveS(r.status)) {
                 <i class="mf-pulse mf-side-dot" [title]="statusName(r.status) | t"></i> } }</span>
-              <span class="tcv-notes-item-when">{{ m.product_count }} {{ (m.view === 'drawer' ? (m.product_count === 1 ? 'part' : 'parts') : m.product_count === 1 ? 'product' : 'products') | t }}</span>
+              <span class="tcv-notes-item-when">{{ m.product_count }} {{ (m.view === 'drawer' || m.id === 'mcmaster' ? (m.product_count === 1 ? 'part' : 'parts') : m.id === 'grabcad' ? (m.product_count === 1 ? 'model' : 'models') : m.product_count === 1 ? 'product' : 'products') | t }}</span>
             </span>
             <span class="tcv-notes-item-meta mf-side-meta"><span class="mf-dom">{{ m.domain }}</span></span>
           </button>
@@ -470,6 +475,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       @if (m.view === 'drawer') {
         <!-- LCSC: the parts drawer as a seller (backend/catalog_lcsc.py) - its own head, then the catalog below as any maker's -->
         <ng-container *ngTemplateOutlet="lcscHead; context: { $implicit: m }" />
+      } @else if (m.view === 'linked') {
+        <!-- McMaster-Carr, GrabCAD: the search front and centre (linked.ts), the saved ones below as any maker's catalog -->
+        <wb-linked-head [src]="m.id" [url]="m.url" [items]="m.products ?? []" />
       } @else {
       <header class="tst-head">
         <div class="tst-title">
@@ -609,7 +617,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                the catalog's search and category narrow it, a box drawn or Ctrl-clicks select -->
           <div class="mf-cabinet">
             <wb-cabinet [items]="makerItems()" [order]="m.view === 'drawer' ? partOrder : []" [storeKey]="'m:' + m.id"
-                        [label]="m.view === 'drawer' ? 'in the drawer' : 'products'" [selected]="gsel()"
+                        [label]="m.view === 'drawer' ? 'in the drawer' : m.view === 'linked' ? 'saved' : 'products'" [selected]="gsel()"
                         [seen]="desk.seen() ? LCSC_MAKER + ':' + desk.seen()!.lcsc : null" [pulse]="desk.pulse() ? LCSC_MAKER + ':' + desk.pulse() : null"
                         (open)="cabOpen($event)" (pick)="togglePick($event)" (menu)="cabMenu($event)" (remove)="cabRemove($event)" />
             @if (!makerItems().length) { <wb-empty compact icon="search" text="Nothing matches." /> }
@@ -625,6 +633,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           }
         } @else if (m.products?.length && m.view === 'drawer') {
           <ng-container *ngTemplateOutlet="partsTable; context: { $implicit: m }" />
+        } @else if (m.products?.length && m.view === 'linked') {
+          <wb-linked-table [src]="m.id" [items]="linkedFound()" />
         } @else if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
@@ -672,7 +682,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <wb-empty icon="table" [text]="m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
+          <wb-empty icon="table" [compact]="m.view === 'linked'" [class.mf-empty-pad]="m.view === 'linked'" [text]="m.view === 'linked' ? linkedEmpty(m.id) : m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
         }
       </section>
 
@@ -916,6 +926,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
   </section>
   <!-- an LCSC part, in full: the drawer's part card (part-card.ts) in the detail box (part-desk.ts) -->
   <app-part-modal [canRun]="canRun()" />
+  <!-- a McMaster-Carr part or a GrabCAD model, in full: its page, its CAD files, the drop zone (linked.ts) -->
+  <wb-linked-card />
   <!-- ================= one product, in full: over the whole page, so outside the
      section (its container-type would hold a fixed box to the middle column) ================= -->
   @if (detail(); as d) {
@@ -1114,8 +1126,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           (click)="cardClick($event, p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
     <span class="mf-card-img">
       @if (p.part) { <wb-fp [lcsc]="p.id" /> }
-      @else if (img(p); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
-      @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }
+      @else if (img(p); as src) { <img [class.tcv-fm-solid]="!!p.linked" [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+      @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="p.linked ? I.cube : I.photo" /></svg> }
       @if (p.stock) { <span class="mf-stock" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }
     </span>
     <span class="mf-card-body">
@@ -1128,6 +1140,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       @if (p.price) {
         <span class="mf-card-price" [title]="moneyTip(p.price.amount, p.price.currency)"><b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
           @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span>
+      } @else if (p.linked; as l) { <span class="mf-card-price mono">{{ l.key }}@if (l.cad) { <small> · {{ l.cad.kind.toUpperCase() }}</small> }</span>
       } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span> }
       <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
       <span class="mf-card-foot">@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
@@ -1259,6 +1272,8 @@ export class RoomMfr implements OnDestroy {
   private prefs = inject(Prefs);
   /** The parts drawer's work for the LCSC seller: adding, one part open in full (part-desk.ts). */
   readonly desk = inject(PartDesk);
+  /** McMaster-Carr's and GrabCAD's: the search, saving, one saved item in full (linked.ts). */
+  readonly linked = inject(LinkedDesk);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
   private gridSearch = viewChild<ElementRef<HTMLInputElement>>('gridSearch');
   private addUrlBox = viewChild<ElementRef<HTMLInputElement>>('addUrlBox');
@@ -1434,6 +1449,18 @@ export class RoomMfr implements OnDestroy {
     });
     // A part added, moved or dropped: the LCSC seller reads again.
     effect(() => { if (this.desk.changed()) untracked(() => this.read()); });
+    // McMaster-Carr, GrabCAD: a saved item changed; the page of one is its search's, and draws its CAD files' pictures.
+    effect(() => { if (this.linked.changed()) untracked(() => this.read()); });
+    effect(() => {
+      const m = this.view() === 'maker' ? this.maker() : null;
+      if (m?.view !== 'linked') return;
+      untracked(() => {
+        if (this.linked.src() !== m.id) { this.linked.src.set(m.id); this.linked.found.set(null); this.linked.term.set(''); this.linked.err.set(''); }
+        for (const p of m.products ?? []) if (p.linked) this.linked.want(p.linked);
+        const o = this.linked.open();
+        if (o) { const now = (m.products ?? []).find(p => p.linked?.id === o.id)?.linked; if (now) this.linked.open.set(now); }
+      });
+    });
     // A run the overview counts that ends: the list reads again (its catalog changed).
     effect(() => { this.runs.running(); untracked(() => this.read()); });
   }
@@ -1590,6 +1617,8 @@ export class RoomMfr implements OnDestroy {
   openDetail(p: GridItem) {
     // An LCSC part opens as the drawer's part card: pins, footprint, symbol, 3D bodies, costs.
     if (p.maker.id === LCSC_MAKER) { this.openPart(p.id); return; }
+    // A McMaster-Carr part or a GrabCAD model: its page, its CAD files, what was written of it.
+    if (p.linked) { this.linked.show(p.maker.id, p.linked); return; }
     this.detail.set(p);
     this.shot.set(null);
     this.stockFor.set(null);
@@ -1739,6 +1768,7 @@ export class RoomMfr implements OnDestroy {
       this.saving.set(true);
       try {
         for (const [mid, ids] of by) {
+          if (isLinked(mid)) { await this.linked.remove(mid, ids, false); continue; }
           const r = await new Promise<{ manufacturer: Maker }>((res, rej) => this.api.deleteProducts(mid, ids).subscribe({ next: res, error: rej }));
           this.replace(r.manufacturer);
         }
@@ -1759,6 +1789,7 @@ export class RoomMfr implements OnDestroy {
   /** A product's right-click menu, on the grid's cards and the table's rows. */
   openMenu(e: MouseEvent, p: GridItem) {
     if (p.part) { this.partMenu(e, p); return; }
+    if (p.linked) { this.linkedMenu(e, p); return; }
     const can = this.can();
     ContextMenu.open(e, [
       { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openDetail(p) },
@@ -1776,6 +1807,7 @@ export class RoomMfr implements OnDestroy {
   }
   /** Its pictures, the main one first; those that did not load left out. */
   pics(p: Product): string[] {
+    if (p.linked) { const s = this.linked.pic(p.linked); return s ? [s] : []; }
     const b = this.broken();
     return [...new Set([p.image, ...(p.images ?? [])].filter(u => !!u && !b.has(u)))];
   }
@@ -1976,6 +2008,7 @@ export class RoomMfr implements OnDestroy {
   }
   deleteProducts(m: Maker, ids: string[]) {
     if (m.view === 'drawer') { this.dropParts(ids); return; }
+    if (m.view === 'linked') { this.linked.remove(m.id, ids); return; }
     if (!ids.length) return;
     const one = ids.length === 1 ? (m.products ?? []).find(p => p.id === ids[0]) : null;
     this.sure(one ? t('Delete this product?') : this.fmt('Delete {n} products?', { n: ids.length }), one?.name ?? '').then(ok => ok && this.api.deleteProducts(m.id, ids).subscribe({
@@ -2211,7 +2244,7 @@ export class RoomMfr implements OnDestroy {
   /** The open maker's products (what its search and category leave) as bins. */
   makerItems = computed<CabinetItem[]>(() => {
     const m = this.maker();
-    return m ? this.found().map(p => p.part ? this.partBin(p, m) : this.productBin(this.asItem(p, m), false)) : [];
+    return m ? this.found().map(p => p.part ? this.partBin(p, m) : p.linked ? this.linkedBin(p, m) : this.productBin(this.asItem(p, m), false)) : [];
   });
   /** The overview's products as bins, a page of them as the grid has. */
   homeItems = computed<CabinetItem[]>(() => (this.grid()?.items ?? []).map(p => this.productBin(p, true)));
@@ -2241,6 +2274,29 @@ export class RoomMfr implements OnDestroy {
                : p.stock_qty != null ? this.fmt('{n} in stock', { n: this.num(p.stock_qty) }) : ''].filter(Boolean).join(' · ') || null,
              stock: p.stock ?? null, thumb: { lcsc: p.id }, pins: wired ? p.id : null, removable: this.desk.canEdit(),
              tip: [p.part?.mpn, p.part?.maker, p.category].filter(Boolean).join(' · ') };
+  }
+  /** A McMaster-Carr part or a GrabCAD model: its tag as the drawer, its CAD file's picture, its key, how many. */
+  private linkedBin(p: Product, m: Maker): CabinetItem {
+    const l = p.linked!, src = this.linked.pic(l);
+    return { key: m.id + ':' + p.id, group: l.tags[0] || t('Saved'), sub: l.tags[1] || null, title: p.name, line: l.author || null,
+             copy: l.key,
+             badge: { text: l.cad ? l.cad.kind.toUpperCase() : t('no CAD'), on: !!l.cad, tip: l.cad ? l.cad.name : 'no CAD file yet: download it from its page' },
+             note: l.quantity != null ? this.fmt('{n} needed', { n: l.quantity }) : null,
+             thumb: src ? { srcs: [src], solid: true } : null, tip: [l.key, p.name].join(' · ') };
+  }
+  /** The open source's saved items, as its search and category leave them, for the table. */
+  linkedFound = computed(() => this.found().map(p => p.linked).filter((l): l is LinkedItem => !!l));
+  linkedEmpty(mid: string) { return LINKED[mid]?.empty ?? ''; }
+  /** A saved McMaster-Carr part's or GrabCAD model's right-click menu. */
+  private linkedMenu(e: MouseEvent, p: GridItem) {
+    const l = p.linked!, name = LINKED[p.maker.id]?.name ?? p.maker.name;
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openDetail(p) },
+      { label: this.fmt('Open on {s}', { s: name }), icon: 'open', kbd: '↗', run: () => window.open(l.url, '_blank', 'noopener,noreferrer') },
+      { label: 'Copy', icon: 'doc', run: () => this.copyNumbers([l.key]) },
+      { sep: true },
+      this.linked.canEdit() && { label: 'Remove', icon: 'trash', kbd: 'Del', danger: true, run: () => this.linked.remove(p.maker.id, [l.key]) },
+    ]);
   }
   cabOpen(key: string) { const p = this.binItems().get(key); if (p) this.openDetail(p); }
   togglePick(key: string) { this.gsel.update(s => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }
@@ -2348,7 +2404,7 @@ export class RoomMfr implements OnDestroy {
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));
 
   key(e: KeyboardEvent) {
-    if (this.desk.isOpen()) return;
+    if (this.desk.isOpen() || this.linked.open()) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape' && this.gsel().size && !this.detail()) { this.gsel.set(new Set()); return; }
     if (e.key === 'Delete' && this.gsel().size && !ContextMenu.isOpen() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }

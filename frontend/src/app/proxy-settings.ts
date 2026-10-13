@@ -9,6 +9,7 @@ import { when } from './llm-settings';
 import { Money, MoneyView, money as shown, usdTip } from './money';
 import { Prefs } from './preferences';
 import { JinaSettingsPanel, TrafficPeriod, foldKeep, foldLoad } from './jina-settings';
+import { McMasterSettingsPanel } from './mcmaster-settings';
 import { TrafficOverview } from './traffic-overview';
 import { RouteOrder } from './route-order';
 import { SelectOption, UiSelect } from './ui-select';
@@ -77,7 +78,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [CountUp, Skeleton, MoneyView, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
+  imports: [CountUp, Skeleton, MoneyView, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, McMasterSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
   styleUrl: './settings.css',
   template: `
 <ng-template #periodSeg>
@@ -382,6 +383,9 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
   <!-- Jina AI: reading web pages and searching, its key and its calls -->
   <app-jina-settings />
+
+  <!-- McMaster-Carr's API: access pending; its credentials kept, nothing called yet (mcmaster-settings.ts) -->
+  <app-mcmaster-settings />
 
   <!-- Jina AI's and the proxy's traffic together, always in sight -->
   <app-traffic-overview />
