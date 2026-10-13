@@ -171,6 +171,24 @@ def page_session(token: str | None, call=_call) -> dict | None:
         sys.exit(f"the API would not give the browser a page session ({type(exc).__name__})")
 
 
+def given_session(env: dict | None = None) -> dict | None:
+    """A page session the caller already has: the server photographing a
+    model for a taste palette (backend/taste.py) makes one for whoever
+    asked, in their workspace, and hands it over in REDLINE_PAGE_SESSION
+    ({"cookie", "value", "expires"} as JSON) - not on the command line.
+    It also signs in this command's own reads of the API."""
+    raw = ((os.environ if env is None else env).get("REDLINE_PAGE_SESSION") or "").strip()
+    if not raw:
+        return None
+    try:
+        got = json.loads(raw)
+    except ValueError:
+        sys.exit("REDLINE_PAGE_SESSION is not JSON")
+    if not isinstance(got, dict) or not got.get("cookie") or not got.get("value"):
+        sys.exit("REDLINE_PAGE_SESSION wants {cookie, value}")
+    return got
+
+
 def end_page_session(session: dict | None, call=_call) -> None:
     """Sign the page session out once the picture is taken; it would
     expire on its own in minutes anyway."""
@@ -785,6 +803,61 @@ def side_js(side: str, margin: float = 1.08) -> str:
             "   position: v.getCameraPosition(), target: v.getCameraTarget()}); })()")
 
 
+# Named views for a set of pictures of one model (--views): a taste
+# palette's reference renders (backend/taste.py) and the check of a design
+# against them (revisions.py taste-check) are taken from the same ones, so
+# the two line up. A side is the viewer's own preset; the rest are a
+# direction to look from (world, Z up), and "detail" is a close look at
+# the middle of the front: half the distance, aimed at the front face.
+VIEWS = {
+    "iso": {"side": "iso"},
+    "iso-back": {"dir": [-1, 1, 0.9]},
+    "front": {"side": "front"},
+    "right": {"side": "right"},
+    "top": {"side": "top"},
+    "detail": {"dir": [0.55, -1, 0.5], "zoom": 0.5, "focus": "front"},
+}
+DEFAULT_VIEWS = ("iso", "iso-back", "front", "right", "top", "detail")
+
+
+def dir_js(direction: list[float], margin: float = 1.08, zoom: float = 1.0, focus: str | None = None) -> str:
+    """Frames what is visible from a direction (pointing from the model to
+    the camera), Z up, the way side_js frames a preset side; `zoom` < 1
+    comes closer, `focus` "front" aims at the middle of the box's front
+    face (-Y) instead of its centre."""
+    return ("(() => { const v = window.tcv; if (!v) return 'no viewer';"
+            + _VISIBLE_BOX +
+            f" const dd = {json.dumps(direction)}; const L = Math.hypot(dd[0], dd[1], dd[2]) || 1;"
+            " const back = v.vector3(dd[0] / L, dd[1] / L, dd[2] / L);"
+            " const zup = v.vector3(0, 0, 1);"
+            " const right = zup.clone().cross(back).normalize();"
+            " const up = back.clone().cross(right).normalize();"
+            " const cam = v.rendered.camera.getCamera();"
+            " const tv = Math.tan((cam.fov || 22) * Math.PI / 360), th = tv * (cam.aspect || 1);"
+            " let need = 0;"
+            " for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])"
+            "  for (const z of [box.min.z, box.max.z]) {"
+            "   const p = v.vector3(x - c[0], y - c[1], z - c[2]);"
+            "   const px = Math.abs(p.dot(right)), py = Math.abs(p.dot(up)), pz = p.dot(back);"
+            "   need = Math.max(need, pz + px / th, pz + py / tv); }"
+            f" const t = {json.dumps(focus)} === 'front' ? [c[0], box.min.y, c[2]] : c;"
+            f" const d = need * {margin} * {zoom};"
+            " const pos = [t[0] + back.x * d, t[1] + back.y * d, t[2] + back.z * d];"
+            " v.setCameraTarget(t, false);"
+            " v.setCameraPosition(pos, false, false);"
+            " v.update(true, true);"
+            " return JSON.stringify({visible: n, centre: c, size, distance: d, ortho: !!v.getOrtho(),"
+            "   position: v.getCameraPosition(), target: v.getCameraTarget()}); })()")
+
+
+def view_js(name: str) -> str:
+    """The camera for one of VIEWS."""
+    v = VIEWS[name]
+    if "side" in v:
+        return side_js(v["side"])
+    return dir_js(v["dir"], zoom=v.get("zoom", 1.0), focus=v.get("focus"))
+
+
 def camera_js(pos: list[float], target: list[float] | None) -> str:
     """Puts the camera at `pos` looking at `target` (world coordinates, as
     three-cad-viewer's setCameraPosition(.., relative=false) takes them), or
@@ -842,9 +915,17 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
            camera: str | None = None, only: str | None = None,
            build_timeout: int = 1200, allow_stale: bool = False,
            free_aspect: bool = False, no_wait: bool = False,
-           on_model: str | None = None, side: str | None = None) -> Path:
+           on_model: str | None = None, side: str | None = None,
+           views: list[str] | None = None) -> Path:
+    """One picture to `out`; with `views`, one per view into the directory
+    `out` (<view>.png, and views.json: where each camera was)."""
     from websockets.sync.client import connect
 
+    if views and (camera or side):
+        raise SystemExit("--views takes its own cameras; leave out --camera and --side")
+    bad = [v for v in views or () if v not in VIEWS]
+    if bad:
+        raise SystemExit(f"--views: no view {', '.join(bad)} (there are {', '.join(VIEWS)})")
     if camera and side:
         raise SystemExit("--camera and --side both say where to look; give one")
     if side and side not in SIDES:
@@ -854,8 +935,10 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         found = find_browser()
     except NoBrowser as exc:
         sys.exit(str(exc))
-    token = agent_token()
-    auth = {"Authorization": "Bearer " + token} if token else {}
+    given = given_session()
+    token = None if given else agent_token()
+    auth = ({"Cookie": f"{given['cookie']}={given['value']}"} if given
+            else {"Authorization": "Bearer " + token} if token else {})
 
     def catalog() -> dict:
         try:
@@ -961,7 +1044,7 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         rb = js("window.redlineViewReadback ? window.redlineViewReadback() : null")
         return view_state_problem(page, rb, rid, note_view)
 
-    session = page_session(token)
+    session = given or page_session(token)
     profile = tempfile.mkdtemp(prefix="redline-render-")
     name = f"redline-render-{os.getpid()}"
     # The browser opens on a blank page: the cookie goes in first, then
@@ -1124,21 +1207,25 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         # coordinates. A revision's camera looks at what the user drew on;
         # checking the result sometimes needs a different side of the part,
         # and clicking one up by hand is slow.
-        if side or cam:
-            if is_board:
-                raise SystemExit("--side and --camera are for the 3D room's viewer")
-            got = js(side_js(side) if side else camera_js(*cam))
+        def fmt(v) -> str:
+            return ",".join(f"{x:.1f}" for x in v)
+
+        def aim(expr: str, said: str) -> dict:
+            got = js(expr)
             try:
                 info = json.loads(got)
             except (TypeError, ValueError):
                 raise SystemExit(f"could not set the camera: {got}")
-
-            def fmt(v) -> str:
-                return ",".join(f"{x:.1f}" for x in v)
-            print(f"camera  : {'--side ' + side if side else '--camera'}: from {fmt(info['position'])}"
+            print(f"camera  : {said}: from {fmt(info['position'])}"
                   f" at {fmt(info['target'])}; shown: {info['visible']} part(s),"
                   f" {fmt(info['size'])} mm around {fmt(info['centre'])}")
             time.sleep(3)
+            return info
+
+        if (side or cam or views) and is_board:
+            raise SystemExit("--side, --camera and --views are for the 3D room's viewer")
+        if side or cam:
+            aim(side_js(side) if side else camera_js(*cam), '--side ' + side if side else '--camera')
 
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
@@ -1166,32 +1253,49 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
             if why:
                 raise SystemExit(f"not photographing ({when}): {why}")
 
-        for attempt in range(3):
-            if attempt:
-                unclutter()
-            on_screen("before the capture")
-            box = js("(()=>{const c=" + CANVAS + ";"
-                     "const r=c.getBoundingClientRect();"
-                     "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
-            x, y, w, h = json.loads(box)
-            shot = send("Page.captureScreenshot",
-                        {"format": "png",
-                         "clip": {"x": x, "y": y, "width": w, "height": h,
-                                  "scale": 1}})
-            data = base64.b64decode(shot["data"])
-            # The model could have been swapped while the frame was taken.
-            on_screen("after the capture")
-            if _ink(data) > 0.02 or attempt == 2:
-                out.write_bytes(data)
-                return out
-            print(f"frame looks empty, waiting ({attempt + 1}/2)")
-            time.sleep(25)
+        def capture(dest: Path) -> Path:
+            for attempt in range(3):
+                if attempt:
+                    unclutter()
+                on_screen("before the capture")
+                box = js("(()=>{const c=" + CANVAS + ";"
+                         "const r=c.getBoundingClientRect();"
+                         "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
+                x, y, w, h = json.loads(box)
+                shot = send("Page.captureScreenshot",
+                            {"format": "png",
+                             "clip": {"x": x, "y": y, "width": w, "height": h,
+                                      "scale": 1}})
+                data = base64.b64decode(shot["data"])
+                # The model could have been swapped while the frame was taken.
+                on_screen("after the capture")
+                if _ink(data) > 0.02 or attempt == 2:
+                    dest.write_bytes(data)
+                    return dest
+                print(f"frame looks empty, waiting ({attempt + 1}/2)")
+                time.sleep(25)
+            return dest
+
+        if not views:
+            return capture(out)
+        # A set of pictures, one browser: each view's camera, then its frame.
+        out.mkdir(parents=True, exist_ok=True)
+        where = {}
+        for name in views:
+            where[name] = aim(view_js(name), f"view {name}")
+            unclutter()
+            capture(out / f"{name}.png")
+            print(f"view    : {name} -> {out / (name + '.png')}")
+        (out / "views.json").write_text(json.dumps({"model": model, "built_at": built_at,
+                                                     "size": [width, height], "views": where}))
+        return out
     finally:
         # Read before the kill: a terminated browser takes its counters with
         # it, and its renderers are never reaped by anyone here.
         LAST_JOB.update(meter.stop())
         browser.stop(found, chrome, name)
-        end_page_session(session)
+        if not given:
+            end_page_session(session)       # the server's own is the server's to end
         # The profile goes with it. Every render used to leave its own
         # behind in /tmp - 150 MB each, 8.7 GB of them by the time the
         # system disk filled up on 2026-09-24.
@@ -1226,6 +1330,9 @@ def main() -> None:
                     help="frame everything shown (or the --only parts) from one side: "
                          "front looks from -Y, back from +Y, left from -X, right from +X, "
                          "top down from +Z, bottom up from -Z, iso from (1,-1,1)")
+    ap.add_argument("--views", help="several pictures in one go, comma-separated, from "
+                                    + ", ".join(VIEWS) + " ('all': every one); -o is then a "
+                                    "directory, <view>.png in it (default /tmp/views-<id>)")
     ap.add_argument("--only", help="show only parts whose tree path contains "
                                    "this text, e.g. kapak")
     ap.add_argument("--build-timeout", type=int, default=1200,
@@ -1245,7 +1352,13 @@ def main() -> None:
     # some parts (--only) is a look of its own and must never land there -
     # it would stand in for the note's picture.
     rid = args.revision.replace(':', '-')
-    if args.out:
+    views = None
+    if args.views:
+        views = list(DEFAULT_VIEWS) if args.views.strip() == "all" else \
+            [v.strip() for v in args.views.split(",") if v.strip()]
+    if views:
+        out = Path(args.out or f"/tmp/views-{rid.replace('/', '_')}")
+    elif args.out:
         out = Path(args.out)
     elif args.camera or args.only or args.side:
         tag = hashlib.sha1(f"{args.camera}|{args.only}".encode()
@@ -1257,7 +1370,7 @@ def main() -> None:
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
                args.only, args.build_timeout, args.allow_stale, args.free_aspect, args.no_wait,
-               args.on_model, args.side)
+               args.on_model, args.side, views)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame
@@ -1267,6 +1380,10 @@ def main() -> None:
         compute.record_sync(Path(__file__).resolve().parent.parent, "render",
                             model=args.revision,
                             **compute.whole_process(t0, LAST_JOB))
+    if views:
+        print(f"{out}   ({len(views)} views)")
+        print("Open each picture with the Read tool.")
+        return
     print(f"{out}   ({out.stat().st_size} bytes)")
     print("Open it with the Read tool and compare against the revision drawing.")
 

@@ -483,9 +483,14 @@ async def _taste(db, pid: str) -> dict | None:
     d = await taste.get(db, pid)
     if not d:
         return None
+    # Its reference renders go along as pictures (the first few): the form
+    # language is easier seen than read.
+    pics = [{"src": "taste", "id": pid, "ref": r["id"],
+             "about": f"taste palette reference render, {r.get('view')} view of {r.get('model') or 'the source'}"}
+            for r in (d.get("references") or [])[:4] if r.get("id")]
     return {"label": d.get("name") or pid, "version": d.get("updated_at"),
             "text": taste.block(d) + "\n\nFollow MUST items; follow PREFER items unless told otherwise; "
-                                     "never do AVOID items.", "images": []}
+                                     "never do AVOID items.", "images": pics}
 
 
 async def _manufacturer(db, mid: str) -> dict | None:
@@ -619,6 +624,11 @@ async def images(db, pics: list[dict]) -> list[dict]:
             elif p.get("src") == "file":
                 doc, data = await files.get(db, p["id"])
                 mime = (doc.get("content_type") or "image/png").split(";")[0]
+            elif p.get("src") == "taste":
+                from . import taste
+                data, mime = await taste.ref_png(db, await taste.get(db, p["id"]), p.get("ref") or ""), "image/png"
+                if data is None:
+                    continue
             else:
                 continue
         except Exception:                              # noqa: BLE001 - a picture gone is a picture less

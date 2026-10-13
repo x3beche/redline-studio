@@ -21,7 +21,8 @@ The loop, whatever the room:
 3. Do the work. Log as you go, in this room's log:
    `revisions.py log "..." --room cad -p <percent> -l work`.
 4. Check it the way this room checks things (below), and look at the
-   after picture before calling it done.
+   after picture before calling it done. When a taste palette is attached
+   or mentioned, the Taste check is part of this step (below).
 5. `revisions.py finish <id>` (or `--failed`), which files the cost.
 
 A fork that is not yours to choose goes to the person, on their screen:
@@ -92,3 +93,39 @@ then `revisions.py part body-bind <C> <model> --name "<name>"` (`--default`
 only when the note says every board should wear it). Selecting it on a
 board is the PCB room's (`board body`). See AGENTS.md: *A body for an LCSC
 part*.
+
+## Taste palettes: design to the person's look, then check it
+
+`show` / `next` print the palettes attached to the note's project (and a
+note may name one: `revisions.py taste <palette-id>`). A palette has:
+
+- a **priority rule**, said first: on visible surfaces appearance wins
+  over printability rules; a MUST that conflicts with the form language
+  is a question for the person (`ask`), not your choice;
+- **reference renders** of the product it was read from: `revisions.py
+  taste <palette-id>` writes them to disk - open every one with Read
+  **before** you design;
+- the **design language** (form language first: radii, chamfers, wells,
+  embossed icons, the colour split...) - apply it to whatever you design,
+  scaled by its ratios;
+- **project-specific** items - applied only when the work is on that
+  product or a new version of it (the block says which); otherwise they
+  are background;
+- each item's **scope** (`[visible surfaces]`, `[hidden surfaces]`,
+  `[internal features]`) and **exception**: an overhang rule scoped to
+  hidden features does not turn a visible oval window into a pointed one.
+
+**Taste check, required before `finish`** whenever a palette is attached
+or mentioned:
+
+```bash
+.venv/bin/python tools/revisions.py taste-check <palette-id> <model>
+```
+
+renders the model from the reference views and puts each reference
+beside it (`<view>-compare.png`), then lists the items to mark. Open the
+compare pictures, go through the items - form items first - fix what does
+not match and run it again. Your report ends with a **Taste check**
+section: each item that applies, pass or fail (one line each, what you
+saw), and the before/after compare pictures' paths.
+

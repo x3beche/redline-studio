@@ -39,7 +39,8 @@ does not apply notes itself. It keeps the queue moving:
 5. When an agent reports back, review its work: read the report, look at
    the after picture (`revisions.py show <id>`) or, for firmware, the diff
    and the build on the card, and check it does what the note asked. If it
-   does, mark it applied yourself - `revisions.py done <id>` (archived too
+   does - and, when its project has a taste palette, its report has the
+   "Taste check" section (Taste palettes, below) - mark it applied yourself - `revisions.py done <id>` (archived too
    when auto-archive is on). If it does not, send it back to the room's
    agent with what is missing, or leave it in review and say why in the
    thread. A failed run (`finish --failed`) is never marked applied. Then
@@ -682,16 +683,45 @@ When `find` says it is cooling off, wait; do not loop on it.
 ## Taste palettes: the person's design taste
 
 A **taste palette** (the Taste tab; "Tadım" in Turkish) is a list of short
-statements of how this person likes things designed - "Walls 2 mm, outside
-edges filleted 1 mm", "No vias in pads", "Every task feeds the watchdog" -
-each MUST, PREFER or AVOID, for mechanical, PCB, firmware or anything.
-A palette can be attached to a model, a board or a firmware: `show` and
-`next` then print it under the note, as `taste :` and the statements.
+statements of how this person likes things designed - "Outer corners
+rounded R6-8 mm, the same on every corner", "Walls 2 mm", "No vias in
+pads", "Every task feeds the watchdog" - each MUST, PREFER or AVOID, in a
+domain: **form language** (what it looks like), mechanical, PCB, firmware
+or general. A palette can be attached to a model, a board or a firmware:
+`show` and `next` then print it under the note, as `taste :` and the
+statements.
+
+How to read one:
+
+- **Priority**, its first line: on visible surfaces appearance wins over
+  printability rules; if a MUST conflicts with the form language, ask on
+  their screen instead of choosing.
+- **Scope and exception** on each item: `[visible surfaces]`, `[hidden
+  surfaces]`, `[internal features]` or words of its own, and `(except:
+  ...)`. A printability rule scoped to hidden features does not reshape a
+  visible opening.
+- **Design language** applies to whatever product you design, by its
+  ratios ("corner radius about 6% of the smallest outer dimension"); the
+  `(e.g. ...)` is what it measured on the source. **Project-specific**
+  items (that product's connector, cell, layout) apply only when the work
+  is on that product or a new version of it - the block says which, from
+  the project's product line (its top folder) or the person's switch on
+  the attachment; otherwise they are background.
+- **Reference renders** of the source: `revisions.py taste <palette-id>`
+  writes them to disk. Open them before designing.
 
 Follow it: MUST items always, PREFER items unless the note says otherwise,
 AVOID items never. When a note asks for something a palette forbids, ask on
 their screen before doing it. `revisions.py taste <kind> <id>` prints the
-palettes attached to any project; `taste <palette-id>` prints one.
+palettes attached to any project; `taste <palette-id> [--for kind:id]
+[--specifics on|off]` prints one.
+
+**The Taste check** - required before finishing a note whose project has
+a palette (or that mentions one): `revisions.py taste-check <palette-id>
+<model>` renders the design from the reference views and puts each
+reference beside it; compare item by item (form first), fix what does not
+match, and end the report with a "Taste check" section - pass or fail per
+item, with the before/after pictures.
 
 ## Files people upload
 
@@ -775,6 +805,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py board body <board> [REF variant|lcsc|default]  # which body a ref wears
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py taste [<kind> <id>]  # taste palettes (attached to a project)
+.venv/bin/python tools/revisions.py taste-check <palette> <model>  # the design beside the reference renders
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
 .venv/bin/python tools/revisions.py models               # list models

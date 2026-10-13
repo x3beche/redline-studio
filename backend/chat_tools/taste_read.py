@@ -53,8 +53,10 @@ TOOL = Tool(
     label="Read a taste palette",
     about="Lists the taste palettes, or reads one: its MUST, PREFER and AVOID rules by domain.",
     description="Read this workspace's taste palettes: the person's own design rules, each MUST, PREFER or "
-                "AVOID, grouped by domain (mechanical, PCB, firmware, general), with why, and the projects "
-                "a palette is attached to. Without `palette` it lists them (optionally only those matching "
+                "AVOID, grouped by domain (form language, mechanical, PCB, firmware, general), with where each "
+                "holds (visible, hidden or internal surfaces) and its exception, split into design language "
+                "(for any product) and project-specific items (only for the product it was read from), with "
+                "why, its reference renders and the projects a palette is attached to. Without `palette` it lists them (optionally only those matching "
                 "`query`). Use it when asked about their taste, their rules or their palettes, and before "
                 "advising on a design they have a palette for. A palette may be named by its id or by words "
                 "of its name.",

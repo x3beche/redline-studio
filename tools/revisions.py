@@ -61,6 +61,7 @@ Taste palettes - the person's design taste (backend/taste.py); `show` and
     python tools/revisions.py taste                                list the palettes
     python tools/revisions.py taste <palette-id>                   one, in full
     python tools/revisions.py taste <model|board|firmware> <id>    the ones attached to a project
+    python tools/revisions.py taste-check <palette-id> <model>     the design beside the reference renders
 
 Firmware - the Firmware room's projects (backend/firmware.py) and the notes
 filed on them (backend/fwnotes.py); through the server, like `board`:
@@ -86,6 +87,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -1362,7 +1364,7 @@ async def cmd_show(args):
     print(f"note    : {doc['comment']}")
     print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
     print(f"status  : {doc.get('status')}")
-    await _print_taste(db, _note_projects(doc))
+    await _print_taste(db, _note_projects(doc), doc.get("comment") or "")
     # A note about a part is a valid revision on its own - freeze and draw is
     # optional - so say so instead of dying on the missing image.
     if not (doc.get("image") or {}).get("gridfs_id"):
@@ -1387,30 +1389,67 @@ def _note_projects(doc: dict) -> list[tuple[str, str]]:
     return out
 
 
-async def _print_taste(db, targets: list[tuple[str, str]]) -> None:
+async def _print_taste(db, targets: list[tuple[str, str]], note: str = "") -> None:
     """The taste palettes attached to these projects (backend/taste.py):
-    the person's design taste, to follow in this work."""
+    the person's design taste, to follow in this work - with its
+    project-specific items when the work is on the palette's own product
+    line (or the person switched them on for this project)."""
     from backend import taste
 
-    rows, seen = [], set()
+    rows, seen, overrides = [], set(), {}
     for kind, ref in targets:
-        for p in await taste.attached_to(db, kind, ref):
+        got = await taste.attached_to(db, kind, ref)
+        overrides = {**taste.overrides_for(got, kind, ref), **overrides}
+        for p in got:
             if p["_id"] not in seen:
                 seen.add(p["_id"])
                 rows.append(p)
     if not rows:
         return
+    product = await taste.product_of(db, *targets[0]) if targets else None
     print("taste   : " + ", ".join(f"\"{p.get('name')}\" ({len(p.get('items') or [])} items)" for p in rows)
           + " - attached to this project; follow it")
-    for line in taste.agent_text(rows).splitlines():
+    for line in taste.agent_text(rows, product=product, note=note, overrides=overrides).splitlines():
         print(f"  {line}")
+    for p in rows:
+        if p.get("references"):
+            print(f"  reference renders: .venv/bin/python tools/revisions.py taste {p['_id']}   (writes them; open each)")
+
+
+async def _write_refs(db, doc: dict, out: Path) -> list[Path]:
+    """A palette's reference renders on disk: <out>/<view>[-n].png."""
+    from backend import store
+    out.mkdir(parents=True, exist_ok=True)
+    paths, used = [], set()
+    for r in doc.get("references") or []:
+        stem = re.sub(r"[^\w-]", "_", str(r.get("view") or "view"))
+        if (r.get("model") or "") and stem in used:
+            stem = f"{stem}-{re.sub(r'[^\w-]', '_', r['model'].rsplit('/', 1)[-1])}"
+        used.add(stem)
+        try:
+            png = await store.get_shot(db, r["gridfs_id"])
+        except Exception as exc:                                  # noqa: BLE001
+            print(f"  (render {r.get('view')} could not be read: {type(exc).__name__})")
+            continue
+        path = out / f"{stem}.png"
+        path.write_bytes(png)
+        paths.append(path)
+    return paths
 
 
 async def cmd_taste(args):
-    """Taste palettes: the ones attached to a project, or one by id, or the list."""
+    """Taste palettes: the ones attached to a project, or one by id (with its
+    reference renders written to disk), or the list."""
     from backend import taste
 
     db = connect()
+    on = {"on": True, "off": False}.get(args.specifics or "")
+    product = note = None
+    if args.for_:
+        k, _, r = args.for_.partition(":")
+        if k not in (*taste.PROJECT_KINDS, "folder") or not r:
+            sys.exit("--for is kind:id, e.g. model:iot-fan-80mm/assemblies/station")
+        product = await taste.product_of(db, k, r)
     if args.kind and args.id:
         if args.kind not in taste.PROJECT_KINDS:
             sys.exit("kind is model, board or firmware")
@@ -1418,17 +1457,109 @@ async def cmd_taste(args):
         if not rows:
             print(f"no taste palette is attached to {args.kind} {args.id}")
             return
-        print(taste.agent_text(rows))
+        over = taste.overrides_for(rows, args.kind, args.id)
+        if on is not None:
+            over = {p["_id"]: on for p in rows}
+        print(taste.agent_text(rows, product=product or await taste.product_of(db, args.kind, args.id),
+                               overrides=over))
         return
     if args.kind:
         doc = await taste.get(db, args.kind)
         if not doc:
             sys.exit(f"no palette {args.kind}")
-        print(taste.block(doc, 10 ** 6))
+        print(taste.block(doc, 10 ** 6, product=product, note=note or "", override=on))
+        if doc.get("references"):
+            out = Path(args.out or f"/tmp/taste-{doc['_id']}")
+            paths = await _write_refs(db, doc, out)
+            print(f"\nreference renders ({len(paths)}) - open each with the Read tool before designing:")
+            for path in paths:
+                print(f"  {path}")
+            print(f"the Taste check of a design: .venv/bin/python tools/revisions.py taste-check {doc['_id']} <model>")
         return
     for d in await taste.listing(db):
-        on = ", ".join(f"{a['kind']} {a['id']}" for a in d.get("attached") or []) or "-"
-        print(f"{d['_id']}  {d.get('name')}  ({len(d.get('items') or [])} items; attached: {on})")
+        on_ = ", ".join(f"{a['kind']} {a['id']}" for a in d.get("attached") or []) or "-"
+        refs = len(d.get("references") or [])
+        print(f"{d['_id']}  {d.get('name')}  ({len(d.get('items') or [])} items; {refs} renders; attached: {on_})")
+
+
+OWN_LINE = "this is the palette's own product line"
+
+
+def _side_by_side(ref: Path, got: Path, out: Path, title: str) -> None:
+    """The reference and the design, one beside the other at one height,
+    each named, into one PNG."""
+    from PIL import Image, ImageDraw
+    a, b = Image.open(ref).convert("RGB"), Image.open(got).convert("RGB")
+    h = min(a.height, b.height, 800)
+    a = a.resize((round(a.width * h / a.height), h))
+    b = b.resize((round(b.width * h / b.height), h))
+    bar = 34
+    im = Image.new("RGB", (a.width + b.width + 12, h + bar), (24, 24, 24))
+    im.paste(a, (0, bar))
+    im.paste(b, (a.width + 12, bar))
+    d = ImageDraw.Draw(im)
+    d.text((10, 10), f"REFERENCE - {title}", fill=(230, 230, 230))
+    d.text((a.width + 22, 10), "THIS DESIGN", fill=(230, 230, 230))
+    im.save(out)
+
+
+async def cmd_taste_check(args):
+    """The Taste check: the design rendered from the same views as the
+    palette's reference renders, each put beside its reference, and the
+    palette's items as a list to mark pass or fail in the report."""
+    import subprocess
+    from backend import taste
+
+    db = connect()
+    doc = await taste.get(db, args.palette)
+    if not doc:
+        sys.exit(f"no palette {args.palette}")
+    out = Path(args.out or f"/tmp/taste-check-{doc['_id']}-{re.sub(r'[^\w-]', '_', args.model)}")
+    refs = await _write_refs(db, doc, out / "reference")
+    views = []
+    for r in doc.get("references") or []:
+        if r.get("view") and r["view"] not in views:
+            views.append(r["view"])
+    from render import VIEWS
+    views = [v for v in views if v in VIEWS] or ["iso", "iso-back", "front", "right", "top", "detail"]
+    size = next((r.get("size") for r in doc.get("references") or [] if r.get("size")), None) or [1200, 800]
+    print(f"rendering {args.model} from {', '.join(views)} ...", flush=True)
+    cmd = [sys.executable, str(ROOT / "tools" / "render.py"), f"model:{args.model}", "--views", ",".join(views),
+           "--width", str(size[0]), "--height", str(size[1]), "--free-aspect", "-o", str(out / "design")]
+    if args.no_wait:
+        cmd.append("--no-wait")
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        tail = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()][-3:]
+        sys.exit("the design could not be rendered:\n" + "\n".join(tail))
+    pairs = []
+    by_view = {}
+    for ref in refs:
+        by_view.setdefault(ref.stem.split("-")[0] if ref.stem.split("-")[0] in VIEWS else ref.stem, ref)
+    for v in views:
+        got = out / "design" / f"{v}.png"
+        ref = by_view.get(v)
+        if got.exists() and ref:
+            both = out / f"{v}-compare.png"
+            _side_by_side(ref, got, both, v)
+            pairs.append(both)
+    print(f"\nside by side (reference left, this design right) - open each with the Read tool:")
+    for pth in pairs:
+        print(f"  {pth}")
+    print(f"this design alone: {out / 'design'}")
+    items = [taste.item_out(i) for i in doc.get("items") or []]
+    product = await taste.product_of(db, "model", args.model)
+    with_specific = taste.specifics_for(doc, product)
+    keep = [i for i in items if i["layer"] != "specific" or with_specific]
+    keep.sort(key=lambda i: (i["domain"] != "form", taste.DOMAINS.index(i["domain"]), taste.STRENGTHS.index(i["strength"])))
+    print(f"\nTaste check - mark each pass or fail in your report (\"Taste check\" section), "
+          f"{'with' if with_specific else 'without'} the project-specific items "
+          f"({OWN_LINE if with_specific else 'another product'}):")
+    for i in keep:
+        scope = "" if i["applies_to"] == "all" else f" [{taste.SCOPE_NAMES.get(i['applies_to'], i['applies_to'])}]"
+        print(f"  [ ] {taste.DOMAIN_NAMES[i['domain']]} {i['strength'].upper()}{scope}: {i['text']}"
+              + (f" (except: {i['exception']})" if i.get("exception") else ""))
+    print("\nFix what fails, run this again, and put the compare pictures (before/after) in the report.")
 
 
 async def _show_firmware_note(db, doc: dict) -> None:
@@ -2402,11 +2533,23 @@ def main() -> None:
     s.set_defaults(fn=cmd_pdf, sync=True)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
-    s = sub.add_parser("taste", help="taste palettes: list them, print one (<palette id>), "
-                                     "or the ones attached to a project (<model|board|firmware> <id>)")
+    s = sub.add_parser("taste", help="taste palettes: list them, print one (<palette id>; its reference "
+                                     "renders are written to disk), or the ones attached to a project "
+                                     "(<model|board|firmware> <id>)")
     s.add_argument("kind", nargs="?")
     s.add_argument("id", nargs="?")
+    s.add_argument("--for", dest="for_", help="the work it is for, kind:id - whether the project-specific "
+                                              "items apply follows its product line")
+    s.add_argument("--specifics", choices=["on", "off"], help="project-specific items on or off, whatever the line")
+    s.add_argument("-o", "--out", help="where a palette's reference renders go (default /tmp/taste-<id>)")
     s.set_defaults(fn=cmd_taste)
+    s = sub.add_parser("taste-check", help="the Taste check: a model rendered from the palette's reference "
+                                           "views, each beside its reference, and the items to mark pass/fail")
+    s.add_argument("palette")
+    s.add_argument("model")
+    s.add_argument("-o", "--out", help="directory (default /tmp/taste-check-<palette>-<model>)")
+    s.add_argument("--no-wait", action="store_true", help="shoot the build on record, do not wait for one")
+    s.set_defaults(fn=cmd_taste_check)
     s = sub.add_parser("next", help="the oldest queued note nobody has started, in full")
     s.add_argument("--room", choices=["cad", "pcb", "firmware"], help="only this room's")
     s.add_argument("-o", "--out", help="where its drawing is written")
