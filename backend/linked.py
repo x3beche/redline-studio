@@ -103,32 +103,54 @@ def clean_title(t: str, *tails: str) -> str:
 
 # ---------------------------------------------------------------- finding
 
-async def find(k: Kind, q: str, *, count: int = 8, who: str = "") -> dict:
-    """Items for words, from a web search of the source's site - never the
-    site itself. The first search; the next, worded otherwise, only while
-    fewer than `enough` items came up. {ok, results, queries, error}."""
+async def find_steps(k: Kind, q: str, *, count: int = 8, who: str = ""):
+    """find() as it goes, for a page to follow: {"type": "search", n, of,
+    words} before each web search, {"type": "got", n, rows, items, ms} after
+    it, then {"type": "done", **find()'s answer}."""
+    import time
     q = re.sub(r"\s+", " ", (q or "")).strip()[:200]
     out: dict = {"ok": False, "results": [], "queries": [], "error": None}
     if not q:
         out["error"] = "say what to look for"
-        return out
+        yield {"type": "done", **out}
+        return
     if not jina.configured():
         out["error"] = "web search is not set up (Settings > Proxy & Data: Jina's API key)"
-        return out
+        yield {"type": "done", **out}
+        return
     rows: list[dict] = []
-    for words in k.searches(q):
+    wordings = list(k.searches(q))
+    for i, words in enumerate(wordings, 1):
+        shown = words + (f" site:{k.search_site}" if k.search_site else "")
+        yield {"type": "search", "n": i, "of": len(wordings), "words": shown}
+        t0 = time.monotonic()
         got = await jina.search(words, site=k.search_site, num=jina.SEARCH_MAX, who=who)
-        out["queries"].append(words + (f" site:{k.search_site}" if k.search_site else ""))
+        out["queries"].append(shown)
         if not got["ok"]:
+            yield {"type": "got", "n": i, "rows": 0, "items": len(k.parse(rows)), "ms": int((time.monotonic() - t0) * 1000),
+                   "error": got["error"]}
             if not rows:
                 out["error"] = got["error"]
             break
         rows += got["results"]
-        if len(k.parse(rows)) >= k.enough:
+        items = len(k.parse(rows))
+        yield {"type": "got", "n": i, "rows": len(got["results"]), "items": items,
+               "ms": int((time.monotonic() - t0) * 1000), "enough": items >= k.enough}
+        if items >= k.enough:
             break
     out["results"] = k.parse(rows)[:max(1, min(count, 20))]
     out["ok"] = out["error"] is None
-    return out
+    yield {"type": "done", **out}
+
+
+async def find(k: Kind, q: str, *, count: int = 8, who: str = "") -> dict:
+    """Items for words, from a web search of the source's site - never the
+    site itself. The first search; the next, worded otherwise, only while
+    fewer than `enough` items came up. {ok, results, queries, error}."""
+    last: dict = {}
+    async for ev in find_steps(k, q, count=count, who=who):
+        last = ev
+    return {key: v for key, v in last.items() if key != "type"}
 
 
 # ---------------------------------------------------------------- the saved items
@@ -376,6 +398,27 @@ async def api_search(src: str, q: str = "", n: int = 10) -> dict:
     saved = {d["key"] async for d in _db()[COLL].find({"source": k.id}, {"key": 1})}
     return {**got, "how": k.how, "caution": k.caution,
             "results": [{**r, "saved": r["key"] in saved} for r in got["results"]]}
+
+
+@router.get("/{src}/search/stream")
+async def api_search_stream(src: str, q: str = "", n: int = 10):
+    """The same search, told as it goes (text/event-stream): each web search
+    as it starts and what it brought, then the answer with what is saved."""
+    import json
+    from fastapi.responses import StreamingResponse
+    k = kind(src)
+    db = _db()
+
+    async def events():
+        async for ev in find_steps(k, q[:200], count=n, who="catalog"):
+            if ev["type"] == "done":
+                saved = {d["key"] async for d in db[COLL].find({"source": k.id}, {"key": 1})}
+                ev = {**ev, "how": k.how, "caution": k.caution,
+                      "results": [{**r, "saved": r["key"] in saved} for r in ev["results"]]}
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode()
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/{src}/parts")

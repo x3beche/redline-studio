@@ -6,6 +6,7 @@ import { Confirm } from '../confirm';
 import { LANG, T, t } from '../i18n';
 import { Prefs } from '../preferences';
 import { Toast } from '../toast';
+import { Skeleton } from '../skeleton';
 import { MeshThumbs } from './mesh-thumb';
 import { StoredFile } from './files-model';
 
@@ -32,6 +33,9 @@ export interface LinkedItem {
 }
 export interface LinkedHit { key: string; title: string; url: string; author?: string; specs: Record<string, string>;
   snippet: string; source: string; saved: boolean }
+/** One web search of a source search, as the page follows it. */
+export interface SearchStep { n: number; of: number; words: string; running: boolean; rows?: number; items?: number; ms?: number;
+  error?: string | null; enough?: boolean }
 export interface LinkedFound { ok: boolean; results: LinkedHit[]; queries: string[]; error: string | null; how: string; caution: string }
 export interface McmApi { filled: boolean; connected: boolean; wired: boolean; auto_step: boolean }
 
@@ -103,14 +107,53 @@ export class LinkedDesk {
     if (this.meta(this.src()).paste.test(q) && this.canEdit()) { this.save({ key: q }); return; }
     this.find(q);
   }
+  /** The search as it goes: each web search as it starts and what it brought. */
+  steps = signal<SearchStep[]>([]);
+  /** When the search began, and a clock for its seconds (ms). */
+  since = signal(0);
+  now = signal(0);
+  /** How long the last search took, in seconds. */
+  took = signal<number | null>(null);
+  private es: EventSource | null = null;
+  private tick: ReturnType<typeof setInterval> | undefined;
+
   find(q: string) {
     const src = this.src();
-    this.looking.set(true); this.err.set('');
-    this.http.get<LinkedFound>(`${this.base(src)}/search`, { params: { q, n: 12 } }).subscribe({
-      next: f => { if (this.src() === src) { this.found.set(f); this.looking.set(false); } },
-      error: e => { this.looking.set(false); this.found.set(null); this.err.set(why(e, 'The search failed.')); },
-    });
+    this.stop();
+    this.looking.set(true); this.err.set(''); this.found.set(null); this.steps.set([]); this.took.set(null);
+    const t0 = Date.now();
+    this.since.set(t0); this.now.set(t0);
+    this.tick = setInterval(() => this.now.set(Date.now()), 250);
+    const es = new EventSource(`${this.base(src)}/search/stream?q=${encodeURIComponent(q)}&n=12`);
+    this.es = es;
+    es.onmessage = m => {
+      if (this.src() !== src) { this.stop(); return; }
+      const ev = JSON.parse(m.data);
+      if (ev.type === 'search') {
+        this.steps.update(l => [...l, { n: ev.n, of: ev.of, words: ev.words, running: true }]);
+      } else if (ev.type === 'got') {
+        this.steps.update(l => l.map(x => x.n === ev.n ? { ...x, running: false, rows: ev.rows, items: ev.items, ms: ev.ms,
+                                                           error: ev.error ?? null, enough: !!ev.enough } : x));
+      } else if (ev.type === 'done') {
+        this.took.set((Date.now() - t0) / 1000);
+        this.stop();
+        if (ev.error && !(ev.results || []).length) { this.err.set(ev.error); this.found.set(null); }
+        else this.found.set(ev as LinkedFound);
+      }
+    };
+    es.onerror = () => {
+      if (!this.looking()) return;
+      this.stop();
+      this.err.set(t('The search failed.'));
+    };
   }
+  /** Stop following the search (Cancel, another search, another page). */
+  stop() {
+    this.es?.close(); this.es = null;
+    clearInterval(this.tick); this.tick = undefined;
+    this.looking.set(false);
+  }
+  elapsed() { return Math.max(0, (this.now() - this.since()) / 1000); }
   async save(h: Partial<LinkedHit> & { key: string }) {
     const src = this.src();
     this.busy.set(h.key);
@@ -207,7 +250,7 @@ const TINT = `
 /** The top of a search-and-link source's page: what it is, and the search front and centre. */
 @Component({
   selector: 'wb-linked-head',
-  imports: [T],
+  imports: [T, Skeleton],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './linked.css'],
   template: TINT + `
 <header class="tst-head ln-head">
@@ -227,13 +270,42 @@ const TINT = `
     <input class="ln-in" [placeholder]="m().find | t" [value]="desk.term()" (input)="desk.term.set($any($event.target).value)"
            (keydown.enter)="desk.go()" (keydown.escape)="desk.term.set(''); desk.found.set(null)" [attr.aria-label]="fmt('Find on {s}', { s: m().name })">
     <button class="tcv-btn tcv-btn-accent ln-go" (click)="desk.go()" [disabled]="desk.looking() || !desk.term().trim()">
-      {{ desk.looking() ? '…' : (pasted() ? ('Save' | t) : fmt('Find on {s}', { s: m().name })) }}</button>
+      {{ desk.looking() ? ('Searching…' | t) : (pasted() ? ('Save' | t) : fmt('Find on {s}', { s: m().name })) }}</button>
   </div>
   <p class="ln-how">{{ m().line | t }}
     @if (m().caution) { <b class="ln-caution">{{ m().caution | t }}</b> }</p>
   @if (desk.err(); as e) { <p class="st-err">{{ e }}</p> }
+  @if (desk.looking() || (desk.steps().length && !desk.found())) {
+    <div class="ln-prog" role="status" aria-live="polite">
+      <div class="ln-prog-head">
+        @if (desk.looking()) { <span class="ln-spin" aria-hidden="true"></span> }
+        <b>{{ (desk.looking() ? 'Searching' : 'Stopped') | t }}</b>
+        <span class="dim">{{ fmt('{s} through a web search of its library', { s: m().name }) }}</span>
+        <span class="ln-prog-time mono">{{ desk.elapsed().toFixed(1) }} s</span>
+        @if (desk.looking()) { <button class="st-more" (click)="desk.stop()">{{ 'Cancel' | t }}</button> }
+      </div>
+      <ol class="ln-steps">
+        @for (st of desk.steps(); track st.n) {
+          <li [attr.data-state]="st.running ? 'run' : st.error ? 'bad' : 'ok'">
+            <i aria-hidden="true"></i>
+            <span>{{ fmt('Web search {n} of up to {of}', { n: st.n, of: st.of }) }} <code>{{ st.words }}</code></span>
+            <em class="mono">@if (st.running) { {{ 'searching…' | t }} } @else if (st.error) { {{ st.error }} }
+              @else { {{ fmt('{r} results, {i} usable', { r: st.rows ?? 0, i: st.items ?? 0 }) }} · {{ ((st.ms ?? 0) / 1000).toFixed(1) }} s }</em>
+          </li>
+          @if (!st.running && !st.error && !st.enough && st.n < st.of && desk.looking()) {
+            <li data-state="info"><i aria-hidden="true"></i><span>{{ 'Too few found - searching again in other words' | t }}</span></li>
+          }
+        } @empty {
+          <li data-state="run"><i aria-hidden="true"></i><span>{{ 'Starting the search…' | t }}</span></li>
+        }
+      </ol>
+      @if (desk.looking()) {
+        <div class="ln-results ln-ghosts" aria-hidden="true">@for (g of [1, 2, 3]; track g) { <div class="ln-ghost"><wb-skel kind="text" [count]="3" /></div> }</div>
+      }
+    </div>
+  }
   @if (desk.found(); as f) {
-    <div class="ln-res-head"><span class="st-sub">{{ fmt('{n} found', { n: f.results.length }) }}
+    <div class="ln-res-head"><span class="st-sub">{{ fmt('{n} found', { n: f.results.length }) }}@if (desk.took() !== null) { · {{ fmt('in {s} s', { s: desk.took()!.toFixed(1) }) }} }
       @if (f.queries.length) { <span class="dim" [title]="f.queries.join('\\n')"> · {{ fmt(f.queries.length === 1 ? 'one web search' : '{n} web searches', { n: f.queries.length }) }}</span> }</span>
       <button class="st-more" (click)="desk.found.set(null)">{{ 'Clear' | t }}</button></div>
     @if (f.results.length) {

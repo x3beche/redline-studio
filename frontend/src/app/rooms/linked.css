@@ -73,3 +73,28 @@ p.ln-caution { margin: 0; font-size: 12px; }
   .ln-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .ln-fields .ln-wide { grid-column: span 1; }
 }
+
+/* A search as it goes: each web search with what it brought, the seconds, Cancel. */
+.ln-prog { grid-column: 1 / -1; width: 100%; box-sizing: border-box; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.ln-prog-head { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 12px; min-width: 0; }
+.ln-prog-head .dim { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-prog-time { margin-left: auto; font-size: 11.5px; color: var(--ink-dim); }
+.ln-prog-head .st-more { margin: 0; }   /* the seconds take the free room; Cancel sits after them */
+.ln-spin { flex: none; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: ln-spin .8s linear infinite; }
+@keyframes ln-spin { to { transform: rotate(360deg); } }
+.ln-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; }
+.ln-steps li { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--ink); }
+.ln-steps li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln-steps li code { font-size: 11px; color: var(--ink-dim); }
+.ln-steps li em { margin-left: auto; flex: none; font-style: normal; font-size: 11px; color: var(--ink-dim); }
+.ln-steps li i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); transform: translateY(-1px); }
+.ln-steps li[data-state="run"] i { background: var(--accent); animation: ln-pulse 1s ease-in-out infinite; }
+.ln-steps li[data-state="bad"] i { background: var(--danger); }
+.ln-steps li[data-state="bad"] em { color: var(--danger); }
+.ln-steps li[data-state="info"] { color: var(--ink-dim); }
+.ln-steps li[data-state="info"] i { background: var(--ink-dim); }
+@keyframes ln-pulse { 50% { opacity: .35; } }
+.ln-ghosts { margin-top: 10px; }
+.ln-ghost { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+@media (prefers-reduced-motion: reduce) { .ln-spin, .ln-steps li[data-state="run"] i { animation: none; } }
