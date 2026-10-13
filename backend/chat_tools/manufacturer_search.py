@@ -5,6 +5,7 @@ of them or within one."""
 
 from __future__ import annotations
 
+from .. import catalog_builtin as builtin
 from .. import inventory as inv
 from .. import manufacturers as mf
 from . import Ctx, Result, Tool, ToolError, clip
@@ -16,7 +17,9 @@ SHOW = 40                  # products a search names
 def _line(d: dict) -> str:
     n = len(d.get("products") or [])
     bits = [f"{d['_id']}  \"{d.get('name') or d['_id']}\"  {d.get('url')}  {n} products"]
-    if d.get("explored_at"):
+    if builtin.is_builtin(str(d["_id"])):
+        bits.append("built-in source: the parts saved here")
+    elif d.get("explored_at"):
         bits.append(f"explored {d['explored_at'][:10]}")
     else:
         bits.append("not explored yet")
@@ -28,8 +31,28 @@ def _line(d: dict) -> str:
     return line
 
 
+async def _builtins(ctx: Ctx) -> list[dict]:
+    """The built-in sources (LCSC's drawer, the McMaster-Carr parts and GrabCAD
+    models saved here) as makers with products - only those holding some."""
+    try:
+        return [d for d in await builtin.makers(ctx.db) if d.get("products")]
+    except Exception:                                   # noqa: BLE001 - a source that cannot be read is left out
+        return []
+
+
+async def _all(ctx: Ctx) -> list[dict]:
+    return [*await mf.listing(ctx.db), *await _builtins(ctx)]
+
+
+def _pick(docs: list[dict], ref: str) -> dict | None:
+    """A built-in source by its id or name ("lcsc", "McMaster-Carr")."""
+    r = ref.strip().lower()
+    return next((d for d in docs if r in (str(d["_id"]).lower(), str(d.get("name") or "").lower(),
+                                         str(d.get("domain") or "").lower())), None)
+
+
 async def _listing(ctx: Ctx) -> Result:
-    found = await mf.listing(ctx.db)
+    found = await _all(ctx)
     if not found:
         return Result(text="There are no manufacturers in this workspace. The person adds one by its website in "
                            "the Manufacturers tab.", say="No manufacturers here", summary="none")
@@ -45,7 +68,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
     cat = str(args.get("category") or "").strip()
     if not ref and not q and not cat:
         return await _listing(ctx)
-    one = await find(ctx.db, mf.COLL, ref, ("name", "domain", "url"), "manufacturer") if ref else None
+    one = None
+    if ref:
+        one = _pick(await _builtins(ctx), ref)
+        if one is None:
+            one = await find(ctx.db, mf.COLL, ref, ("name", "domain", "url"), "manufacturer")
     stock = await inv.stock_of(ctx.db)
     if one and not q and not cat:
         text = mf.block(one, 22_000, stock.get(one["_id"], {}))
@@ -53,7 +80,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
                  "of it.")
         return Result(text=clip(text), say="Read the catalog of {name}", vars={"name": one.get("name") or one["_id"]},
                       summary=f"{len(one.get('products') or [])} products · {', '.join((one.get('categories') or [])[:6])}")
-    docs = [one] if one else await mf.listing(ctx.db)
+    docs = [one] if one else await _all(ctx)
     if not docs:
         raise ToolError("there are no manufacturers in this workspace - the person adds one in the Manufacturers tab")
     try:
@@ -67,7 +94,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
         cats = sorted({c for d in docs for c in d.get("categories") or []})[:40]
         text = (f"No product of {where} matches {what}. Catalogs are written in the site's own language - "
                 "try the word in that language (Turkish: menteşe for hinge, rulman for bearing, vida for screw), "
-                "a synonym, or fewer words." + (f" Categories there: {', '.join(cats)}." if cats else ""))
+                "a synonym, or fewer words. Parts not saved here can be looked up on McMaster-Carr with "
+                "mcmaster_find (models on GrabCAD with grabcad_find)." + (f" Categories there: {', '.join(cats)}." if cats else ""))
         return Result(text=text, say="Nothing found for {q}", vars={"q": q or cat}, summary="no match")
     lines = []
     for d, p, _ in hits:
@@ -84,7 +112,9 @@ TOOL = Tool(
     name="manufacturer_search", package="mfr", level="read", order=69,
     label="Search the manufacturers",
     about="Lists the saved manufacturers, reads one's catalog, or searches their products by words and category.",
-    description="The manufacturers this workspace keeps (the Manufacturers tab): makers whose websites were explored, "
+    description="The manufacturers this workspace keeps (the Product Catalog): makers whose websites were explored, "
+                "and the built-in sources' parts saved here - LCSC (the parts drawer), McMaster-Carr parts and GrabCAD "
+                "models - searched with them; "
                 "each with a summary, the person's notes on when to use them, categories and a product catalog "
                 "(name, category, description, specs such as dimensions and materials, code, product page, and - when "
                 "its page showed them - its price with currency and VAT, the seller's stock and the site it is sold on, "
