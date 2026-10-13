@@ -930,7 +930,8 @@ export class RoomPcb implements OnDestroy {
   partHead(p: PartHeld): string { return (p.value || p.mpn || p.name || p.lcsc).replace(/(\d)u(?=[FHΩ])/g, '$1µ'); }
   /** The package out of EasyEDA's footprint name: 0603, SOT-23-6. */
   partPkg(p: PartHeld): string { const k = (p.name || '').split('_')[0]; return /^[RCL]\d{4}$/.test(k) ? k.slice(1) : k; }
-  forget(p: PartHeld) { this.desk.drop(p.lcsc); }
+  /** Out of the drawer, asked first as in the Catalog (part-desk.ts). */
+  async forget(p: PartHeld) { if (await this.desk.sureToDrop([p.lcsc])) this.desk.drop(p.lcsc); }
   /** The whole drawer: the Product Catalog's LCSC seller, with the part open
    *  in full there when one is open here (?ws=catalog&m=lcsc&p=C…&pm=lcsc). */
   openDrawer() {

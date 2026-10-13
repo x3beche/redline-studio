@@ -1,6 +1,8 @@
 import { Component, Injectable, OnDestroy, inject, input, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { PartHeld, PartHit, PartPreview, Parts } from '../api';
+import { firstValueFrom } from 'rxjs';
+import { PartHeld, PartHit, PartPreview, PartUse, Parts } from '../api';
+import { Confirm } from '../confirm';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { PartCard } from './part-card';
@@ -202,6 +204,25 @@ export class PartDesk implements OnDestroy {
       next: () => { this.held.update(rows => rows.filter(p => p.lcsc !== lcsc)); this.changed.update(n => n + 1); done(true); },
       error: () => done(false),
     }));
+  }
+
+  /** Asked before parts leave the drawer, the same in every room: which
+   *  boards use them, read from the boards now (backend/part_usage.py) -
+   *  those boards keep their copies. True to go ahead. */
+  async sureToDrop(ids: string[]): Promise<boolean> {
+    if (!ids.length) return false;
+    const one = ids.length === 1;
+    const fmt = (s: string, v: Record<string, string | number>) => t(s).replace(/\{(\w+)\}/g, (m, k) => k in v ? String(v[k]) : m);
+    let used: Record<string, PartUse[]> | null = null;
+    try { used = await firstValueFrom(this.store.usedInMany(ids)); } catch { /* asked without it */ }
+    const on = (rows: PartUse[]) => fmt(rows.length === 1 ? 'Used on one board: {list}' : 'Used on {n} boards: {list}',
+      { n: rows.length, list: rows.map(b => b.refs.length ? `${b.name} (${b.refs.join(', ')})` : b.name).join(', ') });
+    const usedIds = ids.filter(c => used?.[c]?.length);
+    const warn = !used ? t('Could not check which boards use them.')
+      : one ? (usedIds.length ? on(used[ids[0]]) : '')
+      : usedIds.map(c => `${c} · ${on(used![c])}`).join('\n');
+    return Confirm.ask({ title: one ? t('Remove this part from the drawer?') : fmt('Remove {n} parts from the drawer?', { n: ids.length }),
+                         text: (warn ? warn + '\n\n' : '') + ids.join(', '), ok: t('Remove'), danger: true });
   }
 
   ngOnDestroy() { clearTimeout(this.addTimer); }
