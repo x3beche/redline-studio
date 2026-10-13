@@ -1015,9 +1015,10 @@ export class RoomInventory implements OnDestroy {
     this.sel.room.set('mfr');
     setTimeout(() => this.sel.ask('mfr-product', `${c.manufacturer}\n${c.product_name ?? ''}`), 50);
   }
+  /** An LCSC part: the Product Catalog's LCSC seller (the parts drawer), the part open in full. */
   toPart(code: string) {
-    this.sel.room.set('pcb');
-    setTimeout(() => this.sel.ask('part', code), 50);
+    this.sel.room.set('mfr');
+    setTimeout(() => this.sel.ask('mfr-part', code), 50);
   }
   /** An item's right-click menu, on the cards and the table's rows. */
   openMenu(e: MouseEvent, i: Item) {

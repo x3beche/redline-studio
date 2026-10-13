@@ -18,6 +18,8 @@ import { SelectionBar } from '../selection-bar';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
+import { PartAdding, PartDesk, PartModal } from './part-desk';
+import { PartsDrawer } from './parts-drawer';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -57,7 +59,15 @@ export interface Product {
   added_at?: string; read_at?: string; updated?: string; history?: PriceRow[];
   /** Added by hand ('manual'), or changed by hand (`edited`): kept through a full exploration. */
   source?: 'manual'; edited?: boolean;
+  /** An LCSC part of the parts drawer (the LCSC seller, backend/catalog_lcsc.py): what only a part has. */
+  part?: PartFacts;
 }
+export interface PartFacts {
+  lcsc: string; value: string | null; mpn: string | null; maker: string | null; package: string | null;
+  group: string | null; branch: string | null; has_3d: boolean; pins: number | null; jlc_class: string | null; min: number | null;
+}
+/** The LCSC seller's id: the parts drawer, not a manufacturer kept in the catalog. */
+export const LCSC_MAKER = 'lcsc';
 /** A product with its maker, as the catalog's grid lists them (GET /api/manufacturers/products). */
 export interface GridItem extends Product { maker: { id: string; name: string; domain: string } }
 export interface GridAnswer {
@@ -78,6 +88,8 @@ export interface Maker {
   categories: string[]; docs: { url: string; label: string }[]; route: RouteChoice; product_count: number;
   products?: Product[]; by: { id?: string; name?: string }; created_at: string; updated_at: string;
   explored_at: string | null; last_run: LastRun | null;
+  /** 'drawer': the LCSC seller, made from the parts drawer - read only here, nothing to explore. */
+  virtual?: 'drawer';
 }
 export interface MfrStep {
   id: string; kind: 'robots' | 'sitemap' | 'crawl' | 'ask' | 'merge' | 'done'; state: StepState;
@@ -238,6 +250,7 @@ const I = {
   close: 'M6 6l12 12 M18 6L6 18',
   grid: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
   rows: 'M4 6h16 M4 12h16 M4 18h16',
+  drawer: 'M4 4h16v16H4z M4 12h16 M10 8h4 M10 16h4',
 };
 const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '',
                                     price: '', currency: 'TRY', vat: '', stock: '', stock_qty: '' };
@@ -245,7 +258,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
+  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
+            PartModal, PartAdding, PartsDrawer],
+  providers: [PartDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -283,11 +298,12 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <button class="tcv-notes-item" [attr.data-on]="m.id === mid() && view() !== 'home' ? 1 : null" (click)="openMaker(m.id)">
           <span class="tcv-notes-item-top">
             <span class="tcv-notes-item-title">{{ m.name }}</span>
-            <span class="tcv-notes-item-when">{{ m.product_count }} {{ (m.product_count === 1 ? 'product' : 'products') | t }}</span>
+            <span class="tcv-notes-item-when">{{ m.product_count }} {{ (m.virtual ? (m.product_count === 1 ? 'part' : 'parts') : m.product_count === 1 ? 'product' : 'products') | t }}</span>
           </span>
           <span class="tcv-notes-item-meta mf-side-meta">
             <span class="mf-dom">{{ m.domain }}</span>
-            @if (runOf(m); as r) {
+            @if (m.virtual) { <span class="st-tag" data-tone="accent" [title]="'the parts kept for boards' | t">{{ 'parts drawer' | t }}</span> }
+            @else if (runOf(m); as r) {
               <span class="st-tag" [attr.data-tone]="statusTone(r.status)">@if (isActiveS(r.status)) { <i class="mf-pulse"></i> }{{ statusName(r.status) | t }}</span>
             } @else { <span class="st-tag">{{ 'not explored' | t }}</span> }
           </span>
@@ -299,7 +315,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     </div>
   </aside>
 
-  <section class="tcv-notes-main tst mf" wbMarquee [marqueeOn]="layout() === 'grid' && (view() === 'maker' || (view() === 'home' && sub() === 'products'))"
+  <section class="tcv-notes-main tst mf" wbMarquee [marqueeOn]="layout() === 'grid' && !cabinetOn() && (view() === 'maker' || (view() === 'home' && sub() === 'products'))"
            [marqueeBase]="gsel()" (wbMarquee)="gsel.set($event)">
 
     @if (view() === 'run') {
@@ -395,6 +411,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
     } @else if (view() === 'maker' && maker(); as m) {
       <!-- ================= one manufacturer ================= -->
+      @if (m.virtual) {
+        <!-- LCSC: the parts drawer as a seller (backend/catalog_lcsc.py) - its own head, then the catalog below as any maker's -->
+        <ng-container *ngTemplateOutlet="lcscHead; context: { $implicit: m }" />
+      } @else {
       <header class="tst-head">
         <div class="tst-title">
           <input class="tst-name" [value]="m.name" [readonly]="!can()" (change)="rename(m, $any($event.target).value)"
@@ -487,6 +507,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         </section>
       }
 
+      }
+
       <section class="st-card mf-catalog">
         <div class="st-card-head mf-cathead"><h3>{{ 'Catalog' | t }}</h3>
           <input class="tst-in mf-find" [placeholder]="'Find a product: name, code, size, material' | t" [value]="pq()"
@@ -494,7 +516,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <wb-select class="mf-csel" label="Category" [options]="productCatOpts()" [value]="cat()" (pick)="cat.set($event)" />
           <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span>
           <ng-container *ngTemplateOutlet="layoutT" />
-          @if (can()) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
+          @if (can() && !m.virtual) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
         @if (editing() !== null) {
           <div class="mf-pform mf-ctl">
             <input class="tst-in mf-pf-name" [placeholder]="'Name' | t" [value]="pf().name" (input)="pfSet('name', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Name' | t">
@@ -526,7 +548,13 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
           </div>
         }
-        @if (m.products?.length && layout() === 'grid') {
+        @if (cabinetOn()) {
+          <!-- The drawer as it always looked: a cabinet of groups, a tray of bins each (parts-drawer.ts) -->
+          <div class="mf-cabinet">
+            <app-parts-drawer [held]="desk.held()" [seenLcsc]="desk.seen()?.lcsc ?? null" [pulse]="desk.pulse()"
+                              (inspect)="desk.inspect($event)" (forget)="dropParts([$event.lcsc])" />
+          </div>
+        } @else if (m.products?.length && layout() === 'grid') {
           <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
               >
             @for (p of found().slice(0, shownRows()); track p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: asItem(p, m) }" /> }
@@ -535,6 +563,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           @if (found().length > shownRows()) {
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
+        } @else if (m.products?.length && m.virtual) {
+          <ng-container *ngTemplateOutlet="partsTable; context: { $implicit: m }" />
         } @else if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
@@ -582,7 +612,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <wb-empty icon="table" [text]="runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
+          <wb-empty icon="table" [text]="m.virtual ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
         }
       </section>
 
@@ -789,17 +819,30 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       }
     }
     <!-- the selection, floating over the grid: the grid's (a box drawn, Ctrl/Shift-clicks) or the maker table's ticks -->
-    <wb-selbar [count]="layout() === 'grid' ? gsel().size : 0" (clear)="clearSel()">
+    <wb-selbar [count]="layout() === 'grid' && !cabinetOn() ? gsel().size : 0" (clear)="clearSel()">
       <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
-      @if (can()) { <button class="tcv-btn tst-del" (click)="deleteSelected()" [disabled]="saving()">{{ 'Delete' | t }}</button> }
+      @if (gselParts().length) {
+        <!-- LCSC parts: as a list to send or order from, and their numbers -->
+        <button class="tcv-btn" (click)="exportParts(gselParts())" [title]="'Save the selected parts as a CSV file' | t">{{ 'Export CSV' | t }}</button>
+        <button class="tcv-btn" (click)="copyNumbers(gselParts())">{{ 'Copy LCSC numbers' | t }}</button>
+      }
+      @if (can()) { <button class="tcv-btn tst-del" (click)="deleteSelected()" [disabled]="saving()">{{ (gselParts().length === gsel().size ? 'Remove from the drawer' : 'Delete') | t }}</button> }
     </wb-selbar>
     @if (view() === 'maker' && maker(); as m) {
-      <wb-selbar [count]="layout() === 'table' ? picked_().size : 0" (clear)="pickAll(false)">
-        @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
-        <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
+      <wb-selbar [count]="layout() === 'table' && !cabinetOn() ? picked_().size : 0" (clear)="pickAll(false)">
+        @if (m.virtual) {
+          <button class="tcv-btn" (click)="exportParts(pickedIds())" [title]="'Save the selected parts as a CSV file' | t">{{ 'Export CSV' | t }}</button>
+          <button class="tcv-btn" (click)="copyNumbers(pickedIds())">{{ 'Copy LCSC numbers' | t }}</button>
+          @if (desk.canEdit()) { <button class="tcv-btn tst-del" (click)="dropParts(pickedIds())">{{ 'Remove from the drawer' | t }}</button> }
+        } @else {
+          @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
+          <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
+        }
       </wb-selbar>
     }
   </section>
+  <!-- an LCSC part, in full: the drawer's part card (part-card.ts) in the detail box (part-desk.ts) -->
+  <app-part-modal [canRun]="canRun()" />
   <!-- ================= one product, in full: over the whole page, so outside the
      section (its container-type would hold a fixed box to the middle column) ================= -->
   @if (detail(); as d) {
@@ -888,7 +931,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 </div>
 <!-- ================= shared pieces ================= -->
 <ng-template #cardT let-p>
-  <button class="mf-card" [attr.data-key]="keyOf(p)" [attr.data-on]="gsel().has(keyOf(p)) ? 1 : null" [attr.aria-pressed]="gsel().has(keyOf(p))"
+  <button class="mf-card" [class.mf-card-lcsc]="!!p.part" [attr.data-key]="keyOf(p)" [attr.data-on]="gsel().has(keyOf(p)) ? 1 : null" [attr.aria-pressed]="gsel().has(keyOf(p))"
           (click)="cardClick($event, p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
     <span class="mf-card-img">
       @if (img(p); as src) { <img [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
@@ -897,6 +940,11 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     </span>
     <span class="mf-card-body">
       <span class="mf-card-name">{{ p.name }}</span>
+      @if (p.part; as pt) {
+        <span class="mf-card-part mono" [title]="pt.package || ''">@if (pt.package) { <span>{{ pkg(pt.package) }}</span> }<span>{{ pt.lcsc }}</span>
+          @if (pt.pins) { <span>{{ fmt(pt.pins === 1 ? '{n} pin' : '{n} pins', { n: pt.pins }) }}</span> }
+          <i class="pdw-badge" [class.pdw-badge-3d]="pt.has_3d" [title]="(pt.has_3d ? 'came with a 3D model' : 'footprint only - it will not stand on the board') | t">{{ pt.has_3d ? '3D' : '2D' }}</i></span>
+      }
       @if (p.price) {
         <span class="mf-card-price" [title]="moneyTip(p.price.amount, p.price.currency)"><b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
           @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }</span>
@@ -907,7 +955,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
   </button>
 </ng-template>
 <ng-template #layoutT>
-  @if (layout() === 'grid') {
+  @if (layout() === 'grid' && !cabinetOn()) {
     <div class="st-seg mf-cols" role="group" [attr.aria-label]="'Cards per row' | t">
       <button type="button" (click)="setCols(-1)" [disabled]="cols() === 2" [title]="'Bigger cards' | t" aria-label="−">−</button>
       <button type="button" class="mf-cols-n" (click)="setCols(0)" [title]="'Cards per row - click for automatic' | t">{{ cols() ? fmt('{n} per row', { n: cols() }) : ('Auto' | t) }}</button>
@@ -915,9 +963,103 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     </div>
   }
   <div class="st-seg mf-layout" role="radiogroup" [attr.aria-label]="'Layout' | t">
-    <button [class.on]="layout() === 'grid'" (click)="layout.set('grid')" [title]="'Grid' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.grid" /></svg>{{ 'Grid' | t }}</button>
-    <button [class.on]="layout() === 'table'" (click)="layout.set('table')" [title]="'Table' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.rows" /></svg>{{ 'Table' | t }}</button>
+    <button [class.on]="layout() === 'grid' && !cabinetOn()" (click)="layout.set('grid'); cabinet.set(false)" [title]="'Grid' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.grid" /></svg>{{ 'Grid' | t }}</button>
+    <button [class.on]="layout() === 'table' && !cabinetOn()" (click)="layout.set('table'); cabinet.set(false)" [title]="'Table' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.rows" /></svg>{{ 'Table' | t }}</button>
+    @if (view() === 'maker' && maker()?.virtual) {
+      <button [class.on]="cabinetOn()" (click)="setCabinet(true)" [title]="'The drawer: groups that open to trays of bins' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.drawer" /></svg>{{ 'Drawer' | t }}</button>
+    }
   </div>
+</ng-template>
+<!-- LCSC, the parts drawer as a seller: what it holds, then adding from LCSC (a number is added, words search) -->
+<ng-template #lcscHead let-m>
+  <header class="tst-head">
+    <div class="tst-title">
+      <h2>LCSC</h2>
+      <span class="st-sub"><a class="mf-link" [href]="m.url" target="_blank" rel="noopener noreferrer">lcsc.com</a>
+        · {{ 'the parts drawer: parts kept for boards, with their footprint, symbol and 3D model on the server' | t }}</span>
+    </div>
+    <div class="tst-acts">
+      <button class="tcv-btn" (click)="toBoards()" [title]="'The board room\\'s Parts tab finds the same parts' | t">{{ 'Open the board room' | t }}</button>
+    </div>
+  </header>
+  <div class="st-tiles mf-mtiles">
+    <div class="st-tile" [attr.data-tone]="m.product_count ? null : 'dim'"><span>{{ 'Parts' | t }}</span><b [wbCount]="m.product_count"></b>
+      <small>{{ fmt('{n} with a 3D model', { n: partStats().with3d }) }}</small></div>
+    <div class="st-tile" [attr.data-tone]="m.categories.length ? null : 'dim'"><span>{{ 'Categories' | t }}</span><b [wbCount]="m.categories.length"></b>
+      <small [title]="m.categories.join(', ')">{{ m.categories.slice(0, 3).join(', ') || '–' }}</small></div>
+    <div class="st-tile" [attr.data-tone]="partStats().out ? 'warn' : null"><span>{{ 'In stock at LCSC' | t }}</span><b>{{ partStats().inStock }} / {{ m.product_count }}</b>
+      <small>{{ fmt('{n} out of stock', { n: partStats().out }) }}</small></div>
+    <div class="st-tile" [attr.data-tone]="partStats().basic ? 'ok' : 'dim'"><span>{{ 'JLCPCB Basic' | t }}</span><b [wbCount]="partStats().basic"></b>
+      <small>{{ 'no loading fee' | t }}</small></div>
+    <div class="st-tile" [attr.data-tone]="partStats().last ? null : 'dim'"><span>{{ 'Last added' | t }}</span><b>{{ when(partStats().last?.added_at) }}</b>
+      <small [title]="partStats().last?.name || ''">{{ partStats().last?.name || '–' }}</small></div>
+  </div>
+  <section class="st-card mf-pageadd mf-lcscadd">
+    <div class="mf-addrow mf-ctl">
+      <span class="mf-label mf-rowlabel">{{ 'Add from LCSC' | t }}</span>
+      <input class="tst-in" [placeholder]="'An LCSC number (C25744) to add, or words to search LCSC' | t" [value]="desk.term()"
+             (input)="desk.term.set($any($event.target).value)" (keydown.enter)="desk.addOrLook()"
+             (keydown.escape)="desk.term.set(''); desk.hits.set([])" [attr.aria-label]="'Search LCSC' | t">
+      <span class="st-sub mf-pagenote">{{ 'a search downloads nothing; Add keeps its footprint and 3D model' | t }}</span>
+      <button class="tcv-btn tcv-btn-accent" (click)="desk.addOrLook()" [disabled]="desk.looking() || desk.adding()?.state === 'running' || !desk.term().trim()">
+        {{ desk.looking() ? '…' : ((desk.isNumber(desk.term()) ? 'Add' : 'Search LCSC') | t) }}</button>
+    </div>
+    <app-part-adding class="mf-adding" />
+    @if (desk.note(); as n) { <p class="st-hint">{{ n }}</p> }
+    @if (desk.hits().length) {
+      <div class="st-table-wrap mf-hits">
+        <table class="st-table mf-gtable">
+          <thead><tr><th>LCSC</th><th>{{ 'Part number' | t }}</th><th>{{ 'Package' | t }}</th><th>{{ 'Manufacturer' | t }}</th>
+            <th class="r">{{ 'Stock' | t }}</th><th class="r">{{ 'Price' | t }}</th>
+            <th class="r"><button class="st-more" (click)="desk.hits.set([])">{{ 'Clear' | t }}</button></th></tr></thead>
+          <tbody>
+            @for (h of desk.hits(); track h.lcsc) {
+              <tr (click)="desk.inspect(h.lcsc)">
+                <td class="mono">{{ h.lcsc }}</td><td class="give"><b>{{ h.mpn }}</b></td><td class="mono dim">{{ h.package }}</td>
+                <td class="dim">{{ h.maker }}</td><td class="r mono">{{ h.stock ?? '–' }}</td>
+                <td class="r" [title]="h.price != null ? moneyTip(h.price, 'USD') : ''">{{ h.price != null ? moneyIn(h.price, 'USD') : '–' }}</td>
+                <td class="r">@if (h.have) { <span class="st-tag" data-tone="ok" [title]="'already in the drawer' | t">{{ 'kept' | t }}</span> }
+                  @else if (desk.canEdit()) { <button class="tcv-btn" (click)="$event.stopPropagation(); desk.addPart(h.lcsc)" [disabled]="desk.adding()?.state === 'running'"
+                                                      [title]="'fetch its footprint and 3D model' | t">{{ (desk.adding()?.lcsc === h.lcsc && desk.adding()?.state === 'running' ? 'adding…' : 'Add') | t }}</button> }</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</ng-template>
+<!-- The drawer's parts as rows: what a part has that a product does not -->
+<ng-template #partsTable let-m>
+  <div class="st-table-wrap">
+    <table class="st-table mf-gtable mf-partstable">
+      <thead><tr><th class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th>
+        <th class="mf-gthumb"></th><th>{{ 'Value' | t }}</th><th>{{ 'Part number' | t }}</th><th>{{ 'Package' | t }}</th><th>LCSC</th><th class="r">{{ 'Pins' | t }}</th>
+        <th class="r">{{ 'Price' | t }}</th><th class="r">{{ 'Stock' | t }}</th><th>{{ 'Category' | t }}</th><th>3D</th><th class="r">{{ 'Added' | t }}</th></tr></thead>
+      <tbody>
+        @for (p of found().slice(0, shownRows()); track p.id) {
+          <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null" [class.mf-pulse-row]="desk.pulse() === p.id"
+              (click)="openDetail(asItem(p, m))" (contextmenu)="openMenu($event, asItem(p, m))">
+            <td class="mf-selcol" (click)="$event.stopPropagation()"><input type="checkbox" class="tcv-check" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td>
+            <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
+            <td><b>{{ p.part?.value || '–' }}</b></td>
+            <td class="give" [title]="p.description">{{ p.part?.mpn || p.name }} <span class="dim">{{ p.part?.maker }}</span></td>
+            <td class="mono dim" [title]="p.part?.package || ''">{{ pkg(p.part?.package) || '–' }}</td>
+            <td class="mono"><button class="mf-namebtn mono" (click)="$event.stopPropagation(); copyNumbers([p.id])" [title]="'Copy the LCSC number' | t">{{ p.id }}</button></td>
+            <td class="r mono">{{ p.part?.pins ?? '–' }}</td>
+            <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b> } @else { <span class="dim">–</span> }</td>
+            <td class="r">@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ p.stock_qty != null ? num(p.stock_qty) : stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
+            <td class="dim" [title]="p.part?.group + ' › ' + p.category">{{ p.category }}</td>
+            <td><i class="pdw-badge" [class.pdw-badge-3d]="p.part?.has_3d">{{ p.part?.has_3d ? '3D' : '2D' }}</i></td>
+            <td class="r dim">{{ when(p.added_at) }}</td>
+          </tr>
+        } @empty { <tr><td colspan="12" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+      </tbody>
+    </table>
+  </div>
+  @if (found().length > shownRows()) {
+    <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
+  }
 </ng-template>
 <ng-template #stockFields>
           <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter()" [attr.aria-label]="'Quantity' | t">
@@ -934,6 +1076,8 @@ export class RoomMfr implements OnDestroy {
   private picked = inject(Selection);
   private auth = inject(Auth);
   private prefs = inject(Prefs);
+  /** The parts drawer's work for the LCSC seller: adding, one part open in full (part-desk.ts). */
+  readonly desk = inject(PartDesk);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
   private gridSearch = viewChild<ElementRef<HTMLInputElement>>('gridSearch');
   private addUrlBox = viewChild<ElementRef<HTMLInputElement>>('addUrlBox');
@@ -1045,7 +1189,8 @@ export class RoomMfr implements OnDestroy {
     else if (this.view() === 'maker' && this.mid()) this.openMaker(this.mid()!, true);
     // A product that was open in full, after F5.
     const pid = this.url.get('p'), pm = this.url.get('pm');
-    if (pid && pm) this.api.get(pm).subscribe({ next: m => { const p = (m.products ?? []).find(x => x.id === pid); if (p) this.openDetail(this.asItem(p, m)); }, error: () => {} });
+    if (pid && pm === LCSC_MAKER) this.openPart(pid);
+    else if (pid && pm) this.api.get(pm).subscribe({ next: m => { const p = (m.products ?? []).find(x => x.id === pid); if (p) this.openDetail(this.asItem(p, m)); }, error: () => {} });
     // The overview's grid: read again when what it shows changes (a breath after typing).
     effect(() => {
       if (this.view() !== 'home' || this.sub() !== 'products') return;
@@ -1071,8 +1216,9 @@ export class RoomMfr implements OnDestroy {
       set('stock', grid && this.gstock() ? 'in' : null);
       set('sort', grid && this.gsort() !== 'new' ? this.gsort() : null);
       set('view', v !== 'run' && this.layout() === 'table' ? 'table' : null);
-      set('p', d ? d.id : null);
-      set('pm', d ? d.maker.id : null);
+      const part = this.desk.seen()?.lcsc ?? this.desk.seeing();
+      set('p', d ? d.id : part);
+      set('pm', d ? d.maker.id : part ? LCSC_MAKER : null);
       if (url.href !== location.href) history.replaceState(null, '', url);
     });
     // A manufacturer's own fetching choice, once it is open.
@@ -1085,9 +1231,15 @@ export class RoomMfr implements OnDestroy {
     // Asked from the command palette: one manufacturer, or the Add form.
     effect(() => {
       const w = this.picked.want();
-      if (!w || (w.what !== 'mfr' && w.what !== 'mfr-add' && w.what !== 'mfr-product')) return;
+      if (!w || (w.what !== 'mfr' && w.what !== 'mfr-add' && w.what !== 'mfr-product' && w.what !== 'mfr-part')) return;
       untracked(() => {
         this.picked.want.set(null);
+        // An LCSC part (the board room, the palette, Chat, the Inventory): the drawer, the part open in full.
+        if (w.what === 'mfr-part') {
+          if (this.view() !== 'maker' || this.mid() !== LCSC_MAKER) this.openMaker(LCSC_MAKER);
+          if (w.arg) this.openPart(w.arg);
+          return;
+        }
         // A product, from the Inventory: its maker open, searched for its name.
         if (w.what === 'mfr-product' && w.arg) {
           const [mid, name] = w.arg.split('\n');
@@ -1096,6 +1248,8 @@ export class RoomMfr implements OnDestroy {
         } else if (w.what === 'mfr' && w.arg) this.openMaker(w.arg); else this.goAdd();
       });
     });
+    // A part added, moved or dropped: the LCSC seller reads again.
+    effect(() => { if (this.desk.changed()) untracked(() => this.read()); });
     // A run the overview counts that ends: the list reads again (its catalog changed).
     effect(() => { this.runs.running(); untracked(() => this.read()); });
   }
@@ -1202,6 +1356,7 @@ export class RoomMfr implements OnDestroy {
 
   openMaker(id: string, keepSearch = false) {
     this.stopFollowing();
+    if (id === LCSC_MAKER) this.desk.load();
     if (!keepSearch && id !== this.mid()) { this.pq.set(''); this.cat.set(''); }
     if (id !== this.mid()) { this.picked_.set(new Set()); this.editing.set(null); this.pageUrl.set(''); }
     this.mid.set(id);
@@ -1242,6 +1397,8 @@ export class RoomMfr implements OnDestroy {
     return { ...p, maker: { id: m.id, name: m.name, domain: m.domain } };
   }
   openDetail(p: GridItem) {
+    // An LCSC part opens as the drawer's part card: pins, footprint, symbol, 3D bodies, costs.
+    if (p.maker.id === LCSC_MAKER) { this.openPart(p.id); return; }
     this.detail.set(p);
     this.shot.set(null);
     this.stockFor.set(null);
@@ -1272,6 +1429,7 @@ export class RoomMfr implements OnDestroy {
     this.gsel.set(new Set(keys));
   }
   deleteSelected() {
+    if (this.gselParts().length === this.gsel().size) { this.dropParts(this.gselParts()); return; }
     const by = new Map<string, string[]>();
     for (const k of this.gsel()) { const i = k.indexOf(':'); by.set(k.slice(0, i), [...(by.get(k.slice(0, i)) ?? []), k.slice(i + 1)]); }
     const n = this.gsel().size;
@@ -1299,6 +1457,7 @@ export class RoomMfr implements OnDestroy {
   }
   /** A product's right-click menu, on the grid's cards and the table's rows. */
   openMenu(e: MouseEvent, p: GridItem) {
+    if (p.part) { this.partMenu(e, p); return; }
     const can = this.can();
     ContextMenu.open(e, [
       { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openDetail(p) },
@@ -1515,6 +1674,7 @@ export class RoomMfr implements OnDestroy {
     });
   }
   deleteProducts(m: Maker, ids: string[]) {
+    if (m.virtual) { this.dropParts(ids); return; }
     if (!ids.length) return;
     const one = ids.length === 1 ? (m.products ?? []).find(p => p.id === ids[0]) : null;
     this.sure(one ? t('Delete this product?') : this.fmt('Delete {n} products?', { n: ids.length }), one?.name ?? '').then(ok => ok && this.api.deleteProducts(m.id, ids).subscribe({
@@ -1722,6 +1882,89 @@ export class RoomMfr implements OnDestroy {
     if (m) this.setMakerRoute(m, null); else this.choice.set(null);
   }
   toProxy() { this.prefs.open.set('proxy'); }
+
+  // ---- LCSC: the parts drawer as a seller (backend/catalog_lcsc.py; the work is part-desk.ts)
+
+  /** Its parts as the cabinet of groups and bins (parts-drawer.ts) instead of cards or rows - kept in this browser. */
+  cabinet = signal<boolean>((() => { try { return localStorage.getItem('redline.catalog.drawer') === 'cabinet'; } catch { return false; } })());
+  cabinetOn = computed(() => this.cabinet() && this.view() === 'maker' && !!this.maker()?.virtual);
+  setCabinet(on: boolean) {
+    this.cabinet.set(on);
+    try { localStorage.setItem('redline.catalog.drawer', on ? 'cabinet' : ''); } catch { /* private window */ }
+  }
+  canRun = () => this.auth.can('run');
+  /** One part in full: the drawer's part card, over the page. */
+  openPart(lcsc: string) {
+    if (!this.desk.held().length) this.desk.load();
+    this.desk.inspect(lcsc);
+  }
+  /** The LCSC seller's figures: with a 3D model, in stock, JLCPCB Basic, the last one added. */
+  partStats = computed(() => {
+    const ps = this.maker()?.virtual ? this.maker()!.products ?? [] : [];
+    const last = ps.reduce<Product | null>((a, p) => !a || (p.added_at ?? '') > (a.added_at ?? '') ? p : a, null);
+    return { with3d: ps.filter(p => p.part?.has_3d).length, inStock: ps.filter(p => p.stock === 'in').length,
+             out: ps.filter(p => p.stock === 'out').length, basic: ps.filter(p => /^basic/i.test(p.part?.jlc_class ?? '')).length, last };
+  });
+  /** The LCSC numbers among the grid's selection. */
+  gselParts = computed(() => [...this.gsel()].filter(k => k.startsWith(LCSC_MAKER + ':')).map(k => k.slice(LCSC_MAKER.length + 1)));
+  /** The package out of EasyEDA's footprint name: 0603, SOT-23-6, LQFN-56. */
+  pkg(name: string | null | undefined): string {
+    const k = (name || '').split('_')[0];
+    return /^[RCL]\d{4}$/.test(k) ? k.slice(1) : k;
+  }
+  private lcscParts(ids: string[]): Product[] {
+    const all = new Map<string, Product>();
+    for (const p of this.maker()?.virtual ? this.maker()!.products ?? [] : []) all.set(p.id, p);
+    for (const p of this.grid()?.items ?? []) if (p.maker.id === LCSC_MAKER) all.set(p.id, p);
+    return ids.map(i => all.get(i)).filter((p): p is Product => !!p);
+  }
+  /** Out of the drawer - asked first; boards that use them keep their copies. */
+  dropParts(ids: string[]) {
+    if (!ids.length) return;
+    const one = ids.length === 1;
+    Confirm.ask({ title: one ? t('Remove this part from the drawer?') : this.fmt('Remove {n} parts from the drawer?', { n: ids.length }),
+                  text: ids.join(', '), ok: t('Remove'), danger: true }).then(async ok => {
+      if (!ok) return;
+      this.saving.set(true);
+      let gone = 0;
+      for (const c of ids) if (await this.desk.drop(c)) gone++;
+      this.saving.set(false);
+      this.gsel.set(new Set()); this.picked_.set(new Set());
+      if (gone < ids.length) this.say(this.fmt('{n} could not be removed', { n: ids.length - gone }), 'danger');
+      if (this.view() === 'maker' && this.mid() === LCSC_MAKER) this.openMaker(LCSC_MAKER, true);
+    });
+  }
+  /** The parts as a CSV: to order from, or to send someone. */
+  exportParts(ids: string[]) {
+    const rows = this.lcscParts(ids);
+    const cell = (v: unknown) => { const x = v == null ? '' : String(v); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+    const head = ['LCSC', 'MPN', 'Value', 'Package', 'Manufacturer', 'Category', 'Pins', 'Price (USD)', 'LCSC stock', 'JLCPCB', '3D model'];
+    const body = rows.map(p => [p.id, p.part?.mpn, p.part?.value, p.part?.package, p.part?.maker, p.category, p.part?.pins,
+                                p.price?.amount, p.stock_qty, p.part?.jlc_class, p.part?.has_3d ? 'yes' : 'no'].map(cell).join(','));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([[head.join(','), ...body].join('\n') + '\n'], { type: 'text/csv' }));
+    a.download = `lcsc-parts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  copyNumbers(ids: string[]) {
+    const text = ids.join(ids.length > 1 ? '\n' : '');
+    const done = () => this.say(ids.length === 1 ? this.fmt('{c} copied', { c: ids[0] }) : this.fmt('{n} LCSC numbers copied', { n: ids.length }));
+    try { navigator.clipboard.writeText(text).then(done, () => {}); } catch { /* no clipboard */ }
+  }
+  /** An LCSC part's right-click menu. */
+  private partMenu(e: MouseEvent, p: GridItem) {
+    ContextMenu.open(e, [
+      { label: 'Open', icon: 'right', kbd: 'Enter', run: () => this.openPart(p.id) },
+      !!p.url && { label: 'Open on LCSC', icon: 'open', kbd: '↗', run: () => window.open(p.url!, '_blank', 'noopener,noreferrer') },
+      { label: 'Datasheet', icon: 'pdf', run: () => this.desk.openDatasheet(p.id) },
+      { label: 'Copy the LCSC number', icon: 'doc', run: () => this.copyNumbers([p.id]) },
+      { sep: true },
+      this.desk.canEdit() && { label: 'Remove from the drawer', icon: 'trash', kbd: 'Del', danger: true, run: () => this.dropParts([p.id]) },
+    ]);
+  }
+  /** The board room, where kept parts go onto boards. */
+  toBoards() { this.picked.room.set('pcb'); }
   pct(n: number, of: number) { return of ? Math.min(100, Math.round(n / of * 100)) : 0; }
   num(n: number) { return Math.round(n).toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-US'); }
   kb(n: number) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
@@ -1750,6 +1993,7 @@ export class RoomMfr implements OnDestroy {
   private failed = (fallback: string) => (e: HttpErrorResponse) => this.say(why(e, fallback));
 
   key(e: KeyboardEvent) {
+    if (this.desk.isOpen()) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName);
     if (e.key === 'Escape' && this.gsel().size && !this.detail()) { this.gsel.set(new Set()); return; }
     if (e.key === 'Delete' && this.gsel().size && !ContextMenu.isOpen() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }

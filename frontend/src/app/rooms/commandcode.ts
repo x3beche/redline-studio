@@ -2856,7 +2856,7 @@ export class RoomCommandCode implements OnDestroy {
       case 'note': this.sel.room.set('notes'); this.sel.ask('note', m.id); break;
       case 'taste': this.sel.room.set('taste'); this.sel.ask('taste', m.id); break;
       case 'manufacturer': this.sel.room.set('mfr'); this.sel.ask('mfr', m.id); break;
-      case 'part': this.sel.room.set('pcb'); setTimeout(() => this.sel.ask('part', m.id), 300); break;
+      case 'part': this.sel.room.set('mfr'); setTimeout(() => this.sel.ask('mfr-part', m.id), 300); break;
       case 'file': FileModal.open({ id: m.id, name: m.label }); break;
       case 'revision': {
         const o = m.open ?? {};

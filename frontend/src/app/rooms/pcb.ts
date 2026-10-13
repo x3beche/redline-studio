@@ -1,12 +1,11 @@
 import {
-  Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
+  Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
 import { moneyIn, moneyTip } from '../money';
 import {
   Activity, BoardComponent, BoardEntry, BoardGeometry, BoardSchematic, BoardStats, BoardGraph, BoardLayout, BoardRules,
-  Boards, LogLine, PartHeld, PartHit,
-  PartPreview, Parts, RuleSchema,
+  Boards, LogLine, PartHeld, RuleSchema,
 } from '../api';
 import { Selection } from '../selection';
 import { HttpClient } from '@angular/common/http';
@@ -27,17 +26,8 @@ import { ImportBoard } from './import-board';
 import { BoardHealth } from './board-health';
 import { T, t } from '../i18n';
 import { SelectOption, UiSelect, plainOptions } from '../ui-select';
-import { PartsDrawer } from './parts-drawer';
-import { PartCard } from './part-card';
-import { warmPart } from './part-assets';
+import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { BoardBodies } from './board-bodies';
-
-/** An add being watched (backend main.py /api/parts-add). */
-interface PartAdd {
-  id?: string; lcsc: string; state: 'running' | 'done' | 'error';
-  steps: { step: string; text: string }[]; error?: string | null; already?: boolean;
-  place?: { group: string; branch: string; by: string } | null;
-}
 
 type SideTab = 'parts' | 'rules' | 'health';
 type Pane = 'layout' | 'schematic' | '3d';
@@ -58,7 +48,8 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, RouteLive, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
-            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartCard, BoardBodies, UiSelect],
+            PartAdding, PartModal, RoomFrame, RulesForm, Sketchpad, T, ToolButton, BoardBodies, UiSelect],
+  providers: [PartDesk],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -172,49 +163,46 @@ type BoardView = Pane | 'split' | 'focus';
         <!-- PARTS, FROM LCSC
              A board can only be drawn out of parts somebody can buy: the
              number is what the footprint and the 3D model are fetched by,
-             so this is where a board gets its shapes. Searching downloads
-             nothing - a search is a list to choose from. -->
+             so this is where a board gets its shapes. What the board work
+             needs is here - find a kept part, open it (its bodies, pins,
+             drawer), add one from LCSC; the whole drawer is the Product
+             Catalog's LCSC seller (rooms/part-desk.ts holds the work). -->
 
-      <!-- ADD A PART: its LCSC number, and the fetch watched step by step
-           (POST /api/parts-add). Anything else typed is a search of LCSC,
-           each hit with its own Add. -->
+      <!-- ADD OR FIND A PART: its LCSC number is added, watched step by
+           step (POST /api/parts-add); anything else typed narrows the kept
+           parts below at once, and Enter searches LCSC, each hit with its
+           own Add. Searching downloads nothing. -->
       <div class="flex shrink-0 gap-1 p-2" style="border-bottom: 1px solid var(--line)">
-        <input [value]="term()" (input)="term.set($any($event.target).value)"
-               (keydown.enter)="addOrLook()"
-               placeholder="C25744, or search"
+        <input [value]="desk.term()" (input)="desk.term.set($any($event.target).value)"
+               (keydown.enter)="desk.addOrLook()" (keydown.escape)="desk.term.set(''); desk.hits.set([])"
+               [placeholder]="'C25744, or search' | t" [attr.aria-label]="'Find or add a part' | t"
                class="tcv-field mono min-w-0 flex-1 px-1.5 py-1 text-[11px]">
-        <button (click)="addOrLook()" [disabled]="looking() || adding()?.state === 'running'"
-                class="tcv-btn tcv-btn-accent shrink-0 px-2.5 py-0.5">
-          {{ looking() ? '…' : isNumber(term()) || !term().trim() ? 'Add' : 'Search' }}
+        <button (click)="desk.addOrLook()" [disabled]="desk.looking() || desk.adding()?.state === 'running'"
+                class="tcv-btn tcv-btn-accent shrink-0 px-2.5 py-0.5"
+                [title]="(desk.isNumber(desk.term()) || !desk.term().trim() ? 'fetch its footprint and 3D model' : 'search LCSC') | t">
+          {{ desk.looking() ? '…' : ((desk.isNumber(desk.term()) || !desk.term().trim() ? 'Add' : 'Search LCSC') | t) }}
         </button>
       </div>
 
-      @if (adding(); as ad) {
-        <div class="tcv-add-progress shrink-0" [attr.data-state]="ad.state">
-          @for (st of ad.steps; track $index; let last = $last) {
-            <div class="tcv-add-step" [class.tcv-add-now]="last">
-              <span class="tcv-add-mark">{{ last ? (ad.state === 'running' ? '…' : ad.state === 'error' ? '!' : '✓')
-                                                 : ad.state === 'error' && $index === ad.steps.length - 2 ? '–' : '✓' }}</span>
-              <span>{{ st.text }}</span>
-            </div>
-          }
-          @if (ad.state !== 'running') {
-            <button class="tcv-add-close" (click)="adding.set(null)" title="dismiss">&times;</button>
-          }
-        </div>
-      }
+      <app-part-adding class="block shrink-0" />
 
-      @if (partNote(); as n) {
+      @if (desk.note(); as n) {
         <p class="shrink-0 px-2 py-1 text-[11px]" style="color: var(--ink-dim)">{{ n }}</p>
       }
 
       <div class="min-h-0 flex-1 overflow-auto">
         <!-- What LCSC has. The number, what it is, and the two things
              that decide between two of the same part: stock and price. -->
-        @for (h of hits(); track h.lcsc) {
-          <div (click)="inspect(h.lcsc)"
+        @if (desk.hits().length) {
+          <div class="tcv-pp-head">
+            <span class="tcv-label">{{ 'from LCSC' | t }}</span><span class="mono tcv-pp-n">{{ desk.hits().length }}</span>
+            <button class="tcv-pp-link" (click)="desk.hits.set([])">{{ 'clear' | t }}</button>
+          </div>
+        }
+        @for (h of desk.hits(); track h.lcsc) {
+          <div (click)="desk.inspect(h.lcsc)"
                class="group flex cursor-pointer items-start gap-2 px-2 py-1.5"
-               [style.background]="seen()?.lcsc === h.lcsc ? 'var(--accent-deep)' : null"
+               [style.background]="desk.seen()?.lcsc === h.lcsc ? 'var(--accent-deep)' : null"
                style="border-bottom: 1px solid var(--line)">
             <div class="min-w-0 flex-1">
               <div class="mono text-[11px]" style="color: var(--ink)">
@@ -224,62 +212,59 @@ type BoardView = Pane | 'split' | 'focus';
               <div class="truncate text-[11px]" [title]="h.mpn ?? ''"
                    style="color: var(--ink-dim)">{{ h.mpn }}</div>
               <div class="mono text-[10px]" style="color: var(--ink-dim)">
-                {{ h.maker }} · {{ countOf(h.stock) }} in stock
+                {{ h.maker }} · {{ countOf(h.stock) }} {{ 'in stock' | t }}
                 @if (h.price != null) { · <span [title]="moneyTip(h.price, 'USD')">{{ money(h.price) }}</span> }
               </div>
             </div>
             @if (h.have) {
               <span class="shrink-0 text-[11px]" style="color: var(--ok)"
-                    title="already in the drawer">kept</span>
+                    [title]="'already in the drawer' | t">{{ 'kept' | t }}</span>
             } @else {
-              <button (click)="keep(h.lcsc, $event)" [disabled]="adding()?.state === 'running'"
+              <button (click)="$event.stopPropagation(); desk.addPart(h.lcsc)" [disabled]="desk.adding()?.state === 'running'"
                       class="tcv-chip shrink-0"
-                      title="fetch its footprint and 3D model">
-                {{ adding()?.lcsc === h.lcsc && adding()?.state === 'running' ? '…' : 'Add' }}
+                      [title]="'fetch its footprint and 3D model' | t">
+                {{ desk.adding()?.lcsc === h.lcsc && desk.adding()?.state === 'running' ? '…' : ('Add' | t) }}
               </button>
             }
           </div>
         }
 
-        <!-- The drawer. Fetched once and kept: a part number means the
-             same thing tomorrow, and a board rebuilt ten times should not
-             ask somebody else's service ten times. A cabinet of drawers,
-             one per group, each a tray of bins (rooms/parts-drawer.ts). -->
-        @if (held().length) {
-          <app-parts-drawer [held]="held()" [seenLcsc]="seen()?.lcsc ?? null"
-                            [pulse]="pulse()" (inspect)="inspect($event)" (forget)="forget($event)" />
+        <!-- The kept parts, one line each, narrowed by what is typed above;
+             the whole drawer - its groups, cards, selection - is the
+             Product Catalog's LCSC seller. -->
+        <div class="tcv-pp-head">
+          <span class="tcv-label">{{ 'in the drawer' | t }}</span>
+          <span class="mono tcv-pp-n">{{ desk.term().trim() && !desk.isNumber(desk.term()) ? kept().length + ' / ' : '' }}{{ desk.held().length }}</span>
+          <button class="tcv-pp-link" (click)="openDrawer()" [title]="'The parts drawer as the LCSC seller of the Product Catalog' | t">
+            {{ 'Open the drawer in Catalog' | t }} &rsaquo;</button>
+        </div>
+        @for (p of kept(); track p.lcsc) {
+          <div class="tcv-pp-row" role="button" tabindex="0" [attr.data-lcsc]="p.lcsc"
+               [class.tcv-pp-on]="desk.seen()?.lcsc === p.lcsc" [class.pdw-pulse]="desk.pulse() === p.lcsc"
+               (click)="desk.inspect(p.lcsc)" (keydown.enter)="desk.inspect(p.lcsc)"
+               [title]="(p.group ?? '') + ' › ' + (p.branch ?? '') + (p.maker ? ' · ' + p.maker : '')">
+            <span class="tcv-pp-val">{{ partHead(p) }}</span>
+            <span class="tcv-pp-sub">{{ p.value ? (p.mpn || p.name) : (p.branch || p.maker) }}</span>
+            <span class="mono tcv-pp-pkg">{{ partPkg(p) }}</span>
+            <span class="mono tcv-pp-c">{{ p.lcsc }}</span>
+            <span class="pdw-badge" [class.pdw-badge-3d]="p.has_3d"
+                  [title]="(p.has_3d ? 'came with a 3D model' : 'footprint only - it will not stand on the board') | t">{{ p.has_3d ? '3D' : '2D' }}</span>
+            @if (canEdit()) {
+              <button class="pdw-forget" (click)="$event.stopPropagation(); forget(p)"
+                      [title]="'forget it' | t" [attr.aria-label]="'forget it' | t">&times;</button>
+            }
+          </div>
+        } @empty {
+          <p class="px-2 py-2 text-[11px]" style="color: var(--ink-dim)">
+            {{ (desk.held().length ? 'No kept part matches - Enter searches LCSC.' : 'The drawer is empty: type an LCSC number to add a part.') | t }}</p>
         }
       </div>
 
       <!-- ONE PART, IN FULL, as a card over the room: what it is, what it
            costs, which drawer it is in, its pins, its footprint, symbol
            and shape - straight from EasyEDA, kept on the server's disk so
-           a second look is instant. Esc or a click beside it closes it. -->
-      @if (seen() || seeing()) {
-        <div (click)="closePart()" animate.leave="tcv-leave" class="tcv-m-veil fixed inset-0 flex items-center justify-center p-4"
-             style="background: var(--scrim); z-index: 1100">
-          <div class="tcv-card tcv-part-modal flex max-h-[90vh] w-[min(60rem,96vw)] flex-col overflow-hidden p-0"
-               (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
-               [attr.aria-label]="('Part' | t) + ' ' + (seen()?.lcsc ?? seeing())"
-               style="box-shadow: 0 12px 36px var(--shadow-hard)">
-            <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto">
-              @if (seen(); as s) {
-                <app-part-card [part]="s" [pins]="seenPins()" [held]="heldRow(s.lcsc)" [places]="places()"
-                               [adding]="adding()" [datasheet]="datasheetFor(s.lcsc)"
-                               [canEdit]="canEdit()" [canRun]="canRun()"
-                               (closed)="closePart()" (keep)="keep(s.lcsc)" (openDatasheet)="openDatasheet(s.lcsc)"
-                               (place)="placeIt(s.lcsc, $event)" />
-              } @else {
-                <div class="flex items-center gap-2 px-4 py-3 text-[11px]" style="color: var(--ink-dim)">
-                  <span class="mono" style="color: var(--ink)">{{ seeing() }}</span>
-                  <span>{{ 'looking it up…' | t }}</span>
-                  <button (click)="closePart()" class="tcv-chip ml-auto px-1.5 py-0" [title]="'close (Esc)' | t">&times;</button>
-                </div>
-              }
-            </div>
-          </div>
-        </div>
-      }
+           a second look is instant. -->
+      <app-part-modal [canRun]="canRun()" />
       } @else if (!here()) {
         <p class="p-3 text-[11px]" style="color: var(--ink-dim)">{{ 'Open a board to see this.' | t }}</p>
       } @else {
@@ -590,8 +575,7 @@ export class RoomPcb implements OnDestroy {
   private picked = inject(Selection);
   private prefs = inject(Prefs);
   private activity = inject(Activity);
-  /** Read by the template for the preview URLs. */
-  store = inject(Parts);
+  private http = inject(HttpClient);
   /** The flat drawing on screen, the 3D view, and the pad over either
    *  while the view is held. The 3D one by its shape, not its class: its
    *  class would pull three.js out of the deferred chunk. */
@@ -706,15 +690,8 @@ export class RoomPcb implements OnDestroy {
   private statsAt = 0;
   /** The task Board health was last opened for, so it opens once per task. */
   private shownFor: string | null = null;
-  /** The drawer of parts, and what a search in LCSC turned up. */
-  held = signal<PartHeld[]>([]);
-  hits = signal<PartHit[]>([]);
-  term = signal('');
-  looking = signal(false);
-  partNote = signal('');
-  /** The part open in the column, and the one being looked up. */
-  seen = signal<PartPreview | null>(null);
-  seeing = signal<string | null>(null);
+  /** The parts drawer's work: kept parts, LCSC's search, adding, one part open (rooms/part-desk.ts). */
+  readonly desk = inject(PartDesk);
 
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -754,7 +731,7 @@ export class RoomPcb implements OnDestroy {
           setTimeout(() => this.ide.set(true), this.here()?._id === id ? 0 : 1200);
         } else if (w.what === 'release' && this.here()) this.releasing.set(true);
         else if (w.what === 'build' && this.here() && !this.building() && !this.imported()) this.build();
-        else if (w.what === 'part' && w.arg) { this.side.set('parts'); this.term.set(w.arg); this.look(); }
+        else if (w.what === 'part' && w.arg) { this.side.set('parts'); this.desk.term.set(w.arg); this.desk.look(); }
       });
     });
     this.readUrl();
@@ -767,7 +744,7 @@ export class RoomPcb implements OnDestroy {
       };
     });
     this.refresh();
-    this.drawer();
+    this.desk.load();
     this.tick();
     // The room is only mounted while its tab is on, so this stops when
     // somebody leaves rather than polling behind another room.
@@ -935,177 +912,37 @@ export class RoomPcb implements OnDestroy {
     this.picked.boardDraft.set(null);
   }
 
-  // ---- parts, from LCSC ----
+  // ---- parts, from LCSC (the work is rooms/part-desk.ts) ----
 
-  private drawer() {
-    this.store.held().subscribe({ next: rows => this.held.set(rows) });
-  }
-
-  /** Look in LCSC's catalogue. A part number finds itself; anything else
-   *  is a search, and nothing is downloaded by looking. */
-  look() {
-    const q = this.term().trim();
-    if (!q || this.looking()) return;
-    this.looking.set(true);
-    this.partNote.set('');
-    this.store.search(q).subscribe({
-      next: rows => {
-        this.looking.set(false);
-        this.hits.set(rows);
-        if (!rows.length) this.partNote.set('nothing came back for that');
-      },
-      error: e => {
-        this.looking.set(false);
-        this.partNote.set(String(e?.error?.detail ?? 'LCSC did not answer'));
-      },
-    });
-  }
-
-  /** Open one part in the column: the facts at once, the drawings and
-   *  the model as they arrive. Clicking through a list quickly starts
-   *  several lookups; only the last one clicked may land. */
-  inspect(lcsc: string) {
-    if (this.seen()?.lcsc === lcsc) return;
-    this.seeing.set(lcsc);
-    this.seen.set(null);
-    this.seenPins.set(null);
-    // A part in the drawer is on the server's disk: its drawings, model and
-    // footprint frame are asked for now, beside the facts, not after them.
-    const kept = this.heldRow(lcsc);
-    if (kept) warmPart(lcsc, kept.has_3d);
-    if (!this.places().length) {
-      this.http.get<{ group: string; branches: string[] }[]>('/api/parts-places')
-        .subscribe({ next: p => this.places.set(p) });
-    }
-    this.http.get<{ number: string; name: string }[]>(`/api/parts/${encodeURIComponent(lcsc)}/pins`).subscribe({
-      next: p => { if (this.seeing() === lcsc) this.seenPins.set(p); },
-      error: () => { if (this.seeing() === lcsc) this.seenPins.set([]); },
-    });
-    this.store.preview(lcsc).subscribe({
-      next: p => { if (this.seeing() === lcsc) this.seen.set(p); },
-      error: e => {
-        if (this.seeing() !== lcsc) return;
-        this.seeing.set(null);
-        this.partNote.set(String(e?.error?.detail ?? `${lcsc} could not be looked up`));
-      },
-    });
-  }
-
-  // ---- the datasheet, on request (GET /api/parts/{C}/datasheet) ----
-
-  /** One part's datasheet: being fetched, at hand, or why not. */
-  datasheet = signal<{ lcsc: string; state: 'busy' | 'ready' | 'error'; text?: string } | null>(null);
-  datasheetFor(lcsc: string) { const d = this.datasheet(); return d && d.lcsc === lcsc ? d : null; }
-  datasheetUrl(lcsc: string): string { return `/api/parts/${encodeURIComponent(lcsc)}/datasheet`; }
-
-  /** Fetched by the server the first time (two polite asks of LCSC), then
-   *  opened in a tab from its kept copy. If the browser holds the tab back
-   *  because the fetch took a while, the button has become a link. */
-  openDatasheet(lcsc: string) {
-    if (this.datasheetFor(lcsc)?.state === 'busy') return;
-    this.datasheet.set({ lcsc, state: 'busy' });
-    this.http.get(this.datasheetUrl(lcsc), { responseType: 'blob' }).subscribe({
-      next: () => {
-        this.datasheet.set({ lcsc, state: 'ready' });
-        const w = window.open(this.datasheetUrl(lcsc), '_blank');
-        if (w) w.opener = null;
-      },
-      error: async e => {
-        let text = t('LCSC did not answer');
-        try {
-          const raw = e?.error instanceof Blob ? await e.error.text() : '';
-          text = String(JSON.parse(raw)?.detail ?? text);
-        } catch { /* not JSON: keep the plain line */ }
-        // A 404 is LCSC having none: said in the page's language.
-        if (e?.status === 404) text = t('LCSC has no datasheet for this part');
-        this.datasheet.set({ lcsc, state: 'error', text });
-      },
-    });
-  }
-
-  closePart() {
-    this.seen.set(null);
-    this.seeing.set(null);
-  }
-  @HostListener('document:keydown.escape')
-  escape() { if (this.seen() || this.seeing()) this.closePart(); }
-
-  /** Keep one: its footprint, and its 3D model if it has one. That is
-   *  what puts it within reach of a board. Watched step by step. */
-  keep(lcsc: string, ev?: Event) {
-    ev?.stopPropagation();
-    this.addPart(lcsc);
-  }
-
-  // ---- adding a part, watched (POST /api/parts-add) ----
-
-  adding = signal<PartAdd | null>(null);
-  /** The bin to show and blink once its part is added or asked for again. */
-  pulse = signal<string | null>(null);
-  private http = inject(HttpClient);
-  private addTimer?: ReturnType<typeof setTimeout>;
-
-  isNumber(t: string): boolean { return /^\s*c\d{2,}\s*$/i.test(t); }
-
-  /** A C-number is added; anything else is a search of LCSC. */
-  addOrLook() {
-    const t = this.term().trim();
-    if (!t) { this.adding.set({ lcsc: '', state: 'error', steps: [{ step: 'error', text: 'type an LCSC number - C25744' }] }); return; }
-    if (this.isNumber(t)) this.addPart(t.toUpperCase());
-    else this.look();
-  }
-
-  addPart(lcsc: string) {
-    if (this.adding()?.state === 'running') return;
-    this.partNote.set('');
-    this.adding.set({ lcsc, state: 'running', steps: [{ step: 'start', text: `${lcsc}: starting…` }] });
-    this.http.post<PartAdd>('/api/parts-add', { lcsc }).subscribe({
-      next: job => this.follow(job),
-      error: e => this.adding.set({ lcsc, state: 'error',
-        steps: [{ step: 'error', text: String(e?.error?.detail ?? 'the server did not answer') }] }),
-    });
-  }
-
-  private follow(job: PartAdd) {
-    this.adding.set(job);
-    clearTimeout(this.addTimer);
-    if (job.state === 'running') {
-      this.addTimer = setTimeout(() => this.http.get<PartAdd>(`/api/parts-add/${job.id}`).subscribe({
-        next: j => this.follow(j),
-        error: () => this.adding.set({ ...job, state: 'error',
-          steps: [...job.steps, { step: 'error', text: 'lost track of the add - look in the drawer' }] }),
-      }), 600);
-      return;
-    }
-    if (job.state !== 'done') return;
-    this.hits.update(rows => rows.map(r => r.lcsc === job.lcsc ? { ...r, have: true } : r));
-    this.term.set('');
-    this.store.held().subscribe({ next: rows => {
-      this.held.set(rows);
-      this.pulse.set(job.lcsc);
-      setTimeout(() => this.pulse() === job.lcsc && this.pulse.set(null), 2500);
-    } });
-    this.seen.set(null);
-    this.seeing.set(null);
-    this.inspect(job.lcsc);
-  }
-
-  // ---- the part card's drawer, and its pins ----
-
-  places = signal<{ group: string; branches: string[] }[]>([]);
-  seenPins = signal<{ number: string; name: string }[] | null>(null);
-  heldRow(lcsc: string): PartHeld | undefined { return this.held().find(p => p.lcsc === lcsc); }
-  placeIt(lcsc: string, value: string | null) {
-    const [group, branch] = value ? [value.slice(0, value.indexOf('/')), value.slice(value.indexOf('/') + 1)] : [null, null];
-    this.http.put(`/api/parts/${encodeURIComponent(lcsc)}/place`, { group, branch }).subscribe({
-      next: () => this.drawer(),
-      error: e => this.partNote.set(String(e?.error?.detail ?? 'could not move it')),
-    });
-  }
-
-  forget(part: PartHeld, ev?: Event) {
-    ev?.stopPropagation();
-    this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
+  /** The kept parts, one line each: narrowed by the words typed (a C-number
+   *  is an add, not a filter), in the drawer's order - group, then value. */
+  kept = computed(() => {
+    const q = this.desk.term().trim().toLowerCase(), words = q && !this.desk.isNumber(q) ? q.split(/\s+/) : [];
+    const ORDER = ['ICs', 'Passives', 'Discretes', 'Electromechanical', 'Frequency', 'Displays', 'Other'];
+    const rank = (g?: string) => { const i = ORDER.indexOf(g || 'Other'); return i < 0 ? ORDER.length : i; };
+    return this.desk.held()
+      .filter(p => !words.length || words.every(w => [p.lcsc, p.value, p.mpn, p.name, p.maker, p.group, p.branch, p.category]
+        .some(f => (f || '').toLowerCase().includes(w))))
+      .sort((a, b) => rank(a.group) - rank(b.group) || (a.branch || '').localeCompare(b.branch || '')
+        || (a.value || a.mpn || a.lcsc).localeCompare(b.value || b.mpn || b.lcsc, undefined, { numeric: true }));
+  });
+  /** What a line is called: the value if it has one, else the part number. */
+  partHead(p: PartHeld): string { return (p.value || p.mpn || p.name || p.lcsc).replace(/(\d)u(?=[FHΩ])/g, '$1µ'); }
+  /** The package out of EasyEDA's footprint name: 0603, SOT-23-6. */
+  partPkg(p: PartHeld): string { const k = (p.name || '').split('_')[0]; return /^[RCL]\d{4}$/.test(k) ? k.slice(1) : k; }
+  forget(p: PartHeld) { this.desk.drop(p.lcsc); }
+  /** The whole drawer: the Product Catalog's LCSC seller, with the part open
+   *  in full there when one is open here (?ws=catalog&m=lcsc&p=C…&pm=lcsc). */
+  openDrawer() {
+    const c = this.desk.seen()?.lcsc ?? null;
+    this.desk.closePart();
+    const url = new URL(location.href);
+    url.searchParams.set('m', 'lcsc');
+    for (const k of ['q', 'cat', 'sub', 'run']) url.searchParams.delete(k);
+    if (c) { url.searchParams.set('p', c); url.searchParams.set('pm', 'lcsc'); }
+    history.replaceState(null, '', url);
+    this.picked.room.set('mfr');
+    setTimeout(() => this.picked.ask('mfr-part', c ?? ''), 50);
   }
 
   /** An LCSC price: dollars as LCSC sells, the display currency in its tooltip (money.ts). */

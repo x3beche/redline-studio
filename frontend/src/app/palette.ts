@@ -331,7 +331,7 @@ export class Palette {
         case 'revision': return { group: 'Revisions', icon: '✦', label: h.label, hint: h.text,
           run: () => this.picked.room.set((h.room === 'pcb' ? 'pcb' : 'cad') as never) };
         default: return { group: 'Parts', icon: '⬚', label: h.label, hint: h.text,
-          run: () => { this.picked.room.set('pcb'); setTimeout(() => this.picked.ask('part', h.id), 300); } };
+          run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-part', h.id), 300); } };
       }
     });
   }

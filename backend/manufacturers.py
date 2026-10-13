@@ -67,6 +67,7 @@ from pydantic import BaseModel, Field
 
 from . import access, actors, llm
 from . import catalog_facts as cf
+from . import catalog_lcsc
 from .taste import CHARS_PER_TOKEN, Stopped, Tracker, _closed, _pid_alive, _seconds
 
 router = APIRouter(prefix="/api/manufacturers")
@@ -2567,7 +2568,13 @@ async def _pages_given(urls: list[str]) -> list[str]:
 async def api_list(q: str = ""):
     db = _db()
     lasts = await _lasts(db)
-    return [out(d, lasts.get(d["_id"]), full=False) for d in await listing(db, q[:200])]
+    docs = await listing(db, q[:200])
+    # LCSC, the parts drawer as a seller (backend/catalog_lcsc.py), among the makers by its name.
+    words = [fold(w) for w in q.split() if w]
+    if not words or all(w in fold("lcsc lcsc.com parts drawer") for w in words):
+        if drawer := await catalog_lcsc.maker(db):
+            docs = sorted([*docs, drawer], key=lambda d: fold(d.get("name") or ""))
+    return [out(d, lasts.get(d["_id"]), full=False) for d in docs]
 
 
 def _route_in(value):
@@ -2659,7 +2666,9 @@ async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str 
                        max: float | None = None, stock: str = "", sort: str = "new", page: int = 1, size: int = 60):
     """The products of every maker, for the catalog's grid: filtered,
     sorted, a page of them - and what the filters can choose from."""
-    docs = await listing(_db())
+    db = _db()
+    drawer = await catalog_lcsc.maker(db)
+    docs = [*await listing(db), *([drawer] if drawer else [])]
     rows = all_products(docs, q[:200], cat[:120], maker[:40], seller[:200], min, max, stock,
                         sort if sort in SORTS else "new")
     size = max_(1, min_(size, 200))
@@ -2811,6 +2820,8 @@ async def api_import(body: dict):
 @router.get("/{mid}")
 async def api_get(mid: str):
     db = _db()
+    if mid == catalog_lcsc.MID:
+        return out(await catalog_lcsc.maker(db, always=True))
     doc = await get(db, mid)
     if not doc:
         _404(mid)

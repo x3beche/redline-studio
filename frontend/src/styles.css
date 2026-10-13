@@ -4783,6 +4783,27 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
 .tcv-part-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px; }
 .tcv-part-modal .pdw-pinlist { max-height: 220px; overflow-y: auto; }
 
+/* The board room's Parts tab (rooms/pcb.ts): the kept parts one line each,
+   the whole drawer being the Product Catalog's LCSC seller. */
+.tcv-pp-head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 4px; }
+.tcv-pp-head .tcv-label, .tcv-pp-n { white-space: nowrap; }
+.tcv-pp-n { font-size: 10px; color: var(--ink-dim); }
+.tcv-pp-link { margin-left: auto; padding: 0; border: 0; background: none; cursor: pointer; font-size: 11px; color: var(--accent); white-space: nowrap; }
+.tcv-pp-link:hover { text-decoration: underline; }
+.tcv-pp-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto auto auto 14px; align-items: baseline; gap: 6px;
+  padding: 4px 8px; font-size: 11px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.tcv-pp-row:hover { background: var(--hover); }
+.tcv-pp-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tcv-pp-row.tcv-pp-on { background: var(--accent-deep); }
+.tcv-pp-row.pdw-pulse { animation: pdw-pulse .5s ease-in-out 3; }
+.tcv-pp-val { max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-bright); font-weight: 600; }
+.tcv-pp-sub, .tcv-pp-pkg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
+.tcv-pp-pkg { max-width: 8em; font-size: 10px; }
+.tcv-pp-c { font-size: 10px; color: var(--ink-dim); }
+.tcv-pp-row .pdw-forget { opacity: 0; }
+.tcv-pp-row:hover .pdw-forget, .tcv-pp-row:focus-within .pdw-forget { opacity: 1; }
+@media (hover: none) { .tcv-pp-row .pdw-forget { opacity: 1; } }
+
 @media (max-width: 768px) {
   .tcv-part-grid { grid-template-columns: minmax(0, 1fr); }
   .pdw-tray { max-height: 36vh; }
