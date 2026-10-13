@@ -299,3 +299,17 @@ def test_a_typed_scale_is_kept_as_a_ratio():
     for bad in ("1:0", "abc", "1000:1", "1:1000"):
         with pytest.raises(drawlayout.LayoutError):
             drawlayout.validate({"views": [{"view": "front", "x": .05, "y": .05, "w": .5, "h": .6, "scale": bad}]})
+
+
+def test_fill_takes_a_ratio_to_a_tenth_either_way():
+    """Above 1:1 the ratio is n:1, below it 1:n, rounded so the view still fits."""
+    # techdraw.py runs in its own image (fpdf2, build123d): the function alone is read here.
+    src = (release.ROOT / "tools" / "techdraw.py").read_text()
+    ns: dict = {}
+    exec(src[src.index("def fill_ratio"):src.index("def pads(")], ns)
+    fill_ratio = ns["fill_ratio"]
+    assert fill_ratio(1.74) == (1.7, 1)
+    assert fill_ratio(2.0) == (2, 1)
+    assert fill_ratio(0.77) == (1, 1.3)
+    assert fill_ratio(0.42) == (1, 2.4)
+    assert fill_ratio(0.5) == (1, 2)

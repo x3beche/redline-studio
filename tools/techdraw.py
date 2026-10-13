@@ -189,10 +189,11 @@ def fill_ratio(k: float):
     0.42 -> (1, 2.4); never 0."""
     if k >= 1:
         a = max(1.0, int(k * 10 + 1e-9) / 10)
-    return (int(a) if a.is_integer() else a, 1)
+        return (int(a) if a.is_integer() else a, 1)
     d = int((1 / max(k, 1e-6)) * 10 + 0.999999) / 10          # 1/k rounded up to a tenth
     d = max(d, 1.1)
     return (1, int(d) if d.is_integer() else d)
+
 
 def pads(dims: bool):
     """Room around a view in a box: its dimensions' too when it has them."""
