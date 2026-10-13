@@ -66,6 +66,7 @@ class Kind:
     enough: int = 3                              # a search that finds this many needs no second one
     after_save: Callable[[object, dict], Awaitable[None]] | None = None
     refine: Callable[[list[dict], str], list[dict]] | None = None   # the items read again with the words searched
+    specs_of: Callable[[str], dict] | None = None                   # what an item's title says of it (size, material)
     extra: tuple[str, ...] = field(default_factory=tuple)   # fields an item has besides the common ones
 
 
@@ -310,6 +311,27 @@ def _check(name: str, data: bytes) -> None:
         raise ValueError(f"{name} is not a STEP (it does not start with ISO-10303-21)")
 
 
+def title_from_file(key: str, got: list[tuple[str, bytes]]) -> str:
+    """An item's title from the files it was given: a file's name past the
+    item's key ("92000A130_Passivated 18-8 Stainless Steel Pan Head Phillips
+    Screws.STEP" -> "Passivated 18-8 Stainless Steel Pan Head Phillips
+    Screws"), else the product a STEP names in its own header."""
+    for n, _ in got:
+        stem = PurePosixPath(n).stem
+        rest = re.sub(rf"^\s*{re.escape(key)}\s*[-_ ,.]*", "", stem, flags=re.I) if key.lower() in stem.lower() else ""
+        rest = re.sub(r"[_]+", " ", rest).strip(" -_.,")
+        if len(rest) >= 4 and re.search(r"[A-Za-z]{3}", rest):
+            return rest
+    for n, d in got:
+        if _suffix(n) in (".step", ".stp"):
+            m = re.search(rb"PRODUCT\s*\(\s*'([^']{4,200})'\s*,\s*'([^']*)'", d[:400_000])
+            if m:
+                name = (m.group(2) or m.group(1)).decode("latin-1", "replace").strip()
+                if name and name.lower() != key.lower() and re.search(r"[A-Za-z]{3}", name):
+                    return name
+    return ""
+
+
 async def put_files(db, k: Kind, key: str, name: str, data: bytes, by: dict | None = None,
                     prefix: str = "") -> dict | None:
     """Files dropped on a saved item, kept in Files (folder named after the
@@ -337,6 +359,15 @@ async def put_files(db, k: Kind, key: str, name: str, data: bytes, by: dict | No
     all_files = [*kept, *(have.get("files") or [])][:100]
     cad = next((f for f in kept if f["kind"] == "step"), None) or next((f for f in kept if f["kind"] == "mesh"), None)
     sets = {"files": all_files, "updated_at": _now(), **({"cad": cad} if cad else {})}
+    # Saved by its number alone (a STEP dropped on the page): its name and
+    # what it says come from the file - "92000A130_Passivated 18-8 Stainless
+    # Steel Pan Head Phillips Screws.STEP", else the STEP's own product name.
+    if not have.get("title"):
+        title = title_from_file(have["key"], got)
+        if title:
+            sets["title"] = title[:TEXTS["title"]]
+            if k.specs_of and not have.get("specs"):
+                sets["specs"] = k.specs_of(title)
     await db[COLL].update_one({"_id": have["_id"]}, {"$set": sets, "$unset": {"fetch": ""}})
     return {**have, **sets}
 

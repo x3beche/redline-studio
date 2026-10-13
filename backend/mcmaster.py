@@ -336,7 +336,7 @@ KIND = linked.register(linked.Kind(
             "its own page, and its STEP, downloaded there, is kept here for the CAD models.",
     key_of=part_of, url_of=url_of, searches=searches, parse=parse, search_site=DOMAIN,
     accept=(".step", ".stp", ".zip"), after_save=auto_step,
-    refine=refine))
+    refine=refine, specs_of=specs_of))
 
 
 # ---------------------------------------------------------------- routes

@@ -372,3 +372,14 @@ def test_mcmaster_reads_turkish_and_guesses_no_length_without_a_thread():
              {"key": "cat:standoffs/thread-size~m3", "kind": "category", "title": "M3 Standoffs", "url": "", "specs": {}},
              {"key": "cat:standoffs/thread-size~m3-5", "kind": "category", "title": "M3.5 Standoffs", "url": "", "specs": {}}]
     assert [c["title"] for c in mcmaster.refine(items, "M3 standoff 10 mm")] == ["M3 Standoffs"]
+
+
+def test_a_part_saved_by_its_number_takes_its_name_from_the_file():
+    """A STEP dropped on the page saves the part by the number in its name;
+    the rest of the name, else the STEP's own product name, is its title."""
+    from backend import linked
+    assert linked.title_from_file("92000A130", [("92000A130_Passivated 18-8 Stainless Steel Pan Head Phillips Screws.STEP", b"")]) \
+        == "Passivated 18-8 Stainless Steel Pan Head Phillips Screws"
+    step = b"ISO-10303-21;\nDATA;\n#5=PRODUCT('92000A130','Pan Head Phillips Screw M3','',(#2));\nENDSEC;"
+    assert linked.title_from_file("92000A130", [("92000A130.STEP", step)]) == "Pan Head Phillips Screw M3"
+    assert linked.title_from_file("92000A130", [("drawing.STEP", b"ISO-10303-21;")]) == ""
