@@ -65,6 +65,7 @@ class Kind:
     caution: str = ""                            # one line said beside every result
     enough: int = 3                              # a search that finds this many needs no second one
     after_save: Callable[[object, dict], Awaitable[None]] | None = None
+    refine: Callable[[list[dict], str], list[dict]] | None = None   # the items read again with the words searched
     extra: tuple[str, ...] = field(default_factory=tuple)   # fields an item has besides the common ones
 
 
@@ -138,7 +139,10 @@ async def find_steps(k: Kind, q: str, *, count: int = 8, who: str = ""):
                "ms": int((time.monotonic() - t0) * 1000), "enough": items >= k.enough}
         if items >= k.enough:
             break
-    out["results"] = k.parse(rows)[:max(1, min(count, 20))]
+    found = k.parse(rows)
+    if k.refine:
+        found = k.refine(found, q)
+    out["results"] = found[:max(1, min(count, 20))]
     out["ok"] = out["error"] is None
     yield {"type": "done", **out}
 

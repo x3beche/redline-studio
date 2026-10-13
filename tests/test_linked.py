@@ -335,3 +335,23 @@ def test_mcmaster_category_pages_come_up_after_parts():
     cats = [r for r in got if r.get("kind") == "category"]
     assert [c["key"] for c in cats] == ["cat:screws/thread-size~m3", "cat:phillips-pan-head-machine-screws"]
     assert cats[0]["specs"] == {"Thread size": "M3"} and cats[0]["url"] == "https://www.mcmaster.com/products/screws/thread-size~m3/"
+
+
+def test_mcmaster_categories_open_on_the_size_asked_for():
+    """The words searched become the filters McMaster writes in its addresses,
+    so a category opens on that size; categories carrying more of the words
+    come first."""
+    from backend import mcmaster
+    assert [f[0] for f in mcmaster.filters_of("m3 10mm phillips head")] == \
+        ["system-of-measurement~metric", "length~10-mm", "thread-size~m3"]
+    assert [f[0] for f in mcmaster.filters_of("M2.5 x 6 mm")] == \
+        ["system-of-measurement~metric", "length~6-mm", "thread-size~m2-5"]
+    items = [{"key": "cat:mil-spec-machine-screws", "kind": "category", "title": "Mil. Spec. Machine Screws", "url": "", "specs": {}},
+             {"key": "cat:screws/thread-size~m3", "kind": "category", "title": "M3 Screws", "url": "", "specs": {"Thread size": "M3"}},
+             {"key": "cat:phillips-pan-head-machine-screws", "kind": "category", "title": "Phillips Pan Head Machine Screws", "url": "", "specs": {}}]
+    got = mcmaster.refine(items, "m3 10mm philiphs pan head")
+    assert got[0]["title"] == "Phillips Pan Head Machine Screws"
+    assert got[0]["url"] == ("https://www.mcmaster.com/products/phillips-pan-head-machine-screws/"
+                             "system-of-measurement~metric/length~10-mm/thread-size~m3/")
+    m3 = next(c for c in got if c["title"] == "M3 Screws")
+    assert m3["url"].count("thread-size~m3") == 1 and m3["filtered"]

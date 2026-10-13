@@ -156,6 +156,64 @@ def categories(rows: list[dict]) -> list[dict]:
     return list(out.values())
 
 
+# What the words searched say that McMaster's addresses filter on, as they
+# write it: /products/<category>/system-of-measurement~metric/length~10-mm/thread-size~m3/
+_THREAD = re.compile(r"\bm\s?(\d{1,2}(?:[.,]\d)?)\b", re.I)
+_LENGTH = re.compile(r"(?:\bx\s*|\b)(\d{1,3}(?:[.,]\d)?)\s*mm\b", re.I)
+_STOP = {"mm", "x", "and", "for", "with", "the", "a", "of", "screw", "screws", "ve", "icin", "için"}
+
+
+def filters_of(q: str) -> list[tuple[str, str, str]]:
+    """(address part, label, value) for each filter the words name: a metric
+    thread (M3 -> thread-size~m3, metric), a length (10 mm -> length~10-mm)."""
+    out: list[tuple[str, str, str]] = []
+    m = _THREAD.search(q)
+    if m:
+        size = m.group(1).replace(",", ".")
+        out.append(("system-of-measurement~metric", "System", "Metric"))
+        rest = q[:m.start()] + q[m.end():]
+        n = _LENGTH.search(rest)
+        if n:
+            ln = n.group(1).replace(",", ".")
+            out.append((f"length~{ln.replace('.', '-')}-mm", "Length", f"{ln} mm"))
+        out.append((f"thread-size~m{size.replace('.', '-')}", "Thread size", f"M{size}"))
+    else:
+        n = _LENGTH.search(q)
+        if n:
+            ln = n.group(1).replace(",", ".")
+            out.append((f"length~{ln.replace('.', '-')}-mm", "Length", f"{ln} mm"))
+    return out
+
+
+def _words(q: str) -> set[str]:
+    return {w for w in re.findall(r"[a-zçğıöşü]{3,}", q.lower()) if w not in _STOP} | \
+           ({"phillips"} if re.search(r"phil+ip", q, re.I) else set())
+
+
+def refine(items: list[dict], q: str) -> list[dict]:
+    """Category pages made to land on the size asked for - its filters added
+    to the address - and put in order of how many of the words they carry;
+    parts stay first."""
+    fl = filters_of(q)
+    words = _words(q)
+    parts = [i for i in items if i.get("kind") != "category"]
+    cats = []
+    for c in items:
+        if c.get("kind") != "category":
+            continue
+        path = c["key"][4:]
+        have = {seg.partition("~")[0] for seg in path.split("/")}
+        add = [f for f in fl if f[0].partition("~")[0] not in have]
+        if add:
+            path = path.rstrip("/") + "/" + "/".join(f[0] for f in add)
+            c = {**c, "url": f"https://www.mcmaster.com/products/{path}/",
+                 "specs": {**c.get("specs", {}), **{f[1]: f[2] for f in add}}, "filtered": True}
+        text = f"{c['title']} {path}".lower().replace("-", " ")
+        cats.append((sum(1 for w in words if w in text), c))
+    cats.sort(key=lambda t: -t[0])
+    return parts + [c for _, c in cats]
+
+
 def searches(q: str) -> list[str]:
     return [q, f"{q} McMaster-Carr part number"]
 
@@ -239,7 +297,8 @@ KIND = linked.register(linked.Kind(
     summary="Parts saved from McMaster-Carr: found through a web search, never read from its site; each links to "
             "its own page, and its STEP, downloaded there, is kept here for the CAD models.",
     key_of=part_of, url_of=url_of, searches=searches, parse=parse, search_site=DOMAIN,
-    accept=(".step", ".stp", ".zip"), after_save=auto_step))
+    accept=(".step", ".stp", ".zip"), after_save=auto_step,
+    refine=refine))
 
 
 # ---------------------------------------------------------------- routes
