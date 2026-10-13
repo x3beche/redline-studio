@@ -1675,6 +1675,7 @@ const TR: Record<string, string> = {
   'All users': 'Tüm kullanıcılar',
   'Users': 'Kullanıcılar',
   'Dashboard': 'Panel',
+  'Find': 'Bul',
   'Open it and pick the size: each row shows its part number. Paste that number above to save the part.': 'Aç ve ölçüyü seç: her satırda parça numarası yazar. O numarayı yukarı yapıştırınca parça kaydedilir.',
   'Searching': 'Aranıyor',
   '{s} through a web search of its library': '{s}, kütüphanesinin web aramasıyla',

@@ -4,7 +4,7 @@
 .ln-head { align-items: flex-end; }
 .ln-counts { display: flex; align-items: center; gap: 10px; }
 
-.ln-find { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.ln-find { display: flex; flex-direction: column; gap: 8px; }
 .ln-bar { position: relative; display: flex; gap: 8px; align-items: stretch; }
 .ln-bar-ico { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: var(--ink-dim); pointer-events: none; }
 .ln-in { flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 12px 0 38px; font: inherit; font-size: 14.5px; color: var(--ink-bright);

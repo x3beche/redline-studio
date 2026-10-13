@@ -264,16 +264,17 @@ const TINT = `
     @if (src() === 'mcmaster') { <button class="st-more" (click)="toSettings()" [title]="'McMaster-Carr API access: Settings > Proxy & Data' | t">{{ 'API access' | t }}</button> }
   </div>
 </header>
-<section class="st-card ln-find" role="search">
-  <div class="ln-bar">
-    <svg class="ln-bar-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6L20 21l1-1-5.4-5.47A6.5 6.5 0 0 0 10.5 4z" /></svg>
-    <input class="ln-in" [placeholder]="m().find | t" [value]="desk.term()" (input)="desk.term.set($any($event.target).value)"
+<section class="st-card mf-pageadd ln-find" role="search">
+  <!-- One slim row like the other forms of the catalog: what it does, the words, the button. -->
+  <div class="mf-addrow mf-ctl">
+    <span class="mf-label mf-rowlabel">{{ fmt('Find on {s}', { s: m().name }) }}</span>
+    <input class="tst-in" [placeholder]="m().find | t" [value]="desk.term()" (input)="desk.term.set($any($event.target).value)"
            (keydown.enter)="desk.go()" (keydown.escape)="desk.term.set(''); desk.found.set(null)" [attr.aria-label]="fmt('Find on {s}', { s: m().name })">
-    <button class="tcv-btn tcv-btn-accent ln-go" (click)="desk.go()" [disabled]="desk.looking() || !desk.term().trim()">
-      {{ desk.looking() ? ('Searching…' | t) : (pasted() ? ('Save' | t) : fmt('Find on {s}', { s: m().name })) }}</button>
+    <span class="st-sub mf-pagenote" [title]="m().line | t">{{ m().how }}</span>
+    <button class="tcv-btn tcv-btn-accent" (click)="desk.go()" [disabled]="desk.looking() || !desk.term().trim()">
+      {{ desk.looking() ? ('Searching…' | t) : (pasted() ? ('Save' | t) : ('Find' | t)) }}</button>
   </div>
-  <p class="ln-how">{{ m().line | t }}
-    @if (m().caution) { <b class="ln-caution">{{ m().caution | t }}</b> }</p>
+  @if (m().caution) { <p class="ln-how"><b class="ln-caution">{{ m().caution | t }}</b></p> }
   @if (desk.err(); as e) { <p class="st-err">{{ e }}</p> }
   @if (desk.looking() || (desk.steps().length && !desk.found())) {
     <div class="ln-prog" role="status" aria-live="polite">
