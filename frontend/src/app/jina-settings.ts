@@ -1,3 +1,4 @@
+import { SecretInput } from './secret-input';
 import { Component, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
@@ -63,7 +64,7 @@ export class TrafficPeriod {
 
 @Component({
   selector: 'app-jina-settings',
-  imports: [Skeleton, CountUp, T, TimeChart],
+  imports: [SecretInput, Skeleton, CountUp, T, TimeChart],
   styleUrl: './settings.css',
   template: `
 <section class="st-card pv" [attr.data-open]="open() ? 1 : null">
@@ -109,7 +110,7 @@ export class TrafficPeriod {
 
       @if (canEdit) {
         <div class="st-row">
-          <input class="st-in" style="flex: 1 1 320px; min-width: 0" type="password" autocomplete="off" [value]="keyIn()"
+          <input class="st-in" style="flex: 1 1 320px; min-width: 0" type="password" wbSecret [value]="keyIn()"
                  [placeholder]="(st.set ? 'kept - paste a new key to replace it' : 'jina_… - paste the API key') | t"
                  (input)="keyIn.set($any($event.target).value)" (keydown.enter)="saveKey()">
           <button class="tcv-btn tcv-files-btn" [disabled]="busy() || !keyIn().trim()" (click)="saveKey()">{{ (st.set ? 'Replace' : 'Save') | t }}</button>

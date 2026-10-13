@@ -1,3 +1,4 @@
+import { SecretInput } from './secret-input';
 import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
@@ -243,7 +244,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [Skeleton, CountUp, T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
+  imports: [SecretInput, Skeleton, CountUp, T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -324,7 +325,7 @@ export class LlmUsagePanel {
                 <span class="pv-src">{{ 'API key' | t }}</span>
                 <span class="pv-meta">{{ info.set ? ('set' | t) + ' ' + info.hint : ('no key' | t) }} · {{ (models()[pv.id] || []).length }} {{ 'models' | t }} · 🖼 {{ visionCount(pv.id) }}</span>
                 @if (canEdit) {
-                  <input class="st-in wide" type="password" autocomplete="off" [placeholder]="(info.set ? 'Replace the key' : 'Paste the API key') | t"
+                  <input class="st-in wide" type="password" wbSecret [placeholder]="(info.set ? 'Replace the key' : 'Paste the API key') | t"
                          [value]="draft()[pv.id] || ''" (input)="setDraft(pv.id, $any($event.target).value)" (keydown.enter)="saveKey(pv.id)">
                   <button class="tcv-btn tcv-files-btn" [disabled]="!draft()[pv.id]?.trim() || busy()" (click)="saveKey(pv.id)">{{ 'Save' | t }}</button>
                   @if (info.set) {

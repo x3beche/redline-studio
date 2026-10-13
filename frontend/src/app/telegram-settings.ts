@@ -1,3 +1,4 @@
+import { SecretInput } from './secret-input';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { Toast } from './toast';
 import { HttpClient } from '@angular/common/http';
@@ -101,7 +102,7 @@ const FATHER = [
 
 @Component({
   selector: 'app-telegram-settings',
-  imports: [Skeleton, CountUp, T, TelegramProfilePanel, TgLangPicker],
+  imports: [SecretInput, Skeleton, CountUp, T, TelegramProfilePanel, TgLangPicker],
   styleUrls: ['./settings.css', './telegram-settings.css'],
   template: `
 @if (s(); as d) {
@@ -180,7 +181,7 @@ const FATHER = [
                   }
                   @if (d.can_edit) {
                     <div class="st-row">
-                      <input class="st-in wide" type="password" autocomplete="off" [placeholder]="(d.bot.set ? 'Replace the token' : 'Paste the token from @BotFather') | t"
+                      <input class="st-in wide" type="password" wbSecret [placeholder]="(d.bot.set ? 'Replace the token' : 'Paste the token from @BotFather') | t"
                              [value]="token()" (input)="token.set($any($event.target).value)" (keydown.enter)="saveToken()">
                       <button class="tcv-btn tcv-files-btn" [disabled]="!token().trim() || busy()" (click)="saveToken()">{{ busy() === 'token' ? '…' : ('Check & save' | t) }}</button>
                       @if (d.bot.set) {

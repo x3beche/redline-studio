@@ -1,3 +1,4 @@
+import { SecretInput } from './secret-input';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Auth } from './auth';
@@ -17,7 +18,7 @@ interface McmSettings { username: string; password_set: boolean; cert: { name: s
 
 @Component({
   selector: 'app-mcmaster-settings',
-  imports: [T],
+  imports: [SecretInput, T],
   styleUrl: './settings.css',
   template: `
 <section class="st-card pv" [attr.data-open]="open() ? 1 : null">
@@ -50,10 +51,10 @@ interface McmSettings { username: string; password_set: boolean; cert: { name: s
         <div class="st-row">
           <input class="st-in" style="flex: 1 1 200px; min-width: 0" autocomplete="off" [value]="user()" [placeholder]="'API user name' | t"
                  (input)="user.set($any($event.target).value)" [attr.aria-label]="'API user name' | t">
-          <input class="st-in" style="flex: 1 1 200px; min-width: 0" type="password" autocomplete="new-password" [value]="pw()"
+          <input class="st-in" style="flex: 1 1 200px; min-width: 0" type="password" wbSecret [value]="pw()"
                  [placeholder]="(st.password_set ? 'kept - type a new one to replace it' : 'API password') | t"
                  (input)="pw.set($any($event.target).value)" [attr.aria-label]="'API password' | t">
-          <input class="st-in" style="flex: 1 1 200px; min-width: 0" type="password" autocomplete="new-password" [value]="certPw()"
+          <input class="st-in" style="flex: 1 1 200px; min-width: 0" type="password" wbSecret [value]="certPw()"
                  [placeholder]="(st.cert_password_set ? 'kept - type a new one to replace it' : 'certificate password') | t"
                  (input)="certPw.set($any($event.target).value)" [attr.aria-label]="'certificate password' | t">
           <button class="tcv-btn tcv-files-btn" [disabled]="busy() || !dirty()" (click)="save()">{{ 'Save' | t }}</button>

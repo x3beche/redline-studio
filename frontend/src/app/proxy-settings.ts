@@ -1,3 +1,4 @@
+import { SecretInput } from './secret-input';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { Toast } from './toast';
 import { NgTemplateOutlet } from '@angular/common';
@@ -78,7 +79,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [CountUp, Skeleton, MoneyView, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, McMasterSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
+  imports: [SecretInput, CountUp, Skeleton, MoneyView, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, McMasterSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
   styleUrl: './settings.css',
   template: `
 <ng-template #periodSeg>
@@ -141,7 +142,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         <label class="st-f" style="grid-column: span 2"><span>{{ 'Username' | t }}</span>
           <input class="st-in" [value]="user()" [disabled]="!canEdit" autocomplete="off" (input)="user.set($any($event.target).value)"></label>
         <label class="st-f"><span>{{ 'Password' | t }}</span>
-          <input class="st-in" type="password" [value]="pass()" [disabled]="!canEdit" autocomplete="off"
+          <input class="st-in" type="password" wbSecret [value]="pass()" [disabled]="!canEdit"
                  [placeholder]="(d.password_set ? 'kept - type to replace' : '') | t" (input)="pass.set($any($event.target).value)"></label>
       </div>
 
