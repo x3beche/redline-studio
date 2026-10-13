@@ -177,11 +177,8 @@ def filters_of(q: str) -> list[tuple[str, str, str]]:
             ln = n.group(1).replace(",", ".")
             out.append((f"length~{ln.replace('.', '-')}-mm", "Length", f"{ln} mm"))
         out.append((f"thread-size~m{size.replace('.', '-')}", "Thread size", f"M{size}"))
-    else:
-        n = _LENGTH.search(q)
-        if n:
-            ln = n.group(1).replace(",", ".")
-            out.append((f"length~{ln.replace('.', '-')}-mm", "Length", f"{ln} mm"))
+    # Without a thread, "15 mm" is a rail's width, a bearing's bore or a screw's
+    # diameter as often as a length: no filter is guessed for it.
     return out
 
 
@@ -194,14 +191,21 @@ def refine(items: list[dict], q: str) -> list[dict]:
     """Category pages made to land on the size asked for - its filters added
     to the address - and put in order of how many of the words they carry;
     parts stay first."""
+    q = english(q)
     fl = filters_of(q)
     words = _words(q)
+    want = next((f[0] for f in fl if f[0].startswith("thread-size~")), None)
     parts = [i for i in items if i.get("kind") != "category"]
     cats = []
     for c in items:
         if c.get("kind") != "category":
             continue
         path = c["key"][4:]
+        # A category of another thread size than the one asked for (M10 Standoffs for M3) is left out.
+        other = next((seg for seg in path.split("/") if seg.startswith("thread-size~")), None)
+        # ("m8-2" is M8 with its 2 mm pitch, the same size; "m3-5" is M3.5, another one.)
+        if want and other and other != want and not (other.startswith(want + "-") and other != want + "-5"):
+            continue
         have = {seg.partition("~")[0] for seg in path.split("/")}
         add = [f for f in fl if f[0].partition("~")[0] not in have]
         if add:
@@ -214,8 +218,42 @@ def refine(items: list[dict], q: str) -> list[dict]:
     return parts + [c for _, c in cats]
 
 
+# McMaster's catalog is in English: the Turkish a person types for common
+# hardware, as McMaster names it (longest first, so "lineer ray" is not "ray").
+_TR = [("bilyalı rulman", "ball bearing"), ("bilyali rulman", "ball bearing"), ("lineer rulman", "linear bearing"),
+       ("lineer ray", "linear rail"), ("lineer kızak", "linear guide carriage"), ("lineer kizak", "linear guide carriage"),
+       ("lineer mil", "linear shaft"), ("bilyalı mil", "ball screw"), ("bilyali mil", "ball screw"),
+       ("trapez mil", "lead screw"), ("vidalı mil", "lead screw"), ("vidali mil", "lead screw"),
+       ("alüminyum profil", "aluminum extrusion"), ("aluminyum profil", "aluminum extrusion"),
+       ("sigma profil", "aluminum extrusion"), ("mil bileziği", "shaft collar"), ("mil bilezigi", "shaft collar"),
+       ("ısıl somun", "heat-set insert"), ("isil somun", "heat-set insert"), ("ısıyla gömülen somun", "heat-set insert"),
+       ("triger kayış", "timing belt"), ("triger kayis", "timing belt"), ("triger kasnak", "timing belt pulley"),
+       ("basma yayı", "compression spring"), ("çekme yayı", "extension spring"), ("burulma yayı", "torsion spring"),
+       ("mesafe burcu", "standoff"), ("altıgen ara parça", "standoff"), ("havşa başlı", "flat head"),
+       ("yıldız başlı", "phillips"), ("yildiz", "phillips"), ("imbus", "socket head"), ("allen", "socket head"),
+       ("paslanmaz", "stainless steel"), ("pirinç", "brass"), ("alüminyum", "aluminum"), ("aluminyum", "aluminum"),
+       ("kızak", "linear guide carriage"), ("kizak", "linear guide carriage"), ("araba", "carriage"),
+       ("rulman", "ball bearing"), ("yatak", "bearing"), ("kaplin", "shaft coupling"), ("kasnak", "pulley"),
+       ("kayış", "belt"), ("kayis", "belt"), ("dişli", "gear"), ("disli", "gear"), ("menteşe", "hinge"),
+       ("mentese", "hinge"), ("tekerlek", "caster wheel"), ("yay", "spring"), ("somun", "nut"), ("pul", "washer"),
+       ("cıvata", "bolt"), ("civata", "bolt"), ("vida", "screw"), ("mıknatıs", "magnet"), ("miknatis", "magnet"),
+       ("conta", "gasket"), ("oring", "o-ring"), ("mil", "shaft"), ("burç", "bushing"), ("burc", "bushing"),
+       ("tutucu", "holder"), ("braket", "bracket"), ("ayak", "leveling foot")]
+
+
+def english(q: str) -> str:
+    """The words in McMaster's English: Turkish hardware names put in its words,
+    the rest kept ("lineer ray 15mm" -> "linear rail 15mm")."""
+    low = q.lower()
+    for tr, en in _TR:
+        low = re.sub(rf"(?<![\wçğıöşü]){re.escape(tr)}(?:ları|leri|lar|ler|ı|i|u|ü)?(?![\wçğıöşü])", en, low)
+    # Nothing Turkish in it: the words as they were typed.
+    return re.sub(r"\s+", " ", low).strip() if low != q.lower() else q.strip()
+
+
 def searches(q: str) -> list[str]:
-    return [q, f"{q} McMaster-Carr part number"]
+    e = english(q)
+    return [e, f"{e} McMaster-Carr part number"]
 
 
 # ---------------------------------------------------------------- the API, later

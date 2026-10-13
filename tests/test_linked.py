@@ -355,3 +355,20 @@ def test_mcmaster_categories_open_on_the_size_asked_for():
                              "system-of-measurement~metric/length~10-mm/thread-size~m3/")
     m3 = next(c for c in got if c["title"] == "M3 Screws")
     assert m3["url"].count("thread-size~m3") == 1 and m3["filtered"]
+
+
+def test_mcmaster_reads_turkish_and_guesses_no_length_without_a_thread():
+    """McMaster's catalog is English: common Turkish hardware names are put in
+    its words; a millimetre figure is a length only beside a metric thread
+    (a rail's width, a bearing's bore otherwise); categories of another
+    thread size are left out."""
+    from backend import mcmaster
+    assert mcmaster.english("lineer ray 15mm") == "linear rail 15mm"
+    assert mcmaster.english("bilyalı mil 12mm") == "ball screw 12mm"
+    assert mcmaster.english("608 rulman") == "608 ball bearing"
+    assert mcmaster.english("M3x10 socket head") == "M3x10 socket head"
+    assert mcmaster.filters_of("linear rail 15 mm") == []
+    items = [{"key": "cat:standoffs/thread-size~m10", "kind": "category", "title": "M10 Standoffs", "url": "", "specs": {}},
+             {"key": "cat:standoffs/thread-size~m3", "kind": "category", "title": "M3 Standoffs", "url": "", "specs": {}},
+             {"key": "cat:standoffs/thread-size~m3-5", "kind": "category", "title": "M3.5 Standoffs", "url": "", "specs": {}}]
+    assert [c["title"] for c in mcmaster.refine(items, "M3 standoff 10 mm")] == ["M3 Standoffs"]

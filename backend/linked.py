@@ -126,6 +126,8 @@ async def find_steps(k: Kind, q: str, *, count: int = 8, who: str = ""):
         yield {"type": "search", "n": i, "of": len(wordings), "words": shown}
         t0 = time.monotonic()
         got = await jina.search(words, site=k.search_site, num=jina.SEARCH_MAX, who=who)
+        if not got["ok"] and re.search(r"\b(5\d\d|timed? ?out)\b", str(got.get("error") or ""), re.I):
+            got = await jina.search(words, site=k.search_site, num=jina.SEARCH_MAX, who=who)   # a passing upstream error: once more
         out["queries"].append(shown)
         if not got["ok"]:
             yield {"type": "got", "n": i, "rows": 0, "items": len(k.parse(rows)), "ms": int((time.monotonic() - t0) * 1000),
