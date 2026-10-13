@@ -131,7 +131,7 @@ def test_the_find_tools(fake_search):
     got = run(t.run(Ctx(db=None), {"query": "socket head cap screw", "material": "stainless", "thread": "M3"}))
     assert fake_search["calls"][0].url.params["q"] == "socket head cap screw stainless M3"
     assert "1. 91290A115 - Socket Head Screw" in got.text and "https://www.mcmaster.com/91290A115/" in got.text
-    assert "CAD → 3-D STEP → Save" in got.text and got.vars["n"] == 4
+    assert "CAD → 3-D STEP → Download" in got.text and got.vars["n"] == 4
     fake_search["rows"] = []
     got = run(t.run(Ctx(db=None), {"query": "unobtainium widget"}))
     assert got.vars["n"] == 0 and "Try other words" in got.text
@@ -318,7 +318,7 @@ def test_a_part_without_a_cad_file_says_where_to_get_it(db, grid):  # noqa: F811
     a = person(db, "a")
     a.post("/api/linked/mcmaster/parts", json={"key": "5972K91"})
     r = a.post("/api/linked/mcmaster/parts/5972K91/to-model", json={"folder": "lamp/purchased"})
-    assert r.status_code == 409 and "https://www.mcmaster.com/5972K91/" in r.text and "CAD → 3-D STEP → Save" in r.text
+    assert r.status_code == 409 and "https://www.mcmaster.com/5972K91/" in r.text and "CAD → 3-D STEP → Download" in r.text
 
 
 def test_mcmaster_category_pages_come_up_after_parts():

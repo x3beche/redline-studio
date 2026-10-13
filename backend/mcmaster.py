@@ -35,7 +35,7 @@ from . import actors, linked
 MID = "mcmaster"
 SITE = "https://www.mcmaster.com"
 DOMAIN = "mcmaster.com"
-HOW = "CAD → 3-D STEP → Download, then drop the file on the Catalog's McMaster-Carr page"   # what to click on the part's page
+HOW = "CAD → 3-D STEP → Download"   # what to click on the part's page (the file is then dropped on the Catalog page)
 
 # A part number: 3 to 5 digits, one or two capital letters, 1 to 4 digits
 # (91290A115, 5972K91, 6655K13, 57155K372). Case matters in text: "608zz",
