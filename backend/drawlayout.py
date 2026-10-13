@@ -130,7 +130,9 @@ def validate(spec) -> dict:
             raise LayoutError(f"view {i}: a box is at least {MIN_SIDE} of the sheet each way")
         if x + w > 1.0001 or y + h > 1.0001:
             raise LayoutError(f"view {i}: the box goes off the sheet (x + w and y + h must be at most 1)")
-        scale = str(b.get("scale") or "auto").replace(" ", "").replace(",", ".")
+        scale = str(b.get("scale") or "fill").replace(" ", "").replace(",", ".")
+        if scale in ("auto", "fit"):            # older layouts: every view now fills its box
+            scale = "fill"
         if scale not in ("auto", "fit", "fill") and scale not in SCALES:
             # Any scale written as a ratio ("1.7:1", "1:2.5"): kept as written, within reason.
             m = re.fullmatch(r"(\d{1,4}(?:\.\d{1,2})?):(\d{1,4}(?:\.\d{1,2})?)", scale)

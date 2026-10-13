@@ -81,7 +81,7 @@ type Grip = 'move' | 'nw' | 'ne' | 'sw' | 'se';
 type Preset = 'standard' | 'front' | 'iso' | 'notes' | 'six';
 
 function box(view: ViewKey, x: number, y: number, w: number, h: number): ViewBox {
-  return { view, x, y, w, h, scale: 'auto', hidden_lines: view !== 'iso', dims: view !== 'iso' };
+  return { view, x, y, w, h, scale: 'fill', hidden_lines: view !== 'iso', dims: view !== 'iso' };
 }
 
 function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
@@ -90,10 +90,11 @@ function ratio(s: string): [number, number] | null {
   const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(s);
   return m && +m[2] > 0 ? [+m[1], +m[2]] : null;
 }
-/** The largest ratio written to a tenth that is at most k (techdraw.py fill_ratio). */
+/** The largest ratio in steps of 0.05 that is at most k (techdraw.py fill_ratio). */
 function fillRatio(k: number): [number, number] {
-  if (k >= 1) return [Math.max(1, Math.floor(k * 10 + 1e-9) / 10), 1];
-  return [1, Math.max(1.1, Math.ceil(1 / Math.max(k, 1e-6) * 10 - 1e-6) / 10)];
+  const neat = (v: number) => Math.round(v * 100) / 100;
+  if (k >= 1) return [neat(Math.max(1, Math.floor(k * 20 + 1e-9) / 20)), 1];
+  return [1, neat(Math.max(1.05, Math.ceil(1 / Math.max(k, 1e-6) * 20 - 1e-6) / 20))];
 }
 /** A scale as the person types it ("1,7:1", "1.7 : 1", "2") as kept ("1.7:1"); null if it is not one. */
 function typedScale(s: string): string | null {
@@ -171,6 +172,10 @@ function typedScale(s: string): string | null {
     .dl-ghost { position: absolute; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--dl-pen) 55%, transparent);
                 background: color-mix(in srgb, var(--dl-pen) 7%, transparent); pointer-events: none; }
     .dl-box[data-warn] .dl-ghost { border-color: var(--dl-bad); }
+    /* the room its dimension lines take, beside the view */
+    .dl-dimzone { position: absolute; box-sizing: border-box; pointer-events: none;
+                  border: 1px dashed color-mix(in srgb, var(--dl-pen) 35%, transparent);
+                  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--dl-pen) 9%, transparent) 0 3px, transparent 3px 7px); }
     .dl-size { position: absolute; right: 4px; bottom: 4px; padding: 1px 6px; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace;
                color: var(--dl-pen-on); background: var(--dl-ink); border-radius: 3px; white-space: nowrap; }
     .dl-box[data-warn] .dl-size { background: var(--dl-bad); }
@@ -271,7 +276,7 @@ function typedScale(s: string): string | null {
       <span>{{ title() }}</span>
       @if (spec()) {
         <span class="dl-chip">{{ sheetName() }}</span>
-        <span class="dl-chip" [attr.data-on]="common() ? 1 : null" [title]="'The scale the automatic views share' | t">{{ 'Scale' | t }} {{ common() || '-' }}</span>
+        <span class="dl-chip" [attr.data-on]="sheetScale() !== 'NTS' ? 1 : null" [title]="'The scale the title block will say' | t">{{ 'Scale' | t }} {{ sheetScale() }}</span>
         <span class="dl-chip" [attr.data-on]="custom() ? 1 : null">{{ (custom() ? 'Own layout' : 'Automatic layout') | t }}</span>
       }
     </header>
@@ -311,6 +316,9 @@ function typedScale(s: string): string | null {
                      (pointerdown)="grab($event, i, 'move')" (focus)="sel.set(i)">
                   @if (f && ghost(i); as g) {
                     <i class="dl-ghost" [style.left.%]="g.x" [style.top.%]="g.y" [style.width.%]="g.w" [style.height.%]="g.h"></i>
+                    @for (d of g.dims; track $index) {
+                      <i class="dl-dimzone" [style.left.%]="d.x" [style.top.%]="d.y" [style.width.%]="d.w" [style.height.%]="d.h"></i>
+                    }
                   }
                   <span class="dl-tag">{{ viewName(b.view) }} · {{ f?.label }}</span>
                   @if (i === sel() || f && !f.fits) {
@@ -372,21 +380,6 @@ function typedScale(s: string): string | null {
                   <span>{{ (f.fits ? 'Comes out at' : 'Does not fit at') | t }}</span><b>{{ f.label }}</b>
                   <span style="margin-left:auto">{{ 'needs' | t }} {{ f.need[0] }} × {{ f.need[1] }} mm</span>
                 </div>
-                @if (heldBack(); as hb) {
-                  <div class="dl-held">
-                    <span>{{ 'Kept at the shared scale by' | t }} {{ hb.by || ('another view' | t) }}. {{ 'On its own this box takes' | t }} <b>{{ hb.own }}</b>.</span>
-                    @if (canSave()) {
-                      <button type="button" class="tcv-btn" (click)="set({ scale: 'fit' })">{{ 'Fit this box' | t }}</button>
-                      @if (fillOf(sel()); as fr) { <button type="button" class="tcv-btn" (click)="set({ scale: 'fill' })">{{ 'Fill the box' | t }} ({{ fr }})</button> }
-                    }
-                  </div>
-                }
-                @if (b.scale === 'fit' && fillOf(sel()) && fillOf(sel()) !== bestOf(sel()) && canSave()) {
-                  <div class="dl-held">
-                    <span>{{ 'A standard scale leaves room in this box; filling it takes' | t }} <b>{{ fillOf(sel()) }}</b>.</span>
-                    <button type="button" class="tcv-btn" (click)="set({ scale: 'fill' })">{{ 'Fill the box' | t }}</button>
-                  </div>
-                }
               }
               <div class="dl-checks">
                 <label><input type="checkbox" class="tcv-check" [checked]="b.hidden_lines" [disabled]="!canSave()" (change)="set({ hidden_lines: $any($event.target).checked })"> {{ 'Hidden lines' | t }}</label>
@@ -589,9 +582,6 @@ export class DrawingLayout implements OnInit, OnDestroy {
 
   viewOpts = computed<SelectOption[]>(() => VIEWS.map(v => ({ value: v, label: t(NAMES[v]) })));
   scaleOpts = computed<SelectOption[]>(() => [
-    { value: 'auto', label: t('Automatic') + (this.common() ? ` (${this.common()})` : ''), note: t('One scale the automatic views share') },
-    { value: 'fit', label: t('Fit this box') + (this.bestOf(this.sel()) ? ` (${this.bestOf(this.sel())})` : ''),
-      note: t('The largest standard scale for this box alone') },
     { value: 'fill', label: t('Fill the box') + (this.fillOf(this.sel()) ? ` (${this.fillOf(this.sel())})` : ''),
       note: t('The largest ratio, to a tenth, at which the view fills the box') },
     ...(ratio(this.picked()?.scale ?? '') && !SCALES.some(([a, b]) => `${a}:${b}` === this.picked()?.scale)
@@ -664,15 +654,7 @@ export class DrawingLayout implements OnInit, OnDestroy {
   private commonK = computed(() => { const s = this.spec(); return s ? this.commonOn(this.size_(), s) : null; });
   common = computed(() => { const k = this.commonK(); return k ? `${k[0]}:${k[1]}` : ''; });
 
-  /** The largest standard scale at which box b's view fits b alone (techdraw.py "fit"). */
-  private bestFor(b: ViewBox, paper: [number, number]): [number, number] | null {
-    const e = this.extent(b.view);
-    if (!e || b.view === 'iso') return null;
-    const { w, h } = this.boxMm(b, paper);
-    const [pl, pr, pt, pb] = b.dims ? PAD.dims : PAD.plain;
-    return SCALES.find(([a, d]) => e[0] * a / d + pl + pr <= w + FIT_SLACK && e[1] * a / d + pt + pb <= h + FIT_SLACK)
-      ?? SCALES[SCALES.length - 1];
-  }
+
   /** The ratio "Fill the box" gives box i ("1.7:1"); '' for none. */
   fillOf(i: number) {
     const b = this.spec()?.views[i];
@@ -691,26 +673,6 @@ export class DrawingLayout implements OnInit, OnDestroy {
     this.typed.set('');
     this.set({ scale: got });
   }
-  /** Box i's own best scale, as written ("1:1"); '' for none. */
-  bestOf(i: number) {
-    const b = this.spec()?.views[i];
-    const r = b ? this.bestFor(b, this.paper()) : null;
-    return r ? `${r[0]}:${r[1]}` : '';
-  }
-  /** For an automatic box held back by the shared scale: the view that holds it
-   *  back and the scale this box alone would take - so the panel can say why
-   *  a large box still draws its view small. */
-  heldBack = computed(() => {
-    const s = this.spec(), i = this.sel(), common = this.commonK();
-    const b = s?.views[i];
-    if (!s || !b || !common || b.view === 'iso' || (b.scale || 'auto') !== 'auto') return null;
-    const paper = this.paper(), mine = this.bestFor(b, paper);
-    if (!mine || mine[0] / mine[1] <= common[0] / common[1] + 1e-9) return null;
-    const by = s.views.find((o, j) => j !== i && o.view !== 'iso' && (o.scale || 'auto') === 'auto'
-      && (() => { const r = this.bestFor(o, paper); return !!r && Math.abs(r[0] / r[1] - common[0] / common[1]) < 1e-9; })());
-    return { own: `${mine[0]}:${mine[1]}`, by: by ? t(NAMES[by.view]) : '' };
-  });
-
   /** Each box: the scale it comes out at, whether its view fits, and the
    *  room it needs. */
   fits = computed<(Fit | null)[]>(() => {
@@ -733,12 +695,11 @@ export class DrawingLayout implements OnInit, OnDestroy {
         const need: [number, number] = [Math.round(e[0] * k + pl + pr), Math.round(e[1] * k + pt + pb)];
         return { k, label: `${r[0]}:${r[1]} ` + t('fill'), fits: true, need };
       }
-      const fit = b.scale === 'fit' ? this.bestFor(b, paper) : null;
-      const r = own ?? fit ?? common ?? [1, 1];
+      // A scale of its own (picked or typed); a view always has one or fills its box.
+      const r = own ?? common ?? [1, 1];
       const k = r[0] / r[1];
       const need: [number, number] = [Math.round(e[0] * k + pl + pr), Math.round(e[1] * k + pt + pb)];
-      const how = own ? '' : fit ? ' ' + t('fit') : ' ' + t('auto');
-      return { k, label: `${r[0]}:${r[1]}` + how, fits: need[0] <= w + .5 && need[1] <= h + .5, need };
+      return { k, label: `${r[0]}:${r[1]}`, fits: need[0] <= w + .5 && need[1] <= h + .5, need };
     });
   });
 
@@ -762,7 +723,14 @@ export class DrawingLayout implements OnInit, OnDestroy {
     const [pl, pr, pt, pb] = b.view === 'iso' ? [4, 4, PAD.dims[2], 4] : b.dims ? PAD.dims : PAD.plain;
     const vw = e[0] * f.k, vh = e[1] * f.k;
     const cx = pl + (w - pl - pr) / 2, cy = pt + (h - pt - pb) / 2;
-    return { x: (cx - vw / 2) / w * 100, y: (cy - vh / 2) / h * 100, w: vw / w * 100, h: vh / h * 100 };
+    const x0 = cx - vw / 2, y0 = cy - vh / 2;
+    // Where its dimensions go: the width under it, the height to its left -
+    // room in the box that is taken, though the view does not fill it.
+    const dims = b.view !== 'iso' && b.dims
+      ? [{ x: x0 / w * 100, y: (y0 + vh) / h * 100, w: vw / w * 100, h: Math.min(PAD.dims[3], h - y0 - vh) / h * 100 },
+         { x: Math.max(0, x0 - PAD.dims[0]) / w * 100, y: y0 / h * 100, w: Math.min(PAD.dims[0], x0) / w * 100, h: vh / h * 100 }]
+      : [];
+    return { x: x0 / w * 100, y: y0 / h * 100, w: vw / w * 100, h: vh / h * 100, dims };
   }
 
   // ---- the title block as it will print ----------------------------------
@@ -806,6 +774,9 @@ export class DrawingLayout implements OnInit, OnDestroy {
    *  drawing as made, else the standard arrangement. */
   private begin(spec: LayoutSpec | null) {
     const s = spec ? structuredClone(spec) : this.fromDrawing();
+    // Every view fills its box unless a scale is set for it: what an older
+    // layout kept as "auto" or "fit" opens as "fill".
+    s.views = s.views.map(b => ['auto', 'fit', ''].includes(b.scale || '') ? { ...b, scale: 'fill' } : b);
     this.spec.set(s);
     this.start.set(structuredClone(s));
     this.sel.set(0);

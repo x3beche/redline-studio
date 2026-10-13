@@ -39,7 +39,8 @@ SPEC = {"sheet": {"size": "A4", "orientation": "portrait"},
 def test_a_spec_is_kept_in_one_form():
     got = drawlayout.validate(SPEC)
     assert got["sheet"] == {"size": "A4", "orientation": "portrait"}
-    assert got["views"][1] == {"view": "left", "x": .58, "y": .05, "w": .36, "h": .35, "scale": "auto",
+    # No scale given (or an older "auto"/"fit"): the view fills its box.
+    assert got["views"][1] == {"view": "left", "x": .58, "y": .05, "w": .36, "h": .35, "scale": "fill",
                                "hidden_lines": False, "dims": True}
     # The isometric view: no hidden lines and no dimensions unless said - never dimensions.
     assert got["views"][3]["hidden_lines"] is False and got["views"][3]["dims"] is False
@@ -243,7 +244,7 @@ def test_techdraw_draws_the_layout(tmp_path):
     # The button (up at z 37..43) is left out: 30 mm tall, not 43.
     assert info["size_mm"] == [60.0, 40.0, 30.0]
     assert info["parts"] == ["base", "Top_Parts", "post", "button"] and info["unmatched"] == []
-    assert [b["scale"] for b in info["boxes"]] == ["auto", "auto", "1:1", "auto"]
+    assert [b["scale"] for b in info["boxes"]] == ["fill", "fill", "1:1", "auto"]
     assert info["boxes"][0]["x"] == pytest.approx(.06, abs=.001)
     png = (tmp_path / "d.png").read_bytes()
     assert png.startswith(b"\x89PNG") and int.from_bytes(png[16:20], "big") == 480
@@ -255,10 +256,10 @@ def test_techdraw_draws_the_layout(tmp_path):
         assert w in words
 
 
-def test_a_box_may_fit_its_own_view_or_fill_itself(tmp_path):
-    """"fit": the largest standard scale for that box alone, not the shared
-    one a small box holds down; "fill": the whole box, said not to scale;
-    the title block then says AS SHOWN."""
+def test_every_view_fills_its_own_box(tmp_path):
+    """Each box's view is drawn as large as its box allows, at a ratio in
+    steps of 0.05 ("auto" and "fit" of older layouts read as that too); the
+    title block then says AS SHOWN, each view its own scale."""
     assert drawlayout.validate({"views": [{"view": "front", "x": .05, "y": .05, "w": .5, "h": .6, "scale": "fit"},
                                           {"view": "top", "x": .6, "y": .05, "w": .3, "h": .3, "scale": "fill"}]})
     if subprocess.run(["docker", "image", "inspect", "redline-draw"], capture_output=True).returncode:
@@ -279,18 +280,15 @@ def test_a_box_may_fit_its_own_view_or_fill_itself(tmp_path):
                           "redline-draw", "-c", script], capture_output=True, text=True, timeout=240)
     assert run.returncode == 0, run.stdout + run.stderr
     info = json.loads((tmp_path / "d.json").read_text())
-    assert [b["scale"] for b in info["boxes"]] == ["fit", "auto", "fill"]
+    assert [b["scale"] for b in info["boxes"]] == ["fill", "fill", "fill"]
     assert info["scale"] == "AS SHOWN"
     words = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{tmp_path}:/work",
                             "--entrypoint", "python", "redline-draw", "-c",
                             "import fitz; print(' '.join(w[4] for w in fitz.open('/work/d.pdf')[0].get_text('words')))"],
                            capture_output=True, text=True, timeout=60).stdout
-    # The big box takes a larger scale than the small one holds the shared scale to,
-    # and the filled one a ratio to a tenth, still to scale.
-    assert "(2:1)" in words or "(5:1)" in words, words
+    # The big box draws its view larger than the small one does, each to scale.
     assert "NOT TO SCALE" not in words
-    fill = info["boxes"][2]
-    assert fill["scale"] == "fill"
+    assert "FRONT" in words and ":1)" in words, words
 
 
 def test_a_typed_scale_is_kept_as_a_ratio():
@@ -302,7 +300,7 @@ def test_a_typed_scale_is_kept_as_a_ratio():
 
 
 def test_fill_takes_a_ratio_to_a_tenth_either_way():
-    """Above 1:1 the ratio is n:1, below it 1:n, rounded so the view still fits."""
+    """Above 1:1 the ratio is n:1, below it 1:n, in steps of 0.05 so the view still fits."""
     # techdraw.py runs in its own image (fpdf2, build123d): the function alone is read here.
     src = (release.ROOT / "tools" / "techdraw.py").read_text()
     ns: dict = {}
@@ -313,3 +311,5 @@ def test_fill_takes_a_ratio_to_a_tenth_either_way():
     assert fill_ratio(0.77) == (1, 1.3)
     assert fill_ratio(0.42) == (1, 2.4)
     assert fill_ratio(0.5) == (1, 2)
+    assert fill_ratio(0.8) == (1, 1.25)
+    assert fill_ratio(1.76) == (1.75, 1)

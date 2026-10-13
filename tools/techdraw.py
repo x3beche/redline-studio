@@ -185,14 +185,15 @@ def ratio(text: str):
 
 
 def fill_ratio(k: float):
-    """The largest ratio written to a tenth that is at most `k`: 1.74 -> (1.7, 1),
-    0.42 -> (1, 2.4); never 0."""
+    """The largest ratio in steps of 0.05 that is at most `k`: 1.74 -> (1.7, 1),
+    0.8 -> (1, 1.25), 0.42 -> (1, 2.4); never 0."""
+    def neat(v: float):
+        v = round(v, 2)
+        return int(v) if v.is_integer() else v
     if k >= 1:
-        a = max(1.0, int(k * 10 + 1e-9) / 10)
-        return (int(a) if a.is_integer() else a, 1)
-    d = int((1 / max(k, 1e-6)) * 10 + 0.999999) / 10          # 1/k rounded up to a tenth
-    d = max(d, 1.1)
-    return (1, int(d) if d.is_integer() else d)
+        return (neat(max(1.0, int(k * 20 + 1e-9) / 20)), 1)
+    d = int((1 / max(k, 1e-6)) * 20 + 0.999999) / 20          # 1/k rounded up to a twentieth
+    return (1, neat(max(d, 1.05)))
 
 
 def pads(dims: bool):
