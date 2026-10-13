@@ -13,6 +13,7 @@ import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
 import { ModelSwitch, SWITCHES, SWITCH_DEFAULT, SWITCH_INFO, currentSwitch, reducedMotion, setSwitch } from './editor/model-switch';
+import { SwitchPreview } from './editor/switch-preview';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
@@ -116,7 +117,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings, SwitchPreview],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -222,12 +223,20 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
               <div class="st-card-body">
                 <div class="st-switches">
                   @for (s of switches; track s) {
-                    <button class="st-theme" [attr.data-on]="prefs.modelSwitch() === s ? 1 : null" (click)="prefs.pickSwitch(s)">
-                      <span class="st-theme-name"><b>{{ switchInfo[s].name | t }}</b>@if (prefs.modelSwitch() === s) { <em>● {{ 'on' | t }}</em> } @else if (s === switchDefault) { <small>{{ 'default' | t }}</small> }</span>
-                      <span class="st-switch-about">{{ switchInfo[s].about | t }}</span>
-                    </button>
+                    <div class="st-switch">
+                      <button class="st-theme" [attr.data-on]="prefs.modelSwitch() === s ? 1 : null" (click)="prefs.pickSwitch(s)">
+                        <span class="st-theme-name"><b>{{ switchInfo[s].name | t }}</b>@if (prefs.modelSwitch() === s) { <em>● {{ 'on' | t }}</em> } @else if (s === switchDefault) { <small>{{ 'default' | t }}</small> }</span>
+                        <span class="st-switch-about">{{ switchInfo[s].about | t }}</span>
+                      </button>
+                      <button type="button" class="st-switch-play" (click)="previewing.set(s)" [title]="'See this transition on two models' | t">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>{{ 'Preview' | t }}</button>
+                    </div>
                   }
                 </div>
+                @if (previewing(); as s) {
+                  <app-switch-preview animate.leave="tcv-leave" [start]="s" (closed)="previewing.set(null)"
+                                      (pick)="prefs.pickSwitch($event); previewing.set(null)" />
+                }
               </div>
             </div>
             @for (grp of groups; track grp.name) {
@@ -334,6 +343,8 @@ export class RoomSettings {
   readonly switches = SWITCHES;
   readonly switchInfo = SWITCH_INFO;
   readonly switchDefault = SWITCH_DEFAULT;
+  /** The transition whose preview is open (editor/switch-preview.ts). */
+  previewing = signal<ModelSwitch | null>(null);
   readonly reduced = reducedMotion();
   readonly swatch = SWATCH;
   readonly seriesVars = PALETTE;

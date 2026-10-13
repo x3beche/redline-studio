@@ -50,6 +50,22 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 type Cam = { position: number[]; target: number[]; zoom: number };
 
+/** What the transition asks of a viewer: three-cad-viewer's Viewer in the
+ *  3D room, a small stand-in over a plain three.js scene in the Settings
+ *  preview (switch-preview.ts) - so the preview runs this very code. */
+export interface SwitchViewer {
+  getCameraPosition(): ArrayLike<number>;
+  getCameraTarget(): ArrayLike<number>;
+  getCameraZoom(): number;
+  setCameraTarget(t: number[], notify: boolean): void;
+  setCameraPosition(p: number[], relative: boolean, notify: boolean): void;
+  setCameraZoom(z: number, notify: boolean): void;
+  /** Draw now. */
+  update(marker: boolean, notify: boolean): void;
+  /** The parts, each an Object3D that has setShapeVisible. */
+  nestedGroup: { groups?: Record<string, unknown> };
+}
+
 /** The transition itself, around OcpViewer.load(): begin() when a switch
  *  is asked for, freeze() just before the old scene is cleared, land() once
  *  the new one is rendered, end() whatever happened. Only opacity and
@@ -65,7 +81,7 @@ export class SwitchMotion {
   private stopGlide = () => {};
 
   constructor(private view: () => HTMLElement | null, private canvas: () => HTMLCanvasElement | null,
-              private viewer: () => any) {}
+              private viewer: () => SwitchViewer | any) {}
 
   /** Where the camera is going while it glides: whoever reads the camera
    *  mid-glide (the remembered view) wants where it ends, not a frame of
@@ -73,10 +89,11 @@ export class SwitchMotion {
   get destination(): Cam | null { return this.glideTo; }
 
   /** A switch is asked for: the progress line, and the old model dims.
-   *  `off` for the headless render's shot, which wants no motion. */
-  begin(off = false): number {
+   *  `off` for the headless render's shot, which wants no motion; `kind`
+   *  is the one picked in Settings unless the preview asks for another. */
+  begin(off = false, kind: ModelSwitch = currentSwitch()): number {
     this.finish();
-    this.kind = off || reducedMotion() ? 'none' : currentSwitch();
+    this.kind = off || reducedMotion() ? 'none' : kind;
     const view = this.view();
     if (view && !off) {
       if (!this.bar?.isConnected) {
@@ -169,6 +186,17 @@ export class SwitchMotion {
    *  user took hold of it). */
   halt() { this.stopGlide(); }
 
+  /** Everything to its end and the line away: the preview closing or
+   *  starting over. */
+  stop() {
+    this.finish();
+    this.token++;
+    this.bar?.remove();
+    this.bar = null;
+    const c = this.canvas();
+    if (c) { c.style.transition = 'none'; c.style.opacity = ''; c.style.transform = ''; }
+  }
+
   /** Anything still moving, to its end at once: a new switch starts clean. */
   private finish() {
     cancelAnimationFrame(this.raf);
@@ -249,7 +277,9 @@ export class SwitchMotion {
     }
     groups.sort((x, y) => low.get(x)! - low.get(y)!);
     for (const g of groups) g.visible = false;
-    this.hidden = groups;
+    // A copy: shift() below must not shorten the list it counts against,
+    // or every part came back in the first frame.
+    this.hidden = [...groups];
     v.update(true, false);
     const gap = Math.min(60, STAGGER_MS / groups.length);
     const t0 = performance.now();

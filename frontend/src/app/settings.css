@@ -250,6 +250,15 @@ select.st-in { cursor: pointer; }
 .st-switches .st-theme-name small { margin-left: auto; flex: none; font-size: 10px; color: var(--ink-dim); }
 .st-switches .st-theme-name em { flex: none; }
 .st-switch-about { font-size: 11px; line-height: 1.4; color: var(--ink-dim); }
+/* The preview's play button sits on the card, bottom right, beside it in the
+   markup: a button cannot hold another. */
+.st-switch { position: relative; display: grid; }
+.st-switch > .st-theme { padding-bottom: 32px; }
+.st-switch-play { position: absolute; right: 7px; bottom: 7px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 6px; font-size: 10.5px; color: var(--ink-dim); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.st-switch-play svg { width: 10px; height: 10px; fill: currentColor; }
+.st-switch-play:hover { color: var(--ink); border-color: var(--accent); }
 .st-swatch { display: flex; height: 30px; overflow: hidden; border-radius: 4px; border: 1px solid var(--line); }
 .st-swatch i { flex: 1; }
 .st-swatch i:nth-child(3), .st-swatch i:nth-child(4) { flex: .45; }

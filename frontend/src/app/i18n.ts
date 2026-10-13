@@ -3551,6 +3551,7 @@ const TR: Record<string, string> = {
   'Camera glide': 'Kamera kayması', 'The camera moves from the old view to the new one.': 'Kamera eski görünümden yenisine kayarak geçer.',
   'Fade and glide': 'Solma ve kayma', 'Fade, with the camera gliding to the new view.': 'Solma, kamera da yeni görünüme kayarak.',
   'Parts in turn': 'Parça parça', 'The parts appear one after another; large models fade.': 'Parçalar sırayla belirir; büyük modeller solarak gelir.',
+  'See this transition on two models': 'Bu geçişi iki model üzerinde gör', 'Replay': 'Yeniden oynat', 'Use this one': 'Bunu kullan',
   // The Model tab (editor/model-health.ts).
   'Runs the model\'s script again': 'Modelin betiğini yeniden çalıştırır', 'Releases': 'Sürümler',
   'All releases': 'Tüm sürümler', 'Open PDF': 'PDF\'i aç', 'No STEP to draw from': 'Çizilecek STEP yok',
