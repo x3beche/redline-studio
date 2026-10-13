@@ -9,7 +9,9 @@ or an agent (chat tool `drawing_layout`) has said:
     {"sheet": {"size": "auto" | "A4" | "A3", "orientation": "landscape" | "portrait"},
      "views": [{"view": "front" | "back" | "top" | "bottom" | "left" | "right" | "iso",
                 "x": .., "y": .., "w": .., "h": ..,      # fractions of the sheet, from its top left
-                "scale": "auto" | "1:1" | "2:1" | ..,    # auto: one scale the auto boxes share
+                "scale": "auto" | "fit" | "fill" | "1:1" | "2:1" | ..,
+                                                  # auto: one scale the auto boxes share; fit: the largest
+                                                  # standard one for this box alone; fill: the box, not to scale
                 "hidden_lines": bool, "dims": bool}],
      "parts": {"hide": [part names], "highlight": [part names]},
      "title": str | None, "notes": str | None}
@@ -120,8 +122,8 @@ def validate(spec) -> dict:
         if x + w > 1.0001 or y + h > 1.0001:
             raise LayoutError(f"view {i}: the box goes off the sheet (x + w and y + h must be at most 1)")
         scale = str(b.get("scale") or "auto").replace(" ", "")
-        if scale != "auto" and scale not in SCALES:
-            raise LayoutError(f"view {i}: scale must be auto or one of {', '.join(SCALES)}")
+        if scale not in ("auto", "fit", "fill") and scale not in SCALES:
+            raise LayoutError(f"view {i}: scale must be auto, fit, fill or one of {', '.join(SCALES)}")
         hidden, dims = b.get("hidden_lines", view != "iso"), b.get("dims", view != "iso")
         if not isinstance(hidden, bool) or not isinstance(dims, bool):
             raise LayoutError(f"view {i}: hidden_lines and dims are true or false")

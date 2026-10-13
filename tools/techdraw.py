@@ -207,7 +207,8 @@ def spec_cells(spec: dict, size: dict, sheet: str, landscape: bool):
         w, h = min(fx1, float(b["x"] + b["w"]) * sw) - x, min(fy1, float(b["y"] + b["h"]) * sh) - y
         if w > 4 and h > 4:
             boxes.append((b, x, y, w, h))
-    auto = [(b, w, h) for b, _, _, w, h in boxes if b["view"] != "iso" and not ratio(b.get("scale"))]
+    auto = [(b, w, h) for b, _, _, w, h in boxes
+            if b["view"] != "iso" and (b.get("scale") or "auto") == "auto"]
     if not auto:
         return boxes, None
     for num, den in SCALES:
@@ -309,18 +310,40 @@ def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: st
         cells = []
         for b, x, y, w, h in boxes:
             key = b["view"]
-            fixed = ratio(b.get("scale"))
-            k = fixed[0] / fixed[1] if fixed else (None if key == "iso" else num / den)
+            mode = str(b.get("scale") or "auto")
+            fixed = ratio(mode)
             dims = []
             if b.get("dims", key != "iso") and key != "iso":
                 dims = [("h", size[key][0]), ("v", size[key][1])]
+            pl, pr, pt, pb = pads(bool(dims))
+            vw, vh = size[key]
+            if mode == "fit" and key != "iso":
+                # The largest standard scale at which this view fits its own box.
+                fixed = next(((a, d) for a, d in SCALES
+                              if vw * a / d + pl + pr <= w + FIT_SLACK and vh * a / d + pt + pb <= h + FIT_SLACK), SCALES[-1])
+            k = fixed[0] / fixed[1] if fixed else (None if key == "iso" else num / den)
+            if mode == "fill" and key != "iso":
+                # As large as the box allows, whatever the scale: said on the sheet.
+                k = min((w - pl - pr) / max(vw, 1e-9), (h - pt - pb) / max(vh, 1e-9))
             label = LABELS[key]
-            if k is not None and abs(k - num / den) > 1e-9:
+            if mode == "fill" and key != "iso":
+                label += " (NOT TO SCALE)"
+            elif k is not None and abs(k - num / den) > 1e-9:
                 label += f" ({fixed[0]}:{fixed[1]})" if fixed else ""
             cells.append({"view": key, "at": (x, y, w, h), "k": k, "label": label, "dims": dims,
                           "hidden": bool(b.get("hidden_lines", key != "iso")), "pads": pads(bool(dims)),
-                          "clip": True, "scale": str(b.get("scale") or "auto") if fixed else "auto"})
-        scale_text = f"{num}:{den}" if (common or first) else "NTS"
+                          "clip": True, "scale": mode if (fixed or mode == "fill") else "auto",
+                          "ratio": None if key == "iso" or mode == "fill" else (fixed or (num, den))})
+        # The title block's scale: the one every scaled view shares, "AS SHOWN"
+        # when they differ (each view then says its own), "NTS" with none.
+        shown = {c["ratio"] for c in cells if c.get("ratio")}
+        scale_text = (f"{next(iter(shown))[0]}:{next(iter(shown))[1]}" if len(shown) == 1
+                      else "AS SHOWN" if shown else "NTS")
+        if len(shown) == 1:
+            num, den = next(iter(shown))
+            for c in cells:                       # one scale for all: the title block says it once
+                if c.get("ratio"):
+                    c["label"] = LABELS[c["view"]]
     else:
         sheet, (num, den, (aw, ah, c1, c2, r1, r2)) = pick(size)
         # What the columns and rows leave over: a little between them (views

@@ -200,6 +200,11 @@ function ratio(s: string): [number, number] | null {
               background: var(--surface-2); border-radius: 5px; color: var(--ink-dim); }
     .dl-res b { font: 600 12px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
     .dl-res[data-warn] { color: var(--danger); }
+    /* An automatic box drawn smaller than it could be: why, and the way out. */
+    .dl-held { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 11.5px; line-height: 1.4;
+               color: var(--ink-dim); border: 1px dashed var(--line); border-radius: 5px; }
+    .dl-held b { font: 600 12px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
+    .dl-held .tcv-btn { flex: none; margin-left: auto; padding: 2px 8px; font-size: 11.5px; }
     .dl-res[data-warn] b { color: var(--danger); }
     .dl-checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
     .dl-checks label { display: flex; align-items: center; gap: 6px; }
@@ -339,6 +344,12 @@ function ratio(s: string): [number, number] | null {
                   <span>{{ (f.fits ? 'Comes out at' : 'Does not fit at') | t }}</span><b>{{ f.label }}</b>
                   <span style="margin-left:auto">{{ 'needs' | t }} {{ f.need[0] }} × {{ f.need[1] }} mm</span>
                 </div>
+                @if (heldBack(); as hb) {
+                  <div class="dl-held">
+                    <span>{{ 'Kept at the shared scale by' | t }} {{ hb.by || ('another view' | t) }}. {{ 'On its own this box takes' | t }} <b>{{ hb.own }}</b>.</span>
+                    @if (canSave()) { <button type="button" class="tcv-btn" (click)="set({ scale: 'fit' })">{{ 'Fit this box' | t }}</button> }
+                  </div>
+                }
               }
               <div class="dl-checks">
                 <label><input type="checkbox" class="tcv-check" [checked]="b.hidden_lines" [disabled]="!canSave()" (change)="set({ hidden_lines: $any($event.target).checked })"> {{ 'Hidden lines' | t }}</label>
@@ -542,6 +553,9 @@ export class DrawingLayout implements OnInit, OnDestroy {
   viewOpts = computed<SelectOption[]>(() => VIEWS.map(v => ({ value: v, label: t(NAMES[v]) })));
   scaleOpts = computed<SelectOption[]>(() => [
     { value: 'auto', label: t('Automatic') + (this.common() ? ` (${this.common()})` : ''), note: t('One scale the automatic views share') },
+    { value: 'fit', label: t('Fit this box') + (this.bestOf(this.sel()) ? ` (${this.bestOf(this.sel())})` : ''),
+      note: t('The largest standard scale for this box alone') },
+    { value: 'fill', label: t('Fill the box'), note: t('As large as the box allows, not to scale') },
     ...SCALES.map(([a, b]) => ({ value: `${a}:${b}`, label: `${a}:${b}` }))]);
   sizeOpts = computed<SelectOption[]>(() => [{ value: 'auto', label: t('Automatic'), note: t('A4 if it fits at 1:1, else A3') },
                                               { value: 'A4', label: 'A4' }, { value: 'A3', label: 'A3' }]);
@@ -589,7 +603,7 @@ export class DrawingLayout implements OnInit, OnDestroy {
    *  spec_cells); null with none. */
   private commonOn(size: 'A4' | 'A3', s: LayoutSpec): [number, number] | null {
     const paper = this.dims(size, s.sheet.orientation);
-    const auto = s.views.filter(b => b.view !== 'iso' && !ratio(b.scale));
+    const auto = s.views.filter(b => b.view !== 'iso' && (b.scale || 'auto') === 'auto');
     if (!auto.length) return null;
     for (const [a, d] of SCALES) {
       const k = a / d;
@@ -610,6 +624,35 @@ export class DrawingLayout implements OnInit, OnDestroy {
   private commonK = computed(() => { const s = this.spec(); return s ? this.commonOn(this.size_(), s) : null; });
   common = computed(() => { const k = this.commonK(); return k ? `${k[0]}:${k[1]}` : ''; });
 
+  /** The largest standard scale at which box b's view fits b alone (techdraw.py "fit"). */
+  private bestFor(b: ViewBox, paper: [number, number]): [number, number] | null {
+    const e = this.extent(b.view);
+    if (!e || b.view === 'iso') return null;
+    const { w, h } = this.boxMm(b, paper);
+    const [pl, pr, pt, pb] = b.dims ? PAD.dims : PAD.plain;
+    return SCALES.find(([a, d]) => e[0] * a / d + pl + pr <= w + FIT_SLACK && e[1] * a / d + pt + pb <= h + FIT_SLACK)
+      ?? SCALES[SCALES.length - 1];
+  }
+  /** Box i's own best scale, as written ("1:1"); '' for none. */
+  bestOf(i: number) {
+    const b = this.spec()?.views[i];
+    const r = b ? this.bestFor(b, this.paper()) : null;
+    return r ? `${r[0]}:${r[1]}` : '';
+  }
+  /** For an automatic box held back by the shared scale: the view that holds it
+   *  back and the scale this box alone would take - so the panel can say why
+   *  a large box still draws its view small. */
+  heldBack = computed(() => {
+    const s = this.spec(), i = this.sel(), common = this.commonK();
+    const b = s?.views[i];
+    if (!s || !b || !common || b.view === 'iso' || (b.scale || 'auto') !== 'auto') return null;
+    const paper = this.paper(), mine = this.bestFor(b, paper);
+    if (!mine || mine[0] / mine[1] <= common[0] / common[1] + 1e-9) return null;
+    const by = s.views.find((o, j) => j !== i && o.view !== 'iso' && (o.scale || 'auto') === 'auto'
+      && (() => { const r = this.bestFor(o, paper); return !!r && Math.abs(r[0] / r[1] - common[0] / common[1]) < 1e-9; })());
+    return { own: `${mine[0]}:${mine[1]}`, by: by ? t(NAMES[by.view]) : '' };
+  });
+
   /** Each box: the scale it comes out at, whether its view fits, and the
    *  room it needs. */
   fits = computed<(Fit | null)[]>(() => {
@@ -626,12 +669,27 @@ export class DrawingLayout implements OnInit, OnDestroy {
         const k = Math.max(0, Math.min((w - 8) / Math.max(e[0], 1e-9), (h - PAD.dims[2] - 4) / Math.max(e[1], 1e-9)));
         return { k, label: t('fit, not to scale'), fits: k > 0, need: [Math.round(w), Math.round(h)] as [number, number] };
       }
-      const r = own ?? common ?? [1, 1];
+      if (b.scale === 'fill') {
+        const k = Math.max(0, Math.min((w - pl - pr) / Math.max(e[0], 1e-9), (h - pt - pb) / Math.max(e[1], 1e-9)));
+        return { k, label: t('fill, not to scale'), fits: k > 0, need: [Math.round(w), Math.round(h)] as [number, number] };
+      }
+      const fit = b.scale === 'fit' ? this.bestFor(b, paper) : null;
+      const r = own ?? fit ?? common ?? [1, 1];
       const k = r[0] / r[1];
       const need: [number, number] = [Math.round(e[0] * k + pl + pr), Math.round(e[1] * k + pt + pb)];
-      return { k, label: `${r[0]}:${r[1]}` + (own ? '' : ' ' + t('auto')), fits: need[0] <= w + .5 && need[1] <= h + .5, need };
+      const how = own ? '' : fit ? ' ' + t('fit') : ' ' + t('auto');
+      return { k, label: `${r[0]}:${r[1]}` + how, fits: need[0] <= w + .5 && need[1] <= h + .5, need };
     });
   });
+
+  /** What the title block says (techdraw.py): the one scale every scaled view
+   *  comes out at, "AS SHOWN" when they differ, "NTS" with none. */
+  sheetScale() {
+    const s = this.spec(), f = this.fits();
+    const shown = new Set((s?.views ?? []).map((b, i) => b.view === 'iso' || b.scale === 'fill' || !f[i]?.k ? ''
+      : f[i]!.label.split(' ')[0]).filter(Boolean));
+    return shown.size === 1 ? [...shown][0] : shown.size ? 'AS SHOWN' : 'NTS';
+  }
 
   /** The view's outline at its scale inside box i, as % of the box. */
   ghost(i: number) {
@@ -657,7 +715,7 @@ export class DrawingLayout implements OnInit, OnDestroy {
     const s = this.spec();
     const values: Record<string, string> = {
       TITLE: s?.title || this.title(), PROJECT: this.model().split('/')[0], RELEASE: '-',
-      SCALE: this.common() || this.picked()?.scale.replace('auto', '') || 'NTS', UNITS: 'mm',
+      SCALE: this.sheetScale(), UNITS: 'mm',
       DATE: new Date().toISOString().slice(0, 10), SHEET: '1 / 1' };
     return TB_COLS.map(([k, w]) => [k, values[k], w]);
   });

@@ -253,3 +253,38 @@ def test_techdraw_draws_the_layout(tmp_path):
                            capture_output=True, text=True, timeout=60).stdout
     for w in ("FRONT", "LEFT", "BOTTOM", "ISOMETRIC", "Custom Title", "My notes"):
         assert w in words
+
+
+def test_a_box_may_fit_its_own_view_or_fill_itself(tmp_path):
+    """"fit": the largest standard scale for that box alone, not the shared
+    one a small box holds down; "fill": the whole box, said not to scale;
+    the title block then says AS SHOWN."""
+    assert drawlayout.validate({"views": [{"view": "front", "x": .05, "y": .05, "w": .5, "h": .6, "scale": "fit"},
+                                          {"view": "top", "x": .6, "y": .05, "w": .3, "h": .3, "scale": "fill"}]})
+    if subprocess.run(["docker", "image", "inspect", "redline-draw"], capture_output=True).returncode:
+        pytest.skip("the redline-draw image is not built")
+    tmp_path.chmod(0o777)
+    spec = {"sheet": {"size": "A3", "orientation": "landscape"},
+            "views": [{"view": "front", "x": .03, "y": .04, "w": .6, "h": .7, "scale": "fit"},
+                      {"view": "right", "x": .66, "y": .04, "w": .12, "h": .2, "scale": "auto"},
+                      {"view": "top", "x": .66, "y": .4, "w": .3, "h": .3, "scale": "fill"}]}
+    (tmp_path / "spec.json").write_text(json.dumps(drawlayout.for_drawing({"spec": drawlayout.validate(spec)})))
+    script = ("from build123d import Box, export_step\n"
+              "export_step(Box(60, 40, 30), '/work/m.step')\n"
+              "import subprocess, sys\n"
+              "sys.exit(subprocess.run([sys.executable, '/tools/techdraw.py', '/work/m.step', '/work/d.pdf',"
+              " '--info', '/work/d.json', '--spec', '/work/spec.json']).returncode)\n")
+    run = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{tmp_path}:/work",
+                          "-v", f"{release.ROOT / 'tools'}:/tools:ro", "--entrypoint", "python",
+                          "redline-draw", "-c", script], capture_output=True, text=True, timeout=240)
+    assert run.returncode == 0, run.stdout + run.stderr
+    info = json.loads((tmp_path / "d.json").read_text())
+    assert [b["scale"] for b in info["boxes"]] == ["fit", "auto", "fill"]
+    assert info["scale"] == "AS SHOWN"
+    words = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{tmp_path}:/work",
+                            "--entrypoint", "python", "redline-draw", "-c",
+                            "import fitz; print(' '.join(w[4] for w in fitz.open('/work/d.pdf')[0].get_text('words')))"],
+                           capture_output=True, text=True, timeout=60).stdout
+    # The big box takes a larger scale than the small one holds the shared scale to.
+    assert "(2:1)" in words or "(5:1)" in words, words
+    assert "SCALE)" in words
