@@ -43,11 +43,18 @@ MAX_TOKENS = 60
 TIMEOUT = 20.0
 
 PROMPT = (
-    "You see the end of a conversation between a person and an assistant. Write the one "
-    "next question or request the person is most likely to send now: short, concrete, "
-    f"at most {MAX_CHARS} characters, written as the person would type it, in the language "
-    "the person writes in (Turkish if they write Turkish). Reply with that line only: "
-    "no quotes, no preamble, no explanation, no Markdown."
+    "You see the end of a conversation between a person and their assistant. Write the one "
+    "message the PERSON is most likely to send next - in the person's own voice, first "
+    "person, as they would type it to the assistant: a request or a question TO the "
+    "assistant about their own work, the next step of what was just done (the shape of "
+    "\"Aynısını diğerleri için de yap\" or \"Can you compare it with the last version?\" - "
+    "shapes only, never copy them). Never write as the assistant: never "
+    "ask the person about their plans, never offer help, never thank or answer them "
+    "(not \"Bu mili ne için kullanacaksın?\", not \"Başka bir şey ister misin?\"). If the "
+    "conversation ended with thanks or a goodbye, suggest the natural next request for "
+    "the work it was about. Short and concrete, "
+    f"at most {MAX_CHARS} characters, in the language the person writes in (Turkish if they "
+    "write Turkish). Reply with that line only: no quotes, no preamble, no explanation, no Markdown."
 )
 
 
@@ -93,7 +100,8 @@ def _cut(text: str) -> str:
 def transcript(turns: list[tuple[str, str]]) -> str:
     """The last TURNS lines, each cut short, as the model reads them."""
     rows = [(r, t) for r, t in turns if (t or "").strip()][-TURNS:]
-    return "\n\n".join(f"{'Person' if r == 'user' else 'Assistant'}: {_cut(t)}" for r, t in rows)
+    return "\n\n".join(f"{'Person' if r == 'user' else 'Assistant'}: {_cut(t)}" for r, t in rows) + \
+        "\n\nPerson (the next message, to the assistant):"
 
 
 async def _turns(db, kind: str, ref: str) -> tuple[str, list[tuple[str, str]]] | None:
