@@ -53,6 +53,15 @@ export function dmWhen(iso: string | null | undefined) {
       <b>{{ name() }}</b>
       <span class="tcv-cc-dim">{{ sub() }}</span>
     </div>
+    <!-- Pinned and archived, mine only, as the chats' header; the list's handlers do it (commandcode.ts). -->
+    @if (auth.can('draw') && flags(); as f) {
+      <div class="tcv-cc-baracts">
+        <button class="tcv-cc-ib tcv-cc-wide" data-act="dm-pin" (click)="pin.emit()" [class.on]="f.pinned" [title]="(f.pinned ? 'Unpin' : 'Pin') | t">
+          <ng-container *ngTemplateOutlet="ico(); context: { $implicit: pinIco() }" /></button>
+        <button class="tcv-cc-ib tcv-cc-wide" data-act="dm-archive" (click)="archive.emit()" [title]="(f.archived ? 'Unarchive' : 'Archive') | t">
+          <ng-container *ngTemplateOutlet="ico(); context: { $implicit: f.archived ? unarchiveIco() : archiveIco() }" /></button>
+      </div>
+    }
   }
 </header>
 
@@ -192,6 +201,13 @@ export class DmView {
   id = input.required<string>();
   ico = input.required<TemplateRef<unknown>>();
   menu = output<void>();
+  pin = output<void>();
+  archive = output<void>();
+  pinIco = input('');
+  archiveIco = input('');
+  unarchiveIco = input('');
+  /** Its pinned and archived as the list has them (they change there too). */
+  flags = computed(() => this.store.chat(this.id()));
 
   readonly MENU = 'M4 6h16 M4 12h16 M4 18h16';
   readonly SEND = 'M12 19V5 M6 11l6-6 6 6';

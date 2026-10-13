@@ -444,6 +444,9 @@ type Ask = { text: string; label: string; go: () => void };
                     [title]="'Delete forever' | t">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
           } @else {
+            <button class="tcv-cc-ib" data-act="pin-sel" [disabled]="!selected().size" (click)="pinSelected()" [class.on]="selPinned()"
+                    [title]="(selPinned() ? 'Unpin' : 'Pin') | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.pin }" /></button>
             <button class="tcv-cc-ib" [disabled]="!selected().size" (click)="archiveSelected()"
                     [title]="(archived() ? 'Unarchive' : 'Archive') | t">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: archived() ? I.unarchive : I.archive }" /></button>
@@ -589,7 +592,12 @@ type Ask = { text: string; label: string; go: () => void };
           @if (row.d; as d) {
           <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-dm]="d.id"
                [attr.data-on]="d.id === dms.open() ? 1 : null" [attr.data-unread]="d.unread ? 1 : null"
-               (click)="openDmHit(d.id)" (keydown.enter)="openDmHit(d.id)" (contextmenu)="dmMenu($event, d)">
+               [attr.data-sel]="selected().has(d.id) ? 1 : null"
+               (click)="pickDm(d)" (keydown.enter)="pickDm(d)" (contextmenu)="dmMenu($event, d)">
+            @if (selecting()) {
+              <input type="checkbox" class="tcv-check" [checked]="selected().has(d.id)" (click)="$event.stopPropagation()"
+                     (change)="toggleSel(d.id)" [attr.aria-label]="'Select' | t">
+            }
             @if (d.members[0]; as m) {
               <span class="tcv-dm-face">
                 <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="26" />
@@ -702,7 +710,8 @@ type Ask = { text: string; label: string; go: () => void };
       <app-cc-tools [tools]="tools()" [ready]="toolsReady()" [canEdit]="auth.can('draw')" (set)="setTools($event)" (openChat)="showTools(false); open($event)"
                     (done)="showTools(false)" (menu)="drawer.set(!drawer())" />
     } @else if (dms.open(); as did) {
-      <app-dm-view [id]="did" [ico]="ico" (menu)="drawer.set(!drawer())" />
+      <app-dm-view [id]="did" [ico]="ico" [pinIco]="I.pin" [archiveIco]="I.archive" [unarchiveIco]="I.unarchive"
+                   (menu)="drawer.set(!drawer())" (pin)="pinOpenDm(did)" (archive)="archiveOpenDm(did)" />
     } @else if (sel.thread(); as room) {
       <app-room-thread [room]="room" [userAv]="userAv" [botAv]="botAv" [ico]="ico" (menu)="drawer.set(!drawer())" />
     } @else if (chat(); as c) {
@@ -1452,9 +1461,21 @@ export class RoomCommandCode implements OnDestroy {
       .map(([name, rows]) => ({ name, rows: rows.sort((a, b) => b.at - a.at) }));
   });
 
+  /** What Select picks from: the chats shown and the direct conversations among them. */
+  private selectable = computed(() => [...this.shownChats().map(c => c.id), ...this.shownDms().map(d => d.id)]);
   allSelected = computed(() => {
-    const s = this.selected(), rows = this.shownChats();
-    return rows.length > 0 && rows.every(c => s.has(c.id));
+    const s = this.selected(), ids = this.selectable();
+    return ids.length > 0 && ids.every(id => s.has(id));
+  });
+  /** The selection's rows, chats and DMs apart. */
+  private selRows() {
+    const ids = this.selected();
+    return { chats: this.shownChats().filter(c => ids.has(c.id)), dms: this.shownDms().filter(d => ids.has(d.id)) };
+  }
+  /** All of the selection pinned already: the bar's pin unpins. */
+  selPinned = computed(() => {
+    const { chats, dms } = this.selRows();
+    return chats.length + dms.length > 0 && chats.every(c => c.pinned) && dms.every(d => d.pinned);
   });
   someSelected = computed(() => this.selected().size > 0 && !this.allSelected());
 
@@ -1867,6 +1888,11 @@ export class RoomCommandCode implements OnDestroy {
     this.showToast(t(archived ? 'Archived.' : 'Back in the list.'), () => this.setFlags({ ...c, archived }, { archived: !archived }));
   }
 
+  /** A row's click: opens it, or while selecting picks it. */
+  pickDm(d: DmChat) { if (this.selecting()) this.toggleSel(d.id); else this.openDmHit(d.id); }
+  /** The open one's header buttons (dm-view.ts): by its id, as the list has it now. */
+  pinOpenDm(id: string) { const d = this.dms.chat(id); if (d) this.toggleDmPin(d); }
+  archiveOpenDm(id: string) { const d = this.dms.chat(id); if (d) this.toggleDmArchive(d); }
   /** A direct conversation's pin and archive: mine only, as the chats' (dm.ts setFlags). */
   toggleDmPin(d: DmChat) { this.dms.setFlags(d.id, { pinned: !d.pinned }); }
   toggleDmArchive(d: DmChat) {
@@ -1897,22 +1923,33 @@ export class RoomCommandCode implements OnDestroy {
     this.selected.update(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
-  selectAll(on: boolean) { this.selected.set(on ? new Set(this.shownChats().map(c => c.id)) : new Set()); }
+  selectAll(on: boolean) { this.selected.set(on ? new Set(this.selectable()) : new Set()); }
 
+  /** The chats only: a direct conversation is never deleted - said, and left alone. */
   deleteSelected() {
-    const ids = this.selected();
-    const rows = this.shownChats().filter(c => ids.has(c.id));
+    const { chats: rows, dms } = this.selRows();
     const mine = rows.filter(c => this.mayDelete(c));
     if (mine.length < rows.length) this.error.set(t('Some of these are someone else\'s - you may not delete them.'));
-    this.deleteChats(mine);
+    if (dms.length) this.showToast(`${dms.length} ${t('people not deleted - people cannot be deleted')}`, undefined, undefined, undefined, 'warn');
+    if (mine.length) this.deleteChats(mine);
     this.selecting.set(false);
     this.selected.set(new Set());
   }
 
   archiveSelected() {
-    const ids = this.selected();
+    const { chats, dms } = this.selRows();
     const archived = !this.archived();
-    for (const c of this.shownChats().filter(x => ids.has(x.id))) this.setFlags(c, { archived });
+    for (const c of chats) this.setFlags(c, { archived });
+    for (const d of dms) this.dms.setFlags(d.id, { archived });
+    this.selecting.set(false);
+    this.selected.set(new Set());
+  }
+
+  pinSelected() {
+    const { chats, dms } = this.selRows();
+    const pinned = !this.selPinned();
+    for (const c of chats.filter(x => !!x.pinned !== pinned)) this.setFlags(c, { pinned });
+    for (const d of dms.filter(x => !!x.pinned !== pinned)) this.dms.setFlags(d.id, { pinned });
     this.selecting.set(false);
     this.selected.set(new Set());
   }

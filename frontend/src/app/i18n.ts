@@ -3481,6 +3481,7 @@ const TR: Record<string, string> = {
   'Found in direct messages': 'Doğrudan mesajlarda bulunanlar',
   'People': 'Kişiler',
   'people': 'kişi',
+  'people not deleted - people cannot be deleted': 'kişi silinmedi - kişiler silinemez',
   'Seen': 'Görüldü',
   'Send a model, board, palette, product…': 'Model, kart, palet, ürün gönder…',
   'Send something of yours…': 'Size ait bir şey gönderin…',

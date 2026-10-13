@@ -522,3 +522,27 @@ def test_a_board_is_sent_with_its_figures_never_as_raw_text():
     assert f["bom"] == [{"ref": "R1, R2", "value": "10k", "footprint": "0402", "lcsc": "C25744"}]
     assert f["thickness"] == 1.6 and f["version"] == 4
     assert dm._board_facts({}, None)["version"] is None                       # a board never laid out or built
+
+
+# ---------------------------------------------------------------- the page (read from its source, as the other page tests do)
+
+def test_the_list_selects_dms_with_the_chats_and_never_deletes_them():
+    from pathlib import Path
+    app = Path(__file__).resolve().parents[1] / "frontend/src/app"
+    cc = (app / "rooms/commandcode.ts").read_text()
+    # Select all takes the DMs shown; their rows get the checkbox and pick instead of opening.
+    assert "...this.shownDms().map(d => d.id)" in cc and "this.selected.set(on ? new Set(this.selectable())" in cc
+    assert '(change)="toggleSel(d.id)"' in cc and "if (this.selecting()) this.toggleSel(d.id); else this.openDmHit(d.id);" in cc
+    # The bar's pin and archive reach both; delete only the chats, and says so for the people.
+    for fn in ("archiveSelected", "pinSelected"):
+        body = cc[cc.index(f"  {fn}() {{"):][:600]
+        assert "this.dms.setFlags(d.id" in body, fn
+    body = cc[cc.index("  deleteSelected() {"):][:700]
+    assert "this.deleteChats(mine)" in body and "dms" not in body.split("this.deleteChats")[1][:20]
+    assert "people not deleted - people cannot be deleted" in body
+    i18n = (app / "i18n.ts").read_text()
+    assert i18n.count("'people not deleted - people cannot be deleted':") == 1
+    # The open DM's header: pin and archive, through the list's own handlers (undo toast included).
+    view = (app / "rooms/dm-view.ts").read_text()
+    assert 'data-act="dm-pin"' in view and 'data-act="dm-archive"' in view
+    assert '(pin)="pinOpenDm(did)" (archive)="archiveOpenDm(did)"' in cc
