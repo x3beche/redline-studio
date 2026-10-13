@@ -183,6 +183,17 @@ def ratio(text: str):
     return (int(a) if a.is_integer() else a, int(b) if b.is_integer() else b)
 
 
+
+def fill_ratio(k: float):
+    """The largest ratio written to a tenth that is at most `k`: 1.74 -> (1.7, 1),
+    0.42 -> (1, 2.4); never 0."""
+    if k >= 1:
+        a = max(1.0, int(k * 10 + 1e-9) / 10)
+    return (int(a) if a.is_integer() else a, 1)
+    d = int((1 / max(k, 1e-6)) * 10 + 0.999999) / 10          # 1/k rounded up to a tenth
+    d = max(d, 1.1)
+    return (1, int(d) if d.is_integer() else d)
+
 def pads(dims: bool):
     """Room around a view in a box: its dimensions' too when it has them."""
     return (PAD_L, PAD_R, PAD_T, PAD_B) if dims else (4.0, PAD_R, PAD_T, 4.0)
@@ -323,17 +334,17 @@ def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: st
                               if vw * a / d + pl + pr <= w + FIT_SLACK and vh * a / d + pt + pb <= h + FIT_SLACK), SCALES[-1])
             k = fixed[0] / fixed[1] if fixed else (None if key == "iso" else num / den)
             if mode == "fill" and key != "iso":
-                # As large as the box allows, whatever the scale: said on the sheet.
-                k = min((w - pl - pr) / max(vw, 1e-9), (h - pt - pb) / max(vh, 1e-9))
+                # The box filled at a scale still worth writing: the largest
+                # ratio to a tenth at which the view fits ("1.7:1", "1:2.4").
+                fixed = fill_ratio(min((w - pl - pr) / max(vw, 1e-9), (h - pt - pb) / max(vh, 1e-9)))
+                k = fixed[0] / fixed[1]
             label = LABELS[key]
-            if mode == "fill" and key != "iso":
-                label += " (NOT TO SCALE)"
-            elif k is not None and abs(k - num / den) > 1e-9:
+            if k is not None and abs(k - num / den) > 1e-9:
                 label += f" ({fixed[0]}:{fixed[1]})" if fixed else ""
             cells.append({"view": key, "at": (x, y, w, h), "k": k, "label": label, "dims": dims,
                           "hidden": bool(b.get("hidden_lines", key != "iso")), "pads": pads(bool(dims)),
-                          "clip": True, "scale": mode if (fixed or mode == "fill") else "auto",
-                          "ratio": None if key == "iso" or mode == "fill" else (fixed or (num, den))})
+                          "clip": True, "scale": mode if fixed else "auto",
+                          "ratio": None if key == "iso" else (fixed or (num, den))})
         # The title block's scale: the one every scaled view shares, "AS SHOWN"
         # when they differ (each view then says its own), "NTS" with none.
         shown = {c["ratio"] for c in cells if c.get("ratio")}

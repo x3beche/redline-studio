@@ -87,8 +87,20 @@ function box(view: ViewKey, x: number, y: number, w: number, h: number): ViewBox
 function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
 
 function ratio(s: string): [number, number] | null {
-  const m = /^(\d+):(\d+)$/.exec(s);
-  return m ? [+m[1], +m[2]] : null;
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(s);
+  return m && +m[2] > 0 ? [+m[1], +m[2]] : null;
+}
+/** The largest ratio written to a tenth that is at most k (techdraw.py fill_ratio). */
+function fillRatio(k: number): [number, number] {
+  if (k >= 1) return [Math.max(1, Math.floor(k * 10 + 1e-9) / 10), 1];
+  return [1, Math.max(1.1, Math.ceil(1 / Math.max(k, 1e-6) * 10 - 1e-6) / 10)];
+}
+/** A scale as the person types it ("1,7:1", "1.7 : 1", "2") as kept ("1.7:1"); null if it is not one. */
+function typedScale(s: string): string | null {
+  const t = s.replace(/\s/g, '').replace(/,/g, '.');
+  const r = ratio(t) ?? (/^\d+(\.\d+)?$/.test(t) ? [+t, 1] as [number, number] : null);
+  if (!r || r[0] / r[1] < 0.01 || r[0] / r[1] > 100) return null;
+  return `${+r[0].toFixed(2)}:${+r[1].toFixed(2)}`;
 }
 
 @Component({
@@ -200,11 +212,19 @@ function ratio(s: string): [number, number] | null {
               background: var(--surface-2); border-radius: 5px; color: var(--ink-dim); }
     .dl-res b { font: 600 12px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
     .dl-res[data-warn] { color: var(--danger); }
+    .dl-typed { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-dim); }
+    .dl-typed small { flex: none; }
+    .dl-typed input { flex: 1; min-width: 0; height: 26px; padding: 0 8px; font: 12px 'IBM Plex Mono', ui-monospace, monospace;
+                      color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; outline: none; }
+    .dl-typed input:focus { border-color: var(--accent); }
+    .dl-typed[data-bad] input { border-color: var(--danger); }
+    .dl-typed em { flex: none; font-style: normal; color: var(--danger); }
     /* An automatic box drawn smaller than it could be: why, and the way out. */
     .dl-held { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 11.5px; line-height: 1.4;
                color: var(--ink-dim); border: 1px dashed var(--line); border-radius: 5px; }
     .dl-held b { font: 600 12px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
-    .dl-held .tcv-btn { flex: none; margin-left: auto; padding: 2px 8px; font-size: 11.5px; }
+    .dl-held .tcv-btn { flex: none; padding: 2px 8px; font-size: 11.5px; }
+    .dl-held .tcv-btn:first-of-type { margin-left: auto; }
     .dl-res[data-warn] b { color: var(--danger); }
     .dl-checks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
     .dl-checks label { display: flex; align-items: center; gap: 6px; }
@@ -326,6 +346,14 @@ function ratio(s: string): [number, number] | null {
                 <wb-select size="sm" [options]="viewOpts()" [value]="b.view" [disabled]="!canSave()" (pick)="set({ view: $any($event) })" [label]="'View' | t" /></label>
               <label class="dl-two"><small>{{ 'Scale' | t }}</small>
                 <wb-select size="sm" [options]="scaleOpts()" [value]="b.scale" [disabled]="!canSave()" (pick)="set({ scale: $event })" [label]="'Scale' | t" /></label>
+              @if (b.view !== 'iso' && canSave()) {
+                <label class="dl-typed" [attr.data-bad]="typed() ? 1 : null"><small>{{ 'Or type a scale' | t }}</small>
+                  <input type="text" inputmode="decimal" [placeholder]="'e.g. 1.7:1 or 1:2.5' | t" [value]="typed()"
+                         (keydown.enter)="typeScale($any($event.target).value); $any($event.target).blur()"
+                         (change)="typeScale($any($event.target).value)" [attr.aria-label]="'Scale' | t">
+                  @if (typed()) { <em>{{ 'Write it as 1.7:1 or 1:2.5' | t }}</em> }
+                </label>
+              }
               <label class="dl-one"><small>X</small>
                 <span class="dl-num"><input type="number" [value]="mmOf(b.x, 0)" [disabled]="!canSave()" (change)="numeric('x', $any($event.target).value, 'mm')"><i>mm</i></span></label>
               <label class="dl-one"><small>Y</small>
@@ -347,7 +375,16 @@ function ratio(s: string): [number, number] | null {
                 @if (heldBack(); as hb) {
                   <div class="dl-held">
                     <span>{{ 'Kept at the shared scale by' | t }} {{ hb.by || ('another view' | t) }}. {{ 'On its own this box takes' | t }} <b>{{ hb.own }}</b>.</span>
-                    @if (canSave()) { <button type="button" class="tcv-btn" (click)="set({ scale: 'fit' })">{{ 'Fit this box' | t }}</button> }
+                    @if (canSave()) {
+                      <button type="button" class="tcv-btn" (click)="set({ scale: 'fit' })">{{ 'Fit this box' | t }}</button>
+                      @if (fillOf(sel()); as fr) { <button type="button" class="tcv-btn" (click)="set({ scale: 'fill' })">{{ 'Fill the box' | t }} ({{ fr }})</button> }
+                    }
+                  </div>
+                }
+                @if (b.scale === 'fit' && fillOf(sel()) && fillOf(sel()) !== bestOf(sel()) && canSave()) {
+                  <div class="dl-held">
+                    <span>{{ 'A standard scale leaves room in this box; filling it takes' | t }} <b>{{ fillOf(sel()) }}</b>.</span>
+                    <button type="button" class="tcv-btn" (click)="set({ scale: 'fill' })">{{ 'Fill the box' | t }}</button>
                   </div>
                 }
               }
@@ -555,7 +592,10 @@ export class DrawingLayout implements OnInit, OnDestroy {
     { value: 'auto', label: t('Automatic') + (this.common() ? ` (${this.common()})` : ''), note: t('One scale the automatic views share') },
     { value: 'fit', label: t('Fit this box') + (this.bestOf(this.sel()) ? ` (${this.bestOf(this.sel())})` : ''),
       note: t('The largest standard scale for this box alone') },
-    { value: 'fill', label: t('Fill the box'), note: t('As large as the box allows, not to scale') },
+    { value: 'fill', label: t('Fill the box') + (this.fillOf(this.sel()) ? ` (${this.fillOf(this.sel())})` : ''),
+      note: t('The largest ratio, to a tenth, at which the view fills the box') },
+    ...(ratio(this.picked()?.scale ?? '') && !SCALES.some(([a, b]) => `${a}:${b}` === this.picked()?.scale)
+      ? [{ value: this.picked()!.scale, label: this.picked()!.scale, note: t('Typed') }] : []),
     ...SCALES.map(([a, b]) => ({ value: `${a}:${b}`, label: `${a}:${b}` }))]);
   sizeOpts = computed<SelectOption[]>(() => [{ value: 'auto', label: t('Automatic'), note: t('A4 if it fits at 1:1, else A3') },
                                               { value: 'A4', label: 'A4' }, { value: 'A3', label: 'A3' }]);
@@ -633,6 +673,24 @@ export class DrawingLayout implements OnInit, OnDestroy {
     return SCALES.find(([a, d]) => e[0] * a / d + pl + pr <= w + FIT_SLACK && e[1] * a / d + pt + pb <= h + FIT_SLACK)
       ?? SCALES[SCALES.length - 1];
   }
+  /** The ratio "Fill the box" gives box i ("1.7:1"); '' for none. */
+  fillOf(i: number) {
+    const b = this.spec()?.views[i];
+    const e = b ? this.extent(b.view) : null;
+    if (!b || !e || b.view === 'iso') return '';
+    const { w, h } = this.boxMm(b, this.paper());
+    const [pl, pr, pt, pb] = b.dims ? PAD.dims : PAD.plain;
+    const r = fillRatio(Math.max(1e-6, Math.min((w - pl - pr) / Math.max(e[0], 1e-9), (h - pt - pb) / Math.max(e[1], 1e-9))));
+    return `${r[0]}:${r[1]}`;
+  }
+  /** A scale typed into the box's field: kept when it reads as one. */
+  typed = signal('');
+  typeScale(v: string) {
+    const got = typedScale(v);
+    if (!got) { this.typed.set(v); return; }
+    this.typed.set('');
+    this.set({ scale: got });
+  }
   /** Box i's own best scale, as written ("1:1"); '' for none. */
   bestOf(i: number) {
     const b = this.spec()?.views[i];
@@ -670,8 +728,10 @@ export class DrawingLayout implements OnInit, OnDestroy {
         return { k, label: t('fit, not to scale'), fits: k > 0, need: [Math.round(w), Math.round(h)] as [number, number] };
       }
       if (b.scale === 'fill') {
-        const k = Math.max(0, Math.min((w - pl - pr) / Math.max(e[0], 1e-9), (h - pt - pb) / Math.max(e[1], 1e-9)));
-        return { k, label: t('fill, not to scale'), fits: k > 0, need: [Math.round(w), Math.round(h)] as [number, number] };
+        const r = fillRatio(Math.max(1e-6, Math.min((w - pl - pr) / Math.max(e[0], 1e-9), (h - pt - pb) / Math.max(e[1], 1e-9))));
+        const k = r[0] / r[1];
+        const need: [number, number] = [Math.round(e[0] * k + pl + pr), Math.round(e[1] * k + pt + pb)];
+        return { k, label: `${r[0]}:${r[1]} ` + t('fill'), fits: true, need };
       }
       const fit = b.scale === 'fit' ? this.bestFor(b, paper) : null;
       const r = own ?? fit ?? common ?? [1, 1];
@@ -683,10 +743,11 @@ export class DrawingLayout implements OnInit, OnDestroy {
   });
 
   /** What the title block says (techdraw.py): the one scale every scaled view
-   *  comes out at, "AS SHOWN" when they differ, "NTS" with none. */
+   *  comes out at (a filled box's ratio counts), "AS SHOWN" when they differ,
+   *  "NTS" with none. */
   sheetScale() {
     const s = this.spec(), f = this.fits();
-    const shown = new Set((s?.views ?? []).map((b, i) => b.view === 'iso' || b.scale === 'fill' || !f[i]?.k ? ''
+    const shown = new Set((s?.views ?? []).map((b, i) => b.view === 'iso' || !f[i]?.k ? ''
       : f[i]!.label.split(' ')[0]).filter(Boolean));
     return shown.size === 1 ? [...shown][0] : shown.size ? 'AS SHOWN' : 'NTS';
   }

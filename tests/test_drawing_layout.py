@@ -54,7 +54,7 @@ def test_a_spec_is_kept_in_one_form():
     ({"views": [{"view": "side", "x": 0, "y": 0, "w": .5, "h": .5}]}, "view must be one of"),
     ({"views": [{"view": "top", "x": .7, "y": 0, "w": .5, "h": .5}]}, "off the sheet"),
     ({"views": [{"view": "top", "x": 0, "y": 0, "w": .01, "h": .5}]}, "at least"),
-    ({"views": [{"view": "top", "x": 0, "y": 0, "w": .5, "h": .5, "scale": "3:1"}]}, "scale must be"),
+    ({"views": [{"view": "top", "x": 0, "y": 0, "w": .5, "h": .5, "scale": "3:0"}]}, "scale must be"),
     ({"views": [{"view": "top", "x": "0", "y": 0, "w": .5, "h": .5}]}, "must be a number"),
     ({"views": [{"view": "top", "x": 0, "y": 0, "w": .5, "h": .5}], "sheet": {"size": "A0"}}, "sheet size"),
     ({"views": [{"view": "top", "x": 0, "y": 0, "w": .5, "h": .5}], "colour": 1}, "unknown field"),
@@ -285,6 +285,17 @@ def test_a_box_may_fit_its_own_view_or_fill_itself(tmp_path):
                             "--entrypoint", "python", "redline-draw", "-c",
                             "import fitz; print(' '.join(w[4] for w in fitz.open('/work/d.pdf')[0].get_text('words')))"],
                            capture_output=True, text=True, timeout=60).stdout
-    # The big box takes a larger scale than the small one holds the shared scale to.
+    # The big box takes a larger scale than the small one holds the shared scale to,
+    # and the filled one a ratio to a tenth, still to scale.
     assert "(2:1)" in words or "(5:1)" in words, words
-    assert "SCALE)" in words
+    assert "NOT TO SCALE" not in words
+    fill = info["boxes"][2]
+    assert fill["scale"] == "fill"
+
+
+def test_a_typed_scale_is_kept_as_a_ratio():
+    got = drawlayout.validate({"views": [{"view": "front", "x": .05, "y": .05, "w": .5, "h": .6, "scale": "1,70 : 1"}]})
+    assert got["views"][0]["scale"] == "1.7:1"
+    for bad in ("1:0", "abc", "1000:1", "1:1000"):
+        with pytest.raises(drawlayout.LayoutError):
+            drawlayout.validate({"views": [{"view": "front", "x": .05, "y": .05, "w": .5, "h": .6, "scale": bad}]})
