@@ -38,7 +38,8 @@
 .tst-chip button:hover { color: var(--danger); background: var(--hover); }
 
 /* ---- one row to add an item -------------------------------------- */
-.tst-add { display: grid; grid-template-columns: auto auto minmax(0, 2fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.tst-add { display: grid; grid-template-columns: auto auto auto minmax(0, 2fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.tsh-first-row { grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 2fr) auto; }
 .tst-add kbd { font: inherit; opacity: .6; margin-left: 2px; }
 .tst-sel, .tst-in {
   min-width: 0; padding: 5px 8px; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface-2);
@@ -343,3 +344,54 @@ td.tsh-scol { width: 130px; white-space: nowrap; }
   .tsh-first-row { grid-template-columns: minmax(0, 1fr) auto auto; }
   .tsh-first-row > :nth-child(4) { grid-column: 1 / -2; }
 }
+
+/* ---- form language: scope, exception, example, the reference strip ---
+   An item's scope is a small tag before its text (none when it holds
+   everywhere); its exception and its example on lines of their own. */
+.tst-body { display: contents; }
+.tst-scope {
+  display: inline-block; margin-right: 6px; padding: 0 5px; font-size: 9.5px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; vertical-align: 1px; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 3px;
+}
+.tst-scope[data-sc="visible"] { color: var(--series-2); border-color: color-mix(in srgb, var(--series-2) 45%, transparent); }
+.tst-exc { font-size: 11px; line-height: 1.4; color: var(--ink); }
+.tst-exc b, .tst-eg b { font-weight: 600; color: var(--ink-dim); margin-right: 3px; }
+.tst-seen { color: var(--ink-dim); }
+.tst-seen[data-all] { color: var(--ok); }
+
+.tst-prio { flex-basis: 100%; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tst-prio-k { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.tst-prio .tst-prio-text { flex: 1; flex-basis: auto; margin: 0; color: var(--ink); }
+.tst-prio .st-more { flex: none; }
+.tst-note::before { background: var(--warn); }
+
+.tst-chip .tst-spec {
+  width: auto; height: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; border: 1px solid var(--line); border-radius: 8px;
+  color: var(--ink-dim); white-space: nowrap;
+}
+.tst-chip .tst-spec[data-on] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tst-chip .tst-spec:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.tst-chip .tst-spec[data-on]:hover:not(:disabled) { color: var(--ink-bright); background: var(--accent-deep); }
+.tst-chip .tst-spec em { font-style: normal; opacity: .7; }
+.tst-chip .tst-spec:disabled { cursor: default; }
+
+.tst-refs .st-card-head { flex-wrap: wrap; }
+.tst-ref-row { display: grid; grid-template-columns: repeat(min(var(--n, 6), 6), minmax(0, 1fr)); gap: 6px; padding: 8px 10px 10px; }
+.tst-ref {
+  min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--ink-dim); text-decoration: none;
+  border-radius: 5px; outline: none;
+}
+.tst-ref img {
+  width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--surface-2); transition: border-color .12s;
+}
+.tst-ref:hover img, .tst-ref:focus-visible img { border-color: var(--accent); }
+.tst-ref span { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tst-ref b { font-weight: 600; color: var(--ink); }
+.tst-measures {
+  margin: 0 10px 10px; padding: 8px 10px; max-height: 260px; overflow: auto; font-size: 11px; line-height: 1.5; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink-dim); white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px;
+}
+@container (max-width: 900px) { .tst-ref-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .tst-ref img { transition: none; } }
+

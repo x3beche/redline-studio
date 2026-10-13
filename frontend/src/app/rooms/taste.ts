@@ -23,28 +23,46 @@ import { EmptyState } from '../empty-state';
  *  Chat like a note, or attached to a model, board or firmware, after
  *  which every agent working on that project gets it by itself.
  *
- *  "Extract from project…" asks a model to read a finished project and
- *  propose statements; each one is accepted, edited or rejected here, and
- *  only the accepted ones are saved - into a new palette or an existing one.
+ *  "Extract from project…" asks a model to read a finished project - and,
+ *  for a model or a folder, to look at renders of it and at measurements
+ *  of its parts - and propose statements; each one is accepted, edited or
+ *  rejected here, and only the accepted ones are saved - into a new palette
+ *  or an existing one, with the renders as the palette's reference strip.
+ *
+ *  An item holds where its scope says (visible, hidden, internal, or words
+ *  of its own) except where its exception says; it is design language
+ *  (for any product) or project-specific (for the product it was read
+ *  from, switched per attachment).
  */
-export type Domain = 'mechanical' | 'pcb' | 'firmware' | 'general';
+export type Domain = 'form' | 'mechanical' | 'pcb' | 'firmware' | 'general';
 export type Strength = 'must' | 'prefer' | 'avoid';
+export type Layer = 'language' | 'specific';
 export interface ProjectRef { kind: 'folder' | 'model' | 'board' | 'firmware'; id: string; label: string; sub?: string }
+export interface Attached extends ProjectRef { product?: string; specifics?: boolean; specifics_default?: boolean }
 export interface TasteItem {
   id: string; text: string; domain: Domain; strength: Strength; why?: string;
+  applies_to: string; exception?: string; example?: string; layer: Layer; seen?: { n: number; m: number };
   source: 'manual' | ProjectRef;
 }
+/** A reference render: the source photographed from one view (backend/taste.py). */
+export interface RefShot { id: string; view: string; model?: string; label?: string; url: string; size?: number[] }
 export interface Palette {
-  id: string; name: string; description: string; items: TasteItem[]; attached: ProjectRef[];
+  id: string; name: string; description: string; items: TasteItem[]; attached: Attached[];
   pinned: boolean; by: { id?: string; name?: string }; created_at: string; updated_at: string;
-  counts: Record<Domain, number>;
+  counts: Record<Domain, number>; priority: string; priority_default: boolean;
+  references: RefShot[]; sources: (ProjectRef & { product: string })[]; measures?: string; notice?: string | null;
 }
 type Proposal = TasteItem & { keep: boolean };
-type NewItem = { text: string; domain: Domain; strength: Strength; why?: string; source?: TasteItem['source'] };
-export type JobStatus = 'queued' | 'reading' | 'asking' | 'parsing' | 'done' | 'failed' | 'cancelled';
+type Draft = { text: string; domain: Domain; strength: Strength; why?: string; applies_to: string; exception?: string; example?: string; layer: Layer };
+/** A column of the open palette: a domain's design language, or the project-specific items. */
+type Column = Domain | 'specific';
+type NewItem = { text: string; domain: Domain; strength: Strength; why?: string; source?: TasteItem['source'];
+                 applies_to?: string; exception?: string; example?: string; layer?: Layer; seen?: TasteItem['seen'] };
+export type JobStatus = 'queued' | 'reading' | 'looking' | 'asking' | 'parsing' | 'done' | 'failed' | 'cancelled';
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
 export interface JobStep {
-  id: string; kind: 'read' | 'ask' | 'parse' | 'done'; state: StepState;
+  id: string; kind: 'read' | 'render' | 'measure' | 'ask' | 'parse' | 'done'; state: StepState;
+  views?: string[]; shots?: number; parts?: number; measured?: number; images?: number;
   started_at?: string; finished_at?: string; seconds?: number; reason?: string;
   project?: ProjectRef; chars?: number; budget?: number; clipped?: boolean; revisions?: number; notes?: number; files?: number;
   provider?: string; provider_name?: string; model?: string; prompt_chars?: number; tokens_est?: number;
@@ -53,7 +71,7 @@ export interface JobStep {
 }
 export interface JobTotals {
   projects?: number; budget?: number; chars?: number; read?: number; prompt_chars?: number; tokens_in_est?: number;
-  tokens_in?: number; tokens_out?: number; cost?: number | null; proposals?: number;
+  tokens_in?: number; tokens_out?: number; cost?: number | null; proposals?: number; images?: number;
 }
 /** One extraction run (backend/taste.py, `taste_jobs`): it goes on in the
  *  server whatever the page does, and says each step as it happens. */
@@ -64,13 +82,23 @@ export interface TasteJob {
   steps: JobStep[]; totals: JobTotals; error?: string | null; count: number;
   saved_to?: { id: string; name: string; count: number; at: string } | null;
   proposals?: TasteItem[];
+  references?: RefShot[]; notice?: string; measures?: string; vision?: boolean;
 }
-export const ACTIVE: JobStatus[] = ['queued', 'reading', 'asking', 'parsing'];
+export const ACTIVE: JobStatus[] = ['queued', 'reading', 'looking', 'asking', 'parsing'];
 export const isActive = (j: { status: JobStatus } | null | undefined) => !!j && ACTIVE.includes(j.status);
 
 export const DOMAINS: { id: Domain; label: string; short: string }[] = [
-  { id: 'mechanical', label: 'Mechanical', short: 'Mech' }, { id: 'pcb', label: 'PCB', short: 'PCB' },
+  { id: 'form', label: 'Form language', short: 'Form' }, { id: 'mechanical', label: 'Mechanical', short: 'Mech' }, { id: 'pcb', label: 'PCB', short: 'PCB' },
   { id: 'firmware', label: 'Firmware', short: 'FW' }, { id: 'general', label: 'General', short: 'Gen' },
+];
+/** Where an item holds; anything else is the person's own words. */
+export const SCOPES: { id: string; label: string }[] = [
+  { id: 'all', label: 'Everywhere' }, { id: 'visible', label: 'Visible surfaces' },
+  { id: 'hidden', label: 'Hidden surfaces' }, { id: 'internal', label: 'Internal features' },
+];
+const SCOPE_TAG: Record<string, string> = { visible: 'visible', hidden: 'hidden', internal: 'internal' };
+export const LAYERS: { id: Layer; label: string }[] = [
+  { id: 'language', label: 'Design language' }, { id: 'specific', label: 'Project-specific' },
 ];
 export const STRENGTHS: { id: Strength; label: string }[] = [
   { id: 'must', label: 'MUST' }, { id: 'prefer', label: 'PREFER' }, { id: 'avoid', label: 'AVOID' },
@@ -79,7 +107,7 @@ const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model',
 /** A colour per domain (the theme's chart series) and per strength (as the
  *  MUST / PREFER / AVOID labels are written), for the bars. */
 export const DOMAIN_COLOR: Record<Domain, string> = {
-  mechanical: 'var(--series-1)', pcb: 'var(--series-3)', firmware: 'var(--series-4)', general: 'var(--series-7)',
+  form: 'var(--series-2)', mechanical: 'var(--series-1)', pcb: 'var(--series-3)', firmware: 'var(--series-4)', general: 'var(--series-7)',
 };
 export const STRENGTH_COLOR: Record<Strength, string> = { must: 'var(--accent)', prefer: 'var(--ink-dim)', avoid: 'var(--danger)' };
 type Tally = Record<Strength, number>;
@@ -99,7 +127,7 @@ export class TasteApi {
   create(name: string, items: NewItem[] = [], description = '') {
     return this.http.post<Palette>('/api/taste', { name, description, items });
   }
-  patch(id: string, p: { name?: string; description?: string; pinned?: boolean }) {
+  patch(id: string, p: { name?: string; description?: string; pinned?: boolean; priority?: string }) {
     return this.http.patch<Palette>(`/api/taste/${id}`, p);
   }
   remove(id: string) { return this.http.delete(`/api/taste/${id}`); }
@@ -110,7 +138,7 @@ export class TasteApi {
   /** A palette as a file for someone else, and such a file made a palette here (backend/taste.py). */
   exportFile(id: string) { return this.http.get<unknown>(`/api/taste/${id}/export`); }
   importFile(data: unknown) { return this.http.post<Palette>('/api/taste/import', data); }
-  attach(id: string, attached: { kind: string; id: string }[]) {
+  attach(id: string, attached: { kind: string; id: string; specifics?: boolean }[]) {
     return this.http.put<Palette>(`/api/taste/${id}/attached`, { attached });
   }
   /** Models, boards and firmware; with `folders`, the folders too (extraction reads a folder whole). */
@@ -304,7 +332,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
           <div class="st-tile"><span>{{ 'Projects read' | t }}</span><b>{{ readCount() }} / {{ j.totals.projects ?? '–' }}</b>
             <small>{{ skippedCount() ? fmt('{n} skipped', { n: skippedCount() }) : (kindName(j.project.kind) | t) + ' · ' + j.project.label }}</small></div>
           <div class="st-tile"><span>{{ 'Sent to the model' | t }}</span><b [wbCount]="j.totals.prompt_chars != null ? num(j.totals.prompt_chars) : num(charsRead())"></b>
-            <small>{{ fmt('~{n} tokens', { n: num(j.totals.tokens_in_est ?? round(charsRead() / 4)) }) }}</small></div>
+            <small>{{ fmt('~{n} tokens', { n: num(j.totals.tokens_in_est ?? round(charsRead() / 4)) }) }}{{ j.totals.images ? ' · ' + fmt('{n} pictures', { n: j.totals.images }) : '' }}</small></div>
           <div class="st-tile tsx-model"><span>{{ 'Model' | t }}</span><b [title]="j.model || ''">{{ j.model || '–' }}</b><small>{{ j.provider_name || j.provider || '' }}</small></div>
           <div class="st-tile" [attr.data-tone]="j.totals.tokens_in == null ? 'dim' : null"><span>{{ 'Tokens in / out' | t }}</span>
             <b [wbCount]="j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0)"></b>
@@ -315,12 +343,16 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <small>{{ droppedLine() }}&nbsp;</small></div>
         </div>
 
+        @if (j.notice && j.status === 'done') { <div class="st-banner tst-note" role="note"><span class="tsx-banner-text">{{ j.notice }}</span></div> }
+        @if (j.references?.length) {
+          <ng-container [ngTemplateOutlet]="refStrip" [ngTemplateOutletContext]="{ refs: j.references, measures: j.measures, title: j.vision ? ('read by the model with the text' | t) : ('kept with the run; not read by the model' | t) }" />
+        }
         @if (j.status === 'done' && proposals().length) {
           @if (j.saved_to; as s) { <p class="st-hint">{{ fmt('Saved to {p} {w}; you can save them again or into another palette.', { p: s.name, w: when(s.at) }) }}</p> }
         <div class="tst-cols" [style.--n]="propCols().length">
           @for (c of propCols(); track c.id) {
             <div class="tst-col">
-              <div class="tst-col-head"><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.kept }} / {{ c.items.length }}</span></div>
+              <div class="tst-col-head" [title]="c.sub ? (c.sub | t) : ''"><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.kept }} / {{ c.items.length }}</span></div>
               @for (it of c.items; track it.id) {
                 <div class="tst-item" [attr.data-drop]="it.keep ? null : 1">
                   <span class="tst-str" [attr.data-s]="it.strength">{{ strengthLabel(it.strength) | t }}</span>
@@ -328,6 +360,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                     @if (editId() === it.id) {
                       <textarea class="tst-edit" rows="2" [value]="draft().text" (input)="setDraft('text', $any($event.target).value)"
                                 (keydown.enter)="$event.preventDefault(); saveProposal(it)" (keydown.escape)="editId.set(null)"></textarea>
+                      <ng-container [ngTemplateOutlet]="editMore" />
                       <div class="tst-edit-row">
                         <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="draft().strength" (pick)="setDraft('strength', $any($event))" />
                         <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="draft().domain" (pick)="setDraft('domain', $any($event))" />
@@ -336,8 +369,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                         <button class="tcv-btn" (click)="saveProposal(it)">{{ 'Done' | t }}</button>
                       </div>
                     } @else {
-                      <span class="tst-text" (dblclick)="editProposal(it)">{{ it.text }}</span>
-                      @if (it.why) { <span class="tst-why">{{ it.why }}</span> }
+                      <span class="tst-body" (dblclick)="editProposal(it)"><ng-container [ngTemplateOutlet]="itemBody" [ngTemplateOutletContext]="{ it: it, src: false }" /></span>
                     }
                   </div>
                   @if (editId() !== it.id) {
@@ -455,7 +487,14 @@ function why(e: HttpErrorResponse, fallback: string): string {
         </div>
         <textarea class="tst-desc" rows="1" [value]="p.description" [readonly]="!can()" [placeholder]="can() ? ('Add a description' | t) : ''"
                   (change)="describe(p, $any($event.target).value)" (keydown.enter)="$event.preventDefault(); $any($event.target).blur()"></textarea>
+        <div class="tst-prio" [title]="'Said first to every agent that reads this palette' | t">
+          <span class="tst-prio-k">{{ 'Priority' | t }}</span>
+          <textarea class="tst-desc tst-prio-text" rows="1" [value]="p.priority" [readonly]="!can()"
+                    (change)="setPriority(p, $any($event.target).value)" (keydown.enter)="$event.preventDefault(); $any($event.target).blur()"></textarea>
+          @if (!p.priority_default && can()) { <button class="st-more" (click)="setPriority(p, '')">{{ 'Standard rule' | t }}</button> }
+        </div>
       </header>
+      @if (p.notice) { <div class="st-banner tst-note" role="note"><span class="tsx-banner-text">{{ p.notice }}</span></div> }
       @let ps = openStats();
       <div class="st-tiles tsh-ptiles">
         <div class="st-tile" [attr.data-tone]="p.items.length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b [wbCount]="p.items.length"></b>
@@ -479,12 +518,20 @@ function why(e: HttpErrorResponse, fallback: string): string {
           <b>{{ ps.sources.length ? fmt(ps.sources.length === 1 ? '{n} project' : '{n} projects', { n: ps.sources.length }) : ('by hand' | t) }}</b>
           <small [title]="ps.sourceLine">{{ ps.sources.length ? ps.sourceLine : ('nothing extracted' | t) }}</small></div>
       </div>
+      @if (p.references.length) {
+        <ng-container [ngTemplateOutlet]="refStrip" [ngTemplateOutletContext]="{ refs: p.references, measures: p.measures, title: ('agents look at these before designing, and check their work against them' | t) }" />
+      }
       @if (p.attached.length) {
         <div class="tst-attached">
           <span class="st-sub">{{ 'Given to the agents of' | t }}</span>
           @for (a of p.attached; track a.kind + a.id) {
             <span class="tst-chip"><em>{{ kindName(a.kind) | t }}</em> {{ a.label }}
-              @if (can()) { <button (click)="detach(p, a)" [title]="'Detach' | t" [attr.aria-label]="('Detach' | t) + ': ' + a.label">×</button> }</span>
+              @if (hasSpecific(p)) {
+                <button class="tst-spec" [attr.data-on]="specOn(a) ? 1 : null" (click)="toggleSpecifics(p, a)" [disabled]="!can()"
+                        [attr.aria-pressed]="specOn(a)" [title]="specTitle(p, a)">
+                  {{ 'Include project-specific items' | t }}: {{ (specOn(a) ? 'on' : 'off') | t }}@if (a.specifics == null) { <em> · {{ 'auto' | t }}</em> }</button>
+              }
+              @if (can()) { <button class="tst-x" (click)="detach(p, a)" [title]="'Detach' | t" [attr.aria-label]="('Detach' | t) + ': ' + a.label">×</button> }</span>
           }
         </div>
       }
@@ -492,6 +539,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <div class="tst-add">
           <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="addStrength()" (pick)="addStrength.set($any($event))" />
           <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="addDomain()" (pick)="addDomain.set($any($event))" />
+          <wb-select class="tst-wsel" label="Applies to" [options]="addScopeOpts()" [value]="addScope()" (pick)="addScope.set($event)" />
           <input #addBox class="tst-in tst-add-text" [placeholder]="'One statement, checkable: Walls 2 mm, outside edges filleted 1 mm' | t"
                  [value]="addText()" (input)="addText.set($any($event.target).value)" (keydown.enter)="addItem(p)">
           <input class="tst-in tst-add-why" [placeholder]="'Why (optional)' | t" [value]="addWhy()"
@@ -503,7 +551,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <div class="tst-cols" [style.--n]="cols().length">
           @for (c of cols(); track c.id) {
             <div class="st-card tst-col" (dragover)="dragOver($event)" (drop)="dropOn($event, p, c.id, null)">
-              <div class="st-card-head tst-col-head"><i class="tsh-dot" [style.background]="dc(c.id)"></i><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.items.length }}</span>
+              <div class="st-card-head tst-col-head" [title]="c.sub ? (c.sub | t) : ''"><i class="tsh-dot" [style.background]="dc(c.id)"></i><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.items.length }}</span>
                 <span class="st-right tsh-colfig">
                   @for (s of strengths; track s.id) { <span [attr.data-s]="s.id" [title]="s.label | t">{{ countOf(c.items, s.id) }}</span> }
                 </span></div>
@@ -521,6 +569,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                     @if (editId() === it.id) {
                       <textarea class="tst-edit" rows="2" [value]="draft().text" (input)="setDraft('text', $any($event.target).value)"
                                 (keydown.enter)="$event.preventDefault(); saveItem(p, it)" (keydown.escape)="editId.set(null)"></textarea>
+                      <ng-container [ngTemplateOutlet]="editMore" />
                       <div class="tst-edit-row">
                         <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="draft().strength" (pick)="setDraft('strength', $any($event))" />
                         <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="draft().domain" (pick)="setDraft('domain', $any($event))" />
@@ -531,9 +580,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                         <button class="tcv-btn" (click)="editId.set(null)">{{ 'Cancel' | t }}</button>
                       </div>
                     } @else {
-                      <span class="tst-text">{{ it.text }}</span>
-                      @if (it.why) { <span class="tst-why">{{ it.why }}</span> }
-                      @if (it.source !== 'manual') { <span class="tst-src">{{ fmt('from {p}', { p: it.source.label }) }}</span> }
+                      <ng-container [ngTemplateOutlet]="itemBody" [ngTemplateOutletContext]="{ it: it, src: true }" />
                     }
                   </div>
                   @if (can() && editId() !== it.id) {
@@ -746,6 +793,46 @@ function why(e: HttpErrorResponse, fallback: string): string {
   </section>
 </ng-template>
 
+<!-- one item's words: scope, text, exception, example, why, where from -->
+<ng-template #itemBody let-it="it" let-src="src">
+  <span class="tst-text">@if (scopeTag(it); as sc) { <span class="tst-scope" [attr.data-sc]="it.applies_to" [title]="fmt('Holds on: {s}', { s: scopeName(it) })">{{ sc | t }}</span> }{{ it.text }}</span>
+  @if (it.exception) { <span class="tst-exc"><b>{{ 'except' | t }}</b> {{ it.exception }}</span> }
+  @if (it.example) { <span class="tst-why tst-eg"><b>{{ 'e.g.' | t }}</b> {{ it.example }}</span> }
+  @if (it.why) { <span class="tst-why">{{ it.why }}</span> }
+  @if (it.seen || (src && it.source !== 'manual')) {
+    <span class="tst-src">@if (it.seen) { <span class="tst-seen" [attr.data-all]="it.seen.n === it.seen.m ? 1 : null">{{ fmt('seen in {n} of {m} projects', { n: it.seen.n, m: it.seen.m }) }}</span> }
+      @if (src && it.source !== 'manual') { {{ (it.seen ? ' · ' : '') + fmt('from {p}', { p: it.source.label }) }} }</span>
+  }
+</ng-template>
+
+<!-- editing an item: where it holds, its exception, its example, its layer -->
+<ng-template #editMore>
+  <div class="tst-edit-row">
+    <wb-select class="tst-wsel" label="Applies to" [options]="scopeOpts()" [value]="draftScope()" (pick)="pickScope($event)" />
+    @if (draftScope() === 'other') {
+      <input class="tst-in" [placeholder]="'Where it holds, in words' | t" [value]="draft().applies_to" (input)="setDraft('applies_to', $any($event.target).value)">
+    }
+    <wb-select class="tst-wsel" label="Layer" [options]="layerOpts()" [value]="draft().layer" (pick)="setDraft('layer', $any($event))" />
+    <input class="tst-in" [placeholder]="'Exception (optional)' | t" [title]="'Exception (optional)' | t" [value]="draft().exception ?? ''" (input)="setDraft('exception', $any($event.target).value)">
+    <input class="tst-in" [placeholder]="'Example on the source (optional)' | t" [title]="'Example on the source (optional)' | t" [value]="draft().example ?? ''" (input)="setDraft('example', $any($event.target).value)">
+  </div>
+</ng-template>
+
+<!-- reference renders: the source from each view, the measurements behind them -->
+<ng-template #refStrip let-refs="refs" let-measures="measures" let-title="title">
+  <section class="st-card tst-refs">
+    <div class="st-card-head"><h3>{{ 'Reference renders' | t }}</h3><span class="st-sub">{{ title }}</span>
+      @if (measures) { <span class="st-right"><button class="st-more" (click)="showMeasures.set(!showMeasures())">{{ (showMeasures() ? 'Hide the measurements' : 'Measurements') | t }}</button></span> }</div>
+    <div class="tst-ref-row" [style.--n]="refs.length">
+      @for (r of refs; track r.id) {
+        <a class="tst-ref" [href]="r.url" target="_blank" rel="noopener" [title]="(r.label || r.model || '') + ' · ' + r.view">
+          <img [src]="r.url" [alt]="r.view" loading="lazy"><span><b>{{ r.view }}</b> {{ r.label || '' }}</span></a>
+      }
+    </div>
+    @if (showMeasures() && measures) { <pre class="tst-measures">{{ measures }}</pre> }
+  </section>
+</ng-template>
+
 <ng-template #howCard>
   <section class="st-card tsh-how">
     <div class="st-card-head"><h3>{{ 'How taste works' | t }}</h3></div>
@@ -789,9 +876,18 @@ export class RoomTaste implements OnDestroy {
   addWhy = signal('');
   addDomain = signal<Domain>('mechanical');
   addStrength = signal<Strength>('must');
+  addScope = signal('all');
+  addScopeOpts = computed<SelectOption[]>(() => SCOPES.map(x => ({ value: x.id, label: t(x.label) })));
 
   editId = signal<string | null>(null);
-  draft = signal<{ text: string; domain: Domain; strength: Strength; why?: string }>({ text: '', domain: 'general', strength: 'prefer' });
+  draft = signal<Draft>({ text: '', domain: 'general', strength: 'prefer', applies_to: 'all', layer: 'language' });
+  /** The measurements under a reference strip, opened. */
+  showMeasures = signal(false);
+  scopeOpts = computed<SelectOption[]>(() => [...SCOPES.map(x => ({ value: x.id, label: t(x.label) })),
+    { value: 'other', label: t('In words…') }]);
+  layerOpts = computed<SelectOption[]>(() => LAYERS.map(x => ({ value: x.id, label: t(x.label) })));
+  /** The scope being edited, as the picker shows it: one of SCOPES, or "other" for words. */
+  draftScope = computed(() => { const a = this.draft().applies_to; return SCOPES.some(x => x.id === a) ? a : 'other'; });
   dragId = signal<string | null>(null);
 
   picker = signal<'attach' | 'extract' | null>(null);
@@ -828,7 +924,7 @@ export class RoomTaste implements OnDestroy {
   /** Only the domains that have items, so no column stands empty. */
   cols = computed(() => this.columns(this.open()?.items ?? []));
   propCols = computed(() => this.columns(this.proposals()).map(c => ({ ...c, kept: (c.items as Proposal[]).filter(i => i.keep).length })) as
-    { id: Domain; label: string; items: Proposal[]; kept: number }[]);
+    { id: Column; label: string; sub?: string; items: Proposal[]; kept: number }[]);
   keptCount = computed(() => this.proposals().filter(p => p.keep).length);
   exFrom = computed(() => {
     const p = this.exProject();
@@ -879,10 +975,17 @@ export class RoomTaste implements OnDestroy {
     this.api.list('').subscribe(ps => this.allPalettes.set(ps));
   }
 
+  /** One column per domain that has design-language items, then the
+   *  project-specific ones in a column of their own. */
   private columns<I extends TasteItem>(items: I[]) {
-    return DOMAINS.map(d => ({ id: d.id, label: d.label, items: items.filter(i => i.domain === d.id) }))
+    const cols: { id: Column; label: string; sub?: string; items: I[] }[] = DOMAINS
+      .map(d => ({ id: d.id as Column, label: d.label, items: items.filter(i => i.layer !== 'specific' && i.domain === d.id) }))
       .filter(c => c.items.length);
+    const spec = items.filter(i => i.layer === 'specific');
+    if (spec.length) cols.push({ id: 'specific', label: 'Project-specific', sub: 'not carried over to another product', items: spec });
+    return cols;
   }
+  colOf(i: TasteItem): Column { return i.layer === 'specific' ? 'specific' : i.domain; }
 
   private replace(p: Palette) {
     const put = (l: Palette[]) => l.some(x => x.id === p.id) ? l.map(x => x.id === p.id ? p : x) : [p, ...l];
@@ -980,6 +1083,8 @@ export class RoomTaste implements OnDestroy {
   /** The first palette, written on the overview: a name and its first statement. */
   firstName = signal('');
   readonly examples: { domain: Domain; items: { strength: Strength; text: string }[] }[] = [
+    { domain: 'form', items: [{ strength: 'must', text: 'Outer corners rounded, the same radius on every corner' },
+      { strength: 'prefer', text: 'Buttons sit in recessed wells, their caps flush with the face' }, { strength: 'avoid', text: 'Visible openings reshaped to suit printing' }] },
     { domain: 'mechanical', items: [{ strength: 'must', text: 'Walls 2 mm, outside edges filleted 1 mm' },
       { strength: 'prefer', text: '0.3 mm clearance on press fits, 0.2 mm on sliding fits' }, { strength: 'avoid', text: 'Overhangs over 45° without support' }] },
     { domain: 'pcb', items: [{ strength: 'must', text: 'Decoupling caps within 2 mm of each supply pin' },
@@ -1088,23 +1193,35 @@ export class RoomTaste implements OnDestroy {
   addItem(p: Palette) {
     const text = this.addText().trim();
     if (!text) return;
-    this.api.add(p.id, [{ text, domain: this.addDomain(), strength: this.addStrength(), why: this.addWhy().trim() }]).subscribe({
+    this.api.add(p.id, [{ text, domain: this.addDomain(), strength: this.addStrength(), why: this.addWhy().trim(),
+                          applies_to: this.addScope() }]).subscribe({
       next: r => { this.replace(r); this.addText.set(''); this.addWhy.set(''); this.addBox()?.nativeElement.focus(); },
       error: this.failed('Could not add it.'),
     });
   }
 
   editItem(it: TasteItem) {
-    this.draft.set({ text: it.text, domain: it.domain, strength: it.strength, why: it.why ?? '' });
+    this.draft.set({ text: it.text, domain: it.domain, strength: it.strength, why: it.why ?? '', applies_to: it.applies_to || 'all',
+                     exception: it.exception ?? '', example: it.example ?? '', layer: it.layer || 'language' });
     this.editId.set(it.id);
     setTimeout(() => (document.querySelector('.tst-edit') as HTMLTextAreaElement | null)?.focus());
   }
-  setDraft(k: 'text' | 'domain' | 'strength' | 'why', v: string) { this.draft.update(d => ({ ...d, [k]: v })); }
+  setDraft(k: keyof Draft, v: string) { this.draft.update(d => ({ ...d, [k]: v })); }
+  pickScope(v: string) { this.setDraft('applies_to', v === 'other' ? '' : v); }
+  /** What a draft is saved as. */
+  private drafted() {
+    const d = this.draft();
+    return { text: d.text.trim(), domain: d.domain, strength: d.strength, why: (d.why ?? '').trim(),
+             applies_to: (d.applies_to ?? '').trim() || 'all', exception: (d.exception ?? '').trim(),
+             example: (d.example ?? '').trim(), layer: d.layer };
+  }
+  /** The scope as a tag before the text: none when it holds everywhere. */
+  scopeTag(it: TasteItem) { const a = it.applies_to || 'all'; return a === 'all' ? '' : SCOPE_TAG[a] ?? a; }
+  scopeName(it: TasteItem) { const a = it.applies_to || 'all'; return t(SCOPES.find(x => x.id === a)?.label ?? a); }
 
   saveItem(p: Palette, it: TasteItem) {
-    const d = this.draft();
-    if (!d.text.trim()) return;
-    this.api.edit(p.id, it.id, { text: d.text.trim(), domain: d.domain, strength: d.strength, why: (d.why ?? '').trim() }).subscribe({
+    if (!this.draft().text.trim()) return;
+    this.api.edit(p.id, it.id, this.drafted()).subscribe({
       next: r => { this.replace(r); this.editId.set(null); },
       error: this.failed('Could not save it.'),
     });
@@ -1122,7 +1239,7 @@ export class RoomTaste implements OnDestroy {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !this.can()) return;
     e.preventDefault();
     const all = [...p.items];
-    const same = all.filter(x => x.domain === it.domain);
+    const same = all.filter(x => this.colOf(x) === this.colOf(it));
     const k = same.findIndex(x => x.id === it.id);
     const other = same[k + (e.key === 'ArrowUp' ? -1 : 1)];
     if (!other) return;
@@ -1152,7 +1269,7 @@ export class RoomTaste implements OnDestroy {
 
   /** Dropped before `target`, or at the end of the column: in its place,
    *  and in the column's domain. */
-  dropOn(e: DragEvent, p: Palette, domain: Domain, target: TasteItem | null) {
+  dropOn(e: DragEvent, p: Palette, col: Column, target: TasteItem | null) {
     const id = this.dragId();
     this.dragId.set(null);
     if (!id || id === target?.id) return;
@@ -1162,16 +1279,18 @@ export class RoomTaste implements OnDestroy {
     const rest = p.items.filter(i => i.id !== id);
     let at = target ? rest.findIndex(i => i.id === target.id) : -1;
     if (at < 0) {
-      const lastOfCol = rest.map(i => i.domain).lastIndexOf(domain);
+      const lastOfCol = rest.map(i => this.colOf(i)).lastIndexOf(col);
       at = lastOfCol < 0 ? rest.length : lastOfCol + 1;
     }
-    const moved = { ...moving, domain };
+    // Onto the project-specific column: that layer, its domain kept; onto a domain: that domain, design language.
+    const change: Partial<NewItem> = col === 'specific' ? { layer: 'specific' } : { domain: col, layer: 'language' };
+    const moved = { ...moving, ...change } as TasteItem;
     rest.splice(at, 0, moved);
     const ids = rest.map(i => i.id);
     this.replace({ ...p, items: rest });
     const order = () => this.api.order(p.id, ids).subscribe({ next: r => this.replace(r), error: this.failed('Could not move it.') });
-    if (moving.domain !== domain) {
-      this.api.edit(p.id, id, { domain }).subscribe({ next: () => order(), error: this.failed('Could not move it.') });
+    if (this.colOf(moving) !== col) {
+      this.api.edit(p.id, id, change).subscribe({ next: () => order(), error: this.failed('Could not move it.') });
     } else order();
   }
 
@@ -1218,16 +1337,39 @@ export class RoomTaste implements OnDestroy {
     }
     const p = this.open();
     if (!p) return;
-    const next = this.isAttached(p, r) ? p.attached.filter(a => !(a.kind === r.kind && a.id === r.id)) : [...p.attached, r];
-    this.api.attach(p.id, next.map(a => ({ kind: a.kind, id: a.id }))).subscribe({
+    const next: Attached[] = this.isAttached(p, r) ? p.attached.filter(a => !(a.kind === r.kind && a.id === r.id)) : [...p.attached, r];
+    this.api.attach(p.id, next.map(a => ({ kind: a.kind, id: a.id, specifics: a.specifics }))).subscribe({
       next: x => this.replace(x), error: this.failed('Could not attach it.'),
     });
   }
 
   detach(p: Palette, a: ProjectRef) {
-    this.api.attach(p.id, p.attached.filter(x => x !== a).map(x => ({ kind: x.kind, id: x.id }))).subscribe({
+    this.api.attach(p.id, p.attached.filter(x => x !== a).map(x => ({ kind: x.kind, id: x.id, specifics: x.specifics }))).subscribe({
       next: x => this.replace(x), error: this.failed('Could not detach it.'),
     });
+  }
+
+  // ---- project-specific items, per attachment: on for the palette's own
+  //      product line unless the person says otherwise
+
+  hasSpecific(p: Palette) { return p.items.some(i => i.layer === 'specific'); }
+  specOn(a: Attached) { return a.specifics ?? !!a.specifics_default; }
+  specTitle(p: Palette, a: Attached) {
+    const line = [...new Set(p.sources.map(s => s.product))].join(', ') || t('the source');
+    return this.fmt('Whether agents working on {a} also follow the project-specific items. Automatic: on for {l} and its new versions, off for other products. Click to switch.',
+                    { a: a.label, l: line });
+  }
+  toggleSpecifics(p: Palette, a: Attached) {
+    const next = !this.specOn(a);
+    const value = next === !!a.specifics_default ? undefined : next;      // back to automatic when it agrees
+    this.api.attach(p.id, p.attached.map(x => ({ kind: x.kind, id: x.id, specifics: x === a ? value : x.specifics }))).subscribe({
+      next: x => this.replace(x), error: this.failed('Could not save it.'),
+    });
+  }
+  setPriority(p: Palette, text: string) {
+    text = text.trim();
+    if (text === p.priority || (!text && p.priority_default)) return;
+    this.api.patch(p.id, { priority: text }).subscribe({ next: r => this.replace(r), error: this.failed('Could not save it.') });
   }
 
   // ---- extraction: a run in the server, followed here
@@ -1338,7 +1480,8 @@ export class RoomTaste implements OnDestroy {
     const j = this.job();
     if (!j) return 0;
     const reads = j.steps.filter(s => s.kind === 'read').length;
-    return Math.max(reads, j.totals.projects ?? reads) + (isActive(j) || j.status === 'done' ? 3 : j.steps.length - reads);
+    const looks = j.steps.filter(s => s.kind === 'render' || s.kind === 'measure').length;
+    return Math.max(reads, j.totals.projects ?? reads) + looks + (isActive(j) || j.status === 'done' ? 3 : j.steps.length - reads - looks);
   });
 
   /** What the run is doing now, in a line under the clock. */
@@ -1349,6 +1492,8 @@ export class RoomTaste implements OnDestroy {
     const cur = [...j.steps].reverse().find(s => s.state === 'running');
     if (!cur) return t('waiting to start');
     if (cur.kind === 'read') return this.fmt('reading {p}', { p: cur.project?.label ?? '' });
+    if (cur.kind === 'render') return this.fmt('photographing {p}', { p: cur.model ?? '' });
+    if (cur.kind === 'measure') return t('measuring the parts');
     if (cur.kind === 'ask') return this.fmt('waiting for {m}', { m: cur.model ?? '' });
     return t('reading the answer');
   });
@@ -1379,8 +1524,17 @@ export class RoomTaste implements OnDestroy {
         rows.push({ id: s.id, state: s.state, kind: this.kindName(s.project?.kind ?? ''), title: s.project?.label ?? '',
                     detail: bits.join(' · '), reason: s.reason, fig: s.state === 'done' ? this.fmt('{n} chars', { n: this.num(s.chars ?? 0) }) : '',
                     time: live(s) });
+      } else if (s.kind === 'render') {
+        rows.push({ id: s.id, state: s.state, kind: 'Render', title: this.fmt('Photographing {m}', { m: s.model ?? '' }),
+                    detail: (s.views ?? []).join(' · '), reason: s.reason,
+                    fig: s.shots != null ? this.fmt('{n} pictures', { n: s.shots }) : '', time: live(s) });
+      } else if (s.kind === 'measure') {
+        rows.push({ id: s.id, state: s.state, kind: 'Measure', title: this.fmt('Measuring {n} parts', { n: s.parts ?? 0 }),
+                    detail: t('radii, chamfers, walls, recesses and colours, from each part\'s STEP'), reason: s.reason,
+                    fig: s.measured != null ? this.fmt('{n} measured', { n: s.measured }) : '', time: live(s) });
       } else if (s.kind === 'ask') {
         const bits = [this.fmt('{n} characters, ~{k} tokens sent', { n: this.num(s.prompt_chars ?? 0), k: this.num(s.tokens_est ?? 0) })];
+        if (s.images) bits.push(this.fmt('{n} pictures', { n: s.images }));
         if (s.tokens_in != null) bits.push(this.fmt('{i} in / {o} out counted', { i: this.num(s.tokens_in), o: this.num(s.tokens_out ?? 0) }));
         else if (s.timeout) bits.push(this.fmt('gives up after {s} s', { s: s.timeout }));
         rows.push({ id: s.id, state: s.state, kind: 'Model', title: this.fmt('Asking {p} · {m}', { p: s.provider_name ?? s.provider ?? '', m: s.model ?? '' }),
@@ -1404,6 +1558,8 @@ export class RoomTaste implements OnDestroy {
       const pend = (id: string, kind: string, title: string, detail = '') =>
         rows.push({ id, state: 'pending', kind, title, detail, fig: '', time: '' });
       if (left > 0) pend('p-read', 'Projects', this.fmt('{n} more to read', { n: left }));
+      if ((j.project.kind === 'model' || j.project.kind === 'folder') && !j.steps.some(s => s.kind === 'render' || s.kind === 'measure')
+          && !j.steps.some(s => s.kind === 'ask')) pend('p-look', 'Render', t('Photographing and measuring'));
       if (!j.steps.some(s => s.kind === 'ask')) pend('p-ask', 'Model', this.fmt('Asking {p} · {m}', { p: j.provider_name ?? '', m: j.model ?? '' }));
       if (!j.steps.some(s => s.kind === 'parse')) pend('p-parse', 'Answer', t('Reading the answer'));
       pend('p-done', 'Result', t('Proposals'));
@@ -1423,7 +1579,7 @@ export class RoomTaste implements OnDestroy {
   }));
 
   statusName(s: JobStatus) {
-    return ({ queued: 'Queued', reading: 'Reading', asking: 'Asking', parsing: 'Parsing',
+    return ({ queued: 'Queued', reading: 'Reading', looking: 'Looking', asking: 'Asking', parsing: 'Parsing',
               done: 'Done', failed: 'Failed', cancelled: 'Cancelled' } as Record<JobStatus, string>)[s] ?? s;
   }
   statusTone(s: JobStatus) {
@@ -1446,16 +1602,16 @@ export class RoomTaste implements OnDestroy {
   setKeep(it: Proposal, keep: boolean) { this.proposals.update(l => l.map(x => x.id === it.id ? { ...x, keep } : x)); }
   editProposal(it: Proposal) { this.editItem(it); }
   saveProposal(it: Proposal) {
-    const d = this.draft();
-    if (!d.text.trim()) return;
-    this.proposals.update(l => l.map(x => x.id === it.id
-      ? { ...x, text: d.text.trim(), domain: d.domain, strength: d.strength, why: (d.why ?? '').trim(), keep: true } : x));
+    if (!this.draft().text.trim()) return;
+    const d = this.drafted();
+    this.proposals.update(l => l.map(x => x.id === it.id ? { ...x, ...d, keep: true } : x));
     this.editId.set(null);
   }
 
   saveProposals() {
     const items: NewItem[] = this.proposals().filter(p => p.keep)
-      .map(({ text, domain, strength, why: w, source }) => ({ text, domain, strength, why: w, source }));
+      .map(({ text, domain, strength, why: w, source, applies_to, exception, example, layer, seen }) =>
+        ({ text, domain, strength, why: w, source, applies_to, exception, example, layer, seen }));
     if (!items.length) return;
     this.saving.set(true);
     const to = this.saveTo();
