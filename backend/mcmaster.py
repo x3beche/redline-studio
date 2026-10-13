@@ -45,7 +45,10 @@ _IN_URL = re.compile(r"mcmaster\.com/(?:[^?#\s]*/)?(\d{3,5}[A-Za-z]{1,2}\d{1,4})
 
 
 def url_of(part: str) -> str:
-    """The part's own page: the CAD box is on it."""
+    """The part's own page: the CAD box is on it. A category kept from a
+    search ("cat:<path>", its filters in the path) is its filtered page."""
+    if part.startswith("cat:"):
+        return f"{SITE}/products/{part[4:].replace('+', '/').strip('/')}/"
     return f"{SITE}/{part}/"
 
 
@@ -55,6 +58,9 @@ def part_of(text: str) -> str | None:
     s = (text or "").strip()
     if not s:
         return None
+    # A category saved from a search, to become a part when its STEP is dropped on it.
+    if s.lower().startswith("cat:") and re.fullmatch(r"cat:[a-z0-9~+/.-]{2,300}", s.lower()):
+        return s.lower().replace("/", "+").rstrip("+")
     if m := _IN_URL.search(s):
         return m.group(1).upper()
     s = s.upper()
@@ -150,7 +156,8 @@ def categories(rows: list[dict]) -> list[dict]:
                 v = val.replace("-", " ")
                 specs[name.replace("-", " ").capitalize()] = v.upper() if len(v) <= 12 else v
         title = linked.clean_title(str(r.get("title") or ""), "McMaster-Carr") or path.split("/")[0].replace("-", " ").title()
-        out[path] = {"key": f"cat:{path}", "kind": "category", "title": title[:200],
+        # "/" written "+" in the key: a key goes in an address as one segment.
+        out[path] = {"key": "cat:" + path.replace("/", "+"), "kind": "category", "title": title[:200],
                      "url": f"https://www.mcmaster.com/products/{path}/", "specs": specs,
                      "snippet": str(r.get("description") or "")[:300], "source": url}
     return list(out.values())
@@ -161,6 +168,12 @@ def categories(rows: list[dict]) -> list[dict]:
 _THREAD = re.compile(r"\bm\s?(\d{1,2}(?:[.,]\d)?)\b", re.I)
 _LENGTH = re.compile(r"(?:\bx\s*|\b)(\d{1,3}(?:[.,]\d)?)\s*mm\b", re.I)
 _STOP = {"mm", "x", "and", "for", "with", "the", "a", "of", "screw", "screws", "ve", "icin", "için"}
+
+
+def part_in_name(name: str) -> str | None:
+    """The part number a downloaded file's name starts with ("92000A130_….STEP")."""
+    m = re.search(r"(?:^|[^A-Za-z0-9])(\d{3,5}[A-Za-z]{1,2}\d{1,4})(?=[^A-Za-z0-9]|$)", name or "")
+    return m.group(1).upper() if m else None
 
 
 def filters_of(q: str) -> list[tuple[str, str, str]]:
@@ -200,7 +213,7 @@ def refine(items: list[dict], q: str) -> list[dict]:
     for c in items:
         if c.get("kind") != "category":
             continue
-        path = c["key"][4:]
+        path = c["key"][4:].replace("+", "/")
         # A category of another thread size than the one asked for (M10 Standoffs for M3) is left out.
         other = next((seg for seg in path.split("/") if seg.startswith("thread-size~")), None)
         # ("m8-2" is M8 with its 2 mm pitch, the same size; "m3-5" is M3.5, another one.)
@@ -210,7 +223,7 @@ def refine(items: list[dict], q: str) -> list[dict]:
         add = [f for f in fl if f[0].partition("~")[0] not in have]
         if add:
             path = path.rstrip("/") + "/" + "/".join(f[0] for f in add)
-            c = {**c, "url": f"https://www.mcmaster.com/products/{path}/",
+            c = {**c, "key": "cat:" + path.replace("/", "+"), "url": f"https://www.mcmaster.com/products/{path}/",
                  "specs": {**c.get("specs", {}), **{f[1]: f[2] for f in add}}, "filtered": True}
         text = f"{c['title']} {path}".lower().replace("-", " ")
         cats.append((sum(1 for w in words if w in text), c))
@@ -336,7 +349,7 @@ KIND = linked.register(linked.Kind(
             "its own page, and its STEP, downloaded there, is kept here for the CAD models.",
     key_of=part_of, url_of=url_of, searches=searches, parse=parse, search_site=DOMAIN,
     accept=(".step", ".stp", ".zip"), after_save=auto_step,
-    refine=refine, specs_of=specs_of))
+    refine=refine, specs_of=specs_of, key_in_name=part_in_name))
 
 
 # ---------------------------------------------------------------- routes

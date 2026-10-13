@@ -67,6 +67,7 @@ class Kind:
     after_save: Callable[[object, dict], Awaitable[None]] | None = None
     refine: Callable[[list[dict], str], list[dict]] | None = None   # the items read again with the words searched
     specs_of: Callable[[str], dict] | None = None                   # what an item's title says of it (size, material)
+    key_in_name: Callable[[str], str | None] | None = None          # the key a downloaded file's name carries
     extra: tuple[str, ...] = field(default_factory=tuple)   # fields an item has besides the common ones
 
 
@@ -346,6 +347,29 @@ async def put_files(db, k: Kind, key: str, name: str, data: bytes, by: dict | No
     for n, d in got:
         _check(n, d)
     who = _who(by)
+    # A category kept from a search becomes the part its STEP is of: the
+    # number its file's name carries is its key now (or, saved already, the
+    # files go to that part and the category goes, its title and sizes kept).
+    if have["key"].startswith("cat:") and k.key_in_name:
+        real = next((x for x in (k.key_in_name(n) for n, _ in got) if x), None)
+        if real:
+            other = await db[COLL].find_one({"source": k.id, "key": real})
+            keep = {a: have[a] for a in ("title", "specs", "notes", "tags", "quantity") if have.get(a)}
+            if other:
+                fill = {a: v for a, v in keep.items() if not other.get(a)}
+                if fill:
+                    await db[COLL].update_one({"_id": other["_id"]}, {"$set": fill})
+                await db[COLL].delete_one({"_id": have["_id"]})
+                have = {**other, **fill}
+            else:
+                sets0 = {"key": real, "url": k.url_of(real), "from_category": have["url"], "updated_at": _now()}
+                ft = title_from_file(real, got)          # the file names the part itself, not its category
+                if ft:
+                    sets0["title"] = ft[:TEXTS["title"]]
+                    if k.specs_of:
+                        sets0["specs"] = {**(have.get("specs") or {}), **k.specs_of(ft)}
+                await db[COLL].update_one({"_id": have["_id"]}, {"$set": sets0})
+                have = {**have, **sets0}
     folder = await files.make_path(db, k.name, who)
     stem = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{prefix}{have['key']}")
     kept = []

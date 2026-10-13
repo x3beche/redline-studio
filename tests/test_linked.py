@@ -333,7 +333,7 @@ def test_mcmaster_category_pages_come_up_after_parts():
     got = mcmaster.parse(rows)
     assert got[0]["key"] == "91290A115" and "kind" not in got[0]
     cats = [r for r in got if r.get("kind") == "category"]
-    assert [c["key"] for c in cats] == ["cat:screws/thread-size~m3", "cat:phillips-pan-head-machine-screws"]
+    assert [c["key"] for c in cats] == ["cat:screws+thread-size~m3", "cat:phillips-pan-head-machine-screws"]
     assert cats[0]["specs"] == {"Thread size": "M3"} and cats[0]["url"] == "https://www.mcmaster.com/products/screws/thread-size~m3/"
 
 
@@ -347,7 +347,7 @@ def test_mcmaster_categories_open_on_the_size_asked_for():
     assert [f[0] for f in mcmaster.filters_of("M2.5 x 6 mm")] == \
         ["system-of-measurement~metric", "length~6-mm", "thread-size~m2-5"]
     items = [{"key": "cat:mil-spec-machine-screws", "kind": "category", "title": "Mil. Spec. Machine Screws", "url": "", "specs": {}},
-             {"key": "cat:screws/thread-size~m3", "kind": "category", "title": "M3 Screws", "url": "", "specs": {"Thread size": "M3"}},
+             {"key": "cat:screws+thread-size~m3", "kind": "category", "title": "M3 Screws", "url": "", "specs": {"Thread size": "M3"}},
              {"key": "cat:phillips-pan-head-machine-screws", "kind": "category", "title": "Phillips Pan Head Machine Screws", "url": "", "specs": {}}]
     got = mcmaster.refine(items, "m3 10mm philiphs pan head")
     assert got[0]["title"] == "Phillips Pan Head Machine Screws"
@@ -368,9 +368,9 @@ def test_mcmaster_reads_turkish_and_guesses_no_length_without_a_thread():
     assert mcmaster.english("608 rulman") == "608 ball bearing"
     assert mcmaster.english("M3x10 socket head") == "M3x10 socket head"
     assert mcmaster.filters_of("linear rail 15 mm") == []
-    items = [{"key": "cat:standoffs/thread-size~m10", "kind": "category", "title": "M10 Standoffs", "url": "", "specs": {}},
-             {"key": "cat:standoffs/thread-size~m3", "kind": "category", "title": "M3 Standoffs", "url": "", "specs": {}},
-             {"key": "cat:standoffs/thread-size~m3-5", "kind": "category", "title": "M3.5 Standoffs", "url": "", "specs": {}}]
+    items = [{"key": "cat:standoffs+thread-size~m10", "kind": "category", "title": "M10 Standoffs", "url": "", "specs": {}},
+             {"key": "cat:standoffs+thread-size~m3", "kind": "category", "title": "M3 Standoffs", "url": "", "specs": {}},
+             {"key": "cat:standoffs+thread-size~m3-5", "kind": "category", "title": "M3.5 Standoffs", "url": "", "specs": {}}]
     assert [c["title"] for c in mcmaster.refine(items, "M3 standoff 10 mm")] == ["M3 Standoffs"]
 
 
@@ -383,3 +383,28 @@ def test_a_part_saved_by_its_number_takes_its_name_from_the_file():
     step = b"ISO-10303-21;\nDATA;\n#5=PRODUCT('92000A130','Pan Head Phillips Screw M3','',(#2));\nENDSEC;"
     assert linked.title_from_file("92000A130", [("92000A130.STEP", step)]) == "Pan Head Phillips Screw M3"
     assert linked.title_from_file("92000A130", [("drawing.STEP", b"ISO-10303-21;")]) == ""
+
+
+def test_a_saved_mcmaster_category_becomes_the_part_its_step_is_of(db, grid):  # noqa: F811
+    """A category card saved from a search, its filters in its key, takes the
+    part number of the STEP dropped on it: key, link and title become the
+    part's, its sizes stay; a part saved already takes the files instead."""
+    a = person(db, "a")
+    key = "cat:phillips-pan-head-machine-screws+system-of-measurement~metric+length~25-mm+thread-size~m3"
+    r = a.post("/api/linked/mcmaster/parts", json={"key": key, "title": "Phillips Pan Head Machine Screws",
+                                                  "specs": {"Thread size": "M3", "Length": "25 mm"}})
+    it = r.json()["part"]
+    assert it["url"].endswith("/products/phillips-pan-head-machine-screws/system-of-measurement~metric/length~25-mm/thread-size~m3/")
+    r = a.post(f"/api/linked/mcmaster/parts/{it['id']}/files",
+               files={"upload": ("92000A130_Passivated 18-8 Stainless Steel Pan Head Phillips Screws.STEP", STEP)})
+    got = r.json()
+    assert got["key"] == "92000A130" and got["url"] == "https://www.mcmaster.com/92000A130/"
+    assert got["title"] == "Passivated 18-8 Stainless Steel Pan Head Phillips Screws"
+    assert got["specs"]["Thread size"] == "M3" and got["specs"]["Length"] == "25 mm"
+    assert got["cad"]["kind"] == "step"
+    # Another category whose STEP is of the same part: the part takes it, the category goes.
+    it2 = a.post("/api/linked/mcmaster/parts", json={"key": "cat:screws+thread-size~m3", "title": "M3 Screws"}).json()["part"]
+    got2 = a.post(f"/api/linked/mcmaster/parts/{it2['id']}/files", files={"upload": ("92000A130.STEP", STEP)}).json()
+    assert got2["key"] == "92000A130" and len(got2["files"]) == 2
+    keys = [p["key"] for p in a.get("/api/linked/mcmaster/parts").json()]
+    assert keys == ["92000A130"]
