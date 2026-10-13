@@ -26,6 +26,13 @@ HUB) - which also says who is online: someone with the stream open.
 Unread: each member's `read` moment on the conversation; what others wrote
 after it counts. Opening a conversation (POST .../read) clears it.
 
+Pinned and archived are each member's own, as `read` is (`prefs.<uid>`,
+PATCH /chats/{id}): one person pinning or archiving it changes nothing for
+the other. A new line brings an archived conversation back to the list for
+everyone in it, as messengers do - archiving puts away what is quiet, it
+does not mute; the AI conversations stay archived when written in, but only
+their owner writes there.
+
 A line can carry things of the sender's space (`items`): a 3D model, a
 board, a project (a catalog folder), a taste palette, a Product Catalog
 product, an inventory item, a note, a file, a firmware. What the card shows
@@ -182,9 +189,15 @@ async def summary(doc: dict, uid: str, folks: dict[str, dict] | None = None) -> 
     others = [person(folks[m]) for m in doc.get("members") or [] if m != uid and m in folks]
     unread = await _unread(doc, uid)
     return {"id": doc["_id"], "members": others, "created_at": doc.get("created_at"), "updated_at": doc.get("updated_at"),
-            "last": doc.get("last"), "unread": len(unread),
+            "last": doc.get("last"), "unread": len(unread), **_flags(doc, uid),
             # When each of the others last read it: "seen" under one's own last line.
             "read": {m: at for m, at in (doc.get("read") or {}).items() if m != uid}}
+
+
+def _flags(doc: dict, uid: str) -> dict:
+    """The asker's own pinned and archived, never the other's."""
+    mine = (doc.get("prefs") or {}).get(uid) or {}
+    return {"pinned": bool(mine.get("pinned")), "archived": bool(mine.get("archived"))}
 
 
 def _pair(a: str, b: str) -> str:
@@ -203,6 +216,7 @@ async def state() -> dict:
     chats = [d async for d in _raw()[CHATS].find(_mine(uid)).sort("updated_at", -1).limit(300)
              if uid in (d.get("members") or [])]
     rows = [await summary(d, uid, folks) for d in chats]
+    rows.sort(key=lambda r: not r["pinned"])          # my pinned ones first, as the AI list; then the latest
     direct = {next((m for m in d.get("members") or [] if m != uid), None): d["_id"] for d in chats}
     known = {m for d in chats for m in d.get("members") or []}
     unread_by: dict[str, int] = {}
@@ -305,6 +319,26 @@ async def mark_read(cid: str) -> dict:
     return {"ok": True, "at": at}
 
 
+class FlagsIn(BaseModel):
+    pinned: bool | None = None
+    archived: bool | None = None
+
+
+@router.patch("/chats/{cid}")
+async def set_flags(cid: str, body: FlagsIn) -> dict:
+    """Pin or archive the conversation for the asker only."""
+    who = me(write=True)
+    doc = await _chat(cid, who["id"])
+    patch = {f"prefs.{who['id']}.{k}": v for k, v in body.model_dump().items() if v is not None}
+    if patch:
+        await _raw()[CHATS].update_one({"_id": doc["_id"]}, {"$set": patch})
+        doc = await _chat(cid, who["id"])
+        # The asker's other pages; the other member's list does not change.
+        if _hub().watchers(key(who["id"])):
+            _hub().publish(key(who["id"]), {"type": "chat", "chat": doc["_id"]})
+    return await summary(doc, who["id"])
+
+
 # ---- lines ------------------------------------------------------------------
 
 def line(m: dict, space: str | None = None) -> dict:
@@ -396,8 +430,10 @@ async def say(cid: str, body: SayIn) -> dict:
     await raw[MSGS].insert_one(m)
     last = {"by": who.get("name"), "by_id": who["id"], "text": _clip(text or ", ".join(i["label"] for i in items), 140),
             "at": now, **({"items": len(items)} if items else {})}
+    # A new line brings it back to the list, for whoever had archived it.
+    back = {f"prefs.{u}.archived": False for u in doc.get("members") or [] if _flags(doc, u)["archived"]}
     await raw[CHATS].update_one({"_id": doc["_id"]},
-                                {"$set": {"updated_at": now, "last": last, f"read.{who['id']}": now}})
+                                {"$set": {"updated_at": now, "last": last, f"read.{who['id']}": now, **back}})
     await _tell(doc, lambda sp: {"type": "message", "chat": doc["_id"], "message": line(m, sp)})
     return line(m)
 

@@ -559,6 +559,7 @@ type Ask = { text: string; label: string; go: () => void };
             <button class="tcv-cc-hit" [attr.data-on]="dms.open() === h.chat_id ? 1 : null" (click)="openDmHit(h.chat_id)">
               <span class="tcv-cc-itemtop">
                 <span class="tcv-cc-itemtitle">{{ h.title }}</span>
+                @if (dms.chat(h.chat_id)?.archived) { <span class="tcv-cc-tag">{{ 'Archived' | t }}</span> }
                 <time class="tcv-cc-itemwhen">{{ dmWhen(h.at) }}</time>
               </span>
               <span class="tcv-cc-hitsnip"><b>{{ h.by }}: </b><span>{{ h.snippet }}</span></span>
@@ -588,7 +589,7 @@ type Ask = { text: string; label: string; go: () => void };
           @if (row.d; as d) {
           <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-dm]="d.id"
                [attr.data-on]="d.id === dms.open() ? 1 : null" [attr.data-unread]="d.unread ? 1 : null"
-               (click)="openDmHit(d.id)" (keydown.enter)="openDmHit(d.id)">
+               (click)="openDmHit(d.id)" (keydown.enter)="openDmHit(d.id)" (contextmenu)="dmMenu($event, d)">
             @if (d.members[0]; as m) {
               <span class="tcv-dm-face">
                 <app-avatar [name]="m.name" [userId]="m.id" [hasPicture]="m.has_avatar" [v]="m.avatar_v" [colour]="m.avatar_colour" [size]="26" />
@@ -597,6 +598,7 @@ type Ask = { text: string; label: string; go: () => void };
             }
             <div class="tcv-cc-itemtext">
               <div class="tcv-cc-itemtop">
+                @if (d.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24"><path [attr.d]="I.pin" /></svg> }
                 <span class="tcv-cc-itemtitle">{{ dmName(d) }}</span>
                 @if (d.unread) { <span class="tcv-th-badge" [title]="'unread' | t">{{ d.unread }}</span> }
                 @else { <span class="tcv-cc-itemwhen">{{ dmWhen(d.last?.at || d.updated_at) }}</span> }
@@ -606,6 +608,17 @@ type Ask = { text: string; label: string; go: () => void };
                 @else { {{ 'Write a message' | t }} }
               </div>
             </div>
+            <!-- Pinned and archived are mine only (backend/dm.py); nothing to delete. -->
+            @if (auth.can('draw') && !selecting()) {
+              <div class="tcv-cc-itemacts">
+                <button class="tcv-cc-ib" (click)="toggleDmPin(d); $event.stopPropagation()" [class.on]="d.pinned"
+                        [title]="(d.pinned ? 'Unpin' : 'Pin') | t">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.pin }" /></button>
+                <button class="tcv-cc-ib" (click)="toggleDmArchive(d); $event.stopPropagation()"
+                        [title]="(d.archived ? 'Unarchive' : 'Archive') | t">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: d.archived ? I.unarchive : I.archive }" /></button>
+              </div>
+            }
           </div>
           } @else if (row.c; as c) {
           <div class="tcv-cc-item" data-chat role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
@@ -1395,12 +1408,13 @@ export class RoomCommandCode implements OnDestroy {
   });
 
   /** The direct conversations with something in them (or open), among the
-   *  others in the list; never archived or in the trash. While searching,
-   *  the people are found by name above (peopleHits) and these stay out. */
+   *  others in the list - the archived ones under Archived, none in the
+   *  trash (nothing to delete). While searching, the people are found by
+   *  name above (peopleHits) and these stay out. */
   shownDms = computed(() => {
-    if (this.tab() !== 'list' || !this.dms.enabled() || this.q().trim()) return [];
-    const open = this.dms.open();
-    return (this.dms.state()?.chats ?? []).filter(d => d.last || d.id === open);
+    if (this.trash() || !this.dms.enabled() || this.q().trim()) return [];
+    const open = this.dms.open(), arch = this.archived();
+    return (this.dms.state()?.chats ?? []).filter(d => (d.last || d.id === open) && !!d.archived === arch);
   });
   /** People by name, while searching: the way to a new direct conversation. */
   peopleHits = computed(() => {
@@ -1418,7 +1432,8 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   /** Pinned, then Today, Yesterday, the previous seven days, older; the
-   *  direct conversations go by their last line like the others. */
+   *  direct conversations go by their last line like the others, pinned
+   *  ones among the pinned. */
   groups = computed<Group[]>(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const today = start.getTime(), yesterday = today - 86_400_000, week = today - 7 * 86_400_000;
@@ -1430,10 +1445,11 @@ export class RoomCommandCode implements OnDestroy {
     }
     for (const d of this.shownDms()) {
       const at = Date.parse(d.last?.at || d.updated_at) || 0;
-      g[when(at)].push({ at, d });
+      g[d.pinned && this.tab() === 'list' ? 'Pinned' : when(at)].push({ at, d });
     }
+    // Pinned too by when it last moved: the server's order for the chats, the DMs among them.
     return Object.entries(g).filter(([, v]) => v.length)
-      .map(([name, rows]) => ({ name, rows: name === 'Pinned' ? rows : rows.sort((a, b) => b.at - a.at) }));
+      .map(([name, rows]) => ({ name, rows: rows.sort((a, b) => b.at - a.at) }));
   });
 
   allSelected = computed(() => {
@@ -1849,6 +1865,25 @@ export class RoomCommandCode implements OnDestroy {
     const archived = !c.archived;
     this.setFlags(c, { archived });
     this.showToast(t(archived ? 'Archived.' : 'Back in the list.'), () => this.setFlags({ ...c, archived }, { archived: !archived }));
+  }
+
+  /** A direct conversation's pin and archive: mine only, as the chats' (dm.ts setFlags). */
+  toggleDmPin(d: DmChat) { this.dms.setFlags(d.id, { pinned: !d.pinned }); }
+  toggleDmArchive(d: DmChat) {
+    const archived = !d.archived;
+    this.dms.setFlags(d.id, { archived });
+    this.showToast(t(archived ? 'Archived.' : 'Back in the list.'), () => this.dms.setFlags(d.id, { archived: !archived }));
+  }
+  /** Its right-click menu: what its row's buttons do; no delete. */
+  dmMenu(e: MouseEvent, d: DmChat) {
+    if (this.selecting()) { e.preventDefault(); return; }
+    const draw = this.auth.can('draw');
+    ContextMenu.open(e, [
+      { label: 'Open', icon: I.chat, kbd: 'Enter', run: () => this.openDmHit(d.id) },
+      { sep: true },
+      draw && { label: d.pinned ? 'Unpin' : 'Pin', icon: I.pin, run: () => this.toggleDmPin(d) },
+      draw && { label: d.archived ? 'Unarchive' : 'Archive', icon: d.archived ? I.unarchive : I.archive, run: () => this.toggleDmArchive(d) },
+    ]);
   }
 
   // ---- selecting ---------------------------------------------------------

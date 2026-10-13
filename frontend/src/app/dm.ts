@@ -55,6 +55,8 @@ export interface DmChat {
   id: string; members: DmPerson[]; created_at: string; updated_at: string;
   last: { by: string; by_id: string; text: string; at: string; items?: number } | null;
   unread: number; read: Record<string, string>;
+  /** Mine only: the other person pins and archives their own. A new line brings it back from the archive. */
+  pinned?: boolean; archived?: boolean;
   messages?: DmLine[]; more?: boolean;
 }
 export interface DmState {
@@ -108,6 +110,7 @@ export class DmApi {
   edit(id: string, mid: string, text: string) { return this.http.patch<DmLine>(`/api/dm/chats/${id}/messages/${mid}`, { text }); }
   remove(id: string, mid: string) { return this.http.delete(`/api/dm/chats/${id}/messages/${mid}`); }
   read(id: string) { return this.http.post<{ ok: boolean }>(`/api/dm/chats/${id}/read`, {}); }
+  flags(id: string, p: { pinned?: boolean; archived?: boolean }) { return this.http.patch<DmChat>(`/api/dm/chats/${id}`, p); }
   search(q: string) {
     return this.http.get<{ results: { chat_id: string; title: string; message_id: string; at: string; by: string; snippet: string }[] }>(
       `/api/dm/search?q=${encodeURIComponent(q)}`);
@@ -290,6 +293,15 @@ export class DmStore {
     const url = new URL(location.href);
     if (id) url.searchParams.set('dm', id); else url.searchParams.delete('dm');
     if (url.href !== location.href) history.replaceState(null, '', url);
+  }
+  /** Pinned or archived, for me: at once here, then as the server has it. */
+  setFlags(id: string, p: { pinned?: boolean; archived?: boolean }) {
+    const s = this.state();
+    if (s) this.state.set({ ...s, chats: s.chats.map(x => x.id === id ? { ...x, ...p } : x) });
+    this.api.flags(id, p).subscribe({
+      next: () => this.refreshSoon(),
+      error: () => { this.say(t('could not save that'), 'danger'); this.refresh(); },
+    });
   }
   /** Read, here: its count goes at once, not on the next state. */
   markRead(id: string) {

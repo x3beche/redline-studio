@@ -78,7 +78,7 @@ def test_reading_is_looking_and_writing_is_chatting():
     assert access.action("GET", "/api/dm/chats/dm-1") == "view"
     for m, p in (("POST", "/api/dm/chats"), ("POST", "/api/dm/chats/dm-1/messages"),
                  ("PATCH", "/api/dm/chats/dm-1/messages/x"), ("DELETE", "/api/dm/chats/dm-1/messages/x"),
-                 ("POST", "/api/dm/chats/dm-1/read")):
+                 ("POST", "/api/dm/chats/dm-1/read"), ("PATCH", "/api/dm/chats/dm-1")):
         assert access.action(m, p) == "draw", (m, p)
         assert not access.page_allowed(m, p)
     assert access.page_allowed("GET", "/api/dm/state")
@@ -223,6 +223,52 @@ def test_edits_and_deletes_reach_the_list(db):
     a.delete(f"/api/dm/chats/{cid}/messages/{mid}")
     assert a.get("/api/dm/state").json()["chats"][0]["last"] is None
     assert a.post(f"/api/dm/chats/{cid}/messages", json={"text": "  "}).status_code == 400
+
+
+def test_pinned_and_archived_are_each_persons_own(db):
+    a, b, c = client(db, "u-ayse"), client(db, "u-bora"), client(db, "u-cem")
+    one = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()["id"]
+    two = a.post("/api/dm/chats", json={"people": ["u-cem"]}).json()["id"]
+    a.post(f"/api/dm/chats/{one}/messages", json={"text": "older"})
+    a.post(f"/api/dm/chats/{two}/messages", json={"text": "newer"})
+    chats = lambda cl: {x["id"]: x for x in cl.get("/api/dm/state").json()["chats"]}
+    assert [x["id"] for x in a.get("/api/dm/state").json()["chats"]] == [two, one]
+    assert chats(a)[one]["pinned"] is False and chats(a)[one]["archived"] is False
+    r = a.patch(f"/api/dm/chats/{one}", json={"pinned": True})
+    assert r.status_code == 200 and r.json()["pinned"] is True and r.json()["archived"] is False
+    # Pinned first in my list, though older; Bora's view of it is unchanged.
+    assert [x["id"] for x in a.get("/api/dm/state").json()["chats"]] == [one, two]
+    assert chats(b)[one]["pinned"] is False
+    assert "prefs" not in r.text and "u-ayse" not in str(r.json().get("read"))
+    # Archived for me only; unarchived again.
+    assert a.patch(f"/api/dm/chats/{one}", json={"archived": True}).json() == {**r.json(), "archived": True}
+    assert chats(a)[one]["archived"] is True and chats(a)[one]["pinned"] is True
+    assert chats(b)[one]["archived"] is False
+    b.patch(f"/api/dm/chats/{one}", json={"archived": True})
+    assert a.patch(f"/api/dm/chats/{one}", json={"archived": False}).json()["archived"] is False
+    assert chats(b)[one]["archived"] is True
+    assert a.patch(f"/api/dm/chats/{one}", json={}).status_code == 200      # nothing asked, nothing changed
+    # Only the members, only people writing: the same 404 for anyone else.
+    assert c.patch(f"/api/dm/chats/{one}", json={"pinned": True}).status_code == 404
+    assert a.patch("/api/dm/chats/dm-nothere", json={"pinned": True}).status_code == 404
+    assert "u-cem" not in (run(db["dm_chats"].find_one({"_id": one})).get("prefs") or {})
+
+
+def test_a_new_line_brings_an_archived_conversation_back(db):
+    a, b = client(db, "u-ayse"), client(db, "u-bora")
+    cid = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()["id"]
+    a.post(f"/api/dm/chats/{cid}/messages", json={"text": "hi"})
+    a.patch(f"/api/dm/chats/{cid}", json={"archived": True, "pinned": True})
+    b.patch(f"/api/dm/chats/{cid}", json={"archived": True})
+    # Editing or deleting a line leaves it where it is.
+    mid = b.post(f"/api/dm/chats/{cid}/messages", json={"text": "news"}).json()["id"]
+    one = lambda cl: next(x for x in cl.get("/api/dm/state").json()["chats"] if x["id"] == cid)
+    assert one(a)["archived"] is False and one(a)["pinned"] is True and one(a)["unread"] == 1
+    assert one(b)["archived"] is False                      # the writer's own too
+    a.patch(f"/api/dm/chats/{cid}", json={"archived": True})
+    b.patch(f"/api/dm/chats/{cid}/messages/{mid}", json={"text": "news!"})
+    b.delete(f"/api/dm/chats/{cid}/messages/{mid}")
+    assert one(a)["archived"] is True
 
 
 # ---------------------------------------------------------------- things sent along
