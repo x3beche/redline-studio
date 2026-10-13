@@ -19,6 +19,8 @@ import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
+import { PartUse } from '../api';
+import { firstValueFrom } from 'rxjs';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
@@ -2002,12 +2004,21 @@ export class RoomMfr implements OnDestroy {
     for (const p of this.grid()?.items ?? []) if (p.maker.id === LCSC_MAKER) all.set(p.id, p);
     return ids.map(i => all.get(i)).filter((p): p is Product => !!p);
   }
-  /** Out of the drawer - asked first; boards that use them keep their copies. */
-  dropParts(ids: string[]) {
+  /** Out of the drawer - asked first, saying which boards use them (read
+   *  from the boards now, backend/part_usage.py); those boards keep their copies. */
+  async dropParts(ids: string[]) {
     if (!ids.length) return;
     const one = ids.length === 1;
+    let used: Record<string, PartUse[]> | null = null;
+    try { used = await firstValueFrom(this.desk.store.usedInMany(ids)); } catch { /* asked without it */ }
+    const on = (rows: PartUse[]) => this.fmt(rows.length === 1 ? 'Used on one board: {list}' : 'Used on {n} boards: {list}',
+      { n: rows.length, list: rows.map(b => b.refs.length ? `${b.name} (${b.refs.join(', ')})` : b.name).join(', ') });
+    const usedIds = ids.filter(c => used?.[c]?.length);
+    const warn = !used ? t('Could not check which boards use them.')
+      : one ? (usedIds.length ? on(used[ids[0]]) : '')
+      : usedIds.map(c => `${c} · ${on(used![c])}`).join('\n');
     Confirm.ask({ title: one ? t('Remove this part from the drawer?') : this.fmt('Remove {n} parts from the drawer?', { n: ids.length }),
-                  text: ids.join(', '), ok: t('Remove'), danger: true }).then(async ok => {
+                  text: (warn ? warn + '\n\n' : '') + ids.join(', '), ok: t('Remove'), danger: true }).then(async ok => {
       if (!ok) return;
       this.saving.set(true);
       let gone = 0;

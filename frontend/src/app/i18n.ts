@@ -3625,6 +3625,11 @@ const TR: Record<string, string> = {
   '{n} in stock': '{n} stokta',
   'Uncategorised': 'Kategorisiz', 'full view': 'tam görünüm', 'pins': 'pinler', 'the pins could not be read': 'pinler okunamadı',
   'close every drawer': 'tüm çekmeceleri kapat', 'open every drawer': 'tüm çekmeceleri aç', 'close all': 'hepsini kapat', 'open all': 'hepsini aç',
+  // which boards use a part, read from the boards when asked (part-card.ts, manufacturers.ts, backend/part_usage.py)
+  'Used in': 'Kullanıldığı kartlar', 'Not used on any board': 'Hiçbir kartta kullanılmıyor', 'not built yet': 'henüz derlenmedi',
+  'Could not read the boards.': 'Kartlar okunamadı.', 'changed since its last build': 'son derlemeden beri değişti',
+  'Open in the PCB room': 'PCB odasında aç', 'Used on one board: {list}': 'Bir kartta kullanılıyor: {list}',
+  'Used on {n} boards: {list}': '{n} kartta kullanılıyor: {list}', 'Could not check which boards use them.': 'Hangi kartlarda kullanıldıkları denetlenemedi.',
 };
 
 export function t(text: string): string {

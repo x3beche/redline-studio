@@ -98,6 +98,9 @@ app.include_router(tasks_api.router)
 # A part's 3D bodies - LCSC's and the drawn ones - and a board's choice (backend/bodies.py).
 from . import bodies_api  # noqa: E402
 app.include_router(bodies_api.router)
+# Which boards use a part, read from the boards when asked (backend/part_usage.py).
+from . import part_usage  # noqa: E402
+app.include_router(part_usage.router)
 # a model's technical drawing layout (backend/drawlayout.py): before the
 # PUT /api/models/{id} below would take the path as a model's
 from . import drawlayout  # noqa: E402

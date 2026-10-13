@@ -1,5 +1,7 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
-import { Parts, PartHeld, PartPreview } from '../api';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Parts, PartHeld, PartPreview, PartUse } from '../api';
+import { Selection } from '../selection';
+import { Skeleton } from '../skeleton';
 import { moneyIn, moneyTip } from '../money';
 import { T, t } from '../i18n';
 import { SelectOption, UiSelect } from '../ui-select';
@@ -17,7 +19,7 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
  *  in the markup can run. */
 @Component({
   selector: 'app-part-card',
-  imports: [T, PartBodiesCard, UiSelect],
+  imports: [T, PartBodiesCard, UiSelect, Skeleton],
   styleUrl: '../settings.css',
   styles: [`
     :host { display: block; container-type: inline-size; color: var(--ink); font-size: 12px; }
@@ -64,6 +66,15 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
     .pc-pins .pdw-pinlist { max-height: 168px; }
     .pc-drawer .st-card-body { gap: 8px; }
     .pc-drawer select { width: 100%; }
+    .pc-uses { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pc-use { display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 4px 6px; margin: 0 -6px;
+              width: calc(100% + 12px); font: inherit; color: var(--ink); text-align: left; background: none;
+              border: 0; border-radius: 4px; cursor: pointer; }
+    .pc-use:hover { background: var(--surface); }
+    .pc-use:hover b { color: var(--accent); }
+    .pc-use b { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .pc-use .refs { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); font-size: 10.5px; }
+    .pc-use .qty { flex: none; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
     .pc-head-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @container (max-width: 680px) {
       .pc-grid { grid-template-columns: minmax(0, 1fr); }
@@ -176,6 +187,7 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
         </div>
       </section>
 
+      <div class="pc-side">
       <!-- Which drawer: the rules, a model's pick where they were unsure,
            or somebody's own choice - which wins. -->
       <section class="st-card pc-drawer">
@@ -204,6 +216,35 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
           }
         </div>
       </section>
+
+      <!-- Which boards use it: read from the boards when the card opens
+           (backend/part_usage.py), each a way into the board room. -->
+      <section class="st-card">
+        <div class="st-card-head"><h3>{{ 'Used in' | t }}</h3>
+          @if (uses(); as u) { @if (u.length) { <span class="st-badge">{{ u.length }}</span> } }</div>
+        <div class="st-card-body">
+          @if (usesErr()) {
+            <p class="st-err">{{ usesErr() }}</p>
+          } @else if (uses(); as u) {
+            @if (u.length) {
+              <ul class="pc-uses wb-in">
+                @for (b of u; track b.board) {
+                  <li><button class="pc-use" (click)="openBoard(b)" [title]="useTip(b)">
+                    <b>{{ b.name }}</b>
+                    <span class="refs mono">· {{ b.refs.length ? b.refs.join(', ') : ('not built yet' | t) }}</span>
+                    @if (b.qty) { <span class="qty">· ×{{ b.qty }}</span> }
+                  </button></li>
+                }
+              </ul>
+            } @else {
+              <p class="st-hint wb-in">{{ 'Not used on any board' | t }}</p>
+            }
+          } @else {
+            <wb-skel kind="rows" [count]="2" [h]="22" />
+          }
+        </div>
+      </section>
+      </div>
     </div>
   </div>
   `,
@@ -228,6 +269,36 @@ export class PartCard {
   place = output<string | null>();
 
   noPhoto = signal(false);
+  private picked = inject(Selection);
+  /** The boards that use it; null while they are being read. */
+  uses = signal<PartUse[] | null>(null);
+  usesErr = signal('');
+
+  constructor() {
+    effect(onCleanup => {
+      const c = this.part().lcsc;
+      this.uses.set(null); this.usesErr.set('');
+      const sub = this.store.usedIn(c).subscribe({
+        next: rows => this.uses.set(rows),
+        error: e => this.usesErr.set(String(e?.error?.detail ?? t('Could not read the boards.'))),
+      });
+      onCleanup(() => sub.unsubscribe());
+    });
+  }
+
+  /** Into the board room, on that board. */
+  openBoard(b: PartUse) {
+    this.picked.openBoard(b.board);
+    this.closed.emit();
+  }
+  useTip(b: PartUse): string {
+    const lines = [b.path];
+    if (b.refs.length) lines.push(b.refs.join(', '));
+    if (b.built_at) lines.push(t('built') + ' ' + new Date(b.built_at).toLocaleString());
+    if (b.stale) lines.push(t('changed since its last build'));
+    lines.push(t('Open in the PCB room'));
+    return lines.join('\n');
+  }
 
   datasheetUrl(): string { return `/api/parts/${encodeURIComponent(this.part().lcsc)}/datasheet`; }
   /** LCSC sells in dollars: the price as it is, the display currency in its tooltip (money.ts). */

@@ -890,6 +890,14 @@ export interface PartHeld {
   place_model?: string | null;
 }
 
+/** A board that uses a part (backend/part_usage.py): its references there,
+ *  how many (null before a first build names them), and its build. */
+export interface PartUse {
+  board: string; name: string; path: string; project: string | null;
+  refs: string[]; qty: number | null; built: boolean; built_at: string | null;
+  saved_at: string | null; version: number | null; stale: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class Parts {
   private http = inject(HttpClient);
@@ -914,6 +922,14 @@ export class Parts {
   }
   file(lcsc: string, name: 'footprint.svg' | 'symbol.svg' | 'model.glb' | 'photo.jpg'): string {
     return `/api/parts/${encodeURIComponent(lcsc)}/${name}`;
+  }
+  /** The boards of this workspace that use it, read from them when asked. */
+  usedIn(lcsc: string): Observable<PartUse[]> {
+    return this.http.get<PartUse[]>(`/api/parts/${encodeURIComponent(lcsc)}/used-in`);
+  }
+  /** The same for several parts at once: {part: boards}. */
+  usedInMany(parts: string[]): Observable<Record<string, PartUse[]>> {
+    return this.http.get<Record<string, PartUse[]>>(`/api/parts-used-in?parts=${encodeURIComponent(parts.join(','))}`);
   }
 }
 
