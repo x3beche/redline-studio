@@ -383,6 +383,9 @@ def test_a_part_saved_by_its_number_takes_its_name_from_the_file():
     step = b"ISO-10303-21;\nDATA;\n#5=PRODUCT('92000A130','Pan Head Phillips Screw M3','',(#2));\nENDSEC;"
     assert linked.title_from_file("92000A130", [("92000A130.STEP", step)]) == "Pan Head Phillips Screw M3"
     assert linked.title_from_file("92000A130", [("drawing.STEP", b"ISO-10303-21;")]) == ""
+    # Downloaded twice, the browser numbers the file: not the part's name.
+    assert linked.title_from_file("92000A130", [("92000A130_Pan Head Phillips Screws (1).STEP", b"")]) == "Pan Head Phillips Screws"
+    assert linked.title_from_file("92000A130", [("92000A130_Pan Head Phillips Screws - Copy.STEP", b"")]) == "Pan Head Phillips Screws"
 
 
 def test_a_saved_mcmaster_category_becomes_the_part_its_step_is_of(db, grid):  # noqa: F811

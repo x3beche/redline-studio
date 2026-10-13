@@ -321,6 +321,8 @@ def title_from_file(key: str, got: list[tuple[str, bytes]]) -> str:
         stem = PurePosixPath(n).stem
         rest = re.sub(rf"^\s*{re.escape(key)}\s*[-_ ,.]*", "", stem, flags=re.I) if key.lower() in stem.lower() else ""
         rest = re.sub(r"[_]+", " ", rest).strip(" -_.,")
+        # A browser's mark for a file downloaded again ("… Screws (1)", "… - Copy") is not part of the name.
+        rest = re.sub(r"\s*(?:\(\d{1,3}\)|-\s*(?:copy|kopya)(?:\s*\(\d{1,3}\))?)\s*$", "", rest, flags=re.I).strip(" -_.,")
         if len(rest) >= 4 and re.search(r"[A-Za-z]{3}", rest):
             return rest
     for n, d in got:
