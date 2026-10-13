@@ -968,3 +968,11 @@ def test_the_reference_views_are_views_render_py_takes():
     js = render.view_js("detail")
     assert "setCameraPosition" in js and "box.min.y" in js
     assert render.view_js("iso") == render.side_js("iso")
+
+
+def test_an_empty_folder_of_the_tree_can_be_picked():
+    fake = FakeDb()
+    run(fake["folders"].insert_one({"_id": "scanner", "name": "scanner", "parent": None}))
+    run(fake["folders"].insert_one({"_id": "scanner/parts", "name": "parts", "parent": "scanner"}))
+    rows = run(taste.projects(fake, "scann", folders=True))
+    assert [(r["id"], r["sub"]) for r in rows] == [("scanner", "empty"), ("scanner/parts", "empty")]

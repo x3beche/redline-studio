@@ -399,7 +399,13 @@ async def projects(db, q: str = "", limit: int = 60, folders: bool = False) -> l
     words = [w for w in q.lower().split() if w]
     out: list[dict] = []
     if folders:
-        for f in await folder_list(db):
+        # Empty folders of the tree too: a palette attached to one reaches what is put in it later.
+        rows = await folder_list(db)
+        held = {f["id"] for f in rows}
+        rows += [{"id": d["_id"], "sub": "empty"} async for d in db["folders"].find({}, {"_id": 1})
+                 if d["_id"] not in held and not _stock(d["_id"])]
+        rows.sort(key=lambda f: f["id"])
+        for f in rows:
             row = {"kind": "folder", "id": f["id"], "label": f["id"], "sub": f["sub"]}
             if all(w in f"{f['id']} {f['sub']}".lower() for w in words):
                 out.append(row)
