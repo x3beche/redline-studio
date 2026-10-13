@@ -40,6 +40,13 @@ How the agents get it: the Chat's `manufacturer_search` tool
 and searches the products; a manufacturer is also an @-mention
 (backend/cc_context.py, kind "manufacturer").
 
+A wrong read is never taken quietly: a price or a stock read with a doubt
+(catalog_facts) is kept marked; a person's "Wrong" keeps the right value
+through the next reads while the page says what it said (correct_product,
+_hold) and keeps the page as a test case (keep_case, tests/fixtures/
+catalog_pages); "Re-read all products" reads every saved product page again
+with today's reader and reports what changed (recheck).
+
 Manufacturers and their runs belong to the workspace (backend/scope.py).
 """
 
@@ -61,6 +68,7 @@ import urllib.parse
 import urllib.robotparser
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -1331,6 +1339,54 @@ def _history(rows) -> list[dict]:
     return out[-HISTORY:]
 
 
+def _doubts(rows) -> list[dict]:
+    """Why a value read may be wrong (catalog_facts.price_doubts, stock_doubts, _hold): {k, ...} each, kept short."""
+    out = []
+    for d in rows if isinstance(rows, list) else []:
+        if isinstance(d, dict) and isinstance(d.get("k"), str) and d["k"]:
+            out.append({_clean(k, 20): v if v is None or isinstance(v, (bool, int, float)) else _clean(v, 80)
+                        for k, v in list(d.items())[:8]})
+    return out[:8]
+
+
+def read_meta(d, kind: str) -> dict:
+    """What is kept beside a price (`kind` "price", inside it) or a stock ("stock",
+    the product's `stock_read`): where it was read (`source`, cf.SOURCES) and
+    the words around it (`snippet`), why it may be wrong (`doubt`), and a
+    correction by hand ("Wrong", correct_product): `manual`, who (`by`),
+    when (`manual_at`) and what the page said then (`page_was`)."""
+    if not isinstance(d, dict):
+        return {}
+    out: dict = {}
+    if d.get("source") in cf.SOURCES:
+        out["source"] = d["source"]
+    if d.get("snippet"):
+        out["snippet"] = _clean(d["snippet"], 200)
+    doubt = _doubts(d.get("doubt"))
+    if doubt:
+        out["doubt"] = doubt
+    if d.get("manual") is True:
+        out["manual"] = True
+        if isinstance(d.get("by"), dict):
+            out["by"] = {k: _clean(d["by"][k], 120) for k in ("id", "name") if d["by"].get(k)}
+        if isinstance(d.get("manual_at"), str):
+            out["manual_at"] = d["manual_at"][:40]
+        was = d.get("page_was") if isinstance(d.get("page_was"), dict) else {}
+        if kind == "price":
+            out["page_was"] = {"amount": cf.amount(was.get("amount")), "currency": cf.currency_of(was.get("currency")),
+                               "vat": cf.vat_of(was.get("vat"))}
+        else:
+            q = was.get("qty")
+            out["page_was"] = {"stock": was.get("stock") if was.get("stock") in ("in", "out") else None,
+                               "qty": q if isinstance(q, int) and not isinstance(q, bool) else None}
+    return out
+
+
+def doubtful(p: dict) -> bool:
+    """Whether a product's price or stock was read with a doubt on it: the catalog's "check" mark."""
+    return bool((p.get("price") or {}).get("doubt") or (p.get("stock_read") or {}).get("doubt"))
+
+
 def clean_product(raw: dict, known: set[str] | None = None) -> dict | None:
     """One product made whole, or None when it has no name. `known`, when
     given, holds the addresses the pages had: a url or image not among
@@ -1374,7 +1430,7 @@ def clean_product(raw: dict, known: set[str] | None = None) -> dict | None:
         out["images"] = ims[:12]
     price = cf.parse_price(raw.get("price"), raw.get("currency") or "", raw.get("vat"))
     if price:
-        out["price"] = price
+        out["price"] = {**price, **read_meta(raw.get("price"), "price")}
     lp = cf.parse_price(raw.get("list_price"), (price or {}).get("currency") or raw.get("currency") or "")
     if lp and (not price or lp["amount"] > price["amount"]):
         out["list_price"] = {k: lp[k] for k in ("amount", "currency", "text")}
@@ -1392,6 +1448,9 @@ def clean_product(raw: dict, known: set[str] | None = None) -> dict | None:
         words = _clean(raw.get("stock_text"), 60) or words
         if words:
             out["stock_text"] = words
+        said = read_meta(raw.get("stock_read"), "stock")
+        if said:
+            out["stock_read"] = said
     for k in ("added_at", "read_at", "updated"):
         if isinstance(raw.get(k), str) and raw[k].strip():
             out[k] = _clean(raw[k], 40)
@@ -1421,7 +1480,7 @@ def merge_products(lists: list[list[dict]], most: int = MAX_PRODUCTS) -> tuple[l
                 dups += 1
                 have = by[k]
                 for f in ("category", "description", "sku", "url", "image", "images", "price", "list_price", "stock",
-                          "stock_qty", "stock_text", "updated", "seller", "read_at", "added_at", "history"):
+                          "stock_qty", "stock_text", "stock_read", "updated", "seller", "read_at", "added_at", "history"):
                     if have.get(f) in (None, "", [], {}) and p.get(f) not in (None, "", [], {}):
                         have[f] = p[f]
                 for sk, sv in p.get("specs", {}).items():
@@ -1461,7 +1520,53 @@ def remember(hist, entry: dict | None) -> list[dict]:
     return h[-HISTORY:]
 
 
-_SAID = ("price", "list_price", "stock", "stock_qty", "stock_text", "updated")
+_SAID = ("price", "list_price", "stock", "stock_qty", "stock_text", "stock_read", "updated")
+
+
+def _same_price(a: dict, b: dict) -> bool:
+    """Two prices the same, a currency left out matching any; two missing ones the same too."""
+    x, y = a.get("amount"), b.get("amount")
+    if x is None or y is None:
+        return x is None and y is None
+    return abs(x - y) < 0.005 and (not a.get("currency") or not b.get("currency") or a["currency"] == b["currency"])
+
+
+def _with_doubt(d: dict, doubt: dict) -> dict:
+    return {**d, "doubt": [*(d.get("doubt") or []), doubt]}
+
+
+def _hold(old: dict, p: dict) -> None:
+    """A product read again (`p`, what _refresh made of `old` and the page):
+    a price or a stock corrected by hand ("Wrong", correct_product) stays
+    while the page says what it said when it was corrected; once the page
+    says something else the page's new value is taken, marked "changed
+    since your correction". A price that moved by more than half since the
+    last reading is marked too ("jump")."""
+    op, np_ = old.get("price") or {}, p.get("price") or {}
+    if op.get("manual"):
+        if np_ is op or np_.get("amount") is None or _same_price(np_, op.get("page_was") or {}):
+            p["price"] = op
+        else:
+            p["price"] = _with_doubt(np_, {"k": "changed_since_fix", "fixed": op.get("amount"),
+                                           "was": (op.get("page_was") or {}).get("amount")})
+    elif np_ is not op and np_.get("amount") and op.get("amount") \
+            and (not op.get("currency") or not np_.get("currency") or op["currency"] == np_["currency"]):
+        r = np_["amount"] / op["amount"]
+        if r > 1.5 or r < 0.5:
+            p["price"] = _with_doubt(np_, {"k": "jump", "was": op["amount"], "pct": round((r - 1) * 100)})
+    os_ = old.get("stock_read") or {}
+    if os_.get("manual"):
+        was = os_.get("page_was") or {}
+        if not p.get("stock") or p.get("stock_read") is os_ \
+                or (p.get("stock") == was.get("stock") and p.get("stock_qty") == was.get("qty")):
+            for f in ("stock", "stock_qty", "stock_text", "stock_read"):
+                if f in old:
+                    p[f] = old[f]
+                else:
+                    p.pop(f, None)
+        else:
+            p["stock_read"] = _with_doubt(p.get("stock_read") or {}, {
+                "k": "changed_since_fix", "fixed": old.get("stock"), "fixed_qty": old.get("stock_qty"), "was": was.get("stock")})
 
 
 def _refresh(old: dict, new: dict, at: str, keep_old: bool) -> dict:
@@ -1486,10 +1591,11 @@ def _refresh(old: dict, new: dict, at: str, keep_old: bool) -> dict:
         for f in _SAID:
             if new.get(f) not in (None, ""):
                 p[f] = new[f]
-            elif f in ("stock_qty", "stock_text") and new.get("stock"):
+            elif f in ("stock_qty", "stock_text", "stock_read") and new.get("stock"):
                 p.pop(f, None)
             elif f in old:
                 p[f] = old[f]
+        _hold(old, p)
     if new.get("seller") or old.get("seller"):
         p["seller"] = new.get("seller") or old.get("seller")
     for f in ("id", "source", "added_by", "edited", "edited_by", "edited_at"):
@@ -1499,7 +1605,8 @@ def _refresh(old: dict, new: dict, at: str, keep_old: bool) -> dict:
             p.pop(f, None)
     p["added_at"] = old.get("added_at") or at
     p["read_at"] = at
-    hist = remember(old.get("history"), _reading(new, at))
+    # what the product is now - a correction by hand held - when the page said a price or a stock
+    hist = remember(old.get("history"), _reading(p, at) if _reading(new, at) else None)
     if hist:
         p["history"] = hist
     return p
@@ -1573,10 +1680,13 @@ def _with_facts(prod: dict, page: dict, f: dict) -> dict:
         p["stock"] = m["stock"]
         p.pop("stock_qty", None)
         p.pop("stock_text", None)
+        p.pop("stock_read", None)
         if m.get("qty") is not None:
             p["stock_qty"] = m["qty"]
         if m.get("stock_text"):
             p["stock_text"] = m["stock_text"]
+        if m.get("stock_read"):
+            p["stock_read"] = dict(m["stock_read"])
     p["sku"] = p.get("sku") or _clean(m.get("sku"), 80)
     for k in ("description", "category"):
         if not p.get(k) and m.get(k):
@@ -1604,7 +1714,7 @@ def _from_facts(page: dict, f: dict) -> dict | None:
                        "category": m.get("category"), "url": m.get("url"), "image": m.get("image"),
                        "images": m.get("images"), "price": m.get("price"), "list_price": m.get("list_price"),
                        "stock": m.get("stock"), "stock_qty": m.get("qty"), "stock_text": m.get("stock_text"),
-                       "updated": m.get("updated")})
+                       "stock_read": m.get("stock_read"), "updated": m.get("updated")})
     if p:
         p["seller"] = _seller(page.get("url") or "", page.get("site_name") or "")
     return p
@@ -1648,11 +1758,16 @@ def by_page(site: dict, products: list[dict]) -> list[dict]:
 
 def stamp(products: list[dict], at: str, page_url: str = "") -> list[dict]:
     """A run's products: when they were read, and on which site (the
-    product's page's, else the run's first page's)."""
+    product's page's, else the run's first page's). A price or a stock the
+    page's own data did not give (by_page) is the model's reading."""
     for p in products:
         p["read_at"] = at
         if p.get("price"):
             p["price"] = {**p["price"], "at": at}
+            if not p["price"].get("source"):
+                p["price"].update(source="model", **({"snippet": p["price"]["text"]} if p["price"].get("text") else {}))
+        if p.get("stock") and not p.get("stock_read"):
+            p["stock_read"] = {"source": "model", **({"snippet": p["stock_text"]} if p.get("stock_text") else {})}
         if not p.get("seller"):
             sel = _seller(p.get("url") or page_url)
             if sel:
@@ -1965,12 +2080,14 @@ async def edit_product(db, mid: str, pid: str, fields: dict, by: dict | None = N
                 pr["vat"] = was.get("vat")
             same = was and pr["amount"] == was.get("amount") and pr["currency"] == (was.get("currency") or "") \
                 and pr["vat"] == was.get("vat")
-            f["price"] = {**pr, "text": was.get("text", "") if same else "", "at": was.get("at") if same else _now()}
+            f["price"] = {**pr, "text": was.get("text", "") if same else "", "at": was.get("at") if same else _now(),
+                          **(read_meta(was, "price") if same else {"source": "hand"})}
             if same and was.get("gross"):
                 f["price"]["gross"] = was["gross"]
     if "stock" in f and (cf.parse_stock(f["stock"])[0] != old.get("stock") or not f["stock"]):
         f.setdefault("stock_qty", "")                   # a stock changed by hand: the site's words and count go with it
         f["stock_text"] = ""
+        f["stock_read"] = {"source": "hand"}
     p = manual_product({**old, **f})
     if _clashes(have, p, pid):
         raise Clash(f"\"{p['name']}\" is already in the catalog" + (f" (code {p['sku']})" if p["sku"] else ""))
@@ -1999,8 +2116,208 @@ async def delete_products(db, mid: str, ids: list[str]) -> int:
 
 
 def by_hand(p: dict) -> bool:
-    """Added or changed by hand: kept when a full exploration replaces the catalog."""
-    return p.get("source") == "manual" or bool(p.get("edited"))
+    """Added or changed by hand - or its price or stock corrected ("Wrong"):
+    kept when a full exploration replaces the catalog."""
+    return p.get("source") == "manual" or bool(p.get("edited")) or bool((p.get("price") or {}).get("manual")) \
+        or bool((p.get("stock_read") or {}).get("manual"))
+
+
+# ---- a value read wrong, corrected by hand -----------------------------------
+
+# Wrong reads kept as test cases: on this server only, never committed by it. tests/test_catalog_cases.py
+# reads every case here and wants the right value from today's reader (check_case).
+CASES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "catalog_pages"
+_KEEPING: set[asyncio.Task] = set()
+
+
+def _price_of(p: dict) -> dict | None:
+    pr = p.get("price") or {}
+    return {"amount": pr["amount"], "currency": pr.get("currency") or "", "vat": pr.get("vat")} \
+        if pr.get("amount") is not None else None
+
+
+def _stock_of(p: dict) -> dict | None:
+    return {"stock": p["stock"], "qty": p.get("stock_qty")} if p.get("stock") else None
+
+
+async def correct_product(db, mid: str, pid: str, what: str, fields: dict, by: dict | None = None,
+                          keep: bool = True) -> tuple[dict, str | None]:
+    """The "Wrong" button: a product's right price (`what` "price": amount,
+    currency, VAT) or stock ("stock": in or out, how many) as a person says
+    it. Kept as a correction (`manual`, who, when, and what the page said
+    then - `page_was`): the next reads leave it while the page still says
+    that, and take the page's value, marked, once it says something else
+    (_hold). The page as it is now, with the wrong and the right value, is
+    kept as a test case (keep_case, in the background). Returns (the
+    product, the case's file name or None)."""
+    doc = await get(db, mid)
+    if not doc:
+        raise LookupError(f"no manufacturer {mid}")
+    have = doc.get("products") or []
+    old = next((x for x in have if x.get("id") == pid), None)
+    if not old:
+        raise LookupError(f"no product {pid}")
+    who = by or actors.current()
+    now = _now()
+    hand = {"source": "hand", "manual": True, "by": {k: who[k] for k in ("id", "name") if who.get(k)}, "manual_at": now}
+    p = dict(old)
+    if what == "price":
+        op = old.get("price") or {}
+        pr = cf.parse_price(fields.get("amount"), fields.get("currency") or op.get("currency") or "", fields.get("vat") or None)
+        if not pr:
+            raise ValueError(f"the price {str(fields.get('amount'))[:40]!r} is not a price - give a number, like 362,60")
+        wrong = _price_of(old)
+        right = {"amount": pr["amount"], "currency": pr["currency"], "vat": pr["vat"]}
+        p["price"] = {**right, "text": "", "at": now, **hand,
+                      "page_was": op.get("page_was") if op.get("manual") else (wrong or {"amount": None, "currency": "", "vat": None})}
+    elif what == "stock":
+        stock = cf.parse_stock(fields.get("stock"))[0]
+        if stock not in ("in", "out"):
+            raise ValueError("say whether it is in stock or out of stock")
+        qty = fields.get("qty")
+        try:
+            qty = None if qty in (None, "") else max(0, int(float(str(qty).replace(",", "."))))
+        except ValueError as exc:
+            raise ValueError(f"the quantity {str(qty)[:20]!r} is not a number") from exc
+        if stock == "out" and qty:
+            raise ValueError("out of stock with some left - give no quantity, or say it is in stock")
+        os_ = old.get("stock_read") or {}
+        wrong = _stock_of(old)
+        right = {"stock": stock, "qty": qty}
+        p.update(stock=stock, stock_read={**hand, "page_was": os_.get("page_was") if os_.get("manual")
+                                          else (wrong or {"stock": None, "qty": None})})
+        p.pop("stock_text", None)
+        p.pop("stock_qty", None)
+        if qty is not None:
+            p["stock_qty"] = qty
+    else:
+        raise ValueError("say what was read wrong: the price or the stock")
+    p["history"] = remember(old.get("history"), _reading(p, now))
+    await db[COLL].update_one({"_id": mid}, {"$set": {"products": [p if x.get("id") == pid else x for x in have],
+                                                      "updated_at": now}})
+    name = None
+    if keep and p.get("url"):
+        name = case_name(p["url"], pid)
+        t = asyncio.create_task(keep_case(doc, p, what, wrong, right, who))
+        _KEEPING.add(t)
+        t.add_done_callback(_KEEPING.discard)
+    return p, name
+
+
+def case_name(url: str, pid: str) -> str:
+    """A case's file name: the page's host and the product's id."""
+    return re.sub(r"[^a-z0-9.]+", "-", f"{_host(url) or 'page'}-{pid}".lower()).strip("-.")[:120]
+
+
+async def _read_one(fetcher: "Fetcher", url: str, rules: dict, track: Tracker, sleep=asyncio.sleep) -> tuple[dict | None, dict, str | None]:
+    """One product's page as the crawl reads it - under its site's
+    robots.txt (read once a site, into `rules`, the site's Crawl-delay
+    waited after it): (the page, the request, why it was not read)."""
+    root = _root_of(url)
+    if root not in rules:
+        dom = _domain_of(root)
+        rules[root] = await _read_robots(root, track, fetcher, lambda x: _domain_of(x) == dom, f"robots:{len(rules) + 1}")
+        await sleep(rules[root][2])
+    rp = rules[root][0]
+    if not rp.can_fetch(USER_AGENT, url):
+        return None, {}, f"robots.txt of {urllib.parse.urlsplit(url).hostname} does not allow reading this page"
+    dom = _domain_of(url)
+    got = await fetcher.get(url, _is_html, lambda x: _domain_of(x) == dom)
+    if got["error"] or got["status"] != 200 or not got["body"] or not _is_html(got["type"]):
+        return None, got, got["error"] or (f"HTTP {got['status']}" if got["status"] != 200 else "not a web page")
+    final = normalise(got["url"]) or url
+    page = _page_of(got, final)
+    page["url"] = final
+    return page, got, None
+
+
+async def keep_case(doc: dict, prod: dict, what: str, wrong: dict | None, right: dict, who: dict,
+                    fetcher: "Fetcher | None" = None) -> Path | None:
+    """A wrong read kept as a test case: the product's page as it is now -
+    its HTML, or its text when only Jina could read it - and the wrong and
+    the right value, as CASES/<host>-<id>.json (and .html). A case kept
+    before for the same product is brought up to date: the other value's
+    correction stays. On this server only; a developer commits one when the
+    reader reads it right (tests/test_catalog_cases.py)."""
+    from . import netproxy
+    url = prod.get("url") or ""
+    name = case_name(url, prod["id"])
+    own = fetcher is None
+    try:
+        fetcher = fetcher or Fetcher(maker_route(doc), netproxy.new_session())
+    except Refused as exc:
+        log.warning("keeping the case %s: %s", name, exc)
+        return None
+    try:
+        page, got, why = await _read_one(fetcher, url, {}, Tracker())
+    except Exception as exc:                            # noqa: BLE001 - a case not kept is only a case not kept
+        page, got, why = None, {}, str(exc)[:200]
+    finally:
+        if own:
+            await fetcher.close()
+    try:
+        CASES.mkdir(parents=True, exist_ok=True)
+        path = CASES / f"{name}.json"
+        try:
+            case = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            case = {}
+        case.update(url=url, saved_at=_now(), by=who.get("name") or "",
+                    product={"id": prod["id"], "name": prod.get("name") or "", "maker": doc.get("_id"),
+                             "maker_name": doc.get("name") or ""})
+        case[what] = {"wrong": wrong, "right": right}
+        case.pop("html", None)
+        case.pop("page", None)
+        if page is None:
+            case["error"] = f"the page could not be read again: {why}"
+        else:
+            case.pop("error", None)
+            case.update(final_url=page["url"], via=got.get("via"))
+            if got.get("via") == "jina":
+                case["page"] = {k: page.get(k) for k in ("url", "title", "description", "site_name", "text", "images", "links")}
+            else:
+                (CASES / f"{name}.html").write_text(decode(got["body"], got["type"]), "utf-8")
+                case["html"] = f"{name}.html"
+        path.write_text(json.dumps(case, ensure_ascii=False, indent=1), "utf-8")
+        return path
+    except OSError:
+        log.exception("keeping the case %s", name)
+        return None
+
+
+def check_case(path: Path) -> list[str] | None:
+    """What today's reader gets wrong of a kept case (keep_case): [] when it
+    reads the right price and stock, None when the case has no page."""
+    case = json.loads(Path(path).read_text("utf-8"))
+    url = case.get("final_url") or case.get("url") or ""
+    if case.get("html"):
+        page = parse_page((Path(path).parent / case["html"]).read_text("utf-8"), url)
+        page["url"] = url
+    elif isinstance(case.get("page"), dict):
+        page = {**case["page"], "url": url}
+    else:
+        return None
+    f = facts_of(page)
+    m = f.get("main") or {}
+    if f.get("kind") != "product" or not m:
+        return [f"the page is not read as one product's page (it is read as {f.get('kind')!r})"]
+    out = []
+    want = (case.get("price") or {}).get("right")
+    if want:
+        got = m.get("price") or {}
+        if got.get("amount") is None or abs(got["amount"] - want["amount"]) >= 0.005:
+            out.append(f"price: read {got.get('amount')}, the right one is {want['amount']}")
+        if want.get("currency") and got.get("currency") != want["currency"]:
+            out.append(f"currency: read {got.get('currency')!r}, the right one is {want['currency']!r}")
+        if want.get("vat") and got.get("vat") != want["vat"]:
+            out.append(f"VAT: read {got.get('vat')!r}, the right one is {want['vat']!r}")
+    want = (case.get("stock") or {}).get("right")
+    if want:
+        if m.get("stock") != want["stock"]:
+            out.append(f"stock: read {m.get('stock')!r}, the right one is {want['stock']!r}")
+        elif want.get("qty") is not None and m.get("qty") != want["qty"]:
+            out.append(f"quantity: read {m.get('qty')!r}, the right one is {want['qty']!r}")
+    return out
 
 
 # ---- searching the catalogs --------------------------------------------------
@@ -2450,6 +2767,235 @@ def job_out(d: dict, full: bool = True) -> dict:
     return out
 
 
+# ---- reading every product's page again ("Re-read all products") ---------------
+
+CHECKS = "catalog_checks"           # the runs of it, one at a time a workspace, each with its report
+CHECK_ROWS = 400                    # report rows kept on a run
+CHECK_LOST = 600.0                  # seconds without a beat: a run another process left
+_CHECKS: dict[str, asyncio.Task] = {}
+
+
+def _print(p: dict) -> str:
+    """A product as it is stored, in a few letters: whether it changed since it was read."""
+    return hashlib.sha1(json.dumps(p, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+def reread(old: dict, f: dict, at: str) -> tuple[dict, dict]:
+    """A product read again from its page's facts `f` with today's reader:
+    (the product as it would be kept - a correction by hand held, _hold -,
+    what changed: {price: [was, now], stock: [was, now], doubt: [new
+    doubts, each with its `on` price or stock], held: price/stock kept by
+    hand though the page says otherwise})."""
+    m = f["main"]
+    new: dict = {}
+    if m.get("price"):
+        new["price"] = {**m["price"], "at": at}
+    if m.get("list_price"):
+        new["list_price"] = {k: m["list_price"].get(k) for k in ("amount", "currency", "text")}
+    if m.get("stock"):
+        new.update(stock=m["stock"], stock_text=m.get("stock_text") or "")
+        if m.get("qty") is not None:
+            new["stock_qty"] = m["qty"]
+        if m.get("stock_read"):
+            new["stock_read"] = dict(m["stock_read"])
+    if m.get("updated"):
+        new["updated"] = _clean(m["updated"], 40)
+    q = _refresh(old, new, at, keep_old=True)
+    said: dict = {}
+    a, b = _price_of(old), _price_of(q)
+    if (a is None) != (b is None) or (a and b and (not _same_price(a, b) or a["vat"] != b["vat"])):
+        said["price"] = [a, b]
+    a, b = _stock_of(old), _stock_of(q)
+    if a != b:
+        said["stock"] = [a, b]
+    before = {(on, d["k"]) for on, x in (("price", old.get("price")), ("stock", old.get("stock_read")))
+              for d in (x or {}).get("doubt") or []}
+    fresh = [{**d, "on": on} for on, x in (("price", q.get("price")), ("stock", q.get("stock_read")))
+             for d in (x or {}).get("doubt") or [] if (on, d["k"]) not in before]
+    if fresh:
+        said["doubt"] = fresh
+    held = [k for k, x, n in (("price", old.get("price"), new.get("price")), ("stock", old.get("stock_read"), new.get("stock")))
+            if (x or {}).get("manual") and n and q.get("price" if k == "price" else "stock_read") is x]
+    if held:
+        said["held"] = held
+    return q, said
+
+
+async def recheck(db, dry: bool = False, progress=None, sleep=asyncio.sleep, fetcher_for=None) -> dict:
+    """Every product of the workspace's own sites read again from its page,
+    with today's reader (catalog_facts; no model): each maker's pages by its
+    own routes, one at a time, under each site's robots.txt, a pause between
+    two requests to a site. A product's new price and stock are kept unless
+    `dry` (nothing is written then) - a correction by hand held. Returns the
+    report: {counts, rows} - a row a product whose price or stock changed,
+    that has a new doubt, whose correction was held, or whose page could not
+    be read. `progress(done, total, current, report)` is awaited as it goes."""
+    from . import netproxy
+    docs = await listing(db)
+    todo = [(d, p) for d in docs for p in d.get("products") or [] if str(p.get("url") or "").startswith("http")]
+    counts = {"products": sum(len(d.get("products") or []) for d in docs), "pages": len(todo), "read": 0,
+              "failed": 0, "not_product": 0, "price": 0, "stock": 0, "doubt": 0, "held": 0, "saved": 0, "busy": 0}
+    report = {"counts": counts, "rows": []}
+    rows = report["rows"]
+    track = Tracker()
+    pages: dict[str, tuple] = {}                        # a page that several products share is read once
+    last: dict[str, float] = {}                         # a site's last request, and its pause
+    done = 0
+
+    def row(d, p, **said):
+        if len(rows) < CHECK_ROWS:
+            rows.append({"maker": {"id": d["_id"], "name": d.get("name") or ""}, "id": p.get("id"), "name": p.get("name") or "",
+                         "url": p.get("url"), **said})
+
+    for d in docs:
+        mine = [p for dd, p in todo if dd is d]
+        if not mine:
+            continue
+        try:
+            fetcher = fetcher_for(d) if fetcher_for else Fetcher(maker_route(d), netproxy.new_session())
+        except Refused as exc:
+            for p in mine:
+                counts["failed"] += 1
+                row(d, p, error=str(exc))
+            done += len(mine)
+            continue
+        rules: dict = {}
+        updates: dict[str, tuple[str, dict]] = {}
+        try:
+            for p in mine:
+                if progress:
+                    await progress(done, len(todo), p["url"], report)
+                url = p["url"]
+                if url not in pages:
+                    host = urllib.parse.urlsplit(url).hostname or ""
+                    gap = max(DELAY, rules.get(_root_of(url), (None, None, DELAY))[2])
+                    wait = gap - (time.monotonic() - last.get(host, -1e9))
+                    if wait > 0:
+                        await sleep(wait)
+                    try:
+                        page, _, why = await _read_one(fetcher, url, rules, track, sleep)
+                    except Exception as exc:            # noqa: BLE001 - one page not read is one page not read
+                        page, why = None, str(exc)[:200] or type(exc).__name__
+                    last[host] = time.monotonic()
+                    pages[url] = (page, facts_of(page) if page else None, why)
+                page, f, why = pages[url]
+                done += 1
+                if page is None:
+                    counts["failed"] += 1
+                    row(d, p, error=why)
+                    continue
+                if f.get("kind") != "product" or not (f.get("main") or {}).get("name") or not _is_main(p, page, f):
+                    counts["not_product"] += 1
+                    row(d, p, error="the page does not show this product as its own (a list, or another product)")
+                    continue
+                counts["read"] += 1
+                q, said = reread(p, f, _now())
+                for k in ("price", "stock", "held"):
+                    if said.get(k):
+                        counts[k] += 1
+                if said.get("doubt"):
+                    counts["doubt"] += 1
+                if said:
+                    row(d, p, **said)
+                updates[p["id"]] = (_print(p), q)
+        finally:
+            await fetcher.close()
+        if updates and not dry:
+            if await db[JOBS].find_one({"manufacturer.id": d["_id"], "status": {"$in": list(ACTIVE)}}):
+                counts["busy"] += len(updates)          # explored now: its run writes the catalog
+                continue
+            cur = await get(db, d["_id"])
+            if not cur:
+                continue
+            n = 0
+            out = []
+            for x in cur.get("products") or []:
+                u = updates.get(x.get("id"))
+                if u and _print(x) == u[0]:             # changed since it was read (by hand, a run): left as it is
+                    out.append(u[1])
+                    n += 1
+                else:
+                    out.append(x)
+            if n:
+                await db[COLL].update_one({"_id": d["_id"]}, {"$set": {"products": out, "updated_at": _now()}})
+            counts["saved"] += n
+            counts["busy"] += len(updates) - n
+    if progress:
+        await progress(done, len(todo), None, report)
+    return report
+
+
+def check_out(c: dict) -> dict:
+    return {**{k: v for k, v in c.items() if k not in ("_id", "workspace_id", "worker", "beat")}, "id": c["_id"]}
+
+
+async def last_check(db) -> dict | None:
+    """The workspace's latest run of "Re-read all products"; one a restart left ends as interrupted."""
+    rows = [c async for c in db[CHECKS].find({})]
+    if not rows:
+        return None
+    c = max(rows, key=lambda x: x.get("started_at") or "")
+    t = _CHECKS.get(c["_id"])
+    if c.get("status") == "running" and not (t and not t.done()):
+        w = c.get("worker") or {}
+        quiet = _seconds(c.get("beat") or c.get("started_at"))
+        if w.get("boot") == WORKER["boot"] or quiet is None or quiet > CHECK_LOST:
+            await db[CHECKS].update_one({"_id": c["_id"], "status": "running"},
+                                        {"$set": {"status": "failed", "finished_at": _now(), "error": GONE}})
+            c = await db[CHECKS].find_one({"_id": c["_id"]})
+    return c
+
+
+async def start_check(db, dry: bool = False, by: dict | None = None) -> tuple[dict, bool]:
+    """Start "Re-read all products" (in the background): (the run, started).
+    One already going is that run; while an exploration runs it does not
+    start (ValueError)."""
+    c = await last_check(db)
+    if c and c.get("status") == "running":
+        return c, False
+    busy = [j for j in await jobs(db, KEEP_JOBS) if j and j.get("status") in ACTIVE]
+    if busy:
+        raise ValueError(f"{busy[0]['manufacturer'].get('name') or 'a site'} is being explored - wait for it to finish")
+    now = _now()
+    c = {"_id": secrets.token_hex(6), "status": "running", "dry": bool(dry), "by": by or actors.current(),
+         "started_at": now, "finished_at": None, "beat": now, "worker": WORKER, "done": 0, "total": None,
+         "current": None, "counts": {}, "rows": [], "error": None}
+    await db[CHECKS].insert_one(c)
+    # the older runs go: the last few are enough
+    olds = sorted([x async for x in db[CHECKS].find({}, {"started_at": 1})], key=lambda x: x.get("started_at") or "", reverse=True)
+    for x in olds[5:]:
+        await db[CHECKS].delete_one({"_id": x["_id"]})
+    _CHECKS[c["_id"]] = asyncio.create_task(_check_work(db, c["_id"], bool(dry)))
+    return c, True
+
+
+async def _check_work(db, cid: str, dry: bool) -> None:
+    async def progress(done, total, current, report):
+        res = await db[CHECKS].update_one({"_id": cid, "status": "running"}, {"$set": {
+            "done": done, "total": total, "current": current, "counts": report["counts"], "rows": report["rows"],
+            "beat": _now()}})
+        if not getattr(res, "matched_count", 1):
+            raise Stopped(cid)                          # cancelled
+    try:
+        report = await recheck(db, dry, progress)
+        await db[CHECKS].update_one({"_id": cid, "status": "running"}, {"$set": {
+            "status": "done", "finished_at": _now(), "counts": report["counts"], "rows": report["rows"], "current": None}})
+    except Stopped:
+        pass
+    except Exception as exc:                            # noqa: BLE001
+        log.exception("re-reading the catalog %s", cid)
+        await db[CHECKS].update_one({"_id": cid, "status": "running"}, {"$set": {
+            "status": "failed", "finished_at": _now(), "error": f"it stopped: {str(exc)[:300] or type(exc).__name__}"}})
+    finally:
+        _CHECKS.pop(cid, None)
+
+
+async def cancel_check(db, cid: str) -> dict | None:
+    await db[CHECKS].update_one({"_id": cid, "status": "running"},
+                                {"$set": {"status": "cancelled", "finished_at": _now(), "current": None}})
+    return await db[CHECKS].find_one({"_id": cid})
+
+
 # ---- the API -----------------------------------------------------------------
 
 def out(d: dict, last: dict | None = None, full: bool = True) -> dict:
@@ -2608,12 +3154,14 @@ def _seller_of(d: dict, p: dict) -> dict:
 
 
 def all_products(docs: list[dict], q: str = "", cat: str = "", maker: str = "", seller: str = "",
-                 lo: float | None = None, hi: float | None = None, stock: str = "", sort: str = "new") -> list[tuple[dict, dict]]:
+                 lo: float | None = None, hi: float | None = None, stock: str = "", sort: str = "new",
+                 check: bool = False) -> list[tuple[dict, dict]]:
     """Every product of `docs` (the makers) for the catalog's grid: those
     matching the words of `q` (every word, in its name, code, category,
     specs, maker or seller), the category, the maker (its id), the seller
-    (its domain), the price range and the stock ("in": in stock on the
-    site; "out"); sorted newest first ("new": added, or read, last),
+    (its domain), the price range, the stock ("in": in stock on the
+    site; "out") and, with `check`, only those whose price or stock was
+    read with a doubt (doubtful); sorted newest first ("new": added, or read, last),
     by price either way (no price last), by name, or by `q`'s match."""
     words = [fold(w) for w in re.split(r"[\s,;/]+", q or "") if w]
     c = fold(cat).strip()
@@ -2628,6 +3176,8 @@ def all_products(docs: list[dict], q: str = "", cat: str = "", maker: str = "", 
             if seller and seller not in (sel.get("domain"), sel.get("host")):
                 continue
             if stock in ("in", "out") and p.get("stock") != stock:
+                continue
+            if check and not doubtful(p):
                 continue
             amt = (p.get("price") or {}).get("amount")
             if (lo is not None or hi is not None) and amt is None:
@@ -2662,14 +3212,16 @@ def grid_item(d: dict, p: dict) -> dict:
 
 @router.get("/products")
 async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str = "", min: float | None = None,
-                       max: float | None = None, stock: str = "", sort: str = "new", page: int = 1, size: int = 60):
+                       max: float | None = None, stock: str = "", sort: str = "new", page: int = 1, size: int = 60,
+                       check: str = ""):
     """The products of every maker, for the catalog's grid: filtered,
-    sorted, a page of them - and what the filters can choose from."""
+    sorted, a page of them - and what the filters can choose from, and
+    how many need checking (`check`: only those)."""
     db = _db()
     # A built-in source's products only when it is asked for: the overview is the workspace's own sites.
     docs = [await catalog_builtin.maker(db, maker)] if catalog_builtin.is_builtin(maker) else await listing(db)
     rows = all_products(docs, q[:200], cat[:120], maker[:40], seller[:200], min, max, stock,
-                        sort if sort in SORTS else "new")
+                        sort if sort in SORTS else "new", check in ("1", "true", "yes"))
     size = max_(1, min_(size, 200))
     page = max_(1, page)
     every = [(d, p) for d in docs for p in d.get("products") or []]
@@ -2683,7 +3235,7 @@ async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str 
             sellers[dom] = sellers.get(dom, 0) + 1
     amounts = [p["price"]["amount"] for _, p in every if (p.get("price") or {}).get("amount") is not None]
     return {"items": [grid_item(d, p) for d, p in rows[(page - 1) * size: page * size]], "total": len(rows),
-            "page": page, "size": size, "all": len(every),
+            "page": page, "size": size, "all": len(every), "doubtful": sum(1 for _, p in every if doubtful(p)),
             "categories": sorted(([k, v] for k, v in cats.items()), key=lambda x: fold(x[0])),
             "makers": [{"id": d["_id"], "name": d.get("name") or "", "domain": d.get("domain") or "",
                         "count": len(d.get("products") or [])} for d in docs],
@@ -2772,6 +3324,35 @@ async def api_job_delete(jid: str):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
     await delete_run(_db(), jid)
     return {"deleted": jid}
+
+
+class CheckIn(BaseModel):
+    dry: bool = False               # only compare: nothing is saved
+
+
+@router.get("/recheck")
+async def api_recheck_last():
+    """The latest "Re-read all products" of the workspace, with its report."""
+    c = await last_check(_db())
+    return {"check": check_out(c) if c else None}
+
+
+@router.post("/recheck")
+async def api_recheck(body: CheckIn | None = None):
+    """Read every saved product's page again with today's reader, in the background."""
+    try:
+        c, started = await start_check(_db(), bool(body and body.dry), actors.current())
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"check": check_out(c), "started": started}
+
+
+@router.post("/recheck/{cid}/cancel")
+async def api_recheck_cancel(cid: str):
+    c = await cancel_check(_db(), cid)
+    if not c:
+        raise HTTPException(404, f"no re-read {cid}")
+    return {"check": check_out(c)}
 
 
 # ---- sharing: a manufacturer as a file ---------------------------------------
@@ -2934,6 +3515,29 @@ async def api_product_edit(mid: str, pid: str, body: ProductPatch):
     except (LookupError, Clash, ValueError) as exc:
         _product_call(exc)
     return {"product": p, "manufacturer": await _maker_out(db, mid)}
+
+
+class CorrectIn(BaseModel):
+    what: str = Field(pattern="^(price|stock)$")
+    amount: float | str | None = None               # the right price: a number or as written ("2.539,81")
+    currency: str = Field(default="", max_length=8)
+    vat: str | None = Field(default=None, max_length=12)
+    stock: str | None = Field(default=None, max_length=12)   # the right stock: in, out
+    qty: int | str | None = None
+
+
+@router.post("/{mid}/products/{pid}/correct")
+async def api_product_correct(mid: str, pid: str, body: CorrectIn):
+    """"Wrong": the right price or stock of a product whose page was read
+    wrong - kept by hand through the next reads, and the page kept as a
+    test case (tests/fixtures/catalog_pages, on this server)."""
+    db = _db()
+    try:
+        p, case = await correct_product(db, mid, pid, body.what, body.model_dump(), actors.current())
+    except (LookupError, ValueError) as exc:
+        _product_call(exc)
+    return {"product": p, "case": f"tests/fixtures/catalog_pages/{case}.json" if case else None,
+            "manufacturer": await _maker_out(db, mid)}
 
 
 @router.delete("/{mid}/products/{pid}")

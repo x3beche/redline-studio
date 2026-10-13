@@ -44,6 +44,8 @@ SCOPED = frozenset({
     "taste_palettes", "taste_jobs",
     # manufacturers and their explorations (backend/manufacturers.py)
     "manufacturers", "manufacturer_jobs", "manufacturer_pages",
+    # the catalog's runs of "Re-read all products", each with its report (backend/manufacturers.py)
+    "catalog_checks",
     # what is on hand: items, quantities, where they are (backend/inventory.py)
     "inventory",
 })

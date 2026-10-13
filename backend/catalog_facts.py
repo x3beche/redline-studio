@@ -26,6 +26,15 @@ page.
 Prices are read in Turkish and English ways of writing them: "1.234,56 TL",
 "₺1.234,56", "$1,234.56", "362,60 TL + KDV" (VAT excluded), "KDV Dahil"
 (included) - `parse_price`, `find_prices`.
+
+A price and a stock read say where they came from - `source` (SOURCES: the
+JSON-LD, the microdata, the meta tags, the page's text) and the words
+around it (`snippet`) - and carry a `doubt` when something about them looks
+wrong (`price_doubts`: another price in the product's own part about N times
+it, the structured data and the text disagreeing, a currency missing or odd;
+`stock_doubts`: "Tükendi" beside "Sepete Ekle", out of stock with some left,
+the structured data and the text disagreeing). A doubtful value is still
+read; the catalog marks it for a person to check.
 """
 
 from __future__ import annotations
@@ -253,7 +262,8 @@ def price_label(p: dict | None) -> str:
 # ---- stock -------------------------------------------------------------------------
 
 _OUT = re.compile(r"stokta\s+yok|stok\s+yok|t[uü]kendi|t[uü]kenmi[sş]tir|stokta\s+bulunmamaktad[ıi]r|temin\s+edilemiyor|"
-                  r"gelince\s+haber\s+ver|out\s+of\s+stock|sold\s+out|currently\s+unavailable|not\s+available")
+                  r"gelince\s+haber\s+ver|out\s+of\s+stock|sold\s+out|currently\s+unavailable|not\s+available|"
+                  r"notify\s+me\s+when\s+(?:it'?s\s+|it\s+is\s+)?(?:back\s+)?in\s+stock")
 _QTY = (re.compile(r"son\s+(\d{1,6})\s+(?:adet|urun|tane|pcs)"),
         re.compile(r"stok(?:\s+adedi|\s+miktari|ta)?\s*:?\s*(\d{1,6})\s*(?:adet|pcs|pieces)?\b(?!\s*[.,/]\d)"),
         re.compile(r"(\d{1,6})\s+adet\s+stok"),
@@ -298,7 +308,7 @@ def parse_stock(v) -> tuple[str | None, int | None, str]:
 
 
 def stock_in(text: str) -> dict:
-    """The stock a stretch of a page says: {stock, qty, text}; nothing when it
+    """The stock a stretch of a page says: {stock, qty, text, pos, end}; nothing when it
     says both (a template with "Stokta Var" and "Stokta Yok" both written,
     one of them hidden by its script) or neither."""
     lw = low(text)
@@ -306,14 +316,17 @@ def stock_in(text: str) -> dict:
         m = rx.search(lw)
         if m:
             n = int(m.group(1))
-            return {"stock": "in" if n > 0 else "out", "qty": n, "text": _clean(text[m.start():m.end()], 60)}
+            return {"stock": "in" if n > 0 else "out", "qty": n, "text": _clean(text[m.start():m.end()], 60),
+                    "pos": m.start(), "end": m.end()}
     outs = list(_OUT.finditer(lw))
     rest = _OUT.sub(lambda m: " " * len(m.group(0)), lw)
     ins = list(_IN.finditer(rest))
     if outs and not ins:
-        return {"stock": "out", "qty": None, "text": _clean(text[outs[0].start():outs[0].end()], 60)}
+        return {"stock": "out", "qty": None, "text": _clean(text[outs[0].start():outs[0].end()], 60),
+                "pos": outs[0].start(), "end": outs[0].end()}
     if ins and not outs:
-        return {"stock": "in", "qty": None, "text": _clean(text[ins[0].start():ins[0].end()], 60)}
+        return {"stock": "in", "qty": None, "text": _clean(text[ins[0].start():ins[0].end()], 60),
+                "pos": ins[0].start(), "end": ins[0].end()}
     return {}
 
 
@@ -325,7 +338,7 @@ RELATED = re.compile(
     r"birlikte\s+al[ıi]nan\s+urunler|bu\s+urunu\s+(?:alanlar|inceleyenler)[^\n]*|benzer\s+urun\w*|"
     r"tamamlayici\s+urunler|related\s+products?|you\s+may\s+also\s+like|recently\s+viewed[^\n]*|"
     r"customers\s+(?:also|who)\s+[^\n]*|similar\s+products?|recommended(?:\s+(?:for\s+you|products?))?|"
-    r"frequently\s+bought\s+together|ahnliche\s+produkte|zubehor)\s*[*:]*\s*$", re.M)
+    r"(?:frequently\s+)?(?:bought|purchased)\s+together|ahnliche\s+produkte|zubehor)\s*[*:]*\s*$", re.M)
 _CODE = re.compile(r"(?<![a-z])(?:(?:urun|stok|model)\s*(?:kodu|no|numarasi)|sku|product\s+code|part\s+(?:no|number)|"
                    r"item\s+(?:no|number|code)|art(?:ikel)?[.\s-]*nr|mpn)\s*[:#.]?[ \t]*\n?[ \t*]*"
                    r"([a-z0-9][a-z0-9\-_./]{1,40})")
@@ -423,6 +436,9 @@ def _ld_product(node: dict) -> dict:
     inv = offer.get("inventoryLevel")
     qty = inv.get("value") if isinstance(inv, dict) else None
     stock, _, _ = parse_stock(offer.get("availability"))
+    said = {k: offer.get(k) for k in ("price", "lowPrice", "priceCurrency") if offer.get(k) not in (None, "")}
+    if not said and price_raw is not None:
+        said = {"price": price_raw, **({"priceCurrency": cur} if cur else {})}
     return {"name": _clean(node.get("name"), 200), "sku": _clean(node.get("sku") or node.get("mpn") or node.get("productID"), 80),
             "brand": _clean(brand, 120), "description": _clean(node.get("description"), 600),
             "images": _img_urls(node.get("image")), "url": str(node.get("url") or offer.get("url") or "").strip(),
@@ -430,7 +446,10 @@ def _ld_product(node: dict) -> dict:
             "price": parse_price(price_raw, currency_of(cur), vat) if price_raw is not None else None,
             "list_price": list_price, "stock": stock,
             "qty": int(qty) if isinstance(qty, (int, float)) and not isinstance(qty, bool) else None,
-            "updated": _clean(node.get("dateModified") or offer.get("priceValidFrom"), 40)}
+            "updated": _clean(node.get("dateModified") or offer.get("priceValidFrom"), 40),
+            "price_said": _clean(json.dumps(said, ensure_ascii=False)[1:-1], 120) if said else "",
+            "stock_said": _clean(json.dumps({"availability": offer.get("availability")}, ensure_ascii=False)[1:-1], 120)
+            if offer.get("availability") else ""}
 
 
 def _title_name(title: str, site: str = "") -> str:
@@ -475,6 +494,93 @@ def _host(u: str) -> str:
 def _norm(u: str, base: str) -> str:
     from .manufacturers import normalise
     return normalise(u, base) or "" if u else ""
+
+
+# ---- where a value came from, and what makes it doubtful ---------------------------
+
+# Where a price or a stock was read: the JSON-LD, the microdata, the meta tags, the page's text -
+# or, for a product the model read off a list, the model; "hand" when a person typed it.
+SOURCES = ("ld", "micro", "meta", "text", "model", "hand")
+KNOWN_CURRENCIES = frozenset(CURRENCY.values())
+# Words beside a price that make it some other sum: shipping from, points earned, a saving.
+_ASIDE = re.compile(r"kargo|shipping|delivery|teslimat|uzeri|\bover\b|ucretsiz|\bfree\b|puan|points|kazan|indirim|"
+                    r"discount|tasarruf|\bsave\b|kupon|coupon")
+
+
+def _around(text: str, s: int, e: int, n: int = 80) -> str:
+    """The words around text[s:e], about `n` characters, "…" where cut."""
+    pad = max(10, (n - (e - s)) // 2)
+    a, b = max(0, s - pad), min(len(text), e + pad)
+    cut = re.search(r"\s", text[a:min(s, a + 16)]) if a else None
+    a = a + cut.end() if cut else a
+    cut = [m.start() for m in re.finditer(r"\s", text[max(e, b - 16):b])] if b < len(text) else []
+    b = max(e, b - 16) + cut[-1] if cut else b
+    return ("…" if a else "") + _clean(text[a:b], n + 60) + ("…" if b < len(text) else "")
+
+
+def _near(x: float, y: float) -> bool:
+    return abs(x - y) <= max(0.01, 0.01 * max(x, y))
+
+
+def _kin(x: float, y: float) -> bool:
+    """The same price, or the one with VAT and the other without."""
+    return _near(x, y) or any(_near(x, y * v) or _near(y, x * v) for v in VAT_RATES)
+
+
+def price_doubts(price: dict, said: list, wprices: list[dict], window: str, list_price: dict | None,
+                 guessed: bool) -> list[dict]:
+    """Why the price read may not be the product's price, each as {k, ...}:
+    "instalment" - another price in the product's own part is about N times
+    it (N 2..36: it reads like one instalment of it) - or "lower" (far
+    lower, no such N); "mismatch" - the structured data and the text (or
+    two kinds of structured data) say different prices; "no_currency",
+    "currency_guessed" (from "TL"/"KDV" on the page), "odd_currency"."""
+    out: list[dict] = []
+    a, cur = price["amount"], price.get("currency") or ""
+    lp = (list_price or {}).get("amount")
+    others = [p for p in wprices
+              if (not p["currency"] or not cur or p["currency"] == cur) and not _kin(p["amount"], a)
+              and not (lp and _near(p["amount"], lp))
+              and not _ASIDE.search(low(window[max(0, p["pos"] - 40):p["end"] + 30]))]
+    top = max(others, key=lambda p: p["amount"], default=None)
+    if top and top["amount"] >= 1.8 * a:
+        # N instalments come to the price, or a little more (interest)
+        n = next((n for n in range(2, 37) if top["amount"] * 0.98 <= a * n <= top["amount"] * 1.3), None)
+        out.append({"k": "instalment" if n else "lower", "other": top["amount"], "n": n, "text": _clean(top["text"], 40)})
+    src = price.get("source")
+    if src in ("ld", "micro", "meta"):
+        for s, sp, _ in said[1:]:
+            if not _kin(sp["amount"], a):
+                out.append({"k": "mismatch", "other": sp["amount"], "where": s})
+        if wprices and not any(_kin(p["amount"], a) for p in wprices):
+            out.append({"k": "mismatch", "other": wprices[0]["amount"], "where": "text", "text": _clean(wprices[0]["text"], 40)})
+    if not price.get("currency"):
+        out.append({"k": "no_currency"})
+    elif guessed:
+        out.append({"k": "currency_guessed", "cur": price["currency"]})
+    elif price["currency"] not in KNOWN_CURRENCIES:
+        out.append({"k": "odd_currency", "cur": price["currency"]})
+    return out
+
+
+def stock_doubts(st: dict, told: str | None, own: dict, window: str) -> list[dict]:
+    """Why the stock read may be wrong, each as {k, ...}: "both_words" - the
+    product's own part says it is out ("Tükendi") and sells it too ("Stokta
+    Var", "Sepete Ekle"); "qty_conflict" - out with some left, or in with
+    none; "stock_mismatch" - the structured data says one, the text the other."""
+    out: list[dict] = []
+    lwin = low(window)
+    no = _OUT.search(lwin)
+    yes = _IN.search(_OUT.sub(lambda m: " " * len(m.group(0)), lwin)) or _CART.search(lwin)
+    if no and yes:
+        out.append({"k": "both_words", "out": _clean(window[no.start():no.end()], 40),
+                    "in": _clean(window[yes.start():yes.end()], 40)})
+    q = st.get("qty")
+    if q is not None and ((st["stock"] == "out" and q > 0) or (st["stock"] == "in" and q == 0)):
+        out.append({"k": "qty_conflict", "qty": q, "stock": st["stock"]})
+    if told and own.get("stock") and own["stock"] != told:
+        out.append({"k": "stock_mismatch", "said": told, "text": own.get("text") or ""})
+    return out
 
 
 def facts(page: dict, raw: dict | None = None) -> dict:
@@ -555,17 +661,33 @@ def facts(page: dict, raw: dict | None = None) -> dict:
     sku = ld.get("sku") or _clean(micro.get("sku"), 80) or _clean(meta.get("product:retailer_item_id"), 80) \
         or (window[wcode.start(1):wcode.end(1)] if wcode else "")
     # An instalment written near the price ("287,85 TL'den başlayan taksitlerle") is not it.
-    wprices = [p for p in find_prices(window) if not p["instalment"]]
-    price = ld.get("price")
-    if not price and (micro.get("price") or meta.get("product:price:amount") or meta.get("og:price:amount")):
-        price = parse_price(micro.get("price") or meta.get("product:price:amount") or meta.get("og:price:amount"),
-                            currency_of(micro.get("pricecurrency") or meta.get("product:price:currency")
-                                        or meta.get("og:price:currency")))
-    first = wprices[0] if wprices else None
-    if price and first is None:
-        first = next((p for p in prices_all if abs(p["amount"] - price["amount"]) < 0.005), None)
-    if not price and first:
-        price = {k: first[k] for k in ("amount", "currency", "vat", "text")}
+    wall = find_prices(window)
+    wprices = [p for p in wall if not p["instalment"]]
+    # Every price the structured data gives, in the order it is believed - JSON-LD, microdata, the
+    # meta tags - each with the words it was written in; the page's text after them.
+    said: list[tuple[str, dict, str]] = []
+    if ld.get("price"):
+        said.append(("ld", ld["price"], ld.get("price_said") or ""))
+    if micro.get("price") and not (said and n_micro > 1):     # several products' microdata: not this one's for sure
+        got = parse_price(micro["price"], currency_of(micro.get("pricecurrency") or meta.get("product:price:currency")
+                                                      or meta.get("og:price:currency")))
+        if got:
+            said.append(("micro", got, _clean(f'itemprop="price" {micro["price"]}'
+                                              + (f' priceCurrency {micro["pricecurrency"]}' if micro.get("pricecurrency") else ""), 120)))
+    mk = next((k for k in ("product:price:amount", "og:price:amount") if meta.get(k)), None)
+    if mk:
+        mc = meta.get("product:price:currency") or meta.get("og:price:currency") or micro.get("pricecurrency")
+        got = parse_price(meta[mk], currency_of(mc))
+        if got:
+            said.append(("meta", got, _clean(f"{mk} {meta[mk]}" + (f", {mc}" if mc else ""), 120)))
+    price, psrc, psnip = None, "", ""
+    if said:
+        psrc, price, psnip = said[0]
+        price = dict(price)
+    elif wprices:
+        w = wprices[0]
+        price = {k: w[k] for k in ("amount", "currency", "vat", "text")}
+        psrc, psnip = "text", _around(window, w["pos"], w["end"])
     if price:
         same = next((p for p in (wprices or prices_all) if abs(p["amount"] - price["amount"]) < 0.005), None)
         if same:
@@ -582,25 +704,46 @@ def facts(page: dict, raw: dict | None = None) -> dict:
                     price["gross"] = p["amount"]
                     price["vat"] = price.get("vat") or "excl"
                 break
-        price.setdefault("currency", "")
+        guessed = not price.get("currency")
         price = {**price, "currency": price.get("currency") or ("TRY" if re.search(r"\b(tl|kdv)\b", lw) else "")}
+        price.update(source=psrc, snippet=psnip)
+        doubt = price_doubts(price, said, wprices, window, ld.get("list_price"), guessed)
+        if doubt:
+            price["doubt"] = doubt
     st = {"stock": ld.get("stock"), "qty": ld.get("qty"), "text": ""}
+    ssrc, ssnip = ("ld", ld.get("stock_said") or "") if st["stock"] else ("", "")
     if not st["stock"] and micro.get("availability"):
         st["stock"] = parse_stock(micro.get("availability"))[0]
+        ssrc, ssnip = "micro", _clean(f'itemprop="availability" {micro["availability"]}', 120)
     if not st["stock"] and meta.get("product:availability"):
         st["stock"] = parse_stock(meta.get("product:availability"))[0]
+        ssrc, ssnip = "meta", _clean(f'product:availability {meta["product:availability"]}', 120)
+    if not st["stock"]:
+        ssrc, ssnip = "", ""
+    told = st["stock"]
     # The page past the product's own part is other products ("İlgili Ürünler",
     # each with its own "Tükendi"): never read for this one's stock.
-    seen = stock_in(window) or ({} if st["stock"] else stock_in(text[:related_at] if related_at is not None else text))
+    own = stock_in(window)
+    seen, where = (own, window) if own else ({}, window) if st["stock"] else \
+        (stock_in(text[:related_at] if related_at is not None else text), text)
     if seen:
         st = {"stock": st["stock"] or seen["stock"], "qty": st["qty"] if st["qty"] is not None else seen.get("qty"),
               "text": seen.get("text") or ""}
+        if not ssrc:
+            ssrc, ssnip = "text", _around(where, seen["pos"], seen["end"])
     # Nothing said either way, but the product's own part sells it: an
     # add-to-cart there and no "Tükendi" means it can be bought now.
     if not st["stock"]:
         cart = _CART.search(lwin)
         if cart and not _OUT.search(lwin):
             st = {"stock": "in", "qty": st["qty"], "text": _clean(window[cart.start():cart.end()], 60)}
+            ssrc, ssnip = "text", _around(window, cart.start(), cart.end())
+    stock_read = None
+    if st["stock"]:
+        stock_read = {"source": ssrc, "snippet": ssnip}
+        doubt = stock_doubts(st, told, own, window)
+        if doubt:
+            stock_read["doubt"] = doubt
     upd = ld.get("updated") or _clean(meta.get("article:modified_time") or meta.get("og:updated_time")
                                       or meta.get("product:updated_time"), 40)
     if not upd:
@@ -625,7 +768,7 @@ def facts(page: dict, raw: dict | None = None) -> dict:
     main = {"name": name, "sku": sku, "brand": ld.get("brand") or _clean(meta.get("product:brand"), 120),
             "description": ld.get("description") or "", "category": ld.get("category") or "",
             "price": price, "list_price": ld.get("list_price"), "stock": st["stock"], "qty": st["qty"],
-            "stock_text": st["text"], "updated": upd, "images": imgs, "image": imgs[0] if imgs else "",
+            "stock_text": st["text"], "stock_read": stock_read, "updated": upd, "images": imgs, "image": imgs[0] if imgs else "",
             "url": canonical if canonical and _host(canonical) == _host(url) else url}
     return {"kind": "product", "why": why, "main": main, "related_at": related_at, "items": 1, "canonical": canonical}
 

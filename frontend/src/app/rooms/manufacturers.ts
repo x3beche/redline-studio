@@ -43,7 +43,38 @@ export type MfrStatus = 'queued' | 'crawling' | 'asking' | 'merging' | 'done' | 
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
 /** A price as the catalog keeps it (backend/catalog_facts.py): `vat` excl when the page said "+ KDV",
  *  `gross` the same price with VAT when the page gave both, `at` when it was read (or typed). */
-export interface Price { amount: number; currency: string; vat: 'incl' | 'excl' | null; text?: string; at?: string | null; gross?: number }
+export interface Price extends ReadMeta { amount: number; currency: string; vat: 'incl' | 'excl' | null; text?: string; at?: string | null; gross?: number }
+/** Why a value read may be wrong (backend/catalog_facts.py price_doubts, stock_doubts; manufacturers._hold): its kind `k`
+ *  and what it saw - another price (`other`, `n` times it), where (`where`), a currency, the last reading (`was`)... */
+export interface Doubt {
+  k: string; other?: number; n?: number | null; text?: string; where?: string; cur?: string; was?: number | string | null; pct?: number;
+  fixed?: number | string | null; fixed_qty?: number | null; qty?: number; stock?: string; said?: string; out?: string; in?: string;
+  /** In a re-read's report: the price's doubt or the stock's. */
+  on?: 'price' | 'stock';
+}
+/** What is kept beside a price (in it) and a stock (`stock_read`): where it was read - the structured data ('ld'), the
+ *  microdata, the meta tags, the page's text, the model, a person - and the words around it; its doubts; and a
+ *  correction by hand ("Wrong"): who, when, and what the page said then - kept while the page says the same. */
+export interface ReadMeta {
+  source?: 'ld' | 'micro' | 'meta' | 'text' | 'model' | 'hand'; snippet?: string; doubt?: Doubt[];
+  manual?: boolean; by?: { id?: string; name?: string }; manual_at?: string;
+  page_was?: { amount?: number | null; currency?: string; vat?: 'incl' | 'excl' | null; stock?: 'in' | 'out' | null; qty?: number | null };
+}
+type PriceSaid = { amount: number; currency: string; vat: 'incl' | 'excl' | null } | null;
+type StockSaid = { stock: 'in' | 'out'; qty: number | null } | null;
+/** A product "Re-read all products" has something to say of: its price and stock before and after, new doubts,
+ *  corrections kept, or why its page was not read. */
+export interface CheckRow {
+  maker: { id: string; name: string }; id: string; name: string; url: string;
+  price?: [PriceSaid, PriceSaid]; stock?: [StockSaid, StockSaid]; doubt?: Doubt[]; held?: ('price' | 'stock')[]; error?: string;
+}
+/** One run of "Re-read all products" (backend/manufacturers.py recheck): `dry` only compared, nothing saved. */
+export interface CatalogCheck {
+  id: string; status: 'running' | 'done' | 'failed' | 'cancelled'; dry: boolean; by: { name?: string };
+  started_at: string; finished_at: string | null; done: number; total: number | null; current: string | null;
+  counts: Partial<Record<'products' | 'pages' | 'read' | 'failed' | 'not_product' | 'price' | 'stock' | 'doubt' | 'held' | 'saved' | 'busy', number>>;
+  rows: CheckRow[]; error?: string | null;
+}
 /** One reading of a product's price and stock (the last 10 are kept): a new row when either changed. */
 export interface PriceRow { at: string; amount?: number; currency?: string; vat?: 'incl' | 'excl' | null; stock?: 'in' | 'out'; qty?: number; seen?: string }
 export interface Product {
@@ -54,6 +85,8 @@ export interface Product {
   price?: Price; list_price?: { amount: number; currency: string; text?: string };
   /** What the seller's site said of its stock, how many when it said, and its words ("Son 3 adet"). */
   stock?: 'in' | 'out'; stock_qty?: number; stock_text?: string;
+  /** Where the stock was read, its doubts, a correction by hand. */
+  stock_read?: ReadMeta;
   /** The site it is sold on (its page's), and when: added to the catalog, last read from its page, the seller's own date. */
   seller?: { domain: string; host?: string; name?: string };
   added_at?: string; read_at?: string; updated?: string; history?: PriceRow[];
@@ -74,8 +107,10 @@ export interface GridAnswer {
   items: GridItem[]; total: number; page: number; size: number; all: number;
   categories: [string, number][]; makers: { id: string; name: string; domain: string; count: number }[];
   sellers: [string, number][]; price: { min: number | null; max: number | null; currencies: string[] };
+  /** How many of every product were read with a doubt on their price or stock ("Needs checking"). */
+  doubtful?: number;
 }
-export interface GridQuery { q: string; cat: string; maker: string; seller: string; min: string; max: string; stock: string; sort: string; size: number }
+export interface GridQuery { q: string; cat: string; maker: string; seller: string; min: string; max: string; stock: string; sort: string; size: number; check: string }
 /** What the Add a product form sends: specs as "name: value" lines; the price as typed, its currency and VAT. */
 export interface ProductFields {
   name: string; category: string; sku: string; description: string; specs: string; url: string; image: string;
@@ -176,6 +211,14 @@ export class MfrApi {
   cancelJob(id: string) { return this.http.post<MfrJob>(`/api/manufacturers/jobs/${id}/cancel`, {}); }
   exportFile(id: string) { return this.http.get<unknown>(`/api/manufacturers/${id}/export`); }
   importFile(data: unknown) { return this.http.post<Maker>('/api/manufacturers/import', data); }
+  /** "Wrong": the right price or stock, kept by hand; the page is kept as a test case (`case`, on the server). */
+  correct(id: string, pid: string, b: { what: 'price' | 'stock'; amount?: string; currency?: string; vat?: string; stock?: string; qty?: string }) {
+    return this.http.post<{ product: Product; manufacturer: Maker; case: string | null }>(`/api/manufacturers/${id}/products/${pid}/correct`, b);
+  }
+  /** "Re-read all products": start one (`dry`: only compare), the latest with its report, stop one. */
+  recheck(dry: boolean) { return this.http.post<{ check: CatalogCheck; started: boolean }>('/api/manufacturers/recheck', { dry }); }
+  lastCheck() { return this.http.get<{ check: CatalogCheck | null }>('/api/manufacturers/recheck'); }
+  cancelCheck(id: string) { return this.http.post<{ check: CatalogCheck }>(`/api/manufacturers/recheck/${id}/cancel`, {}); }
 }
 
 /** The workspace's explorations, for the whole page: the tab's "● N" while
@@ -594,7 +637,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                     <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
-                      @if (p.stock) { <br><span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }</td>
+                      @if (p.stock) { <br><span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></td>
                     <td class="dim mf-pcat" [title]="p.category">{{ p.category || '–' }}</td>
                     <td class="mf-specs" [title]="specLine(p)">@for (s of specs(p); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }@if (!specs(p).length) { <span class="dim">–</span> }</td>
                     <td class="mf-desc dim" [title]="p.description">{{ p.description || '–' }}</td>
@@ -645,7 +688,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button [class.on]="sub() === 'products'" (click)="sub.set('products')">{{ 'All products' | t }}</button>
             <button [class.on]="sub() === 'sites'" (click)="sub.set('sites')">{{ fmt('Sites ({n})', { n: own().length }) }}</button>
           </div>
-          @if (can()) { <button class="tcv-btn" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }
+          @if (can()) {
+            <button class="tcv-btn" (click)="openCheck()" [title]="'Read every saved product page again and see what changed' | t">{{ 'Re-read all products' | t }}</button>
+            <button class="tcv-btn" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button>
+          }
         </div>
       </header>
       @if (sub() === 'products') {
@@ -662,6 +708,11 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </span>
           <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gstock()" (click)="gstock.set(!gstock()); gpages.set(1)">
             <span class="tcv-switch" [attr.data-on]="gstock() ? 1 : null" aria-hidden="true"></span>{{ 'In stock' | t }}</button>
+          @if (grid()?.doubtful || gcheck()) {
+            <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gcheck()" (click)="gcheck.set(!gcheck()); gpages.set(1)"
+                    [title]="'Products whose price or stock was read with a doubt on it' | t">
+              <span class="tcv-switch" [attr.data-on]="gcheck() ? 1 : null" aria-hidden="true"></span>{{ fmt('Needs checking ({n})', { n: grid()?.doubtful ?? 0 }) }}</button>
+          }
           <wb-select class="mf-gsel mf-gsort" label="Sort" [options]="sortOpts()" [value]="gsort()" (pick)="gsort.set($event)" />
           @if (filtered()) { <button class="tcv-btn" (click)="clearFilters()">{{ 'Clear' | t }}</button> }
           <span class="st-right st-sub mf-gcount">{{ grid() ? fmt('{n} of {m}', { n: num(grid()!.total), m: num(grid()!.all) }) : '' }}</span>
@@ -689,7 +740,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
                       <td class="give"><b>{{ p.name }}</b></td>
                       <td class="dim">{{ sellerName(p) }}</td>
-                      <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
+                      <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''"><ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" />@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
                       <td>@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
                       <td class="dim">{{ p.category || '–' }}</td>
                       <td class="mono dim">{{ p.sku || '–' }}</td>
@@ -901,12 +952,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
               @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(d.price.gross, d.price.currency) }) }}</small> }
             } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
           </div>
+          <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'price', meta: d.price }" />
           <div class="mf-dstock">
             @if (d.stock) { <span class="mf-stock mf-stock-inline" [attr.data-s]="d.stock">{{ stockName(d) }}</span>
               @if (d.stock_text) { <span class="dim">"{{ d.stock_text }}"</span> } }
             @else { <span class="dim">{{ 'The page did not say whether it is in stock.' | t }}</span> }
             @if (d.price?.at || d.read_at) { <span class="dim">· {{ fmt('read {w}', { w: ago(d.read_at || d.price?.at) }) }}</span> }
           </div>
+          <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'stock', meta: d.stock_read }" />
           <dl class="mf-dates">
             <div><dt>{{ 'Added to the catalog' | t }}</dt><dd>{{ stamp(d.added_at) }}</dd></div>
             <div><dt>{{ 'Price read' | t }}</dt><dd>{{ stamp(d.price?.at) }}</dd></div>
@@ -950,8 +1003,112 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       </div>
     </div>
   }
+  <!-- ================= "Re-read all products": every saved page read again, and what changed ================= -->
+  @if (checkOpen()) {
+    <div class="mf-modal tcv-m-veil" animate.leave="tcv-leave" (click)="checkOpen.set(false)">
+      <div class="mf-chk tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="'Re-read all products' | t" (click)="$event.stopPropagation()">
+        <button class="tcv-cc-ib mf-x" (click)="checkOpen.set(false)" [title]="'Close' | t">
+          <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
+        <div class="mf-chk-head">
+          <h2 class="mf-dname">{{ 'Re-read all products' | t }}</h2>
+          <span class="st-sub">{{ 'Every saved product page is read again with the current reader - no model, one page at a time, by each site\\'s routes and under its robots.txt. New prices and stocks are saved; the ones you corrected stay while the page says the same.' | t }}</span>
+        </div>
+        @if (check(); as c) {
+          @if (c.dry && c.status !== 'running') { <div class="st-banner mf-chk-banner">{{ 'Only compared: nothing was saved.' | t }}</div> }
+          @if (c.error) { <div class="st-banner tsx-banner" role="alert">{{ c.error }}</div> }
+          <div class="st-tiles mf-chk-tiles">
+            <div class="st-tile" [attr.data-tone]="c.status === 'running' ? 'accent' : c.status === 'done' ? 'ok' : 'warn'"><span>{{ 'Status' | t }}</span>
+              <b>{{ checkStatus(c) | t }}</b><small>{{ fmt('since {w}', { w: when(c.started_at) }) }}{{ c.by.name ? ' · ' + c.by.name : '' }}</small></div>
+            <div class="st-tile"><span>{{ 'Pages read' | t }}</span><b>{{ c.counts.read ?? 0 }} / {{ c.counts.pages ?? c.total ?? '–' }}</b>
+              <small>{{ fmt('{n} products', { n: c.counts.products ?? 0 }) }}</small></div>
+            <div class="st-tile" [attr.data-tone]="c.counts.price ? 'accent' : 'dim'"><span>{{ 'Price changed' | t }}</span><b [wbCount]="c.counts.price ?? 0"></b>
+              <small>{{ (c.dry ? 'not saved' : c.counts.saved ? fmt('{n} updated', { n: c.counts.saved }) : 'nothing to save') | t }}</small></div>
+            <div class="st-tile" [attr.data-tone]="c.counts.stock ? 'accent' : 'dim'"><span>{{ 'Stock changed' | t }}</span><b [wbCount]="c.counts.stock ?? 0"></b><small>&nbsp;</small></div>
+            <div class="st-tile" [attr.data-tone]="c.counts.doubt ? 'warn' : 'dim'"><span>{{ 'Newly doubtful' | t }}</span><b [wbCount]="c.counts.doubt ?? 0"></b>
+              <small>{{ 'shown with the check mark' | t }}</small></div>
+            <div class="st-tile" [attr.data-tone]="c.counts.held ? null : 'dim'"><span>{{ 'Corrections kept' | t }}</span><b [wbCount]="c.counts.held ?? 0"></b>
+              <small>{{ 'the page still says the same' | t }}</small></div>
+            <div class="st-tile" [attr.data-tone]="(c.counts.failed ?? 0) + (c.counts.not_product ?? 0) ? 'warn' : 'dim'"><span>{{ 'Not read' | t }}</span>
+              <b [wbCount]="(c.counts.failed ?? 0) + (c.counts.not_product ?? 0)"></b><small>{{ fmt('{n} no longer this product\\'s page', { n: c.counts.not_product ?? 0 }) }}</small></div>
+          </div>
+          @if (c.status === 'running') {
+            <div class="mf-progress"><div class="st-meter"><i [style.width.%]="pct(c.done, c.total ?? 1)"></i></div>
+              <span class="st-sub">{{ fmt('{n} of {m} pages', { n: c.done, m: c.total ?? '…' }) }}@if (c.current) { · {{ path(c.current) }} }</span></div>
+          }
+          @if (c.rows.length) {
+            <div class="st-table-wrap mf-chk-wrap">
+              <table class="st-table mf-chk-table">
+                <thead><tr><th>{{ 'Product' | t }}</th><th>{{ 'Seller' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th>{{ 'What was found' | t }}</th></tr></thead>
+                <tbody>
+                  @for (r of c.rows; track r.maker.id + r.id) {
+                    <tr>
+                      <td class="give"><button class="mf-namebtn" (click)="openRow(r)" [title]="r.url">{{ r.name }}</button></td>
+                      <td class="dim">{{ r.maker.name }}</td>
+                      <td class="r mono">@if (r.price) { <span class="dim">{{ priceSaid(r.price[0]) }}</span> → <b>{{ priceSaid(r.price[1]) }}</b> }</td>
+                      <td>@if (r.stock) { <span class="dim">{{ stockSaid(r.stock[0]) }}</span> → {{ stockSaid(r.stock[1]) }} }</td>
+                      <td><div class="mf-chk-notes">
+                        @if (r.error) { <span class="mf-err">{{ r.error }}</span> }
+                        @for (x of r.doubt ?? []; track $index) { <span class="mf-doubt-line">{{ doubtLine(x) }}</span> }
+                        @if (r.held?.length) { <span class="dim">{{ (r.held!.length === 2 ? 'your corrections of the price and the stock kept' : r.held![0] === 'price' ? 'your correction of the price kept' : 'your correction of the stock kept') | t }}</span> }
+                      </div></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else if (c.status !== 'running') { <p class="st-hint">{{ 'Every page read says what the catalog says.' | t }}</p> }
+        } @else if (checkLoading()) { <wb-skel kind="tiles" [count]="7" [min]="110" /> }
+        @else { <p class="st-hint">{{ 'Not run yet in this workspace.' | t }}</p> }
+        <div class="mf-chk-acts">
+          @if (check()?.status === 'running') {
+            <button class="tcv-btn tst-del" (click)="cancelCheck()">{{ 'Stop' | t }}</button>
+          } @else {
+            <button class="tcv-btn tcv-btn-accent" (click)="startCheck(false)" [disabled]="starting()">{{ 'Re-read and update' | t }}</button>
+            <button class="tcv-btn" (click)="startCheck(true)" [disabled]="starting()" [title]="'Read every page and show what would change, without saving anything' | t">{{ 'Only compare' | t }}</button>
+          }
+          <button class="tcv-btn" (click)="checkOpen.set(false)">{{ 'Close' | t }}</button>
+        </div>
+      </div>
+    </div>
+  }
 </div>
 <!-- ================= shared pieces ================= -->
+<!-- Where a price or a stock was read (the words around it, or who corrected it), why it may be wrong, and "Wrong" -->
+<ng-template #readT let-d let-what="what" let-meta="meta">
+  @if (meta || (what === 'price' ? d.price : d.stock)) {
+    <div class="mf-dsrc">
+      @if (meta?.manual) {
+        <span class="mf-fixed">{{ fmt('corrected by {p} {w}', { p: meta.by?.name || t('someone'), w: ago(meta.manual_at) }) }}</span>
+        @if (pageWas(what, meta); as w) { <span class="dim">· {{ fmt('the page said {v}', { v: w }) }}</span> }
+      } @else if (meta?.snippet) {
+        <span class="dim">{{ 'read from' | t }}</span> <q class="mf-snip" [title]="meta.snippet">{{ meta.snippet }}</q> <span class="dim">({{ srcName(meta.source) | t }})</span>
+      } @else if (meta?.source) { <span class="dim">{{ srcName(meta.source) | t }}</span> }
+      @if (can() && !d.part) { <button class="st-more mf-wrong" (click)="openFix(what, d)" [attr.aria-expanded]="fix()?.what === what">{{ 'Wrong' | t }}</button> }
+    </div>
+    @if (meta?.doubt?.length) {
+      <ul class="mf-doubts">@for (x of meta.doubt; track $index) { <li>{{ doubtLine(x, d.price?.currency) }}</li> }</ul>
+    }
+    @if (fix()?.what === what) {
+      <div class="mf-fix mf-ctl">
+        @if (what === 'price') {
+          <input class="tst-in mf-pf-amount" inputmode="decimal" [placeholder]="'The right price, e.g. 2.539,81' | t" [value]="fix()!.amount"
+                 (input)="fixSet('amount', $event)" (keydown.enter)="saveFix(d)" (keydown.escape)="fix.set(null)" [attr.aria-label]="'Price' | t">
+          <wb-select label="Currency" [options]="curOpts" [value]="fix()!.currency" (pick)="fixPick('currency', $event)" />
+          <wb-select label="VAT" [options]="vatOpts()" [value]="fix()!.vat" (pick)="fixPick('vat', $event)" />
+        } @else {
+          <wb-select label="Stock on the site" [options]="fixStockOpts()" [value]="fix()!.stock" (pick)="fixPick('stock', $event)" />
+          @if (fix()!.stock === 'in') {
+            <input class="tst-in mf-pf-qty" inputmode="numeric" [placeholder]="'Qty' | t" [value]="fix()!.qty" (input)="fixSet('qty', $event)"
+                   (keydown.enter)="saveFix(d)" [attr.aria-label]="'How many the seller has' | t" [title]="'How many the seller has (optional)' | t">
+          }
+        }
+        <button class="tcv-btn tcv-btn-accent" (click)="saveFix(d)" [disabled]="saving() || (what === 'price' && !fix()!.amount.trim())">{{ 'Save' | t }}</button>
+        <button class="tcv-btn" (click)="fix.set(null)">{{ 'Cancel' | t }}</button>
+        <span class="st-sub mf-fixnote">{{ 'Kept through the next reads while the page says the same; the page is kept as a test case.' | t }}</span>
+      </div>
+    }
+  }
+</ng-template>
 <ng-template #cardT let-p>
   <button class="mf-card" [class.mf-card-lcsc]="!!p.part" [attr.data-key]="keyOf(p)" [attr.data-on]="gsel().has(keyOf(p)) ? 1 : null" [attr.aria-pressed]="gsel().has(keyOf(p))"
           (click)="cardClick($event, p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
@@ -970,12 +1127,16 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       }
       @if (p.price) {
         <span class="mf-card-price" [title]="moneyTip(p.price.amount, p.price.currency)"><b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
-          @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }</span>
-      } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}</span> }
+          @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span>
+      } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span> }
       <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
       <span class="mf-card-foot">@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
     </span>
   </button>
+</ng-template>
+<!-- the amber mark of a price or stock read with a doubt on it: the reasons in its tooltip, in full in the product -->
+<ng-template #doubtT let-p>
+  @if (doubts(p).length) { <span class="mf-doubt" [title]="doubtTip(p)">{{ 'check' | t }}</span> }
 </ng-template>
 <ng-template #layoutT>
   @if (layout() === 'grid') {
@@ -1123,6 +1284,8 @@ export class RoomMfr implements OnDestroy {
   gmin = signal(this.url.get('min') ?? '');
   gmax = signal(this.url.get('max') ?? '');
   gstock = signal(this.url.get('stock') === 'in');
+  /** Only the products read with a doubt on their price or stock ("Needs checking"). */
+  gcheck = signal(this.url.get('check') === '1');
   gsort = signal(this.url.get('sort') ?? 'new');
   gpages = signal(1);
   grid = signal<GridAnswer | null>(null);
@@ -1146,7 +1309,7 @@ export class RoomMfr implements OnDestroy {
     { value: 'incl', label: t('VAT included') }]);
   pfStockOpts = computed<SelectOption[]>(() => [{ value: '', label: t('Stock not said') }, { value: 'in', label: t('In stock') },
     { value: 'out', label: t('Out of stock') }]);
-  filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock()));
+  filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck()));
   /** The product open in full (?p=, its maker ?pm=), the picture shown big, what the Inventory holds of its maker's. */
   detail = signal<GridItem | null>(null);
   shot = signal<string | null>(null);
@@ -1215,7 +1378,7 @@ export class RoomMfr implements OnDestroy {
     effect(() => {
       if (this.view() !== 'home' || this.sub() !== 'products') return;
       const f: GridQuery = { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(),
-                             max: this.gmax(), stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages() };
+                             max: this.gmax(), stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '' };
       untracked(() => { clearTimeout(this.gtimer); this.gtimer = setTimeout(() => this.loadGrid(f), this.grid() ? 180 : 0); });
     });
     // The address follows the page, so F5 comes back here.
@@ -1234,6 +1397,7 @@ export class RoomMfr implements OnDestroy {
       set('min', grid ? this.gmin() : null);
       set('max', grid ? this.gmax() : null);
       set('stock', grid && this.gstock() ? 'in' : null);
+      set('check', grid && this.gcheck() ? '1' : null);
       set('sort', grid && this.gsort() !== 'new' ? this.gsort() : null);
       set('view', v !== 'run' && this.layout() !== 'grid' ? this.layout() : null);
       const part = this.desk.seen()?.lcsc ?? this.desk.seeing();
@@ -1412,13 +1576,13 @@ export class RoomMfr implements OnDestroy {
 
   loadGrid(f?: GridQuery) {
     f ??= { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(), max: this.gmax(),
-            stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages() };
+            stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '' };
     const n = ++this.gseq;
     this.api.products(f).subscribe({ next: g => { if (n === this.gseq) this.grid.set(g); }, error: () => { if (n === this.gseq && !this.grid()) this.grid.set(null); } });
   }
   clearFilters() {
     this.pq.set(''); this.cat.set(''); this.gmaker.set(''); this.gseller.set(''); this.gmin.set(''); this.gmax.set('');
-    this.gstock.set(false); this.gpages.set(1);
+    this.gstock.set(false); this.gcheck.set(false); this.gpages.set(1);
   }
   asItem(p: Product, m: Pick<Maker, 'id' | 'name' | 'domain'>): GridItem {
     return { ...p, maker: { id: m.id, name: m.name, domain: m.domain } };
@@ -1432,7 +1596,116 @@ export class RoomMfr implements OnDestroy {
     this.dStock.set({});
     this.inv.stock(p.maker.id).subscribe({ next: st => { if (this.detail()?.maker.id === p.maker.id) this.dStock.set(st); }, error: () => {} });
   }
-  closeDetail() { this.detail.set(null); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
+  closeDetail() { this.detail.set(null); this.fix.set(null); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
+
+  // ---- what a price or a stock was read from, its doubts, "Wrong", and "Re-read all products"
+
+  /** A product's doubts, its price's first. */
+  doubts(p: Product): Doubt[] { return [...(p.price?.doubt ?? []), ...(p.stock_read?.doubt ?? [])]; }
+  doubtTip(p: Product) { return t('Needs checking') + ':\n' + this.doubts(p).map(x => '- ' + this.doubtLine(x, p.price?.currency)).join('\n'); }
+  srcName(s?: string) {
+    return ({ ld: 'structured data', micro: 'microdata', meta: 'meta tags', text: 'page text', model: 'read by the model', hand: 'typed by hand' } as Record<string, string>)[s ?? ''] ?? 'page text';
+  }
+  private m(v: number | string | null | undefined, cur?: string) { return typeof v === 'number' ? moneyIn(v, cur || 'TRY') : String(v ?? '–'); }
+  private sw(s: string | number | null | undefined) { return s === 'in' ? t('in stock') : s === 'out' ? t('out of stock') : '–'; }
+  /** One doubt in words (backend/catalog_facts.py price_doubts, stock_doubts; manufacturers._hold). */
+  doubtLine(x: Doubt, cur?: string): string {
+    switch (x.k) {
+      case 'instalment': return x.n ? this.fmt('about 1/{n} of {p}, also on the page - an instalment?', { n: x.n, p: this.m(x.other, cur) })
+                                    : this.fmt('far below {p}, also on the page', { p: this.m(x.other, cur) });
+      case 'lower': return this.fmt('far below {p}, also on the page', { p: this.m(x.other, cur) });
+      case 'mismatch': return this.fmt('the {w} says {p}', { w: t(this.srcName(x.where)), p: this.m(x.other, cur) });
+      case 'no_currency': return t('the page gives no currency');
+      case 'currency_guessed': return this.fmt('no currency given: taken as {c} from the page\'s words', { c: x.cur ?? '' });
+      case 'odd_currency': return this.fmt('an unusual currency: {c}', { c: x.cur ?? '' });
+      case 'jump': return this.fmt((x.pct ?? 0) > 0 ? 'up {n}% since the last reading ({p})' : 'down {n}% since the last reading ({p})',
+                                   { n: Math.abs(x.pct ?? 0), p: this.m(x.was, cur) });
+      case 'changed_since_fix': return typeof x.fixed === 'number'
+        ? this.fmt('the page changed since your correction (you said {p})', { p: this.m(x.fixed, cur) })
+        : this.fmt('the page changed since your correction (you said {p})', { p: this.sw(x.fixed) + (x.fixed_qty != null ? ` (${x.fixed_qty})` : '') });
+      case 'both_words': return this.fmt('the page says both "{a}" and "{b}"', { a: x.out ?? '', b: x.in ?? '' });
+      case 'qty_conflict': return x.stock === 'out' ? this.fmt('out of stock, yet {n} left', { n: x.qty ?? 0 }) : t('in stock, yet none left');
+      case 'stock_mismatch': return this.fmt('the structured data says {s}, the page text "{w}"', { s: this.sw(x.said), w: x.text ?? '' });
+    }
+    return x.k;
+  }
+  pageWas(what: string, meta: ReadMeta): string {
+    const w = meta.page_was;
+    if (!w) return '';
+    if (what === 'price') return w.amount != null ? this.m(w.amount, w.currency) : t('no price');
+    return w.stock ? this.sw(w.stock) + (w.qty != null ? ` (${w.qty})` : '') : t('nothing of its stock');
+  }
+  priceSaid(v: PriceSaid) { return v ? this.m(v.amount, v.currency) + (v.vat === 'excl' ? ' ' + t('+VAT') : '') : '–'; }
+  stockSaid(v: StockSaid) { return v ? this.sw(v.stock) + (v.qty != null ? ` (${v.qty})` : '') : '–'; }
+
+  /** "Wrong" open under the price or the stock: the right value as typed. */
+  fix = signal<{ what: 'price' | 'stock'; amount: string; currency: string; vat: string; stock: string; qty: string } | null>(null);
+  fixStockOpts = computed<SelectOption[]>(() => [{ value: 'in', label: t('In stock') }, { value: 'out', label: t('Out of stock') }]);
+  openFix(what: 'price' | 'stock', d: GridItem) {
+    if (this.fix()?.what === what) { this.fix.set(null); return; }
+    this.fix.set({ what, amount: '', currency: d.price?.currency || 'TRY', vat: d.price?.vat ?? '', stock: d.stock === 'in' ? 'out' : 'in', qty: '' });
+  }
+  fixSet(k: 'amount' | 'qty', e: Event) { const v = (e.target as HTMLInputElement).value; this.fix.update(f => f && ({ ...f, [k]: v })); }
+  fixPick(k: 'currency' | 'vat' | 'stock', v: string) { this.fix.update(f => f && ({ ...f, [k]: v })); }
+  saveFix(d: GridItem) {
+    const f = this.fix();
+    if (!f || this.saving()) return;
+    const body = f.what === 'price' ? { what: f.what, amount: f.amount.trim(), currency: f.currency, vat: f.vat }
+                                    : { what: f.what, stock: f.stock, qty: f.stock === 'in' ? f.qty.trim() : '' };
+    this.saving.set(true);
+    this.api.correct(d.maker.id, d.id, body).subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.fix.set(null);
+        if (this.detail()?.id === d.id) this.detail.set({ ...this.asItem(r.product, r.manufacturer), seller: d.seller });
+        this.replace(r.manufacturer);
+        this.read();
+        this.say(r.case ? this.fmt('Saved. The page is kept as a test case: {f}', { f: r.case }) : t('Saved.'));
+      },
+      error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not save it.'), 'danger'); },
+    });
+  }
+
+  /** "Re-read all products": the latest run and its report, read again every second and a half while it runs. */
+  checkOpen = signal(false);
+  check = signal<CatalogCheck | null>(null);
+  checkLoading = signal(false);
+  private checkTimer?: ReturnType<typeof setTimeout>;
+  openCheck() { this.checkOpen.set(true); this.checkLoading.set(true); this.pollCheck(); }
+  private pollCheck() {
+    clearTimeout(this.checkTimer);
+    this.api.lastCheck().subscribe({
+      next: r => {
+        const was = this.check()?.status;
+        this.check.set(r.check); this.checkLoading.set(false);
+        if (r.check?.status === 'running' && this.checkOpen()) this.checkTimer = setTimeout(() => this.pollCheck(), 1500);
+        else if (was === 'running' && r.check && !r.check.dry) this.read();
+      },
+      error: () => this.checkLoading.set(false),
+    });
+  }
+  checkStatus(c: CatalogCheck) {
+    return c.status === 'running' ? (c.dry ? 'Comparing' : 'Reading') : c.status === 'done' ? (c.dry ? 'Compared' : 'Done')
+         : c.status === 'cancelled' ? 'Stopped' : 'Failed';
+  }
+  startCheck(dry: boolean) {
+    this.starting.set(true);
+    this.api.recheck(dry).subscribe({
+      next: r => { this.starting.set(false); this.check.set(r.check); this.pollCheck(); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'Could not start it.'), 'danger'); },
+    });
+  }
+  cancelCheck() {
+    const c = this.check();
+    if (c) this.api.cancelCheck(c.id).subscribe({ next: r => this.check.set(r.check), error: this.failed('Could not stop it.') });
+  }
+  /** A product of the report, open in full. */
+  openRow(r: CheckRow) {
+    this.api.get(r.maker.id).subscribe({
+      next: m => { const p = (m.products ?? []).find(x => x.id === r.id); if (p) { this.checkOpen.set(false); this.openDetail(this.asItem(p, m)); } },
+      error: this.failed('Could not open it.'),
+    });
+  }
   editFromDetail(d: GridItem) {
     this.closeDetail();
     this.openMaker(d.maker.id);
@@ -2080,11 +2353,12 @@ export class RoomMfr implements OnDestroy {
     if (e.key === 'Escape' && this.gsel().size && !this.detail()) { this.gsel.set(new Set()); return; }
     if (e.key === 'Delete' && this.gsel().size && !ContextMenu.isOpen() && this.can() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) { this.deleteSelected(); return; }
     if (e.key === 'Escape' && this.detail() && !typing) { this.closeDetail(); return; }
+    if (e.key === 'Escape' && this.checkOpen() && !typing) { this.checkOpen.set(false); return; }
     if (e.key === '/' && !typing) { e.preventDefault(); (this.gridSearch() ?? this.search()).nativeElement.focus(); }
   }
 
   ngOnDestroy() {
-    clearInterval(this.poll); this.stopFollowing();
+    clearInterval(this.poll); this.stopFollowing(); clearTimeout(this.checkTimer);
     this.runs.here = false;
     this.picked.mfr.set(null);
   }
