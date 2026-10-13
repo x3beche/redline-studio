@@ -1535,7 +1535,10 @@ async def cmd_taste_check(args):
     pairs = []
     by_view = {}
     for ref in refs:
-        by_view.setdefault(ref.stem.split("-")[0] if ref.stem.split("-")[0] in VIEWS else ref.stem, ref)
+        # <view>.png, or <view>-<model>.png for a second model's
+        view = next((v for v in sorted(VIEWS, key=len, reverse=True)
+                     if ref.stem == v or ref.stem.startswith(v + "-")), ref.stem)
+        by_view.setdefault(view, ref)
     for v in views:
         got = out / "design" / f"{v}.png"
         ref = by_view.get(v)
