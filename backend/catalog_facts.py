@@ -74,7 +74,8 @@ SYMBOL = {"TRY": "₺", "USD": "$", "EUR": "€", "GBP": "£"}
 _NUM = r"\d{1,3}(?:[.,'  ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?"
 _PRICE = re.compile(
     rf"(?<![\w.,])(?:(?P<c1>US\$|₺|\$|€|£|(?<![A-Za-z])(?:USD|EUR|TRY|GBP)(?=[ \t\u00a0]))[ \t\u00a0]?(?P<n1>{_NUM})"
-    rf"|(?P<n2>{_NUM})[ \t ]*\n?[ \t ]*(?P<c2>TL|TRY|YTL|USD|EUR|EURO|GBP|₺|€|\$|£)(?![A-Za-zğüşıöçĞÜŞİÖÇ]))",
+    # the currency may run into "KDV"/"VAT" with no space between ("2.539,81 TLKDV Dahil": two spans)
+    rf"|(?P<n2>{_NUM})[ \t ]*\n?[ \t ]*(?P<c2>TL|TRY|YTL|USD|EUR|EURO|GBP|₺|€|\$|£)(?!(?!KDV|VAT)[A-Za-zğüşıöçĞÜŞİÖÇ]))",
     re.I)
 _EXCL_AFTER = re.compile(r"^[\s*]*(\+\s*(kdv|vat|tax)|\(?\s*(kdv\s*hari[cç]|kdv'?siz|excl\.?\s*vat|ex\.?\s*vat|"
                          r"excluding\s+vat|plus\s+vat|vat\s+excl|before\s+tax|net)\b)")
@@ -83,6 +84,9 @@ _INCL_AFTER = re.compile(r"^[\s*]*\(?\s*(kdv\s*dahil|kdv'?\s*li\b|incl\.?\s*vat|
 _EXCL_BEFORE = re.compile(r"(kdv\s*hari[cç]|kdv'?siz|excl\.?\s*vat|ex\.?\s*vat|\+\s*kdv)\s*(fiyat[ıi]?)?\s*[:\-]?\s*$")
 _INCL_BEFORE = re.compile(r"(kdv\s*dahil|kdv'?\s*li|incl\.?\s*vat|inc\.?\s*vat)\s*(fiyat[ıi]?)?\s*[:\-]?\s*$")
 VAT_RATES = (1.2, 1.1, 1.18, 1.08, 1.01, 1.19, 1.21, 1.25)
+# An instalment, not the price: "287,85 TL'den başlayan taksitlerle", "x 12 taksit", "/ ay", "a month".
+_INSTALMENT = re.compile(r"^[\s*]*(?:'?\s*(?:den|dan|ten|tan)\s+baslayan|x\s*\d+\s*(?:taksit|ay)|taksit|"
+                         r"/\s*ay\b|aylik|per\s+month|a\s+month|/\s*mo\b|/\s*month)")
 
 
 def currency_of(s) -> str:
@@ -174,7 +178,7 @@ def find_prices(text: str) -> list[dict]:
         elif _INCL_BEFORE.search(before):
             vat = "incl"
         out.append({"amount": a, "currency": cur, "vat": vat, "text": _clean(text[m.start():end], 60),
-                    "pos": m.start(), "end": end})
+                    "pos": m.start(), "end": end, "instalment": bool(_INSTALMENT.search(after))})
     return out
 
 
@@ -550,7 +554,8 @@ def facts(page: dict, raw: dict | None = None) -> dict:
     wcode = next((m for m in _CODE.finditer(lwin) if re.search(r"\d", m.group(1)) or len(m.group(1)) >= 4), None)
     sku = ld.get("sku") or _clean(micro.get("sku"), 80) or _clean(meta.get("product:retailer_item_id"), 80) \
         or (window[wcode.start(1):wcode.end(1)] if wcode else "")
-    wprices = find_prices(window)
+    # An instalment written near the price ("287,85 TL'den başlayan taksitlerle") is not it.
+    wprices = [p for p in find_prices(window) if not p["instalment"]]
     price = ld.get("price")
     if not price and (micro.get("price") or meta.get("product:price:amount") or meta.get("og:price:amount")):
         price = parse_price(micro.get("price") or meta.get("product:price:amount") or meta.get("og:price:amount"),
@@ -584,10 +589,18 @@ def facts(page: dict, raw: dict | None = None) -> dict:
         st["stock"] = parse_stock(micro.get("availability"))[0]
     if not st["stock"] and meta.get("product:availability"):
         st["stock"] = parse_stock(meta.get("product:availability"))[0]
-    seen = stock_in(window) or ({} if st["stock"] else stock_in(text))
+    # The page past the product's own part is other products ("İlgili Ürünler",
+    # each with its own "Tükendi"): never read for this one's stock.
+    seen = stock_in(window) or ({} if st["stock"] else stock_in(text[:related_at] if related_at is not None else text))
     if seen:
         st = {"stock": st["stock"] or seen["stock"], "qty": st["qty"] if st["qty"] is not None else seen.get("qty"),
               "text": seen.get("text") or ""}
+    # Nothing said either way, but the product's own part sells it: an
+    # add-to-cart there and no "Tükendi" means it can be bought now.
+    if not st["stock"]:
+        cart = _CART.search(lwin)
+        if cart and not _OUT.search(lwin):
+            st = {"stock": "in", "qty": st["qty"], "text": _clean(window[cart.start():cart.end()], 60)}
     upd = ld.get("updated") or _clean(meta.get("article:modified_time") or meta.get("og:updated_time")
                                       or meta.get("product:updated_time"), 40)
     if not upd:

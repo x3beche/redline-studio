@@ -1050,3 +1050,27 @@ def test_prices_by_hand_and_the_grid(db, web, monkeypatch):  # noqa: F811
     assert g["page"] == 2 and len(g["items"]) == 2 and g["total"] == 4
     assert ["Filament", 1] in g["categories"] and g["price"]["min"] == 12.5 and set(g["price"]["currencies"]) == {"TRY", "USD"}
     assert {m["id"] for m in g["makers"]} == {mid, other}
+
+
+ILERI = """<html><head><title>SFU 1204 Mil - ileri3d</title></head><body>
+<h1>SFU 1204 Tornalanmış Mil ve Vidalı Somun-350mm</h1>
+<div><h6 class="fiyat-son">2.539,81 TL<span class="kdv-yaz">KDV Dahil</span></h6></div>
+<div><span>287,85</span> TL'den başlayan taksitlerle!</div>
+<a class="btn" href="/sepet">Sepete Ekle</a>
+<p>SFU1204 vidalı mil ve bilyeli somun seti, 350 mm.</p>
+<h3>İlgili Ürünler</h3>
+<div><span>Tükendi</span><a>SFU 1204 Tornalanmış Mil ve Vidalı Somun-250mm</a> 2.279,31 TL</div>
+<div><span>Tükendi</span><a>SFU 1204 Tornalanmış Mil ve Vidalı Somun-450mm</a> 2.800,30 TL</div>
+</body></html>"""
+
+
+def test_a_price_run_into_kdv_an_instalment_and_related_products_stock():
+    # "2.539,81 TLKDV Dahil" (two spans, no space) is the price; the instalment
+    # under it is not; the related products' "Tükendi" is theirs, and an
+    # add-to-cart in the product's own part says it can be bought.
+    main = mf.parse_page(ILERI, "https://www.ileri3d.com/urun/sfu-1204-350mm")["facts"]["main"]
+    assert main["price"]["amount"] == 2539.81 and main["price"]["vat"] == "incl"
+    assert main["stock"] == "in"
+    assert mf.cf.find_prices("287,85\nTL'den başlayan taksitlerle")[0]["instalment"]
+    assert not mf.cf.find_prices("2.539,81 TL KDV Dahil")[0]["instalment"]
+    assert mf.cf.find_prices("Fiyat 1.200 TLDEN") == []
