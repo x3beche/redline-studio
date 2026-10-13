@@ -791,7 +791,7 @@ async def _snap_taste(db, ref):
             shot = await store.put_shot(db, base64.b64decode(r.pop("png")))
         except Exception:                               # noqa: BLE001 - a lost picture is left out
             continue
-        refs.append({**r, "gridfs_id": shot["gridfs_id"]})
+        refs.append({**r, "gridfs_id": str(shot["gridfs_id"])})      # kept as text: the line is sent as JSON
     data["references"] = refs
     return (data, {}, "")
 
@@ -1170,7 +1170,9 @@ async def _add_taste(dst, d, by, from_who):
     pics = []
     for r in data.get("references") or []:
         try:
-            png = await store.get_shot(dst, r["gridfs_id"])
+            from bson import ObjectId
+            gid = r["gridfs_id"]
+            png = await store.get_shot(dst, ObjectId(gid) if isinstance(gid, str) and ObjectId.is_valid(gid) else gid)
         except Exception:                               # noqa: BLE001 - a lost picture is left out
             continue
         pics.append({k: v for k, v in r.items() if k != "gridfs_id"} | {"png": base64.b64encode(png).decode()})
