@@ -121,7 +121,39 @@ def parse(rows: list[dict]) -> list[dict]:
                 line = (m.group(0).strip(" -:,") if m else "") or title
             seen[p] = {"key": p, "title": line[:200] or p, "url": url_of(p), "specs": specs_of(text),
                        "snippet": desc[:300], "source": url, "own": mine}
-    return [{a: v for a, v in h.items() if a != "own"} for h in seen.values()]
+    parts = [{a: v for a, v in h.items() if a != "own"} for h in seen.values()]
+    return parts + categories(rows)[:max(0, MAX_CATEGORIES - len(parts) // 2)]
+
+
+MAX_CATEGORIES = 6
+_CATEGORY = re.compile(r"mcmaster\.com/products/([^?#\s]+?)/?(?:[?#]|$)", re.I)
+
+
+def categories(rows: list[dict]) -> list[dict]:
+    """The category pages a search found (it finds those far more often than
+    one part's page): {key "cat:<path>", kind "category", title, url, specs
+    - the filters already in its address, "thread-size~m3" as Thread size:
+    M3}. Opened, they list the parts with their numbers to pick from."""
+    out: dict[str, dict] = {}
+    for r in rows:
+        url = str(r.get("url") or "")
+        m = _CATEGORY.search(url)
+        if not m or _IN_URL.search(url):
+            continue
+        path = m.group(1).strip("/").lower()
+        if path in out:
+            continue
+        specs: dict[str, str] = {}
+        for seg in path.split("/")[1:]:
+            name, _, val = seg.partition("~")
+            if val:
+                v = val.replace("-", " ")
+                specs[name.replace("-", " ").capitalize()] = v.upper() if len(v) <= 12 else v
+        title = linked.clean_title(str(r.get("title") or ""), "McMaster-Carr") or path.split("/")[0].replace("-", " ").title()
+        out[path] = {"key": f"cat:{path}", "kind": "category", "title": title[:200],
+                     "url": f"https://www.mcmaster.com/products/{path}/", "specs": specs,
+                     "snippet": str(r.get("description") or "")[:300], "source": url}
+    return list(out.values())
 
 
 def searches(q: str) -> list[str]:

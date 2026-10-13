@@ -31,7 +31,7 @@ export interface LinkedItem {
   /** The McMaster API's own fetch of its STEP, when it was asked and could not. */
   fetch?: { error: string; at: string };
 }
-export interface LinkedHit { key: string; title: string; url: string; author?: string; specs: Record<string, string>;
+export interface LinkedHit { key: string; kind?: 'category'; title: string; url: string; author?: string; specs: Record<string, string>;
   snippet: string; source: string; saved: boolean }
 /** One web search of a source search, as the page follows it. */
 export interface SearchStep { n: number; of: number; words: string; running: boolean; rows?: number; items?: number; ms?: number;
@@ -312,15 +312,20 @@ const TINT = `
       <div class="ln-results">
         @for (h of f.results; track h.key) {
           <article class="ln-hit" [attr.data-saved]="h.saved ? 1 : null">
-            <div class="ln-hit-top"><span class="ln-key mono">{{ h.key }}</span>
+            <div class="ln-hit-top">
+              @if (h.kind === 'category') { <span class="st-tag">{{ 'Category' | t }}</span> } @else { <span class="ln-key mono">{{ h.key }}</span> }
               @if (h.saved) { <span class="st-tag" data-tone="ok">{{ 'saved' | t }}</span> }</div>
             <div class="ln-hit-title" [title]="h.title">{{ h.title }}</div>
             @if (h.author) { <div class="ln-hit-by dim">{{ fmt('by {a}', { a: h.author }) }}</div> }
             @if (specs(h).length) { <div class="ln-specs">@for (s of specs(h); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }</div> }
-            <div class="ln-hint ln-hit-how" [title]="m().how">{{ 'On its page:' | t }} {{ m().how }}</div>
+            @if (h.kind === 'category') {
+              <div class="ln-hint ln-hit-how">{{ 'Open it and pick the size: each row shows its part number. Paste that number above to save the part.' | t }}</div>
+            } @else {
+              <div class="ln-hint ln-hit-how" [title]="m().how">{{ 'On its page:' | t }} {{ m().how }}</div>
+            }
             <div class="ln-hit-foot">
               <a class="tcv-btn ln-open" [href]="h.url" target="_blank" rel="noopener noreferrer" [title]="h.url">{{ fmt('Open on {s}', { s: m().name }) }} ↗</a>
-              @if (!h.saved && desk.canEdit()) { <button class="tcv-btn tcv-btn-accent" (click)="desk.save(h)" [disabled]="desk.busy() === h.key">{{ (desk.busy() === h.key ? 'saving…' : 'Save') | t }}</button> }
+              @if (!h.saved && h.kind !== 'category' && desk.canEdit()) { <button class="tcv-btn tcv-btn-accent" (click)="desk.save(h)" [disabled]="desk.busy() === h.key">{{ (desk.busy() === h.key ? 'saving…' : 'Save') | t }}</button> }
             </div>
           </article>
         }

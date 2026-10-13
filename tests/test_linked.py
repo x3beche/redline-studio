@@ -319,3 +319,19 @@ def test_a_part_without_a_cad_file_says_where_to_get_it(db, grid):  # noqa: F811
     a.post("/api/linked/mcmaster/parts", json={"key": "5972K91"})
     r = a.post("/api/linked/mcmaster/parts/5972K91/to-model", json={"folder": "lamp/purchased"})
     assert r.status_code == 409 and "https://www.mcmaster.com/5972K91/" in r.text and "CAD → 3-D STEP → Save" in r.text
+
+
+def test_mcmaster_category_pages_come_up_after_parts():
+    """A web search finds McMaster's category pages far more often than one
+    part's page: they come back as categories (not saved as parts), with the
+    filters their address already holds, after any part numbers."""
+    from backend import mcmaster
+    rows = [{"url": "https://www.mcmaster.com/products/screws/thread-size~m3/", "title": "M3 Screws | McMaster-Carr", "description": "..."},
+            {"url": "https://www.mcmaster.com/products/phillips-pan-head-machine-screws/", "title": "Phillips Pan Head Machine Screws", "description": ""},
+            {"url": "https://www.mcmaster.com/91290A115/", "title": "Socket Head Screw M3 x 0.5 mm Thread, 10 mm Long", "description": ""},
+            {"url": "https://www.mcmaster.com/products/screws/thread-size~m3/", "title": "dup", "description": ""}]
+    got = mcmaster.parse(rows)
+    assert got[0]["key"] == "91290A115" and "kind" not in got[0]
+    cats = [r for r in got if r.get("kind") == "category"]
+    assert [c["key"] for c in cats] == ["cat:screws/thread-size~m3", "cat:phillips-pan-head-machine-screws"]
+    assert cats[0]["specs"] == {"Thread size": "M3"} and cats[0]["url"] == "https://www.mcmaster.com/products/screws/thread-size~m3/"

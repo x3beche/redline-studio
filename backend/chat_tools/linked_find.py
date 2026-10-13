@@ -40,6 +40,12 @@ def _runner(src: str, extras: tuple[str, ...]):
         lines = []
         for i, r in enumerate(res, 1):
             facts = " · ".join(f"{a} {b}" for a, b in r["specs"].items())
+            if r.get("kind") == "category":
+                lines.append(f"{i}. category: {r['title']}" + (f" ({', '.join(f'{a} {v}' for a, v in r['specs'].items())})"
+                                                            if r.get("specs") else "")
+                             + f"\n   {r['url']}  (open it, pick the size: each row shows its part number; "
+                             "paste that number to save the part)")
+                continue
             lines.append(f"{i}. {r['key']} - {r['title']}" + (f" (by {r['author']})" if r.get("author") else "")
                          + (" [saved]" if r["key"] in saved else "") + f"\n   {r['url']}  ({k.how})"
                          + (f"\n   {facts}" if facts else ""))
