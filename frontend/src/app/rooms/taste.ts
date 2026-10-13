@@ -103,6 +103,8 @@ export const LAYERS: { id: Layer; label: string }[] = [
 export const STRENGTHS: { id: Strength; label: string }[] = [
   { id: 'must', label: 'MUST' }, { id: 'prefer', label: 'PREFER' }, { id: 'avoid', label: 'AVOID' },
 ];
+/** A folder, as the project tree draws one. */
+const FOLDER_PATH = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
 const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model', board: 'Board', firmware: 'Firmware' };
 /** A colour per domain (the theme's chart series) and per strength (as the
  *  MUST / PREFER / AVOID labels are written), for the bars. */
@@ -295,7 +297,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                 <div class="tst-pop-list">
                   @for (r of projects(); track r.kind + r.id; let k = $index) {
                     <button [attr.data-on]="k === pickIdx() ? 1 : null" (mouseenter)="pickIdx.set(k)" (click)="pickProject(r)">
-                      <span class="tst-pop-kind">{{ kindName(r.kind) | t }}</span><span class="tst-pop-label">{{ r.label }}</span>
+                      <span class="tst-pop-kind">@if (r.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }{{ kindName(r.kind) | t }}</span><span class="tst-pop-label">{{ r.label }}</span>
                       <span class="tst-pop-sub">{{ r.sub }}</span>
                     </button>
                   } @empty { <p class="st-hint tst-pad">{{ 'Nothing matches.' | t }}</p> }
@@ -462,19 +464,19 @@ function why(e: HttpErrorResponse, fallback: string): string {
               <button class="tcv-btn" (click)="openPicker('attach')">{{ 'Attach to…' | t }}</button>
               @if (picker() === 'attach') {
                 <div class="tst-pop" animate.leave="tcv-leave" role="listbox">
-                  <input #pickq class="tcv-notes-search" [placeholder]="'Find a model, board or firmware' | t" [value]="pickQ()"
+                  <input #pickq class="tcv-notes-search" [placeholder]="'Find a folder, model, board or firmware' | t" [value]="pickQ()"
                          (input)="findProjects($any($event.target).value)" (keydown)="pickKey($event)">
                   <div class="tst-pop-list">
                     @for (r of projects(); track r.kind + r.id; let k = $index) {
                       <button [attr.data-on]="k === pickIdx() ? 1 : null" (mouseenter)="pickIdx.set(k)" (click)="pickProject(r)"
                               [attr.aria-selected]="isAttached(p, r)">
                         <span class="tst-check" [attr.data-on]="isAttached(p, r) ? 1 : null"></span>
-                        <span class="tst-pop-kind">{{ kindName(r.kind) | t }}</span><span class="tst-pop-label">{{ r.label }}</span>
+                        <span class="tst-pop-kind">@if (r.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }{{ kindName(r.kind) | t }}</span><span class="tst-pop-label">{{ r.label }}</span>
                         <span class="tst-pop-sub">{{ r.sub }}</span>
                       </button>
                     } @empty { <p class="st-hint tst-pad">{{ 'Nothing matches.' | t }}</p> }
                   </div>
-                  <p class="st-hint tst-pad">{{ 'Every agent working on an attached project gets this palette.' | t }}</p>
+                  <p class="st-hint tst-pad">{{ 'Every agent working on an attached project gets this palette; on a folder, everything in it does, at any depth.' | t }}</p>
                 </div>
               }
             </span>
@@ -525,7 +527,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <div class="tst-attached">
           <span class="st-sub">{{ 'Given to the agents of' | t }}</span>
           @for (a of p.attached; track a.kind + a.id) {
-            <span class="tst-chip"><em>{{ kindName(a.kind) | t }}</em> {{ a.label }}
+            <span class="tst-chip" [title]="a.kind === 'folder' ? fmt('Everything in {f}, at any depth: its models, boards and their firmware', { f: a.label }) : ''">
+              @if (a.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }<em>{{ kindName(a.kind) | t }}</em> {{ a.label }}@if (a.kind === 'folder') { <em>/ {{ 'everything in it' | t }}</em> }
               @if (hasSpecific(p)) {
                 <button class="tst-spec" [attr.data-on]="specOn(a) ? 1 : null" (click)="toggleSpecifics(p, a)" [disabled]="!can()"
                         [attr.aria-pressed]="specOn(a)" [title]="specTitle(p, a)">
@@ -745,7 +748,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
                         @for (s of strengths; track s.id) { @if (r.s[s.id]) { <i [style.flex-grow]="r.s[s.id]" [style.background]="sc(s.id)"></i> } }</span>
                       <span class="mono dim">{{ r.s.must }}·{{ r.s.prefer }}·{{ r.s.avoid }}</span></td>
                     <td class="give-s">
-                      @for (a of r.p.attached.slice(0, 2); track a.kind + a.id) { <span class="st-tag tsh-tag" [title]="(kindName(a.kind) | t) + ': ' + a.label">{{ a.label }}</span> }
+                      @for (a of r.p.attached.slice(0, 2); track a.kind + a.id) { <span class="st-tag tsh-tag" [title]="(kindName(a.kind) | t) + ': ' + a.label">@if (a.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }{{ a.label }}</span> }
                       @if (r.p.attached.length > 2) { <span class="dim"> +{{ r.p.attached.length - 2 }}</span> }
                       @if (!r.p.attached.length) { <span class="dim">–</span> }</td>
                     <td class="r">{{ when(r.p.updated_at) }} <span class="dim">· {{ r.p.by.name || ('someone' | t) }}</span></td>
@@ -1004,7 +1007,9 @@ export class RoomTaste implements OnDestroy {
   }
   kindName(k: string) { return KIND_NAME[k] ?? k; }
   strengthLabel(s: Strength) { return STRENGTHS.find(x => x.id === s)?.label ?? s; }
-  attachedLine(p: Palette) { return p.attached.map(a => a.label).join(', '); }
+  /** What a palette is on, in a line; a folder written as one ("pyro/"): everything in it. */
+  attachedLine(p: Palette) { return p.attached.map(a => a.kind === 'folder' ? a.label + '/' : a.label).join(', '); }
+  folderPath = FOLDER_PATH;
   isAttached(p: Palette, r: ProjectRef) { return p.attached.some(a => a.kind === r.kind && a.id === r.id); }
 
   openPalette(id: string) { this.mode.set('palette'); this.editId.set(null); this.openId.set(id); }
@@ -1308,7 +1313,8 @@ export class RoomTaste implements OnDestroy {
   findProjects(q: string) {
     this.pickQ.set(q);
     clearTimeout(this.pickTimer);
-    this.pickTimer = setTimeout(() => this.api.projects(q, this.picker() === 'extract').subscribe({
+    // Folders too in both: extraction reads one whole, an attachment reaches everything in it.
+    this.pickTimer = setTimeout(() => this.api.projects(q, true).subscribe({
       next: rows => { this.projects.set(rows); this.pickIdx.set(0); },
       error: this.failed('Could not list the projects.'),
     }), 120);

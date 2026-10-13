@@ -68,7 +68,7 @@ Taste palettes - the person's design taste (backend/taste.py); `show` and
 
     python tools/revisions.py taste                                list the palettes
     python tools/revisions.py taste <palette-id>                   one, in full
-    python tools/revisions.py taste <model|board|firmware> <id>    the ones attached to a project
+    python tools/revisions.py taste <model|board|firmware|folder> <id>   the ones that apply (its folders' too)
     python tools/revisions.py taste-check <palette-id> <model>     the design beside the reference renders
 
 Firmware - the Firmware room's projects (backend/firmware.py) and the notes
@@ -1398,8 +1398,9 @@ def _note_projects(doc: dict) -> list[tuple[str, str]]:
 
 
 async def _print_taste(db, targets: list[tuple[str, str]], note: str = "") -> None:
-    """The taste palettes attached to these projects (backend/taste.py):
-    the person's design taste, to follow in this work - with its
+    """The taste palettes that apply to these projects (backend/taste.py):
+    attached to one, or to a folder it is in - the person's design taste,
+    to follow in this work - with its
     project-specific items when the work is on the palette's own product
     line (or the person switched them on for this project)."""
     from backend import taste
@@ -1415,8 +1416,9 @@ async def _print_taste(db, targets: list[tuple[str, str]], note: str = "") -> No
     if not rows:
         return
     product = await taste.product_of(db, *targets[0]) if targets else None
-    print("taste   : " + ", ".join(f"\"{p.get('name')}\" ({len(p.get('items') or [])} items)" for p in rows)
-          + " - attached to this project; follow it")
+    print("taste   : " + ", ".join(f"\"{p.get('name')}\" ({len(p.get('items') or [])} items"
+                                   + (f"; via folder {p['via']}" if p.get("via") else "") + ")" for p in rows)
+          + " - attached to this project or its folder; follow it")
     for line in taste.agent_text(rows, product=product, note=note, overrides=overrides).splitlines():
         print(f"  {line}")
     for p in rows:
@@ -1459,8 +1461,8 @@ async def cmd_taste(args):
             sys.exit("--for is kind:id, e.g. model:iot-fan-80mm/assemblies/station")
         product = await taste.product_of(db, k, r)
     if args.kind and args.id:
-        if args.kind not in taste.PROJECT_KINDS:
-            sys.exit("kind is model, board or firmware")
+        if args.kind not in taste.ATTACH_KINDS:
+            sys.exit("kind is model, board, firmware or folder")
         rows = await taste.attached_to(db, args.kind, args.id)
         if not rows:
             print(f"no taste palette is attached to {args.kind} {args.id}")
@@ -1560,7 +1562,9 @@ async def cmd_taste_check(args):
     print(f"this design alone: {out / 'design'}")
     items = [taste.item_out(i) for i in doc.get("items") or []]
     product = await taste.product_of(db, "model", args.model)
-    with_specific = taste.specifics_for(doc, product)
+    # As the person set it where this palette reaches the model - on it, or on a folder it is in.
+    over = taste.overrides_for(await taste.attached_to(db, "model", args.model), "model", args.model).get(doc["_id"])
+    with_specific = taste.specifics_for(doc, product, override=over)
     keep = [i for i in items if i["layer"] != "specific" or with_specific]
     keep.sort(key=lambda i: (i["domain"] != "form", taste.DOMAINS.index(i["domain"]), taste.STRENGTHS.index(i["strength"])))
     print(f"\nTaste check - mark each pass or fail in your report (\"Taste check\" section), "

@@ -507,8 +507,9 @@ _LOADERS = {"model": _model, "board": _board, "file": _file, "note": _note, "rev
 
 
 async def attached_refs(db, refs: list[dict]) -> list[dict]:
-    """The palettes attached to the models and boards among `refs` that are
-    not mentioned themselves: {kind: taste, id, auto, via}."""
+    """The palettes that apply to the models and boards among `refs` (attached
+    to one, or to a folder it is in) that are not mentioned themselves:
+    {kind: taste, id, auto, via}."""
     from . import taste
     have = {str(r.get("id")) for r in refs if r.get("kind") == "taste"}
     out: list[dict] = []
@@ -518,7 +519,10 @@ async def attached_refs(db, refs: list[dict]) -> list[dict]:
         for p in await taste.attached_to(db, r["kind"], str(r.get("id") or "")):
             if p["_id"] not in have:
                 have.add(p["_id"])
-                out.append({"kind": "taste", "id": p["_id"], "auto": True, "via": f"{r['kind']} {r.get('id')}"})
+                via = f"{r['kind']} {r.get('id')}"
+                if p.get("via"):
+                    via = f"folder {p['via']} ({via})"
+                out.append({"kind": "taste", "id": p["_id"], "auto": True, "via": via})
     return out
 
 

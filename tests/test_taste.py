@@ -187,6 +187,102 @@ def test_a_room_agent_reads_the_palettes_of_its_notes_project():
     assert "MUST: Walls 2 mm" in text and "never do AVOID items" in text
 
 
+# ---------------------------------------------------------------- folders
+
+def _tree(fake):
+    run(fake["folders"].insert_one({"_id": "pyro", "name": "pyro", "parent": ""}))
+    run(fake["folders"].insert_one({"_id": "pyro/parts", "name": "parts", "parent": "pyro"}))
+    run(fake["models"].insert_one({"_id": "pyro/parts/body", "title": "Pyro body", "folder": "pyro/parts"}))
+    run(fake["models"].insert_one({"_id": "lamp/shade", "title": "Shade", "folder": "lamp"}))
+    run(fake["boards"].insert_one({"_id": "ignite", "title": "Igniter", "folder": "pyro/electronics"}))
+    run(fake["firmware"].insert_one({"_id": "fw1", "title": "Igniter fw", "board": "ignite"}))
+
+
+def test_a_folder_attachment_reaches_everything_under_it():
+    fake = FakeDb()
+    _tree(fake)
+    p = run(taste.create(fake, "Pyro", items=ITEMS, by={"id": "a"}))
+    doc = run(taste.attach(fake, p["_id"], [{"kind": "folder", "id": "pyro"}]))
+    assert doc["attached"] == [{"kind": "folder", "id": "pyro", "label": "pyro", "product": "pyro"}]
+    for kind, ref in (("model", "pyro/parts/body"), ("board", "ignite"), ("firmware", "fw1"), ("folder", "pyro/parts")):
+        got = run(taste.attached_to(fake, kind, ref))
+        assert [(d["_id"], d["via"]) for d in got] == [(p["_id"], "pyro")], (kind, ref)
+    assert run(taste.attached_to(fake, "model", "lamp/shade")) == []
+    assert run(taste.attached_to(fake, "folder", "pyro"))[0]["via"] is None
+    text = taste.agent_text(run(taste.attached_to(fake, "model", "pyro/parts/body")))
+    assert "via folder pyro" in text and "MUST: Walls 2 mm" in text
+    # A folder not in the workspace (nor any project in it) is not there to attach to.
+    with pytest.raises(KeyError):
+        run(taste.attach(fake, p["_id"], [{"kind": "folder", "id": "nope"}]))
+    # Computed from where the model is now: moved out, it no longer applies.
+    run(fake["models"].update_one({"_id": "pyro/parts/body"}, {"$set": {"folder": "lamp"}}))
+    assert run(taste.attached_to(fake, "model", "pyro/parts/body")) == []
+
+
+def test_the_nearest_attachment_wins_and_each_palette_comes_once():
+    fake = FakeDb()
+    _tree(fake)
+    far = run(taste.create(fake, "Far", items=ITEMS, by={"id": "a"}))
+    both = run(taste.create(fake, "Both", items=ITEMS, by={"id": "a"}))
+    own = run(taste.create(fake, "Own", items=ITEMS, by={"id": "a"}))
+    run(taste.attach(fake, far["_id"], [{"kind": "folder", "id": "pyro"}]))
+    run(taste.attach(fake, both["_id"], [{"kind": "folder", "id": "pyro", "specifics": False},
+                                         {"kind": "folder", "id": "pyro/parts", "specifics": True},
+                                         {"kind": "model", "id": "pyro/parts/body"}]))
+    run(taste.attach(fake, own["_id"], [{"kind": "model", "id": "pyro/parts/body", "specifics": False},
+                                        {"kind": "folder", "id": "pyro", "specifics": True}]))
+    got = run(taste.attached_to(fake, "model", "pyro/parts/body"))
+    assert {(d["name"], d["via"]) for d in got[:2]} == {("Both", None), ("Own", None)}
+    assert (got[2]["name"], got[2]["via"]) == ("Far", "pyro") and len(got) == 3
+    # The switch: the model's own where it says, else the nearest folder's that does.
+    assert taste.overrides_for(got, "model", "pyro/parts/body") == {both["_id"]: True, own["_id"]: False}
+    sub = run(taste.attached_to(fake, "folder", "pyro/parts"))
+    assert (sub[0]["name"], sub[0]["via"]) == ("Both", None)
+    assert {(d["name"], d["via"]) for d in sub[1:]} == {("Far", "pyro"), ("Own", "pyro")}
+
+
+def test_folder_attachments_are_the_workspaces_own(db):  # noqa: F811
+    a, b = person(db, "a"), person(db, "b")
+    a.post("/api/taste", json={"name": "tmp"})
+    ws_a = next(iter(db["taste_palettes"].docs.values()))["workspace_id"]
+    from backend import scope
+    mine = scope.ScopedDb(db, ws_a)
+    run(mine["models"].insert_one({"_id": "pyro/parts/body", "title": "Pyro body", "folder": "pyro/parts"}))
+    pid = a.post("/api/taste", json={"name": "Pyro", "items": ITEMS}).json()["id"]
+    p = a.put(f"/api/taste/{pid}/attached", json={"attached": [{"kind": "folder", "id": "pyro"}]}).json()
+    assert p["attached"][0]["kind"] == "folder" and p["attached"][0]["label"] == "pyro"
+    got = a.get("/api/taste/attached?kind=model&id=pyro/parts/body").json()
+    assert [(x["id"], x["via"]) for x in got["palettes"]] == [(pid, "pyro")] and "via folder pyro" in got["text"]
+    q = b.post("/api/taste", json={"name": "b's"}).json()["id"]
+    assert b.put(f"/api/taste/{q}/attached", json={"attached": [{"kind": "folder", "id": "pyro"}]}).status_code == 404
+    assert b.get("/api/taste/attached?kind=model&id=pyro/parts/body").json()["palettes"] == []
+    assert "pyro" in {r["id"] for r in a.get("/api/taste/projects?folders=1").json()}
+
+
+def test_a_mentioned_model_brings_its_folders_palette_along():
+    fake = FakeDb()
+    _tree(fake)
+    p = run(taste.create(fake, "Pyro", items=ITEMS, by={"id": "a"}))
+    run(taste.attach(fake, p["_id"], [{"kind": "folder", "id": "pyro"}]))
+    got = run(cc_context.attached_refs(fake, [{"kind": "model", "id": "pyro/parts/body"}]))
+    assert got == [{"kind": "taste", "id": p["_id"], "auto": True, "via": "folder pyro (model pyro/parts/body)"}]
+
+
+def test_the_project_specific_items_follow_each_items_own_line_under_a_folder():
+    fake = FakeDb()
+    _tree(fake)
+    src = {"kind": "folder", "id": "pyro", "label": "pyro"}
+    p = run(taste.create(fake, "Pyro", items=[
+        {"text": "Outer corners R6", "domain": "form", "strength": "must", "source": src},
+        {"text": "CR123 cell", "domain": "mechanical", "strength": "must", "layer": "specific", "source": src}],
+        by={"id": "a"}))
+    run(taste.attach(fake, p["_id"], [{"kind": "folder", "id": "pyro"}]))
+    rows = run(taste.attached_to(fake, "model", "pyro/parts/body"))
+    text = taste.agent_text(rows, product=run(taste.product_of(fake, "model", "pyro/parts/body")),
+                            overrides=taste.overrides_for(rows, "model", "pyro/parts/body"))
+    assert "AND the project-specific items" in text
+
+
 # ---------------------------------------------------------------- extraction
 
 SRC = {"kind": "model", "id": "case", "label": "Fan case"}
@@ -281,7 +377,7 @@ def test_extraction_through_the_api_refuses_plainly(db, monkeypatch):  # noqa: F
     assert a.post("/api/taste/extract", json={"kind": "model", "id": "nope"}).status_code == 404
     assert a.post("/api/taste/extract", json={"kind": "drawing", "id": "x"}).status_code == 422
     assert a.post("/api/taste/extract", json={"kind": "folder", "id": "nope"}).status_code == 404
-    assert a.put("/api/taste/x/attached", json={"attached": [{"kind": "folder", "id": "f"}]}).status_code == 422
+    assert a.put("/api/taste/x/attached", json={"attached": [{"kind": "drawing", "id": "f"}]}).status_code == 422
 
 
 def test_reviewed_proposals_are_saved_with_their_source(db):  # noqa: F811

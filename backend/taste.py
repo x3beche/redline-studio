@@ -55,6 +55,7 @@ JOB = "taste"
 DOMAINS = ("form", "mechanical", "pcb", "firmware", "general")
 STRENGTHS = ("must", "prefer", "avoid")
 PROJECT_KINDS = ("model", "board", "firmware")
+ATTACH_KINDS = (*PROJECT_KINDS, "folder")        # a folder: everything under it
 # Where an item holds: on what is seen, on what is not (a hidden face, the
 # inside of a case), inside the product; or a few words of its own
 # ("openings in visible walls"). Missing is "all", as every item was before.
@@ -281,14 +282,15 @@ async def reorder(db, pid: str, ids: list[str]) -> dict | None:
 
 async def attach(db, pid: str, targets: list[dict]) -> dict | None:
     """Which projects this palette goes with: every agent working on one of
-    them gets it. Checked against the workspace - only what is there. Each
+    them gets it - on a folder, on everything under it, at any depth (see
+    attached_to). Checked against the workspace - only what is there. Each
     keeps its product line (for whether the project-specific items go
     along) and, when the person set it, `specifics`: on or off for that
     project whatever its line; left out, it follows the line."""
     out, seen = [], set()
     for t in targets:
-        kind, ref = t.get("kind"), str(t.get("id") or "")
-        if kind not in PROJECT_KINDS or not ref or (kind, ref) in seen:
+        kind, ref = t.get("kind"), str(t.get("id") or "").strip("/")
+        if kind not in ATTACH_KINDS or not ref or (kind, ref) in seen:
             continue
         label = await project_label(db, kind, ref)
         if label is None:
@@ -311,6 +313,9 @@ _PROJECT_COLL = {"model": "models", "board": "boards", "firmware": "firmware"}
 
 
 async def project_label(db, kind: str, ref: str) -> str | None:
+    if kind == "folder":
+        there = await db["folders"].find_one({"_id": ref}) or any(f["id"] == ref for f in await folder_list(db))
+        return ref if there else None
     d = await db[_PROJECT_COLL[kind]].find_one({"_id": ref}, {"title": 1, "name": 1})
     if not d:
         return None
@@ -459,17 +464,61 @@ async def folder_list(db) -> list[dict]:
     return out
 
 
+async def folder_of(db, kind: str, ref: str) -> str:
+    """The folder a project is in, "" at the top: a model's own (else its
+    id's), a board's, a firmware's board's (else its own) - as the catalog
+    tree puts it, so a move changes it."""
+    if kind == "folder":
+        return ref
+    if kind == "model":
+        d = await db["models"].find_one({"_id": ref}, {"folder": 1}) or {}
+        return d["folder"] if isinstance(d.get("folder"), str) else ref.rpartition("/")[0]
+    if kind == "firmware":
+        fw = await db["firmware"].find_one({"_id": ref}, {"board": 1, "folder": 1}) or {}
+        b = await db["boards"].find_one({"_id": fw["board"]}, {"folder": 1}) if fw.get("board") else None
+        return str((b or {}).get("folder") or fw.get("folder") or "")
+    d = await db["boards"].find_one({"_id": ref}, {"folder": 1}) or {}
+    return str(d.get("folder") or "")
+
+
+def ancestors(folder: str) -> list[str]:
+    """A folder and the ones above it, nearest first: pyro/parts, pyro."""
+    parts = [p for p in (folder or "").split("/") if p]
+    return ["/".join(parts[:i]) for i in range(len(parts), 0, -1)]
+
+
 async def attached_to(db, kind: str, ref: str) -> list[dict]:
-    """The palettes attached to one project."""
-    return [d for d in await listing(db)
-            if any(a.get("kind") == kind and a.get("id") == ref for a in d.get("attached") or [])]
+    """The palettes that apply to one project: attached to it, or to a
+    folder it is in at any depth - computed each time from where it is now,
+    never copied. Each palette once, the nearest attachment first (the
+    project's own, then its folder, then the ones above); each says `via`
+    (the folder it came by, None when attached to the project itself) and
+    `switch` (the project-specific items as the person set them for the
+    nearest attachment that says, else None: by the product line)."""
+    chain = [(kind, ref)] + [("folder", f) for f in ancestors(await folder_of(db, kind, ref))
+                             if (kind, ref) != ("folder", f)]
+    got = []
+    for n, d in enumerate(await listing(db)):
+        hits = sorted(((chain.index(k), a) for a in d.get("attached") or []
+                       if (k := (a.get("kind"), a.get("id"))) in chain), key=lambda h: h[0])
+        if not hits:
+            continue
+        rank = hits[0][0]
+        switch = next((a["specifics"] for _, a in hits if isinstance(a.get("specifics"), bool)), None)
+        got.append((rank, n, {**d, "via": chain[rank][1] if rank else None, "switch": switch}))
+    return [d for _, _, d in sorted(got, key=lambda x: x[:2])]
 
 
 def overrides_for(palettes: list[dict], kind: str, ref: str) -> dict:
     """{palette id: on/off} where the person set the project-specific items
-    for this project's attachment; the rest follow the product line."""
+    for this project's attachment (or its nearest folder's that says, as
+    attached_to found it); the rest follow the product line."""
     got = {}
     for p in palettes:
+        if "switch" in p:
+            if isinstance(p["switch"], bool):
+                got[p["_id"]] = p["switch"]
+            continue
         for a in p.get("attached") or []:
             if a.get("kind") == kind and a.get("id") == ref and isinstance(a.get("specifics"), bool):
                 got[p["_id"]] = a["specifics"]
@@ -508,6 +557,8 @@ def block(doc: dict, limit: int = BLOCK_CHARS, product: str | None = None, note:
     project-specific items last. Clipped to `limit`."""
     items = [item_out(i) for i in doc.get("items") or []]
     head = f"Design taste to follow (palette \"{doc.get('name') or doc['_id']}\")"
+    if doc.get("via"):
+        head += f" - via folder {doc['via']}: attached to that folder, so it applies to everything in it"
     if doc.get("description"):
         head += f" - {doc['description']}"
     lines = [head + ":", "Priority: " + (doc.get("priority") or PRIORITY)]
@@ -1732,7 +1783,7 @@ class OrderIn(BaseModel):
 
 
 class Target(BaseModel):
-    kind: str = Field(pattern="^(model|board|firmware)$")
+    kind: str = Field(pattern="^(model|board|firmware|folder)$")
     id: str = Field(min_length=1, max_length=200)
     specifics: bool | None = None               # project-specific items for it: on, off, or by its product line
 
@@ -1772,7 +1823,8 @@ async def api_projects(q: str = "", folders: bool = False):
 
 @router.get("/attached")
 async def api_attached(kind: str, id: str):
-    """The palettes attached to one project, and the text its agent reads."""
+    """The palettes that apply to one project (attached to it or to a folder
+    it is in), and the text its agent reads."""
     if kind not in PROJECT_KINDS:
         raise HTTPException(400, "kind is model, board or firmware")
     rows = await attached_to(_db(), kind, id)
