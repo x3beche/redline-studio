@@ -88,7 +88,7 @@ def test_the_figures_are_the_pages_own(figures):
     top = page["llm"]["by_model"][0]
     assert f"Top models: {top['name']} {f.money(top['cost_usd'])}" in got.text
     assert "Cache saved: 100 TRY" in got.text and "hit ratio 90.0%" in got.text
-    assert "Open Analytics: ?ws=analyze&range=7d" in got.text
+    assert "Open Analytics: /analytics?range=7d" in got.text
     assert got.vars == {"range": "7d", "section": "overview", "project": ""}
     assert got.say == "Read Analytics: {section}, {range}"
     assert len(got.text) < chat_tools.MAX_TEXT
@@ -106,7 +106,7 @@ def test_a_project_is_its_own_and_an_unknown_one_says_which_there_are(figures):
     got = run(TOOL.run(Ctx(db=main.db()), {"project": "IOT-FAN"}))
     assert "Project iot-fan: LLM spend on its notes 400 TRY ($10.00)" in got.text
     assert "Split the lid" in got.text and "Fan curve" not in got.text
-    assert got.text.rstrip().endswith("?ws=analyze&range=7d&project=iot-fan")
+    assert got.text.rstrip().endswith("/analytics?range=7d&project=iot-fan")
     with pytest.raises(ToolError, match="no project 'gearbox'; the projects are: iot-fan"):
         run(TOOL.run(Ctx(db=main.db()), {"project": "gearbox"}))
     with pytest.raises(ToolError, match="range is one of"):

@@ -156,7 +156,7 @@ def test_a_shop_page_makes_its_maker_and_waits_for_the_products(ws):
     assert j["kind"] == "page" and j["only"] == [PAGE] and not j["follow"] and j["status"] == "done"
     assert got.say == "Added {product} to the catalog of {name}"
     assert got.vars["product"] == FILAMENT and got.vars["name"] == "robo90.com" and got.vars["run"] == j["_id"]
-    assert got.vars["link"] == f"/?ws=catalog&m={m['_id']}&run={j['_id']}"
+    assert got.vars["link"] == f"/parts/run/{j['_id']}"
     assert "A new manufacturer was made" in got.text and f"[{p['id']}] {FILAMENT}" in got.text
     assert "code R90-PLA-GRI" in got.text and "price: 449.90 TRY (as of" in got.text and "1 added" in got.text
     assert "449.90 TRY" in got.summary and "sold on robo90.com" in got.text
@@ -196,7 +196,7 @@ def test_without_waiting_it_hands_back_the_run_and_its_link(ws, monkeypatch):
         return got, busy, await mf.job(db, jid)
     got, busy, j = run(go())
     mid = makers(db)[0]["_id"]
-    assert got.say == "Reading the page into {name}" and got.vars["link"] == f"/?ws=catalog&m={mid}&run={j['_id']}"
+    assert got.say == "Reading the page into {name}" and got.vars["link"] == f"/parts/run/{j['_id']}"
     assert got.vars["link"] in got.text and "background" in got.text
     # one maker runs one at a time: the second ask is told so, with the run's link
     assert busy.say == "A run of {name} is already going" and busy.vars["run"] == j["_id"]

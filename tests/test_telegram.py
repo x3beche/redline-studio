@@ -829,7 +829,7 @@ def test_an_applied_note_goes_out_with_its_after_picture(env):
     photo = env.bot.sent("send_photo")[-1]
     assert photo["photo"] == b"\x89PNG fake" and "Note applied" in photo["caption"]
     assert "Box" in photo["caption"] and "Thicker wall" in photo["caption"]
-    assert 'href="https://redline.example.com/?model=iot/box&amp;rev=r1"' in photo["caption"]
+    assert 'href="https://redline.example.com/3d/iot/box?rev=r1"' in photo["caption"]
 
 
 def test_the_preferences_decide_who_hears(env):
@@ -848,7 +848,7 @@ def test_formatting_escapes_and_links():
     rev = {"_id": "r9", "comment": "<b>not bold</b> & more", "model": "pcb1", "kind": "pcb"}
     out = fmt.note_event(None, rev, False, "https://x.y", "Board <1>")
     assert "&lt;b&gt;not bold&lt;/b&gt; &amp; more" in out and "Board &lt;1&gt;" in out
-    assert "Note failed" in out and "https://x.y/?ws=pcb&amp;board=pcb1" in out
+    assert "Note failed" in out and "https://x.y/pcb/pcb1" in out
     assert fmt.note_event(None, rev, True, None).count("<a ") == 0        # no address, no link
     q = {"_id": "q", "text": "t", "options": ["x" * 80, "y"], "multi": False}
     assert "1. " in fmt.question_text(None, q, None, None, True)          # long options spelled out
@@ -1153,11 +1153,11 @@ def test_step_three_is_done_by_its_save_and_a_new_bot_clears_it(env):
 def test_a_question_links_to_its_rooms_thread_in_the_chat_tab():
     """The old "ask the agent" box is gone: a question's card, and the
     reply to /ask, open the room's thread pinned in the Chat tab."""
-    assert fmt.app_link("https://x.y/", thread="pcb") == "https://x.y/?ws=chat&thread=pcb"
+    assert fmt.app_link("https://x.y/", thread="pcb") == "https://x.y/chat/thread/pcb"
     q = {"_id": "q", "text": "t", "options": [], "multi": False, "room": "pcb"}
-    assert "https://x.y/?ws=chat&amp;thread=pcb" in fmt.question_text(None, q, None, "https://x.y", True)
+    assert "https://x.y/chat/thread/pcb" in fmt.question_text(None, q, None, "https://x.y", True)
     del q["room"]
-    assert "thread=cad" in fmt.question_text(None, q, None, "https://x.y", True)
+    assert "/chat/thread/cad" in fmt.question_text(None, q, None, "https://x.y", True)
 
 
 # ---------------------------------------------------------------- what was made, the server, the digest
@@ -1214,16 +1214,16 @@ def test_each_new_kind_is_announced_once_with_its_link(env):
     room = next(x for x in texts if "Board room agent replied" in x)
     assert "Routed again" in room and "Moved U3" not in room and "+1 more line" in room
     assert "x" * 400 not in room                                             # cut to ~300
-    assert "?ws=chat&amp;thread=pcb" in room
+    assert "/chat/thread/pcb" in room
     cc = next(x for x in texts if "Command Code answered" in x)
-    assert "Thermal budget" in cc and "About 2 W." in cc and "?ws=chat&amp;chat=k1" in cc
+    assert "Thermal budget" in cc and "About 2 W." in cc and "/chat/k1" in cc
     route = next(x for x in texts if "Board routed" in x)
     assert all(w in route for w in ("Controller", "TraceMaker", "all connected", "178 vias", "3 min 20 s",
-                                    "DRC 2 errors, 5 warnings", "?ws=pcb&amp;board=ctl"))
+                                    "DRC 2 errors, 5 warnings", "/pcb/ctl"))
     long_ = next(x for x in texts if "Done" in x)
     assert "iot/box" in long_ and "4 min 10 s" in long_ and "iot/lid" not in "".join(texts)
     fw = next(x for x in texts if "Firmware built" in x)
-    assert "flash 34.1%" in fw and "?ws=firmware&amp;fw=fan" in fw
+    assert "flash 34.1%" in fw and "/firmware/fan" in fw
     rel = next(x for x in texts if "Release ready" in x)
     assert "iot v1.2" in rel and "3.0 MB" in rel and "ctl: no STEP" in rel
     assert "/api/releases/rel1/download" in rel
@@ -1294,7 +1294,7 @@ def test_an_unrouted_long_layout_is_a_long_build_and_a_routed_one_a_route(env):
     assert run(notify.tick(env.db)) == 1
     drain(env.db)
     text = env.bot.sent("send_message")[-1]["text"]
-    assert "Done" in text and "layout" in text and "2 min 10 s" in text and "?ws=pcb&amp;board=psu" in text
+    assert "Done" in text and "layout" in text and "2 min 10 s" in text and "/pcb/psu" in text
 
 
 def test_the_server_health_goes_to_admins_once_per_trouble(env, monkeypatch):

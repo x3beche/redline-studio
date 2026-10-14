@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import urllib.parse
 
+from .. import app_links
 from .. import manufacturers as mf
 from . import ToolError
 from ._rights import need  # noqa: F401 - the catalog tools' too
@@ -127,9 +128,8 @@ def product(doc: dict, ref: str) -> dict:
 
 
 def link(mid: str, rid: str | None = None) -> str:
-    """Parts open at this maker (and run), as the page's own URL keeps it."""
-    q = {"ws": "catalog", "m": mid, **({"run": rid} if rid else {})}
-    return "/?" + urllib.parse.urlencode(q)
+    """Parts open at this maker (or at its reading run), as the page's own address keeps it."""
+    return app_links.parts(mid, rid)
 
 
 PRICE = re.compile(r"fiyat|price|preis|prix|prezzo|precio|tutar|ücret|ucret", re.I)

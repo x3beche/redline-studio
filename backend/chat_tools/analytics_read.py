@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from .. import insights
+from .. import app_links, insights
 from . import Ctx, Result, Tool, ToolError, clip
 from ._rights import need
 
@@ -338,7 +338,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         if projects:
             body.append("Projects: " + ", ".join(projects))
         body.append("Ask again with a section (costs, llm, tokens, runs, notes, api, budget) or a project for more.")
-    link = f"?ws=analyze&range={rng}" + (f"&project={project}" if project else "")
+    link = app_links.analytics(rng, project)
     text = "\n".join(head + [""] + body + ["", f"Open Analytics: {link}"])
 
     llm = d.get("llm") or {}

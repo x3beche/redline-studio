@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from .. import app_links as links_
 from . import core
 
 # The bot's own words. A key missing in a language falls back to English.
@@ -153,20 +154,22 @@ def app_link(base: str | None, *, model: str | None = None, kind: str | None = N
     tab, whose id is still "commandcode"), or a firmware."""
     if not base:
         return None
-    base = base.rstrip("/")
+    # The app's own address form (backend/app_links.py, frontend nav-url.ts): /chat/<id>, /pcb/<board>.
     if thread:
-        return f"{base}/?ws=chat&thread={quote(thread)}"
-    if chat:
-        return f"{base}/?ws=chat&chat={quote(chat)}"
-    if fw:
-        return f"{base}/?ws=firmware&fw={quote(fw)}"
-    if kind == "pcb" and model:
-        return f"{base}/?ws=pcb&board={quote(model)}"
-    if model:
-        return f"{base}/?model={quote(model)}" + (f"&rev={quote(rev)}" if rev else "")
-    if rev:
-        return f"{base}/?ws=notes&rev={quote(rev)}"
-    return f"{base}/" + (f"?ws={quote(ws)}" if ws else "")
+        path = links_.thread(thread)
+    elif chat:
+        path = links_.chat(chat)
+    elif fw:
+        path = links_.firmware(fw)
+    elif kind == "pcb" and model:
+        path = links_.board(model)
+    elif model:
+        path = links_.model(model, rev)
+    elif rev:
+        path = links_.revision(rev, "notes")
+    else:
+        path = links_.room(ws)
+    return links_.app_url(base, path)
 
 
 def _a(url: str | None, label: str) -> str:
