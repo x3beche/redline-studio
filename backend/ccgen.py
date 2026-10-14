@@ -400,7 +400,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
     if out.get("limit"):
         end(status="error", error="step limit reached", say=tool.failed)
         return LIMIT_NOTE, True
-    if tool.level == "delete":
+    if tool.level == "delete" or (tool.asks and tool.asks(args)):
         end(status="ask")
         until = time.monotonic() + ASK_WAIT
         while (out.get("answers") or {}).get(step["id"]) is None:
@@ -413,6 +413,8 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
             end(status="denied")
             return "Not run: the person did not allow it.", True
         end(status="running")
+    if ctx is not None:
+        ctx.step = step["id"]                                    # what it writes is kept under this step (chat_undo.py)
     t0 = time.monotonic()
     try:
         res = await asyncio.wait_for(tool.run(ctx, args), TOOL_TIMEOUT)
@@ -445,7 +447,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
 async def run(gid: str, db=None) -> dict | None:
     """The runner's work, in whatever process runs it: the model streamed,
     the answer so far written as it comes, the end put in the conversation."""
-    from . import cc_chat, cc_context, cc_tools, llm
+    from . import cc_chat, cc_context, cc_memory, cc_tools, llm
 
     db = db if db is not None else cc_chat._db()
     gens = coll(db)
@@ -491,13 +493,16 @@ async def run(gid: str, db=None) -> dict | None:
                 tools[cc_tools.MORE] = cc_tools.more_tool(on, tools, out)
         # Earlier answers' steps go back to the model with them: as tool
         # calls and results while it has tools, as a written list otherwise.
+        # The workspace's pinned memory ends the system line (backend/cc_memory.py).
+        memory = await cc_memory.block(db, "memory_write" in tools)
         base = cc_chat.history(convo, images)
+        base = [{**base[0], "content": base[0]["content"] + memory}, *base[1:]] if memory else base
         ctx = None
         if tools:
             ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
                                  actor=gen.get("actor") or {}, chat=gen.get("chat") or "")
             withcalls = cc_chat.history(convo, images, tools=set(tools))
-            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + "\n\n" + chat_tools.note(list(tools.values()))
+            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + memory + "\n\n" + chat_tools.note(list(tools.values()))
                      + cc_tools.note(picked, on)},
                     *withcalls[1:]]
         else:

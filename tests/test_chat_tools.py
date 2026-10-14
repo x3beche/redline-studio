@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from backend import cc_chat, ccgen, chat_tools, lcsc, llm
+from backend import cc_chat, cc_tools, ccgen, chat_tools, lcsc, llm
 from backend.chat_tools import Ctx, Result, Tool, ToolError
 from tests.test_cc_generation import answers, gen_doc, until
 from tests.test_cc_mentions_live_search import env, events, seed_chat  # noqa: F401 - env is a fixture
@@ -83,7 +83,7 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     r = state["rounds"]
     # Of them, the packages the line points to (a part's values: PCB), the core ones and the way to more.
     assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items()
-                                                  if t.default and (t.package == "pcb" or n == "clock")} | {"tools_more"}
+                                                  if t.default and (t.package == "pcb" or n in cc_tools.CORE)} | {"tools_more"}
     assert "drawer_search" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
     assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "datasheet_get"
     assert r[1]["messages"][-1]["role"] == "tool" and "3 pages" in r[1]["messages"][-1]["content"]
@@ -177,7 +177,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
                   "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
-                  "clock": True}
+                  "clock": True, "memory_read": True, "memory_write": True}
     assert [t["package"] for t in got["tools"]][:13] == ["general"] * 4 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
@@ -199,7 +199,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",
                                                                 "chat_list", "chat_read", "pdf_make", "web_search",
-                                                                "web_read", "mcmaster_find", "grabcad_find", "clock"}
+                                                                "web_read", "mcmaster_find", "grabcad_find", "clock",
+                                                                "memory_read", "memory_write"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))

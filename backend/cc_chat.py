@@ -71,9 +71,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, cc_context, ccgen, llm, scope
+from . import access, actors, cc_context, cc_memory, ccgen, llm, scope
 
 router = APIRouter(prefix="/api/cc")
+# The workspace's pinned memory, read and edited from the Chat (/api/cc/memory).
+for _m, _path, _fn in cc_memory.ROUTES:
+    router.add_api_route(_path, _fn, methods=[_m])
 
 COLL = "cc_chats"
 MAX_MESSAGES = 400               # in one conversation

@@ -15,6 +15,7 @@ import { CcUsageLine, pingUsage } from '../cc-usage';
 import { money as shownMoney } from '../money';
 import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
+import { CcMemoryPanel, MEMORY_ICO } from './cc-memory';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
@@ -409,7 +410,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton],
+  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -758,6 +759,9 @@ type Ask = { text: string; label: string; go: () => void };
                   {{ 'Copy conversation' | t }}</button>
                 <button (click)="exportChat()" [disabled]="!messages().length"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" />
                   {{ 'Export as Markdown' | t }}</button>
+                <!-- What every conversation here is told (rooms/cc-memory.ts). -->
+                <button (click)="memoryOpen.set(true)"><ng-container *ngTemplateOutlet="ico; context: { $implicit: MEMORY_ICO }" />
+                  {{ 'Workspace memory' | t }}</button>
                 @if (mayDelete(c)) {
                   <hr>
                   <button class="tcv-cc-danger" (click)="deleteChats([c])"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" />
@@ -773,6 +777,7 @@ type Ask = { text: string; label: string; go: () => void };
         </div>
       </header>
 
+      @if (memoryOpen()) { <rl-cc-memory (close)="memoryOpen.set(false)" /> }
       <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)" (scroll)="logScrolled()"
            [class.tcv-att-over]="att.over()" (dragover)="auth.can('draw') && att.dragOver($event)"
            (dragleave)="att.dragLeave($event)" (drop)="auth.can('draw') && att.drop($event)">
@@ -3208,6 +3213,9 @@ export class RoomCommandCode implements OnDestroy {
   toolsReady = signal(false);
   /** The tools are shown where the conversation is (cc-tools.ts) until closed or a conversation is picked. */
   toolsOpen = signal(false);
+  /** The workspace's memory panel (cc-memory.ts), from the conversation's menu. */
+  memoryOpen = signal(false);
+  readonly MEMORY_ICO = MEMORY_ICO;
   toolsOn = computed(() => this.tools().filter(x => x.on).length);
   private toolsLoaded = (() => { this.loadTools(); return true; })();
   private loadTools() {

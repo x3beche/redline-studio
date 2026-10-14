@@ -315,6 +315,24 @@ const TR: Record<string, string> = {
   'Searching…': 'Aranıyor…',
   'Nothing found.': 'Hiçbir şey bulunamadı.',
   'Tokens in': 'Giren token',
+  'Workspace memory': 'Çalışma alanı belleği', 'Remove?': 'Kaldırılsın mı?', 'edited by': 'düzenleyen',
+  'What every conversation in this workspace is told: printer settings, preferred parts, projects, conventions. Never keys or passwords.':
+    'Bu çalışma alanındaki her sohbete söylenenler: yazıcı ayarları, tercih edilen parçalar, projeler, kurallar. Asla anahtar ya da şifre değil.',
+  'Something to remember, one fact': 'Hatırlanacak bir şey, tek bir bilgi',
+  'Nothing is pinned yet. Ask the Chat to remember something, or pin it here.':
+    'Henüz sabitlenen bir şey yok. Sohbetten bir şeyi hatırlamasını isteyin ya da buraya sabitleyin.',
+  'The memory could not be saved.': 'Bellek kaydedilemedi.',
+  'Read the workspace memory': 'Çalışma alanı belleğini oku',
+  "Reads what is pinned in the workspace's memory, with who pinned each and when.":
+    'Çalışma alanı belleğinde sabitlenenleri, kimin ve ne zaman sabitlediğiyle okur.',
+  'Reading the workspace memory': 'Çalışma alanı belleği okunuyor', 'Could not read the workspace memory': 'Çalışma alanı belleği okunamadı',
+  'Read the workspace memory: empty': 'Çalışma alanı belleği okundu: boş',
+  'Read the workspace memory: {count} items': 'Çalışma alanı belleği okundu: {count} öğe',
+  'Change the workspace memory': 'Çalışma alanı belleğini değiştir',
+  "Adds to the workspace's memory, changes an item, or removes one (asking first).":
+    'Çalışma alanı belleğine ekler, bir öğeyi değiştirir ya da kaldırır (önce sorar).',
+  'Changing the workspace memory': 'Çalışma alanı belleği değiştiriliyor', 'Could not change the workspace memory': 'Çalışma alanı belleği değiştirilemedi',
+  'Changed the workspace memory: {count} changes': 'Çalışma alanı belleği değişti: {count} değişiklik',
   'Tools sent': 'Gönderilen araçlar', 'Tool packages sent with this line': 'Bu satırla gönderilen araç paketleri',
   'Web': 'Web', 'Queues': 'Kuyruklar', 'Calculators': 'Hesaplayıcılar',
   'Took more tools: {packages}': 'Daha fazla araç alındı: {packages}', 'Taking more tools': 'Daha fazla araç alınıyor',

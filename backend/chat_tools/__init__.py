@@ -75,6 +75,8 @@ class Tool:
     default: bool = True             # on for someone who never chose
     order: int = 100
     package: str = "other"           # its package (PACKAGES below): how the Tools panel and the model see it
+    # A tool below "delete" that asks first for some inputs (memory_write's removals): given the input.
+    asks: Callable[[dict], bool] | None = None
 
     def spec(self) -> dict:
         """As a model is told about it (OpenAI's shape; llm.py turns it
