@@ -166,6 +166,9 @@ app.include_router(mcmaster.router)
 # Files on any Parts product: its 3D model (measured), datasheets, drawings, pictures (backend/product_files.py).
 from . import product_files  # noqa: E402
 app.include_router(product_files.router)
+# Each project's wiki: decisions, limits, sourcing, open questions, with every version (backend/wiki.py).
+from . import wiki_api  # noqa: E402
+app.include_router(wiki_api.router)
 # A spoken chat line or note, written out by the voice job's model (backend/voice.py).
 from . import voice  # noqa: E402
 app.include_router(voice.router)

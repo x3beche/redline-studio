@@ -60,6 +60,8 @@ SCOPED = frozenset({
     "cc_changes",
     # products deleted from Parts with their stock lines and files, restorable for a while (backend/parts_trash.py)
     "parts_trash",
+    # each project's wiki: its pages and every version of them (backend/wiki.py)
+    "wiki_pages", "wiki_versions",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

@@ -1,4 +1,4 @@
-"""One search box over everything: code, notes, chats, parts, revisions.
+"""One search box over everything: code, notes, chats, parts, revisions, wiki pages.
 
 What the Ctrl+K palette asks as you type (after two characters). Each kind
 answers a handful of its best matches: a code line with its file and line
@@ -86,4 +86,10 @@ async def everything(db, q: str) -> list[dict]:
                                  {"name": 1, "model_name": 1}).limit(EACH):
         out.append({"kind": "part", "id": p["_id"], "label": f"{p['_id']} · {p.get('name') or ''}".strip(" ·"),
                     "text": p.get("model_name") or ""})
+
+    # The projects' wikis (backend/wiki.py): a page by its name or its words.
+    from . import wiki
+    for w in await wiki.search(db, q, limit=EACH):
+        out.append({"kind": "wiki", "id": w["slug"], "project": w["project"],
+                    "label": f"{w['title']} · {w['project']}", "text": w["snippet"]})
     return out

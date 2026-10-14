@@ -19,7 +19,7 @@ from urllib.parse import quote, urlencode
 ROOM_PATH = {
     "cad": "3d", "pcb": "pcb", "firmware": "firmware", "notes": "notes", "taste": "taste",
     "mfr": "parts", "commandcode": "chat", "files": "files", "tools": "basic-tools",
-    "settings": "settings", "analyze": "analytics", "notifications": "notifications",
+    "settings": "settings", "analyze": "analytics", "wiki": "wiki", "notifications": "notifications",
 }
 #: The names rooms had in old links (?ws=chat, ?ws=catalog).
 OLD_NAMES = {"chat": "commandcode", "catalog": "mfr", "supply": "mfr", "inventory": "mfr", "parts": "mfr",
@@ -102,6 +102,13 @@ def settings(section: str | None = None) -> str:
 def notifications() -> str:
     """The notification centre's own page."""
     return "/notifications"
+
+
+def wiki(project: str | None = None, page: str | None = None) -> str:
+    """A project's wiki, at one of its pages (backend/wiki.py; the room is in the top bar's More)."""
+    if not project:
+        return "/wiki"
+    return f"/wiki/{seg(project)}" + (f"/{seg(page)}" if page else "")
 
 
 def analytics(range_: str | None = None, project: str | None = None) -> str:
