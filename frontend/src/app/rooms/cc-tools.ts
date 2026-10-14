@@ -65,7 +65,7 @@ export const TOOL_ICON: Record<string, string> = {
   product_to_model: CUBE, product_files_missing: SEARCH, product_to_my_items: SHELF,
   build_count: CALC, shopping_list: CART, stock_consume: PLUSMINUS, model_render: CAMERA,
   clock: CLOCK, web_search: SEARCH, web_read: GLOBE,
-  analytics_read: CHART,
+  analytics_read: CHART, memory_read: NOTE, memory_write: PEN,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
@@ -593,13 +593,12 @@ function pkgColorAt(i: number) {
     .ctl { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 100%; min-width: 0; padding: 7px 8px 8px; text-align: left;
       font: inherit; font-size: 11px; color: var(--ink-dim); border: 0; border-radius: 0; background: none; cursor: pointer; }
     .ctl:hover, .ctl:focus-visible { background: var(--hover); outline: none; }
-    .ctl[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+    /* Open or not, the card looks the same: no colour or edge mark for the open one (the panel itself says it). */
     .ctl-head { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
     .ctl b { color: var(--ink); font-weight: 600; }
     .ctl-head em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
     svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;
       stroke-linecap: round; stroke-linejoin: round; }
-    .ctl[aria-pressed="true"] .ctl-head svg:first-child { color: var(--accent); }
     .ctl-head svg:last-child { width: 12px; height: 12px; }
     /* The two figures that matter: the week's uses, large, and how many worked. */
     .ctl-fig { display: flex; align-items: baseline; gap: 4px; width: 100%; min-width: 0; font-size: 10.5px; white-space: nowrap; }
