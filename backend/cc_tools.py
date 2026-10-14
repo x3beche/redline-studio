@@ -42,7 +42,7 @@ RECENT = 2                      # the conversation's last answers whose packages
 # A tool's package for this, where it is not its Tools panel package.
 GROUP = {
     "analytics_read": "analytics",
-    "queue_list": "queue", "queue_read": "queue", "room_note": "queue",
+    "queue_list": "queue", "queue_read": "queue", "room_note": "queue", "note_status": "queue",
     "web_search": "web", "web_read": "web", "mcmaster_find": "web", "grabcad_find": "web",
     "chat_list": "chats", "chat_read": "chats", "chat_archive": "chats", "rename_chat": "chats",
     "pdf_make": "pdf",
@@ -98,7 +98,7 @@ WORDS: dict[str, tuple[str, ...]] = {
               "bitti", "depo", "alışveriş", "eksik", "kaç kart", "kaç tane yap"),
     "pcb": ("board", "pcb", "schematic", "footprint", "lcsc", "drawer", "datasheet", "mosfet", "resistor",
             "capacitor", "diode", "transistor", "regulator", "ldo", "buck", "boost", "mcu", "esp32", "stm32",
-            "rp2040", "pinout", "rds", "volt", "current", "ohm", "ic$", "chip", "net$", "nets$", "kart",
+            "rp2040", "pinout", "rout", "placement", "freerouting", "yerleşim", "yerleştir", "rds", "volt", "current", "ohm", "ic$", "chip", "net$", "nets$", "kart",
             "devre", "şema", "çekmece", "direnç", "kondansatör", "kapasitör", "diyot", "transistör",
             "regülatör", "bacak", "voltaj", "gerilim", "akım", "entegre", "lehim", "veri sayfa"),
     # A question a datasheet answers: its limits, pins, figures (the drawer's tools come with "pcb" words).
@@ -108,7 +108,8 @@ WORDS: dict[str, tuple[str, ...]] = {
                    "voltaj", "bacak", "sınır", "dayan", "güç", "sıcaklı", "entegre", "teknik özellik"),
     "cad": ("3d", "cad", "model", "assembl", "drawing", "sketch", "extrud", "fillet", "chamfer", "enclosure",
             "case$", "lid", "bracket", "mount", "render", "stl", "mesh", "print", "çizim", "montaj", "kutu",
-            "kapak", "muhafaza", "braket", "baskı", "yazıcı", "tasarım"),
+            "kapak", "muhafaza", "braket", "baskı", "yazıcı", "tasarım", "rebuild", "technical drawing",
+            "teknik resim"),
     "firmware": ("firmware", "build", "compile", "flash", "platformio", "arduino", "code", "yazılım", "derle",
                  "gömülü", "kod"),
     "notes": ("note", "todo", "to-do", "jot", "tag", "notu", "notum", "notlar", "notun", "nota$", "notta$",
@@ -123,7 +124,8 @@ WORDS: dict[str, tuple[str, ...]] = {
     "pdf": ("pdf", "report", "datasheet summary", "export", "rapor", "döküman"),
     "analytics": ("cost", "spend", "spent", "usage", "token", "budget", "bill", "analytic", "expensive",
                   "cache", "maliyet", "harca", "kullanım", "bütçe", "fatura", "analitik", "pahalı", "ne kadar tuttu"),
-    "queue": ("queue", "agent", "task", "working on", "room note", "kuyruk", "ajan", "görev"),
+    "queue": ("queue", "agent", "task", "working on", "room note", "applied", "revision", "kuyruk", "ajan", "görev",
+              "uygulandı", "revizyon"),
     "tools": ("calculat", "compute", "formula", "convert", "hesap", "hesapla", "dönüştür", "formül"),
     "tasks": ("schedul", "every day", "every week", "every monday", "every morning", "every night", "nightly",
               "weekly report", "daily report", "recurring", "cron", "her gün", "her hafta", "her pazartesi",

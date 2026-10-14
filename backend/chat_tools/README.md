@@ -111,6 +111,43 @@ through the workspace, and the list of them when the name fits nothing).
   drawing layout read, set (the whole spec, checked by backend/drawlayout.py)
   or put back to automatic, as the layout editor's PUT does, and with
   `make` the drawing made again with it.
+- The rooms' buttons (`_drawing_job.py` is drawing_get's helper). Each starts the
+  very function the room's route starts, with that route's right (`_rights.py`):
+  - `model_build` (change, off; `cad`): the 3D room's Rebuild - main.py
+    `_start_build`, the build a process of its own (buildjobs.py); one build
+    per model (a second names the running job); `wait` up to `MAX_WAIT` (150 s)
+    for ok/failed, seconds, files made or the error's end, else the job, read
+    later with `job`. Not undoable (words on its `undo`).
+  - `drawing_get` (change, on, asks for `make_now`; `cad`): release.drawing_status
+    - made (when, sheet, scale, views, PDF size), not made, failed, no STEP -
+    with the PDF, its preview and app_links' 3D place. `make_now` is Make now
+    (Make again when made): release.model_drawing in a process of its own
+    (`python -m backend.chat_tools._drawing_job <ws> <model> [again]`; the
+    answer's runner ends with the answer), with a marker `<key>.chat` beside
+    the kept drawings so it is not started twice. What the API holds only in
+    memory (the room making one now, the drawing after a build) is not seen.
+  - `board_route` (change, off; `pcb`): `both` is the PCB room's Build (the
+    `run` job), `place`/`route` the `layout` job (KiCad places, the router
+    follows) - main.py `_as_job` detached; Freerouting only: a board set to
+    TraceMaker is refused, imported boards too; bounded `wait` and `job` as
+    model_build; done: unrouted nets, DRC/ERC errors, parts, size.
+  - `board_render` (change, on; `pcb`): model_render's contract for a board -
+    `3d` is model_render's own board picture, `top`/`bottom` the Layout tab's
+    layout.svg / bottom.svg printed by pdfdoc's Chromium and cut out with
+    pdfium; kept in Files > Chat/Renders by board, drawing date, view and size.
+  - `firmware_read` (read, on; `firmware`): firmware.tree / firmware.read
+    (`path`, else the entry points; at most 400 lines or 16k characters a
+    file, paged with `from_line`) and the last build's log (fwbuild job
+    `lines`: errors first, then the last 120).
+  - `note_status` (change, on, asks for `mark_applied`; `general`, picked as
+    `queue`): a room note's status, dates, run and the room's log over the run
+    (the card's band), its Taste check; `for` gives the newest note about a
+    model/board/firmware. `mark_applied` is the card's Mark applied (main.py
+    `set_status` through `ctx.db`, so undoable): the Taste gate holds - a
+    check running is said, one that failed is listed (`force` marks anyway),
+    none yet is started as the card's box starts it.
+  The Chat shows a row under each step (`frontend/src/app/rooms/cc-room-card.ts`),
+  and board_render's picture in model_render's row.
 - `pdf_make` (change, on; package `files`): a document the model writes in
   Markdown, printed as a PDF in Workbench's white theme (backend/pdfdoc.py:
   headless Chromium in its container, no network) and kept in Files >

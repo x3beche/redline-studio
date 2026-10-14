@@ -172,6 +172,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
                   "datasheet_get": True, "datasheet_read": True, "datasheet_search": True, "board_read": True, "model_read": True, "drawing_layout": False,
+                  "model_build": False, "drawing_get": True, "board_route": False, "board_render": True,
+                  "firmware_read": True, "note_status": True,
                   "firmware_build": True, "file_read": False, "file_save_to_my_files": True, "taste_read": False, "manufacturer_search": True,
                   "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
                   "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
@@ -191,7 +193,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "clock": True, "memory_read": True, "memory_write": True,
                   "wiki_search": True, "wiki_read": True, "wiki_write": True,
                   "task_list": True, "task_create": True, "task_run": True}
-    assert [t["package"] for t in got["tools"]][:14] == ["general"] * 5 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
+    assert [t["package"] for t in got["tools"]][:16] == ["general"] * 6 + ["cad"] * 5 + ["pcb"] * 5     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -208,6 +210,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "product_file_detach", "product_set_main", "product_to_model",
                                                                 "product_files_missing", "build_count", "shopping_list",
                                                                 "stock_consume", "model_render", "file_save_to_my_files",
+                                                                "drawing_get", "board_render", "firmware_read", "note_status",
                                                                 "inventory_search", "inventory_read", "inventory_add",
                                                                 "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",
