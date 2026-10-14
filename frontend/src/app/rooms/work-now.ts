@@ -13,6 +13,9 @@ interface WorkItem {
   secs: number | null;
   expected_secs: number | null;
   why: string | null;
+  /** What a queued rebuild waits for ("after Enclosure builds", "settling, 18s"),
+   *  or the rebuild queued behind a running build. */
+  wait?: string | null;
   job?: string;
   room?: string;
   percent?: number | null;
@@ -107,7 +110,8 @@ export class WorkNowPanel implements OnDestroy {
     if (w.kind === 'board') return `board ${w.job ?? 'job'}`;
     if (w.kind === 'firmware') return w.job === 'flash' ? 'flashing, from a browser' : 'firmware build';
     if (w.kind === 'note') return `note in ${w.room ?? '?'}${w.by ? ' · ' + w.by : ''}`;
-    return w.state === 'queued' ? 'rebuild queued' : 'building';
+    const base = w.state === 'queued' ? 'rebuild queued' : 'building';
+    return w.wait ? `${base} · ${w.wait}` : base;
   }
 
   bar(w: WorkItem): number | null {

@@ -53,15 +53,26 @@ async def now() -> dict:
             {"$or": [{"building": True}, {"link.state": {"$in": list(links.UPDATING)}}]},
             {"title": 1, "building": 1, "build_started": 1, "build_secs": 1, "link": 1}):
         link = m.get("link") or {}
-        because = link.get("because") or {}
         building = bool(m.get("building")) or link.get("state") == "building"
+        why = links.why_text(link.get("because"))
+        wait = None
+        if building and link.get("state") == "queued":
+            # Built by hand while a rebuild waits: the build's reason is not
+            # the change's.
+            why, wait = None, f"rebuild queued · {links.why_text(link.get('because'))}"
+        elif building and link.get("next"):
+            # A newer version came while it rebuilt: once more after it.
+            wait = f"then again · {links.why_text(link['next'].get('because'))}"
+        elif not building:
+            due = _dt(link.get("due"))
+            left = (due - t).total_seconds() if due else 0
+            wait = link.get("wait") or (f"settling, {round(left)}s" if left >= 1 else None)
         items.append({
             "kind": "model", "id": str(m["_id"]), "title": m.get("title") or str(m["_id"]),
             "state": "building" if building else "queued",
             "secs": _secs(m.get("build_started"), t) if building else None,
             "expected_secs": m.get("build_secs"),
-            "why": (f"{because.get('title')}" + (f" v{because['version']}" if because.get("version") else "")
-                    + " changed") if because.get("title") else None,
+            "why": why, "wait": wait,
         })
 
     # Boards: a run, convert or layout in its own process, this space's.

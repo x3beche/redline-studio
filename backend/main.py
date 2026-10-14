@@ -3042,7 +3042,7 @@ async def _link_build(d, model_id: str, job: str | None = None):
     # A job of its own (backend/buildjobs.py); `job` is one a previous API
     # process started, which a reload did not stop - waited for, not redone.
     if job is None:
-        await say(f"{model_id}: rebuilding because {why} {did}", "work")
+        await say(f"{model_id}: rebuilding because {links.why_text(b) or why + ' ' + did}", "work")
         job = (await _start_build(d, model_id, by="link", link_token=link.get("token")))["_id"]
     done = await buildjobs.wait(d.raw, job)
     if done.get("status") == "lost":

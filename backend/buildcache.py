@@ -93,14 +93,15 @@ def directory() -> Path | None:
 
 def default_parallel() -> int:
     """Link rebuilds at once when REDLINE_LINK_BUILDS does not say: one per
-    ~10 GB of memory (the build ceiling, tools/capped.sh) and per four
-    hardware threads, at most three. 32 GB and 16 threads: 3."""
+    ~10 GB of memory (the build ceiling, tools/capped.sh) and per eight
+    hardware threads, at most three. 32 GB and 16 threads: 2 - each build
+    keeps a core at full tilt, and three at once ran the machine at 90 °C."""
     try:
         mem = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
     except (ValueError, OSError, AttributeError):
         mem = 16
     cpus = os.cpu_count() or 4
-    return max(1, min(3, int(mem // 10), cpus // 4))
+    return max(1, min(3, int(mem // 10), cpus // 8))
 
 
 def _debug(msg: str) -> None:

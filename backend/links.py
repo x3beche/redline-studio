@@ -27,14 +27,24 @@ What this module keeps
 How a change travels
     A model saved with a different source, or a board whose layout gave a
     new 3D artifact, calls `changed()`. Every model that uses it, directly
-    or through another, is marked stale and queued with a due time a few
-    seconds away (a burst of saves is one rebuild). The API's `loop()`
-    takes the queue in topological order - a model is only built once
-    nothing it uses is still waiting - at most PARALLEL at once, through
-    the ordinary memory-capped build (backend/build.py). A dependent that
-    fails is marked failed with the error, and what depends on it is
-    blocked rather than built against a broken part. A cycle is never
-    built: its members are marked with the cycle.
+    or through another, is marked stale and queued with a due time DEBOUNCE
+    seconds away. A newer version of the same component pushes the rebuild
+    out again and takes the old reason's place ("Enclosure v58 changed (and
+    2 earlier)"), up to SETTLE_MAX after the first: an agent iterating on a
+    part saves v56, v57, v58 a minute or two apart, and every one of them
+    used to rebuild everything on top of it. While a component a queued
+    model uses is being built itself, the rebuild waits, and settles again
+    once that build is done. A model already rebuilding when a newer
+    version comes is let finish; the newer one waits beside it
+    (`link.next`) and is rebuilt after - only if that build did not stage
+    the newer version already (`_built_already`). The API's `loop()` takes
+    the queue in topological order - a model is only built once nothing it
+    uses is still waiting - at most PARALLEL at once, counting the builds
+    asked for directly, through the ordinary memory-capped build
+    (backend/build.py). A dependent that fails is marked failed with the
+    error, and what depends on it is blocked rather than built against a
+    broken part. A cycle is never built: its members are marked with the
+    cycle.
 """
 
 from __future__ import annotations
@@ -55,9 +65,13 @@ LOG = logging.getLogger("redline.links")
 
 BOARDS = "boards"
 VERSIONS = "component_versions"
-DEBOUNCE = float(os.environ.get("REDLINE_LINK_DEBOUNCE", "4"))
-# Rebuilds at once: REDLINE_LINK_BUILDS, else what this machine has room
-# for under the build memory ceiling (3 on 32 GB / 16 threads).
+# Seconds a change settles before what uses it rebuilds; each newer
+# version starts it again, but never past SETTLE_MAX after the first.
+DEBOUNCE = float(os.environ.get("REDLINE_LINK_DEBOUNCE", "25"))
+SETTLE_MAX = float(os.environ.get("REDLINE_LINK_SETTLE_MAX", "600"))
+# Rebuilds at once, builds asked for directly counted in: REDLINE_LINK_BUILDS,
+# else what this machine has room for (2 on 32 GB / 16 threads) - every
+# build is a CPU at full tilt, and the machine runs hot.
 PARALLEL = max(1, int(os.environ.get("REDLINE_LINK_BUILDS") or buildcache.default_parallel()))
 TICK = 2.0
 KEEP = 8                    # versions of a component kept besides pinned ones
@@ -547,6 +561,61 @@ def _later(seconds: float) -> str:
     return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
 
 
+def _due(first: str | None) -> str:
+    """When a queued rebuild may start: DEBOUNCE from now, but no later
+    than SETTLE_MAX after the change that first queued it."""
+    due = datetime.now(timezone.utc) + timedelta(seconds=DEBOUNCE)
+    try:
+        cap = datetime.fromisoformat(first) + timedelta(seconds=SETTLE_MAX) if first else due
+    except ValueError:
+        cap = due
+    return max(min(due, cap), datetime.now(timezone.utc)).isoformat()
+
+
+def _same(a: dict, b: dict) -> bool:
+    return (a.get("kind"), a.get("id")) == (b.get("kind"), b.get("id"))
+
+
+def merge_because(old: dict | None, new: dict) -> dict:
+    """The reason for a rebuild still waiting when a newer change comes: the
+    newer one, counting the versions of the same component it replaces
+    (`earlier`) and naming the other components that changed meanwhile
+    (`also`). A pin is its own reason and does not merge."""
+    old = old or {}
+    if not old or old.get("pin") or new.get("pin"):
+        return dict(new)
+    out = {k: v for k, v in new.items() if k not in ("earlier", "also")}
+    also = old.get("also") or []
+    if _same(old, new):
+        out["earlier"] = (old.get("earlier") or 0) + 1
+    else:
+        prior = next((a for a in also if _same(a, new)), None)
+        if prior:
+            out["earlier"] = (prior.get("earlier") or 0) + 1
+        also = [{k: old.get(k) for k in ("kind", "id", "title", "version", "earlier") if old.get(k)},
+                *[a for a in also if not _same(a, old)]]
+    also = [a for a in also if not _same(a, new)]
+    if also:
+        out["also"] = also[:4]
+    return out
+
+
+def why_text(b: dict | None) -> str | None:
+    """A rebuild's reason in words: "Enclosure v58 changed (and 2 earlier)"."""
+    b = b or {}
+    if not (b.get("title") or b.get("id")):
+        return None
+    did = {"pinned": "was pinned", "follow": "is followed again"}.get(b.get("pin"), "changed")
+    out = f"{b.get('title') or b.get('id')}" + (f" v{b['version']}" if b.get("version") else "") + f" {did}"
+    if b.get("earlier"):
+        out += f" (and {b['earlier']} earlier)"
+    also = b.get("also") or []
+    if also:
+        out += "; also " + ", ".join(f"{a.get('title') or a.get('id')}"
+                                     + (f" v{a['version']}" if a.get("version") else "") for a in also)
+    return out
+
+
 async def changed(db, kind: str, cid: str, version: int | None = None,
                   g: Graph | None = None, because: dict | None = None,
                   include_self: bool = False) -> dict:
@@ -563,20 +632,45 @@ async def changed(db, kind: str, cid: str, version: int | None = None,
     in_cycle = {m for c in cycles for m in c}
     because = because or {"kind": kind, "id": cid, "title": info.get("title") or cid,
                           "version": version if version is not None else info.get("version")}
-    at, due = store.now(), _later(DEBOUNCE)
+    at = store.now()
+    ids = [split(d)[1] for d in deps if split(d)[0] == "model"]
+    prevs = {str(m["_id"]): m.get("link") or {} async for m in db.models.find(
+        {"_id": {"$in": ids}}, {"link": 1})} if ids else {}
     queued = []
     for d in deps:
         dk, did = split(d)
         if dk != "model":
             continue
         token = hashlib.sha256(f"{d}{at}".encode()).hexdigest()[:12]
+        prev = prevs.get(did) or {}
         if d in in_cycle:
             cyc = next(c for c in cycles if d in c)
             link = {"state": "cycle", "because": because, "at": at, "token": token,
                     "cycle": [split(x)[1] for x in cyc],
                     "error": "import cycle: " + " -> ".join(split(x)[1] for x in cyc + cyc[:1])}
         else:
-            link = {"state": "queued", "because": because, "at": at, "due": due, "token": token}
+            if prev.get("state") == "building":
+                # Let it finish: what it staged may be this version already
+                # (then nothing more is built), else it is rebuilt once more
+                # after - however many versions come meanwhile.
+                nxt = prev.get("next") or {}
+                first = nxt.get("first") or at
+                later = {"because": merge_because(nxt.get("because"), because), "at": at,
+                         "first": first, "due": _due(first), "token": token}
+                got = await db.models.update_one(
+                    {"_id": did, "link.state": "building", "link.token": prev.get("token")},
+                    {"$set": {"stale": True, "link.next": later}})
+                if got.modified_count:
+                    queued.append(did)
+                    continue
+                prev = {}                       # it finished meanwhile: queued afresh
+            if prev.get("state") == "queued":
+                first = prev.get("first") or prev.get("at") or at
+                why = merge_because(prev.get("because"), because)
+            else:
+                first, why = at, because
+            link = {"state": "queued", "because": why, "at": at, "first": first,
+                    "due": _due(first), "token": token}
             queued.append(did)
         await db.models.update_one({"_id": did}, {"$set": {"stale": True, "link": link}})
     return {"queued": queued, "cycles": [[split(x)[1] for x in c] for c in cycles]}
@@ -749,8 +843,11 @@ async def recover(db, lookup=None, adopt: list | None = None) -> int:
         if job and adopt is not None:
             adopt.append((str(m["_id"]), token, job["_id"]))
             continue
+        nxt = (m.get("link") or {}).get("next")
+        # A newer change that was waiting behind it is the reason now.
         await db.models.update_one({"_id": m["_id"]}, {"$set": {
-            "link.state": "queued", "link.due": store.now(), "building": False}})
+            "link": {**nxt, "state": "queued", "due": store.now()}, "building": False}}
+            if nxt else {"$set": {"link.state": "queued", "link.due": store.now(), "building": False}})
         n += 1
     return n
 
@@ -773,6 +870,10 @@ class Scheduler:
         now = store.now()
         busy = {mid for (w, mid) in self.running if w == ws}
         waiting = {key("model", m) for m in queued} | {key("model", m) for m in busy}
+        # Models being built right now, however asked for: what uses them
+        # waits for that build and settles after it.
+        building = {key("model", str(m["_id"])) async for m in db.models.find(
+            {"building": True}, {"_id": 1})}
         order, stuck = g.order([key("model", m) for m in queued])
         started = []
         for k in stuck:                        # a cycle among the queued
@@ -781,15 +882,33 @@ class Scheduler:
             await db.models.update_one({"_id": mid, "link.state": "queued"}, {"$set": {
                 "link.state": "cycle", "link.cycle": [split(x)[1] for x in cyc],
                 "link.error": "import cycle: " + " -> ".join(split(x)[1] for x in cyc + cyc[:1])}})
+        others = None
         for k in order:
-            if len(self.running) >= self.parallel:
-                break
             mid = split(k)[1]
             link = queued[mid].get("link") or {}
-            if (link.get("due") or "") > now or mid in busy:
+            if mid in busy:
                 continue
-            if any(u in waiting for u in g.upstream(k)):
-                continue                       # something it uses is not built yet
+            ups = g.upstream(k)
+            src = next((u for u in ups if u in building and u not in waiting), None)
+            if src:
+                # A component it uses is being built itself (an agent saving
+                # and building v57 after v56): wait, and settle once it is done.
+                title = (g.nodes.get(src) or {}).get("title") or split(src)[1]
+                soon, settle = _later(DEBOUNCE / 2), _due(link.get("first"))
+                await self._wait(db, mid, link, f"after {title} builds",
+                                 due=settle if (link.get("due") or "") < soon <= settle else None)
+                continue
+            if (link.get("due") or "") > now:
+                if link.get("wait"):           # settling now, nothing else to wait for
+                    await db.models.update_one({"_id": mid, "link.state": "queued",
+                                                "link.token": link.get("token")},
+                                               {"$unset": {"link.wait": ""}})
+                continue
+            up = next((u for u in ups if u in waiting), None)
+            if up:
+                # Something it uses is not built yet.
+                await self._wait(db, mid, link, f"after {(g.nodes.get(up) or {}).get('title') or split(up)[1]}")
+                continue
             if self._built_already(queued[mid], g, k):
                 # A build since - asked for directly, or the rebuild that was
                 # running when this was queued - already used exactly these
@@ -797,11 +916,17 @@ class Scheduler:
                 await db.models.update_one(
                     {"_id": mid, "link.state": "queued", "link.token": link.get("token")},
                     {"$set": {"link.state": "done", "link.done_at": now,
-                              "link.coalesced": True}, "$unset": {"link.error": ""}})
+                              "link.coalesced": True}, "$unset": {"link.error": "", "link.wait": ""}})
+                continue
+            if others is None:
+                others = await self._others(db)
+            if len(self.running) + others >= self.parallel:
+                await self._wait(db, mid, link, f"{len(self.running) + others} builds running"
+                                 if len(self.running) + others != 1 else "1 build running")
                 continue
             claim = await db.models.update_one(
                 {"_id": mid, "link.state": "queued", "link.token": link.get("token")},
-                {"$set": {"link.state": "building", "link.started": now}})
+                {"$set": {"link.state": "building", "link.started": now}, "$unset": {"link.wait": ""}})
             if not claim.modified_count:
                 continue
             task = asyncio.create_task(self._rebuild(db, mid, link.get("token"), g))
@@ -809,6 +934,32 @@ class Scheduler:
             task.add_done_callback(lambda _t, w=ws, m=mid: self.running.pop((w, m), None))
             started.append(mid)
         return started
+
+    @staticmethod
+    async def _wait(db, mid: str, link: dict, why: str, due: str | None = None) -> None:
+        """Say what a queued rebuild is waiting for (the Working now panel),
+        written only when it changes."""
+        if link.get("wait") == why and due is None:
+            return
+        patch = {"link.wait": why, **({"link.due": due} if due else {})}
+        await db.models.update_one({"_id": mid, "link.state": "queued",
+                                    "link.token": link.get("token")}, {"$set": patch})
+        link["wait"] = why
+
+    @staticmethod
+    async def _others(db) -> int:
+        """Builds running on this machine that this scheduler did not start
+        (asked for directly, any workspace): they count against PARALLEL."""
+        raw = getattr(db, "raw", None)
+        if raw is None:
+            return 0
+        from . import buildjobs, jobs
+        try:
+            return len([j async for j in raw[buildjobs.JOBS].find(
+                {"status": "running", "by": {"$ne": "link"}}, {"status": 1, "beat": 1, "started_at": 1})
+                if jobs.alive(j)])
+        except Exception:                      # noqa: BLE001 - not counted, not stopped
+            return 0
 
     @staticmethod
     def _built_already(doc: dict, g: Graph, k: str) -> bool:
@@ -832,9 +983,12 @@ class Scheduler:
             if getattr(exc, "later", False):
                 # Being built already (somebody asked for it directly): queued
                 # again behind it, and coalesced if that build made the same.
-                await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
-                    "link.state": "queued", "link.due": _later(max(DEBOUNCE, 5))}})
+                if not await self._next(db, mid, token, due=_later(max(DEBOUNCE, 5))):
+                    await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
+                        "link.state": "queued", "link.due": _later(max(DEBOUNCE, 5))}})
                 return
+            if await self._next(db, mid, token):
+                return                         # a newer version may well build: tried next
             msg = f"{type(exc).__name__}: {exc}" if not str(exc) else str(exc)
             await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
                 "link.state": "failed", "link.error": msg[-4600:], "link.done_at": store.now()}})
@@ -845,8 +999,27 @@ class Scheduler:
                     {"$set": {"link.state": "blocked",
                               "link.error": f"{mid} failed to build after this change"}})
             return
-        await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
-            "link.state": "done", "link.done_at": store.now()}, "$unset": {"link.error": ""}})
+        got = await db.models.update_one(
+            {"_id": mid, "link.token": token, "link.next": {"$exists": False}},
+            {"$set": {"link.state": "done", "link.done_at": store.now()}, "$unset": {"link.error": ""}})
+        if not got.modified_count:
+            await self._next(db, mid, token)
+
+    @staticmethod
+    async def _next(db, mid: str, token: str | None, due: str | None = None) -> bool:
+        """A newer change came while this rebuild ran (`link.next`): it is
+        the queued rebuild now. False when there was none."""
+        for _ in range(5):
+            doc = await db.models.find_one({"_id": mid, "link.token": token}, {"link": 1})
+            nxt = ((doc or {}).get("link") or {}).get("next")
+            if not nxt:
+                return False
+            got = await db.models.update_one(
+                {"_id": mid, "link.token": token, "link.next.token": nxt.get("token")},
+                {"$set": {"link": {**nxt, "state": "queued", **({"due": due} if due else {})}}})
+            if got.modified_count:
+                return True
+        return False
 
     async def idle(self) -> None:
         """Until nothing this scheduler started is running (tests)."""
