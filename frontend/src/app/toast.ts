@@ -93,6 +93,14 @@ export class Toast {
     <div class="toast-item" [attr.data-tone]="it.tone" [attr.role]="it.tone === 'danger' ? 'alert' : 'status'"
          [attr.aria-live]="it.tone === 'danger' ? 'assertive' : 'polite'" aria-atomic="true"
          animate.leave="tcv-leave" (keydown.escape)="$event.stopPropagation(); dismiss(it.id)">
+      <svg class="toast-ico" viewBox="0 0 24 24" aria-hidden="true">
+        @switch (it.tone) {
+          @case ('ok') { <circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/> }
+          @case ('warn') { <path d="M12 3.8L21.2 20H2.8z"/><path d="M12 10v4.2M12 17.2v.1"/> }
+          @case ('danger') { <circle cx="12" cy="12" r="9"/><path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/> }
+          @default { <circle cx="12" cy="12" r="9"/><path d="M12 11v5.2M12 7.8v.1"/> }
+        }
+      </svg>
       <span class="toast-text">{{ it.text }}</span>
       @if (it.action; as a) {
         <button type="button" class="toast-act" (click)="act(it)">{{ a.label }}</button>
@@ -107,13 +115,17 @@ export class Toast {
 .toast-stack { position: fixed; right: 16px; bottom: 16px; z-index: 10050; display: flex; flex-direction: column;
   align-items: flex-end; gap: 8px; width: min(380px, calc(100vw - 32px)); pointer-events: none; }
 .toast-item { position: relative; display: flex; align-items: center; gap: 10px; max-width: 100%; box-sizing: border-box;
-  min-height: 40px; padding: 8px 6px 8px 12px; overflow: hidden; pointer-events: auto;
+  min-height: 40px; padding: 8px 6px 8px 10px; overflow: hidden; pointer-events: auto;
   font-size: 12.5px; line-height: 1.4; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px;
+  border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 8px 24px var(--shadow-hard); }
-.toast-item[data-tone="ok"] { border-left-color: var(--ok); }
-.toast-item[data-tone="warn"] { border-left-color: var(--warn); }
-.toast-item[data-tone="danger"] { border-left-color: var(--danger); }
+/* The tone is said by a small mark before the text, in its colour - the box itself stays plain. */
+.toast-ico { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--ink-dim); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }
+.toast-item[data-tone="ok"] .toast-ico { stroke: var(--ok); }
+.toast-item[data-tone="warn"] .toast-ico { stroke: var(--warn); }
+.toast-item[data-tone="danger"] .toast-ico { stroke: var(--danger); }
+.toast-item[data-tone="danger"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 .toast-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .toast-act { flex: none; height: 26px; padding: 0 10px; font: inherit; font-weight: 600; color: var(--accent);
   background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
@@ -124,7 +136,7 @@ export class Toast {
 .toast-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .toast-act:focus-visible, .toast-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* the time an action is left open, running out */
-.toast-bar { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: var(--accent);
+.toast-bar { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: var(--ink-dim); opacity: .45;
   transform-origin: left; animation: toast-shrink linear forwards; }
 .toast-stack:hover .toast-bar, .toast-stack:focus-within .toast-bar { animation-play-state: paused; }
 @keyframes toast-shrink { to { transform: scaleX(0); } }
