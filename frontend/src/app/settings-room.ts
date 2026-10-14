@@ -18,6 +18,7 @@ import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
 import { AdminOverview } from './admin-overview';
 import { RustdeskSettings } from './rustdesk-settings';
+import { BackupsSettings } from './backups-settings';
 import { Prefs, PrefsTab } from './preferences';
 
 /** The Settings tab (Prefs, preferences.ts, is what the rest of the app
@@ -62,7 +63,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings, SwitchPreview],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -94,14 +95,14 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
           @if (x.id === 'profile') {
             <span>{{ 'only you can change these' | t }}</span>
           } @else if (x.id === 'admin') {
             <span>{{ (auth.state()?.role === 'owner' ? 'owner: everything here' : 'admin: manages user accounts') | t }}</span>
-          } @else if (x.id === 'rustdesk' || x.id === 'dashboard') {
+          } @else if (x.id === 'rustdesk' || x.id === 'dashboard' || x.id === 'backups') {
             <span>{{ 'only the owner and the admins see this' | t }}</span>
           } @else if (server(x.id)) {
             <span class="st-badge" [attr.data-tone]="mayEdit(x.id) ? 'ok' : 'warn'">{{ (mayEdit(x.id) ? 'you can change these' : 'read-only for you') | t }}</span>
@@ -243,6 +244,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('dashboard') { @if (auth.admin()) { @defer { <app-admin-overview /> } } }
         @case ('admin') { @if (auth.admin()) { @defer { <app-admin-users /> } } }
         @case ('rustdesk') { @if (auth.admin()) { @defer { <app-rustdesk-settings /> } } }
+        @case ('backups') { @if (auth.admin()) { @defer { <app-backups-settings /> } } }
         @case ('topbar') { @defer { <app-topbar-settings /> } }
         @case ('shortcuts') {
           <div class="st-page">
@@ -335,6 +337,8 @@ export class RoomSettings {
         blurb: 'The accounts on this server: add people, change roles, reset passwords, disable or delete.' },
       { id: 'rustdesk', label: 'RustDesk', about: 'the remote desktop, over Tailscale', ico: 'M3 4h18v12H3zM8 20h8M12 16v4',
         blurb: 'The remote desktop on the server: on or off, and its Tailscale address and password.' },
+      { id: 'backups', label: 'Backups', about: 'nightly database dumps, restore checks', ico: 'M4 5c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zM4 5v6c0 1.1 3.6 2 8 2s8-.9 8-2V5M4 11v6c0 1.1 3.6 2 8 2 1 0 1.9 0 2.8-.1M20 11v3M17 19l2 2 4-4',
+        blurb: 'The nightly dumps of the database: the archives, the restore checks, the disk, and the secret key that is kept apart.' },
     ] },
   ];
   /** The admin panel is listed only for the owner and the admins. */

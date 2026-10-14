@@ -11,7 +11,7 @@ import { ModelSwitch, currentSwitch, setSwitch } from './editor/switch-pref';
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page). The owner
  *  and the admins also get the admin panel: the accounts (admin-users.ts).
  */
-export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'dashboard' | 'admin' | 'rustdesk';
+export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'dashboard' | 'admin' | 'rustdesk' | 'backups';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {

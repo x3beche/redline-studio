@@ -121,6 +121,9 @@ app.include_router(admin_api.router)
 # RustDesk, the remote desktop over Tailscale: on and off from the admin panel.
 from . import rustdesk as rustdesk_api  # noqa: E402
 app.include_router(rustdesk_api.router)
+# The nightly MongoDB backups, their restore checks and the secret key (backend/backups.py).
+from . import backups as backups_api  # noqa: E402
+app.include_router(backups_api.router)
 # Accounts remembered on a browser, and switching between them.
 from . import accounts as accounts_api  # noqa: E402
 app.include_router(accounts_api.router)
