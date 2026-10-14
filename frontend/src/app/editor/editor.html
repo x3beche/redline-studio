@@ -1367,3 +1367,6 @@
 @if (changesOf(); as r) {
   <app-changes animate.leave="tcv-leave" [rid]="r.id" [title]="r.summary || r.comment" (closed)="changesOf.set(null)" />
 }
+
+<!-- The Taste check before a note is marked applied (taste-gate.ts). -->
+<wb-taste-gate />

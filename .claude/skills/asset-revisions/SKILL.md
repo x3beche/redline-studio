@@ -197,6 +197,11 @@ The card keeps this picture as the revision's "after", beside the drawing:
 
 Only once the work is genuinely finished. When unsure, ask the user.
 
+When a Taste palette applies to the note's project, `done` runs the Taste
+check first (the server renders the model and a model compares it with the
+palettes, a minute or more) and marks it only when no item fails;
+`done <id> --force` marks it anyway, when the person asked for it this way.
+
 `done` archives it too when auto-archive is on, and `finish` closes the run,
 takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own

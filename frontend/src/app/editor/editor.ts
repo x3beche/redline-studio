@@ -5,6 +5,7 @@ import {
 import { Toast } from '../toast';
 import { money } from '../money';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 const SEED = `"""__NAME__ - a build123d model."""
 
 from build123d import *
@@ -30,6 +31,7 @@ import { LinksCard, PinIcon } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { DrawingStatus, ModelFacts, ModelHealth } from './model-health';
 import { DrawingLayout } from './drawing-layout';
+import { TasteGate, TasteGateHost } from './taste-gate';
 import { LogPanel } from '../rooms/log-panel';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
@@ -57,7 +59,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, DrawingLayout, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, DecimalPipe, DrawingLayout, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, TasteGateHost, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -2386,7 +2388,17 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   mark(r: Revision, status: RevisionStatus) {
-    this.api.setStatus(r.id, status).subscribe(() => { this.refresh(); this.pollHealth(); });
+    this.api.setStatus(r.id, status).subscribe({
+      next: () => { this.refresh(); this.pollHealth(); },
+      // Applied only past the Taste check when palettes apply to its
+      // project (backend/taste_check.py): the check runs in its box, which
+      // marks it when it passes or when the person marks it anyway.
+      error: (e: HttpErrorResponse) => {
+        if (status === 'applied' && e.status === 409 && e.error?.detail?.taste) {
+          TasteGate.ask(r).then(marked => { if (marked) { this.refresh(); this.pollHealth(); } });
+        } else this.flash(typeof e.error?.detail === 'string' ? e.error.detail : 'could not change it - failed');
+      },
+    });
   }
 
   /** One button, three-state cycle: draft -> queued -> applied -> draft,

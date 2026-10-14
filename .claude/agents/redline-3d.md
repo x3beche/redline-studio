@@ -127,5 +127,8 @@ beside it (`<view>-compare.png`), then lists the items to mark. Open the
 compare pictures, go through the items - form items first - fix what does
 not match and run it again. Your report ends with a **Taste check**
 section: each item that applies, pass or fail (one line each, what you
-saw), and the before/after compare pictures' paths.
+saw), and the before/after compare pictures' paths. The main agent's
+`done <id>` checks it again (the server renders the model and a model
+compares it with the palettes) and does not mark the note applied while
+an item fails - so fix what fails here, not later.
 

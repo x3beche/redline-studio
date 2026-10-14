@@ -1456,14 +1456,8 @@ async def cmd_show(args):
 
 def _note_projects(doc: dict) -> list[tuple[str, str]]:
     """The projects a queued note is about, as (kind, id), for its taste."""
-    if doc.get("kind") == "firmware":
-        return [("firmware", doc["model"])] if doc.get("model") else []
-    out = []
-    if doc.get("board"):
-        out.append(("board", doc["board"]))
-    if doc.get("model"):
-        out.append(("board" if doc.get("kind") == "pcb" and not doc.get("board") else "model", doc["model"]))
-    return out
+    from backend import taste_check
+    return taste_check.note_projects(doc)
 
 
 async def _print_taste(db, targets: list[tuple[str, str]], note: str = "") -> None:
@@ -1718,16 +1712,99 @@ async def cmd_next(args):
     await cmd_show(argparse.Namespace(id=d["_id"], out=args.out))
 
 
+def _taste_check_by_api(rid: str, limit: int = 900) -> dict:
+    """The Taste check of a note, by the server (backend/taste_check.py:
+    it renders the model and asks a model that reads images): started,
+    then followed until it is done. Its job, as GET returns it."""
+    import json as _json
+    import time as _t
+    import urllib.error
+    import urllib.request
+
+    from backend import actors
+
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
+    where = f"/api/revisions/{rid}/taste-check"
+
+    def call(method: str) -> dict | None:
+        req = urllib.request.Request(base + where, method=method, data=b"{}" if method == "POST" else None,
+                                     headers={"content-type": "application/json", **actors.header_for_agent(),
+                                              **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"}
+                                                 if os.environ.get("REDLINE_TOKEN") else {})})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return _json.loads(r.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code in (502, 503, 504):
+                return None
+            sys.exit(f"{method} {where}: {exc.code} {exc.read().decode(errors='replace')[:600]}")
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            if method == "POST":
+                sys.exit(f"the Taste check needs the server, which is not answering at {base} ({exc}) - "
+                         "start.sh; the note is not marked applied")
+            return None                     # the API reloading: the check is settled when read again
+
+    got = call("POST")
+    print(f"taste check: {', '.join(p.get('name') or p['id'] for p in got.get('palettes') or [])} "
+          f"- rendering the model and asking a model to compare (a minute or more) ...", flush=True)
+    said, t0 = None, _t.monotonic()
+    while got is None or got.get("status") in ("queued", "rendering", "asking"):
+        if _t.monotonic() - t0 > limit:
+            sys.exit(f"the Taste check is still running after {limit} s - {where}")
+        if got and got.get("status") != said:
+            said = got["status"]
+            print(f"  {said} ...", flush=True)
+        _t.sleep(3)
+        got = call("GET")
+    return got
+
+
+def _print_check(got: dict) -> str:
+    """The check's outcome for an agent; its verdict: pass, fail, unchecked or failed."""
+    if got.get("status") != "done":
+        print(f"the Taste check {got.get('status')}: {got.get('error') or '?'}")
+        return "failed"
+    r = got.get("result") or {}
+    mark = {"pass": "pass", "fail": "FAIL", "unclear": "unclear", "unchecked": "not checked"}
+    for i in r.get("items") or []:
+        print(f"  [{mark.get(i.get('verdict'), i.get('verdict'))}] {i['strength'].upper()}: {i['text']}"
+              + (f" - {i['why']}" if i.get("why") else "") + f"  ({i.get('palette_name')})")
+    if r.get("notice"):
+        print(f"  note: {r['notice']}")
+    if r.get("model"):
+        print(f"  judged by {r['model']} from renders of the design beside the palettes' references")
+    print(f"verdict: {r.get('verdict')}")
+    return r.get("verdict") or "failed"
+
+
 async def cmd_done(args):
     # Through store.set_status, not a raw update: that is where auto-archive
     # lives, and a raw write left every task closed here sitting in the list.
-    from backend import store
+    # And past the Taste check when palettes apply to the note's project
+    # (backend/taste_check.py), as the page's "mark applied" is.
+    from backend import actors, store, taste_check
 
     db = connect()
+    doc = await db.revisions.find_one({"_id": args.id})
+    if not doc:
+        sys.exit(f"{args.id} not found")
+    palettes, _, _ = await taste_check.applying(db, doc)
+    force = bool(getattr(args, "force", False))
+    if palettes and not force:
+        verdict = _print_check(_taste_check_by_api(args.id))
+        if verdict != "pass":
+            sys.exit(f"\n{args.id} is NOT marked applied: the Taste check "
+                     + ("found items the design does not follow" if verdict == "fail" else
+                        "could not check it" if verdict in ("unchecked", "failed") else f"said {verdict}")
+                     + ". Fix what fails and run `done` again; or, when the person asked for it this way "
+                       "(or the items cannot apply), `done " + args.id + " --force` and say why in the report.")
     patch = await store.set_status(db, args.id, "applied")
     if patch is None:
         sys.exit(f"{args.id} not found")
-    print(f"{args.id} -> applied" + ("  (archived)" if patch.get("archived") else ""))
+    if palettes:
+        await taste_check.decided(db, args.id, force, by=actors.agent())
+    print(f"{args.id} -> applied" + ("  (archived)" if patch.get("archived") else "")
+          + ("  (past the Taste check by --force)" if palettes and force else ""))
 
 
 async def cmd_start(args):
@@ -2714,7 +2791,12 @@ def main() -> None:
     s.add_argument("--wait", action="store_true", help="build: wait for it and print the errors, warnings, "
                                                       "flash and RAM (default: off - start it and return)")
     s.set_defaults(fn=cmd_fw, sync=True)
-    s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)
+    s = sub.add_parser("done", help="mark a note applied - past the Taste check when palettes apply to its "
+                                    "project (backend/taste_check.py)")
+    s.add_argument("id")
+    s.add_argument("--force", action="store_true",
+                   help="mark it applied even though the Taste check fails or cannot check it")
+    s.set_defaults(fn=cmd_done)
     s = sub.add_parser("start"); s.add_argument("id")
     s.add_argument("title", nargs="?", default="",
                    help="what you are doing (optional with --take-over)")

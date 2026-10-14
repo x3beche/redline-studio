@@ -136,6 +136,9 @@ app.include_router(chat_ideas_api.router)
 # Taste palettes: design taste the agents follow, extracted or written (backend/taste.py).
 from . import taste as taste_api  # noqa: E402
 app.include_router(taste_api.router)
+# The Taste check before a note is marked applied (backend/taste_check.py).
+from . import taste_check  # noqa: E402
+app.include_router(taste_check.router)
 # Manufacturers: makers' catalogs, explored from their sites (backend/manufacturers.py).
 from . import manufacturers as manufacturers_api  # noqa: E402
 app.include_router(manufacturers_api.router)
@@ -3594,10 +3597,19 @@ async def archive_revision(rid: str, value: bool = True):
 
 
 @app.patch("/api/revisions/{rid}")
-async def set_status(rid: str, status: str):
+async def set_status(rid: str, status: str, force: bool = False):
     if status not in STATUSES:
         raise HTTPException(400, "status: " + " | ".join(STATUSES))
+    # Applied only past the Taste check when palettes apply to its project
+    # (backend/taste_check.py): its latest check passed, or force - marked
+    # anyway, after the person saw what failed.
+    if status == "applied" and not force:
+        held = await taste_check.gate(db(), rid)
+        if held:
+            raise HTTPException(409, {"taste": held})
     patch = await store.set_status(db(), rid, status)
+    if patch is not None and status == "applied":
+        await taste_check.decided(db(), rid, force)
     if patch is None:
         raise HTTPException(404, rid)
     await db().revisions.update_one({"_id": rid}, {"$set": {"status_by": actors.current()}})

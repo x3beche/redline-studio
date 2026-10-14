@@ -54,7 +54,9 @@ does not apply notes itself. It keeps the queue moving:
    and the build on the card, and check it does what the note asked. If it
    does - and, when its project has a taste palette, its report has the
    "Taste check" section (Taste palettes, below) - mark it applied yourself - `revisions.py done <id>` (archived too
-   when auto-archive is on). If it does not, send it back to the room's
+   when auto-archive is on). When a palette applies, `done` runs the Taste
+   check first (below) and marks the note only when it passes. If it does
+   not do what the note asked, send it back to the room's
    agent with what is missing, or leave it in review and say why in the
    thread. A failed run (`finish --failed`) is never marked applied. Then
    say what happened in the thread in a line, and start `wait` again.
@@ -736,6 +738,20 @@ reference beside it; compare item by item (form first), fix what does not
 match, and end the report with a "Taste check" section - pass or fail per
 item, with the before/after pictures.
 
+**Marking applied runs the check again, by the server.** `revisions.py done
+<id>` on a note whose project has a palette (on it, or on a folder it is
+in) renders the model, shows the renders and the palettes' references to a
+model that reads images, and prints each item that is about the shape
+(form, mechanical, general) pass, FAIL or unclear - a minute or more. Only
+a pass marks it applied; on a FAIL the note stays where it is and `done`
+exits non-zero: fix it and run `done` again, or send it back to the room's
+agent. A board or firmware note has no picture to check: its items come
+back unchecked and the note is not marked either. `done <id> --force`
+marks it anyway - only when the person asked for it this way or the items
+cannot apply to this work, and say so in the thread; the note keeps that it
+was forced (`taste_check` on the note). The page's "mark applied" runs the
+same check and lets the person mark it anyway.
+
 ## Files people upload
 
 The **Files** tab is where a person drops what the work needs and the app
@@ -827,7 +843,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py save <model> <file>  # update source
 .venv/bin/python tools/revisions.py build <model>        # rebuild (minutes)
 .venv/bin/python tools/revisions.py stop <model>         # end one early
-.venv/bin/python tools/revisions.py done <id>            # mark as applied
+.venv/bin/python tools/revisions.py done <id> [--force]  # mark as applied (past the Taste check)
 .venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py after <id> --model <new>  # ...on the model the work went into

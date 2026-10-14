@@ -111,6 +111,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("PUT", "/api/revisions/{}", "draw"),
     ("PATCH", "/api/revisions/{}", "status"),          # see action(): by the status asked for
     ("PATCH", "/api/revisions/{}/archive", "edit"),
+    # the Taste check before a note is marked applied (backend/taste_check.py):
+    # what marking it applied takes - it renders and asks a model
+    ("POST", "/api/revisions/{}/taste-check", "run"),
     ("PUT", "/api/revisions/{}/image/after", "run"),
     # finishing a firmware note's work: its diff, build and picture on the card
     ("POST", "/api/revisions/{}/firmware-result", "run"),

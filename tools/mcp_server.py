@@ -83,8 +83,14 @@ TOOLS: dict[str, tuple] = {
         ["id"], lambda a: ["finish", a["id"]] + (["--failed"] if a.get("failed") else [])
         + (["--model", a["model"]] if a.get("model") else [])),
     "done": (
-        "Mark a note applied.",
-        {"id": _s("revision id")}, ["id"], lambda a: ["done", a["id"]]),
+        "Mark a note applied. When Taste palettes apply to its project, the Taste check runs "
+        "first (the model rendered and compared with the palettes by a model, a minute or more) "
+        "and prints each item pass or FAIL; a failing or unchecked note is not marked. force "
+        "marks it anyway - only when the person asked for it this way or the items cannot "
+        "apply, and say why in the report.",
+        {"id": _s("revision id"),
+         "force": {"type": "boolean", "description": "mark it applied past a failing Taste check"}},
+        ["id"], lambda a: ["done", a["id"]] + (["--force"] if a.get("force") else [])),
     "chat": (
         "Read the room's thread (in the Chat tab), and pick up what the person said. "
         "Each room (tab) has its own thread; with a room, only that one. A picture the person "
