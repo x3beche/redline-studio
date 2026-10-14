@@ -79,6 +79,12 @@ export interface CcTool {
   /** Its package (backend/chat_tools PACKAGES): the Tools panel's card it sits in. */
   package?: string; package_label?: string; package_about?: string;
 }
+/** backend/cc_tools.py LABELS: a tool package's name. */
+const PKG_LABEL: Record<string, string> = {
+  parts: 'Parts', stock: 'Stock', pcb: 'PCB', cad: '3D', firmware: 'Firmware', notes: 'Notes', taste: 'Taste',
+  files: 'Files', web: 'Web', chats: 'Chats', pdf: 'PDF', analytics: 'Analytics', queue: 'Queues', tools: 'Calculators',
+};
+
 /** An answer's text with its steps where they happened. */
 type Chunk = { text: string; steps?: undefined } | { text?: undefined; steps: CcStep[] };
 /** An answer someone else is having written, as far as it got. */
@@ -117,6 +123,9 @@ export interface CcMessage {
   steps?: CcStep[];
   /** The model took no tools: it answered without them (why). */
   no_tools?: string;
+  /** The tool packages sent with its line (backend/cc_tools.py), every one
+   *  that was on (`packages_all`), and those it took mid-answer. */
+  packages?: string[]; packages_all?: boolean; packages_added?: string[];
   /** Its runner died with the server: kept as far as it got. */
   interrupted?: boolean;
   /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
@@ -808,6 +817,7 @@ type Ask = { text: string; label: string; go: () => void };
                     }
                     }
                   }
+                  @if (pkgLine(m); as pk) { <div class="tcv-cc-pkgs" [title]="'Tool packages sent with this line' | t">{{ 'Tools sent' | t }}: {{ pk }}</div> }
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
                 }
@@ -2738,6 +2748,14 @@ export class RoomCommandCode implements OnDestroy {
     if (m.stopped) bits.push(t('stopped'));
     if (m.interrupted) bits.push(t('interrupted'));
     return bits.join(' · ') || t('Details');
+  }
+
+  /** The tool packages an answer's line was sent, when they were not all
+   *  of them: "PCB · Notes (+)" - a package taken mid-answer marked. */
+  pkgLine(m: CcMessage): string {
+    if (!m.packages?.length || m.packages_all) return '';
+    const name = (p: string) => t(PKG_LABEL[p] ?? p);
+    return [...m.packages.map(name), ...(m.packages_added ?? []).map(p => name(p) + ' (+)')].join(' · ');
   }
 
   /** Everything about how an answer came, for its popover. */

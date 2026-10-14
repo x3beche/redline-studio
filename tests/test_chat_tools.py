@@ -81,7 +81,9 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     assert steps[0]["pos"] == steps[1]["pos"] == len("Let me check the datasheet.\n\n")
     # The tools went out, with the note; each round got the last one's results.
     r = state["rounds"]
-    assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items() if t.default}
+    # Of them, the packages the line points to (a part's values: PCB), the core ones and the way to more.
+    assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items()
+                                                  if t.default and (t.package == "pcb" or n == "clock")} | {"tools_more"}
     assert "drawer_search" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
     assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "datasheet_get"
     assert r[1]["messages"][-1]["role"] == "tool" and "3 pages" in r[1]["messages"][-1]["content"]

@@ -4289,6 +4289,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
    flat rows like the thinking fold's head - an icon and a plain sentence;
    a click opens what went in and what came back. */
 .tcv-cc-steps { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 10px; }
+/* The tool packages an answer's line was sent (rooms/commandcode.ts pkgLine). */
+.tcv-cc-pkgs { font-size: 11px; color: var(--ink-dim); margin: 0 0 6px; }
 .tcv-cc-step > summary { display: flex; align-items: center; gap: 7px; min-height: 24px; padding: 2px 6px; margin: 0 -6px;
   font-size: 12px; color: var(--ink-dim); border-radius: 5px; cursor: pointer; list-style: none; user-select: none; }
 .tcv-cc-step > summary::-webkit-details-marker { display: none; }

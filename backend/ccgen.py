@@ -445,7 +445,7 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
 async def run(gid: str, db=None) -> dict | None:
     """The runner's work, in whatever process runs it: the model streamed,
     the answer so far written as it comes, the end put in the conversation."""
-    from . import cc_chat, cc_context, llm
+    from . import cc_chat, cc_context, cc_tools, llm
 
     db = db if db is not None else cc_chat._db()
     gens = coll(db)
@@ -476,10 +476,19 @@ async def run(gid: str, db=None) -> dict | None:
             images = await cc_context.images(db, pics)
         uid = (gen.get("actor") or {}).get("id") or (gen.get("by") or {}).get("id")
         try:
-            tools = {t.name: t for t in await chat_tools.enabled(db, uid)}
+            on = {t.name: t for t in await chat_tools.enabled(db, uid)}
         except Exception as exc:                                 # noqa: BLE001 - an answer without tools
             print(f"cc {gid}: tools not read: {exc}", file=sys.stderr)
-            tools = {}
+            on = {}
+        # Of the tools that are on, the packages this line needs (and the
+        # core ones), with tools_more to take the rest mid-answer
+        # (backend/cc_tools.py).
+        picked = cc_tools.pick(convo, on) if on else None
+        tools = {n: t for n, t in on.items() if n in picked.names} if picked else {}
+        if picked:
+            out["packages"], out["packages_all"] = picked.groups, picked.all
+            if not picked.all:
+                tools[cc_tools.MORE] = cc_tools.more_tool(on, tools, out)
         # Earlier answers' steps go back to the model with them: as tool
         # calls and results while it has tools, as a written list otherwise.
         base = cc_chat.history(convo, images)
@@ -488,7 +497,8 @@ async def run(gid: str, db=None) -> dict | None:
             ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
                                  actor=gen.get("actor") or {}, chat=gen.get("chat") or "")
             withcalls = cc_chat.history(convo, images, tools=set(tools))
-            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + "\n\n" + chat_tools.note(list(tools.values()))},
+            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + "\n\n" + chat_tools.note(list(tools.values()))
+                     + cc_tools.note(picked, on)},
                     *withcalls[1:]]
         else:
             msgs = base
@@ -596,6 +606,14 @@ async def run(gid: str, db=None) -> dict | None:
         answer["steps"] = settle(out["steps"], "stopped" if stopped else "interrupted")
     if out.get("no_tools"):
         answer["no_tools"] = out["no_tools"]
+    elif out.get("packages") is not None:
+        # The tool packages sent with it (and taken mid-answer): the page's
+        # small line under the steps, and the next line's first guess.
+        answer["packages"] = out["packages"]
+        if out.get("packages_all"):
+            answer["packages_all"] = True
+        if out.get("packages_added"):
+            answer["packages_added"] = out["packages_added"]
     if stopped:
         answer["stopped"] = True
         if not out["text"]:
