@@ -32,17 +32,17 @@ ITEM_PROPS = {
                             "category and part number - set it only when the person says or it would come out wrong"},
     "subtype": {"type": "string", "enum": ["", *kinds.SUBTYPE_IDS],
                 "description": "For an electronic component: its kind (resistor, capacitor, ic, connector...)"},
-    "mpn": {"type": "string", "description": "The maker's part number (a new Own items product's code)"},
+    "mpn": {"type": "string", "description": "The maker's part number (a new My Items product's code)"},
     "lcsc": {"type": "string", "description": "The LCSC part number, like C25744: the drawer's part is counted "
                                               "when the drawer holds it"},
-    "manufacturer": {"type": "string", "description": "Who makes it (said on a new Own items product)"},
+    "manufacturer": {"type": "string", "description": "Who makes it (said on a new My Items product)"},
     "board": {"type": "string", "description": "The board or model it is for, if any"},
     "catalog": {"type": "object", "description": "The Parts product it counts: the maker or source (a site's id, "
                                                 "or lcsc, mcmaster, grabcad, own) and the product, each by id "
                                                 "(manufacturer_search) or by words of its name",
                 "properties": {"manufacturer": {"type": "string"}, "product": {"type": "string"}}},
     "min_stock": {"type": "number", "description": "At or below this many it is low"},
-    "price": {"type": "number", "description": "Price of one unit (a new Own items product's price)"},
+    "price": {"type": "number", "description": "Price of one unit (a new My Items product's price)"},
     "currency": {"type": "string", "description": "TRY, USD, EUR..."},
     "notes": {"type": "string"},
     "tags": {"type": "array", "items": {"type": "string"}},

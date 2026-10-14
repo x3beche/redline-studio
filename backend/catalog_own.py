@@ -1,4 +1,4 @@
-"""Own items as a seller in Parts: the workspace's things that
+"""My Items as a seller in Parts: the workspace's things that
 no maker's site sells - filament bought over a counter, its own screws, a
 cable made up on the bench - typed in by hand.
 
@@ -24,7 +24,7 @@ from . import actors
 from .catalog_builtin import Source, register
 
 MID = "own"
-NAME = "Own items"
+NAME = "My Items"
 COLL = "own_items"
 
 

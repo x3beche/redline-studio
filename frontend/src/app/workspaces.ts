@@ -55,7 +55,7 @@ export const WORKSPACES: Workspace[] = [
   },
   {
     // The parts you buy and keep: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and
-    // your own items - and how many of each are on hand (the stock, a part of this page). Its name is
+    // your My Items - and how many of each are on hand (the stock, a part of this page). Its name is
     // this label, here only: the tab, the page's title and the palette read it (PARTS_LABEL).
     id: 'mfr',
     label: 'Parts',

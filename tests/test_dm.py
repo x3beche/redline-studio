@@ -439,7 +439,7 @@ def test_only_what_the_sender_can_see_can_be_sent(db):
                                           "catalog": {"manufacturer": "own", "product": "o1"}})
     put(db, space("u-ayse"), "own_items", {"_id": "o1", "name": "M3 screw", "category": "Fasteners"})
     got = a.get("/api/dm/shareables", params={"q": "screw"}).json()
-    # Its product - here an Own item - is what is offered; the stock line is not.
+    # Its product - here a My Items product - is what is offered; the stock line is not.
     assert [(x["kind"], x["id"]) for x in got] == [("product", "own:o1")]
     assert a.get("/api/dm/shareables", params={"q": "secret"}).json() == []
 

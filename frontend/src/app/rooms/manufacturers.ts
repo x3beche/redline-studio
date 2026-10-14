@@ -26,7 +26,7 @@ import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, is
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
  *  read from their own websites (backend/manufacturers.py), the built-in
- *  sources (the LCSC drawer, McMaster-Carr, GrabCAD, Own items:
+ *  sources (the LCSC drawer, McMaster-Carr, GrabCAD, My Items:
  *  backend/catalog_builtin.py) - and how many of each are on hand: the
  *  stock (stock.ts). Every row, card and bin says its count; a product's
  *  detail has its stock section; "Stock" lists every product on hand.
@@ -485,7 +485,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <!-- McMaster-Carr, GrabCAD: the search front and centre (linked.ts), the saved ones below as any maker's catalog -->
         <wb-linked-head [src]="m.id" [url]="m.url" [items]="m.products ?? []" />
       } @else if (m.view === 'own') {
-        <!-- Own items (backend/catalog_own.py): things no site sells, typed in by hand - a head of a line, the catalog below -->
+        <!-- My Items (backend/catalog_own.py): things no site sells, typed in by hand - a head of a line, the catalog below -->
         <header class="tst-head">
           <div class="tst-title">
             <h2>{{ m.name | t }}</h2>

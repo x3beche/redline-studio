@@ -1057,7 +1057,7 @@ def test_prices_by_hand_and_the_grid(db, web, monkeypatch):  # noqa: F811
     g = a.get("/api/manufacturers/products?size=2&page=2&sort=name").json()
     assert g["page"] == 2 and len(g["items"]) == 2 and g["total"] == 4
     assert ["Filament", 1] in g["categories"] and g["price"]["min"] == 12.5 and set(g["price"]["currencies"]) == {"TRY", "USD"}
-    assert {m["id"] for m in g["makers"]} == {mid, other, "own"}     # and Own items, the overview's too
+    assert {m["id"] for m in g["makers"]} == {mid, other, "own"}     # and My Items, the overview's too
 
 
 ILERI = """<html><head><title>SFU 1204 Mil - ileri3d</title></head><body>

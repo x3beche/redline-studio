@@ -5,9 +5,9 @@ same product, MPN or LCSC number, else the same name in the same unit - is
 topped up rather than made twice, and the answer says which.
 
 Every line counts a Parts product: the one named in `catalog` (a site's,
-the LCSC drawer's, a saved McMaster-Carr or GrabCAD item, an Own item), the
+the LCSC drawer's, a saved McMaster-Carr or GrabCAD item, a My Items product), the
 drawer's part an LCSC number names, or - for a thing with no product yet -
-an Own items product made from its words (backend/inventory.py `_home`).
+a My Items product made from its words (backend/inventory.py `_home`).
 The answer names the product of each line."""
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         if d.get("catalog"):
             made = (d["catalog"].get("manufacturer") == "own" and not (raw or {}).get("catalog")
                     and not r["merged"])
-            lines[-1] += f" - counts the Parts product {product(d)}" + (" (made in Own items)" if made else "")
+            lines[-1] += f" - counts the Parts product {product(d)}" + (" (made in My Items)" if made else "")
     if not added and not merged:
         raise ToolError("nothing was added: " + "; ".join(f"{r.get('name') or '?'}: {r['error']}" for r in bad))
     text = (f"Stock: {len(added)} added, {len(merged)} merged into lines already kept"
@@ -106,8 +106,8 @@ TOOL = Tool(
                 "manufacturer_search (a site's id, or the built-in sources lcsc, mcmaster, grabcad, own) or words of "
                 "their names (\"Doğuş\", \"20 mm menteşe\") - or `lcsc` for a part in the LCSC drawer. A thing with "
                 "no product in Parts yet (filament, own screws, a cable made up) needs only a `name` (and its "
-                "category, part number, maker, price when known): it is made a product of Parts > Own items first, "
-                "or counted under the Own item of that name or code already there. Its type (filament, screw, "
+                "category, part number, maker, price when known): it is made a product of Parts > My Items first, "
+                "or counted under the My Items product of that name or code already there. Its type (filament, screw, "
                 "electronic...) is worked out from its name - give `type` only when the person says it or the name "
                 "would not tell. A product already counted (or the same MPN or LCSC number, or the same name in the "
                 "same unit) is topped up: its quantity goes up and the answer says so; it is never doubled. The "

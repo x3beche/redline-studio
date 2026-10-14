@@ -110,7 +110,7 @@ PACKAGES = (
     Package("firmware", "Firmware", "The Firmware room's builds."),
     Package("notes", "Notes", "The notes jotted down in Notes: #tags, @boards, to-dos."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
-    Package("mfr", "Parts", "Parts: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and own items - "
+    Package("mfr", "Parts", "Parts: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and My Items - "
                             "and how many of each are on hand."),
     Package("commandcode", "Chat", "The Chat's conversations and what it can do on its own: the clock, the web, PDFs."),
     Package("files", "Files", "The Files room."),
@@ -206,11 +206,11 @@ SYSTEM_NOTE = (
     "when they give the product's details themselves; then inventory_add can count it in stock. Edit or remove catalog products "
     "(catalog_edit_product, catalog_remove_product) or add a maker by its site (catalog_add_maker; exploring its whole "
     "site reads up to 100 pages and costs tokens) only when asked. What the person has on hand is stock on the Parts page: every stock line counts one Parts product "
-    "(a site's, the LCSC drawer's, McMaster-Carr's, GrabCAD's or an Own item), how many and where it is kept - "
+    "(a site's, the LCSC drawer's, McMaster-Carr's, GrabCAD's or a My Items product), how many and where it is kept - "
     "found with inventory_search and read with inventory_read; when they say they got, used or moved something, add "
     "it (inventory_add: several at once, the same product already counted is topped up, not doubled; name its Parts "
     "product - manufacturer_search gives its ids and what is in stock of it - or an LCSC part; a thing no site sells "
-    "becomes an Own items product from its name) or change its quantity with a reason "
+    "becomes a My Items product from its name) or change its quantity with a reason "
     "(inventory_adjust); edit a stock line's place, unit or minimum (inventory_edit) or remove it (inventory_remove) "
     "only when asked - what a thing is (name, code, price) is its product's (catalog_edit_product). Leave a note in a room's queue (room_note) only when asked to. "
     "The person's own notes (the Notes tab) are found with notes_search and read with note_read; write, tick or edit "

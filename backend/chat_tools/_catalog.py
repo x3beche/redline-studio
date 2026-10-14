@@ -54,7 +54,7 @@ async def maker(db, ref: str) -> dict:
     got = await mf.get(db, ref)
     if got:
         return got
-    # Own items (backend/catalog_own.py): the one built-in source a product is added to by hand.
+    # My Items (backend/catalog_own.py): the one built-in source a product is added to by hand.
     from .. import catalog_builtin, catalog_own
     if mf.fold(ref) in (catalog_own.MID, mf.fold(catalog_own.NAME), "own item", "own"):
         return await catalog_builtin.maker(db, catalog_own.MID)
@@ -186,7 +186,7 @@ def short(p: dict) -> str:
     return " · ".join(b for b in bits if b)
 
 
-# ---- writing a product: a site's, or Own items' (a built-in source that takes writes)
+# ---- writing a product: a site's, or My Items' (a built-in source that takes writes)
 
 async def add_product(db, mid: str, f: dict, by: dict | None = None) -> dict:
     from .. import catalog_builtin

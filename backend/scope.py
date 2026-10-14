@@ -50,7 +50,7 @@ SCOPED = frozenset({
     "inventory",
     # parts and models saved from McMaster-Carr and GrabCAD, with their CAD files (backend/linked.py)
     "linked_parts",
-    # the Parts page's Own items: things no site sells, typed in by hand (backend/catalog_own.py)
+    # the Parts page's My Items: things no site sells, typed in by hand (backend/catalog_own.py)
     "own_items",
     # the agent sessions' heartbeats: who holds a note, and whether it is still there (backend/asks.py)
     "agent_sessions",

@@ -19,7 +19,7 @@ import { EmptyState } from '../empty-state';
  *  pictures, datasheet, 3D - is its Parts product's; a stock line counts it:
  *  a quantity in a unit, a place, a minimum below which it is low, notes and
  *  a log of every change with who and why. Every line points at a product
- *  (`catalog`); a thing no site sells is a product of Own items.
+ *  (`catalog`); a thing no site sells is a product of My Items.
  *
  *  Three pieces, all shown inside the Parts page (manufacturers.ts):
  *  - `StockState`: what is on hand of every product, read once and shared,
@@ -29,7 +29,7 @@ import { EmptyState } from '../empty-state';
  *    "Add to stock" when there is none;
  *  - `<wb-stock-view>`: every product on hand, across the sources, in one
  *    dense list grouped by type - search, type, place, low, import and
- *    export, adding own items - where a line opens its product.
+ *    export, adding to My Items - where a line opens its product.
  *
  *  The Chat counts and changes stock too (backend/chat_tools/inventory_*.py),
  *  so the view reads again every few seconds while it is open.
@@ -415,10 +415,10 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
   }
 
   @if (can()) {
-    <!-- a thing no site sells: an Own items product and its stock line in one go (one, or a pasted list) -->
+    <!-- a thing no site sells: a My Items product and its stock line in one go (one, or a pasted list) -->
     <div class="inv-addbar mf-ctl">
       @if (!pasting()) {
-        <span class="mf-label mf-rowlabel" [title]="'Made a product of Own items, or counted under the one of that name already there' | t">{{ 'Add an own item' | t }}</span>
+        <span class="mf-label mf-rowlabel" [title]="'Made a product of My Items, or counted under the one of that name already there' | t">{{ 'Add to My Items' | t }}</span>
         <input #addName class="tst-in inv-a-name" [placeholder]="'Name - e.g. PETG black 1 kg' | t" [value]="form().name" (input)="setF('name', $any($event.target).value)" (keydown.enter)="add()" [attr.aria-label]="'Name' | t">
         <input class="tst-in inv-a-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="form().quantity" (input)="setF('quantity', $any($event.target).value)" (keydown.enter)="add()" [attr.aria-label]="'Quantity' | t">
         <input class="tst-in inv-a-unit" list="inv-units" [placeholder]="'pcs'" [value]="form().unit" (input)="setF('unit', $any($event.target).value)" (keydown.enter)="add()" [attr.aria-label]="'Unit' | t">
@@ -539,7 +539,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
         <button class="tcv-btn" (click)="clearFilters()">{{ 'Clear' | t }}</button></wb-empty>
     }
   } @else if (loaded()) {
-    <wb-empty icon="cube" text="Nothing in stock yet. Open a product and count it in its Stock section, add an own item above, or tell the Chat what you have." />
+    <wb-empty icon="cube" text="Nothing in stock yet. Open a product and count it in its Stock section, add to My Items above, or tell the Chat what you have." />
   }
 
   <wb-selbar [count]="picked().size" (clear)="picked.set(none())">
@@ -793,7 +793,7 @@ export class StockView implements OnDestroy {
         this.busy.set(false);
         this.form.set({ name: '', quantity: '', unit: '', location: f.location, category: f.category, min: '' });
         say(r.merged ? fmt('Topped up {name}: now {q}', { name: r.item.name, q: `${qty(r.item.quantity)} ${r.item.unit}` })
-                     : fmt('Added {name} to Own items and stock', { name: r.item.name }));
+                     : fmt('Added {name} to My Items and stock', { name: r.item.name }));
         this.state.touch();
         setTimeout(() => this.addName()?.nativeElement.focus(), 0);
       },

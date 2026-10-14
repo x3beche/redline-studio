@@ -3238,7 +3238,7 @@ async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str 
     from . import inventory as inv
     db = _db()
     # A built-in source's products only when it is asked for: the overview is the workspace's own sites and its
-    # own items - or, for what is on hand, every source.
+    # My Items - or, for what is on hand, every source.
     if catalog_builtin.is_builtin(maker):
         docs = [await catalog_builtin.maker(db, maker)]
     elif held in ("1", "low"):

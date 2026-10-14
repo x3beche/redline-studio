@@ -12,7 +12,7 @@ they come from.
 LCSC is the first: the parts drawer (backend/catalog_lcsc.py). McMaster-Carr
 and GrabCAD are search-and-link sources (backend/linked.py: found through a
 web search, saved by the person with the CAD files they downloaded; view
-"linked"). Own items (backend/catalog_own.py) is the workspace's own
+"linked"). My Items (backend/catalog_own.py) is the workspace's own
 things that no site sells - filament, its own screws - typed in by hand: a
 source that takes writes (`add`, `edit`, `delete`), so the catalog's
 product routes reach it. JLCMC and other component sources are added the
@@ -45,7 +45,7 @@ class Source:
     view: str
     # Its products as catalog products, for the asking workspace.
     products: Callable[[object], Awaitable[list[dict]]]
-    # A source a person writes to (Own items): a product added, changed, dropped - as a site's by hand.
+    # A source a person writes to (My Items): a product added, changed, dropped - as a site's by hand.
     add: Callable[..., Awaitable[dict]] | None = None
     edit: Callable[..., Awaitable[dict]] | None = None
     delete: Callable[..., Awaitable[int]] | None = None

@@ -18,7 +18,7 @@ or two places); `stock_of` adds them up.
 Every line points at a product. One added without one - "200 M3 nuts on
 shelf A" from the Chat, a pasted list, a file - gets one first (`_home`):
 the LCSC drawer's part when it names one the drawer holds, else a product
-of Own items (backend/catalog_own.py) made from its words, or the one of
+of My Items (backend/catalog_own.py) made from its words, or the one of
 the same code or name already there. Lines kept before this rule are given
 theirs by `home_unlinked` (tools/inventory_home.py), which changes nothing
 else of them.
@@ -472,7 +472,7 @@ async def _fields(db, raw: dict, partial: bool = False) -> dict:
 
 
 def own_fields(f: dict) -> dict:
-    """What an item says of what it is, as an Own items product's fields."""
+    """What an item says of what it is, as a My Items product's fields."""
     specs = {k: v for k, v in (("Maker", f.get("manufacturer")), ("MPN", f.get("mpn")), ("LCSC", f.get("lcsc"))) if v}
     out = {"name": f.get("name") or "", "category": f.get("category") or "", "sku": f.get("mpn") or f.get("lcsc") or "",
            "specs": specs}
@@ -483,7 +483,7 @@ def own_fields(f: dict) -> dict:
 
 async def _home(db, f: dict, by: dict | None) -> dict:
     """`f` with a catalog product to count, when it names none: the LCSC
-    drawer's part it names, else an Own items product made from its words
+    drawer's part it names, else a My Items product made from its words
     (or the one of the same code or name) - see the module's words."""
     if linked_to(f):
         return f

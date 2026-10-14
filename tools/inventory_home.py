@@ -7,7 +7,7 @@ workspace (backend/inventory.py `home_unlinked`).
 Since stock became a part of the Parts page every stock line counts one
 product. A line kept before that with no product (or with only a maker)
 gets one: the LCSC drawer's part its LCSC number names, else a product of
-Own items made from its own words (or the Own item of the same code or
+My Items made from its own words (or the My Items product of the same code or
 name). Its quantity, place, minimum and log stay; a line in its log says
 what was done. Nothing is deleted, and a second run finds nothing to do.
 

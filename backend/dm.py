@@ -36,7 +36,7 @@ their owner writes there.
 A line can carry things of the sender's space (`items`): a 3D model, a
 board, a project (a catalog folder), a taste palette, a product of the
 Parts page (a site's, the LCSC drawer's, a saved McMaster-Carr or GrabCAD
-item, an Own item - with how many the sender has on hand), a note, a file,
+item, a My Items product - with how many the sender has on hand), a note, a file,
 a firmware. What the card shows - the name and a line of facts - is read
 when it is sent, through the sender's space, so only what the sender can
 see can be sent. A stock line is not sent on its own any more: it goes as
@@ -1315,7 +1315,7 @@ async def _add_product(dst, d, by, from_who):
     data = d.get("data") or {}
     p, maker = dict(data.get("product") or {}), data.get("maker") or {}
     if maker.get("builtin") or not maker.get("domain"):
-        # A built-in source's (the drawer's part, an Own item...): an Own item of mine - its words, not its files.
+        # A built-in source's (the drawer's part, a My Items product...): a My Items product of mine - its words, not its files.
         from . import catalog_own
         keep = {k: p.get(k) for k in ("name", "category", "sku", "description", "url", "image", "specs") if p.get(k)}
         if (p.get("price") or {}).get("amount") is not None:

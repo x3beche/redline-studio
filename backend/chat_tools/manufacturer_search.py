@@ -33,7 +33,7 @@ def _line(d: dict) -> str:
 
 async def _builtins(ctx: Ctx) -> list[dict]:
     """The built-in sources (LCSC's drawer, the McMaster-Carr parts and GrabCAD
-    models saved here, Own items) as makers with products - only those holding some."""
+    models saved here, My Items) as makers with products - only those holding some."""
     try:
         return [d for d in await builtin.makers(ctx.db) if d.get("products")]
     except Exception:                                   # noqa: BLE001 - a source that cannot be read is left out
@@ -114,7 +114,7 @@ TOOL = Tool(
     about="Lists the saved manufacturers, reads one's catalog, or searches their products by words and category.",
     description="The manufacturers this workspace keeps (Parts): makers whose websites were explored, "
                 "and the built-in sources' parts saved here - LCSC (the parts drawer), McMaster-Carr parts and GrabCAD "
-                "models, and Own items (things no site sells, typed in by hand, id own) - searched with them; "
+                "models, and My Items (things no site sells, typed in by hand, id own) - searched with them; "
                 "each with a summary, the person's notes on when to use them, categories and a product catalog "
                 "(name, category, description, specs such as dimensions and materials, code, product page, and - when "
                 "its page showed them - its price with currency and VAT, the seller's stock and the site it is sold on, "

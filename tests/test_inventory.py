@@ -328,7 +328,7 @@ def test_the_catalog_routes(db):  # noqa: F811
     assert "no product" in r[2]["error"]
     st = a.get("/api/inventory/stock?manufacturer=dogus").json()
     assert {k: v["quantity"] for k, v in st.items()} == {"p1": 22, "p2": 2}
-    # "tmp" had no product to count: it counts one of Own items.
+    # "tmp" had no product to count: it counts one of My Items.
     assert set(a.get("/api/inventory/stock").json()) == {"dogus", "own"}
     assert a.post("/api/inventory/from-catalog", json={"manufacturer": "dogus", "product": "p1",
                                                        "quantity": -1}).status_code == 400
@@ -495,10 +495,10 @@ def test_a_line_with_nothing_to_point_at_gets_an_own_item():
     assert a["catalog"]["manufacturer"] == "own" and a["catalog"]["product_name"] == "PLA grey 1 kg"
     own = list(fake["own_items"].docs.values())
     assert len(own) == 1 and own[0]["sku"] == "PLA-GR" and own[0]["price"]["amount"] == 350
-    # The product is the Own items source's, read like any catalog product.
+    # The product is the My Items source's, read like any catalog product.
     from backend import catalog_builtin
     m, p = run(catalog_builtin.find_product(fake, "own", a["catalog"]["product"]))
-    assert m["name"] == "Own items" and p["category"] == "Filament"
+    assert m["name"] == "My Items" and p["category"] == "Filament"
     # The same thing in another unit: a line of its own, on the same product.
     b, merged = run(inv.add(fake, {"name": "PLA grey 1 kg", "quantity": 500, "unit": "g", "mpn": "PLA-GR"}, ME))
     assert not merged and b["catalog"]["product"] == a["catalog"]["product"] and len(fake["own_items"].docs) == 1
@@ -536,7 +536,7 @@ def test_own_items_take_the_catalog_product_routes(db):  # noqa: F811
     assert r.status_code == 200 and r.json()["product"]["price"]["amount"] == 12.5
     line = a.post("/api/inventory/from-catalog", json={"manufacturer": "own", "product": pid, "quantity": 10,
                                                       "unit": "m", "location": "Drawer 2"}).json()["item"]
-    assert line["product"]["name"] == "Cable 2x0.5 red" and line["product"]["maker"] == "Own items"
+    assert line["product"]["name"] == "Cable 2x0.5 red" and line["product"]["maker"] == "My Items"
     got = a.get(f"/api/inventory/product/own/{pid}").json()
     assert [x["quantity"] for x in got] == [10] and got[0]["log"][0]["kind"] == "added"
     grid = a.get("/api/manufacturers/products", params={"held": "1"}).json()

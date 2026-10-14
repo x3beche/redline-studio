@@ -120,7 +120,7 @@ def test_add_links_a_catalog_product_or_an_lcsc_part(ws, monkeypatch):
     assert got.vars["n"] == 2
     # Each line names the Parts product it counts: the site's, and the drawer's part the LCSC number names.
     assert "counts the Parts product Doğuş / Menteşe 20 [dogus:p1]" in got.text
-    assert "[lcsc:C111607]" in got.text and "made in Own items" not in got.text
+    assert "[lcsc:C111607]" in got.text and "made in My Items" not in got.text
     rows = {d["name"]: d for d in run(inv.everything(db))}
     hinge, fet = rows["Menteşe 20"], rows["IRL540N TO-220"]
     assert hinge["catalog"]["product_name"] == "Menteşe 20" and hinge["mpn"] == "MN-20" and hinge["manufacturer"] == "Doğuş"
@@ -137,18 +137,18 @@ def test_a_thing_no_site_sells_becomes_an_own_item(ws):
     db, _, _ = ws
     got = call(db, "inventory_add", {"items": [{"name": "PETG black 1 kg", "quantity": 2, "unit": "roll",
                                                 "category": "Filament", "location": "Cabinet"}]})
-    assert "made in Own items" in got.text and "[own:" in got.text
+    assert "made in My Items" in got.text and "[own:" in got.text
     line = run(inv.everything(db))[0]
     assert line["catalog"]["manufacturer"] == "own" and line["catalog"]["product_name"] == "PETG black 1 kg"
-    # Again, by its name: the same Own item, topped up - no second product, no second line.
+    # Again, by its name: the same My Items product, topped up - no second product, no second line.
     again = call(db, "inventory_add", {"items": [{"name": "petg black 1 KG", "quantity": 1, "unit": "roll"}]})
     assert again.vars["name"] == "PETG black 1 kg" and "merged" in again.text
     assert len(run(inv.everything(db))) == 1
     # What it is belongs to the product: inventory_edit says where to change it.
     with pytest.raises(ToolError, match="catalog_edit_product"):
         call(db, "inventory_edit", {"item": line["_id"], "set": {"name": "PETG"}})
-    # The catalog tools reach Own items by its name.
-    edited = call(db, "catalog_edit_product", {"manufacturer": "Own items", "product": "petg",
+    # The catalog tools reach My Items by its name.
+    edited = call(db, "catalog_edit_product", {"manufacturer": "My Items", "product": "petg",
                                                "set": {"sku": "PETG-BK-1"}})
     assert "PETG-BK-1" in edited.text
 
