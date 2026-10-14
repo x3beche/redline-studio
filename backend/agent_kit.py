@@ -76,6 +76,7 @@ psutil>=5.9
 pillow>=10
 websockets>=12
 pypdfium2==5.14.0
+cryptography>=43
 """
 
 CLAUDE_MD = """\
