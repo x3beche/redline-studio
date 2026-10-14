@@ -12,6 +12,7 @@ import { FwAnchor, Selection } from '../selection';
 import { isLightTheme } from '../../theme';
 import { Drawing, DrawingMarks } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
+import { TasteStrip } from './taste-strip';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { loadMonaco, redlineTheme } from './code-view';
 import {
@@ -313,7 +314,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
  */
 @Component({
   selector: 'app-room-firmware',
-  imports: [Drawing, DrawTools, FwCode, RoomFrame, Sketchpad, T, ToolButton, UiSelect],
+  imports: [Drawing, DrawTools, FwCode, RoomFrame, Sketchpad, T, TasteStrip, ToolButton, UiSelect],
   styles: [`
     :host { display: contents; }
     .fw-pane { display: flex; flex-direction: column; min-height: 0; height: 100%; font-size: 12px; color: var(--ink); }
@@ -655,6 +656,8 @@ export class FwCode implements AfterViewInit, OnDestroy {
           @if (!serial().ok) {
             <div class="fs-note fs-needs">{{ serial().why | t }}.</div>
           }
+          <!-- The Taste palettes that apply to it (rooms/taste-strip.ts). -->
+          <wb-taste-strip kind="firmware" [ref]="f.id" [folder]="f.board" />
           @if (f.board_change; as ch) {
             <div class="fs-note">{{ ch.text }}@if (ch.moved.length) { - @for (m of ch.moved; track m.net) { {{ m.net }} {{ m.from }}→{{ m.to }}@if (!$last) {,} } }</div>
           }

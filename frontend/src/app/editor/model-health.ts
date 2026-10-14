@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { ModelEntry } from '../api';
 import { T, t } from '../i18n';
 import { Toast } from '../toast';
+import { TasteStrip } from '../rooms/taste-strip';
 
 /** The 3D room's Model tab (model-tab.ts), in the board room's "Board
  *  health" look (rooms/board-health.css), kept small: the open model at a
@@ -83,10 +84,11 @@ function day(iso: string): string {
 
 @Component({
   selector: 'app-model-health',
-  imports: [T],
+  imports: [T, TasteStrip],
   styleUrls: ['../settings.css', '../rooms/board-health.css'],
   styles: [`
     .bh { padding: 6px; gap: 6px; }
+    .mh-taste { padding: 0 2px; }
 
     /* the build: one line, a dim line of figures, a warning when wrong */
     .mh-top { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 2px 8px;
@@ -165,6 +167,8 @@ function day(iso: string): string {
       @if (figures()) { <span class="mh-dim">{{ figures() }}</span> }
       @for (w of warnings(); track $index) { <span class="mh-warn" [title]="w">{{ w }}</span> }
     </section>
+    <!-- The Taste palettes that apply to it, its folders' too (rooms/taste-strip.ts). -->
+    <wb-taste-strip class="mh-taste" kind="model" [ref]="m.id" />
 
     <!-- RELEASES of the model's project (rooms/releases.ts). -->
     <div class="bh-sec mh-sec">

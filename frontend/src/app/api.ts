@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, filter, map, of, switchMap, take, throwError, timer } from 'rxjs';
 import type { BudgetStatus } from './money';
@@ -202,6 +202,10 @@ export interface NoteView {
   /** The viewer's background it was drawn on (the theme's --view-top/mid/bottom). */
   backdrop?: { top: string; mid: string; bottom: string };
 }
+
+/** Bumped when a model or a board is moved to another folder: what comes
+ *  with its folder (its Taste palettes, rooms/taste-strip.ts) is read again. */
+export const TREE_MOVED = signal(0);
 
 /** The only contact point with the backend. The Atlas URI lives in FastAPI. */
 @Injectable({ providedIn: 'root' })
@@ -419,7 +423,7 @@ export class Catalog {
 
   move(id: string, folder: string): Observable<{ from: string; to: string }> {
     return this.http.post<{ from: string; to: string }>(
-      `/api/models/${id}/move?folder=${encodeURIComponent(folder)}`, {});
+      `/api/models/${id}/move?folder=${encodeURIComponent(folder)}`, {}).pipe(map(r => { TREE_MOVED.update(n => n + 1); return r; }));
   }
 
   /** force replaces the refusal when another model imports this one. */
@@ -822,7 +826,7 @@ export class Boards {
   /** Put it in a folder. The id does not change: it is not a path. */
   move(id: string, folder: string): Observable<unknown> {
     return this.http.post(
-      `/api/boards/${id}/move?folder=${encodeURIComponent(folder)}`, {});
+      `/api/boards/${id}/move?folder=${encodeURIComponent(folder)}`, {}).pipe(map(r => { TREE_MOVED.update(n => n + 1); return r; }));
   }
   drop(id: string, force = false): Observable<unknown> {
     return this.http.delete(`/api/boards/${id}${force ? '?force=true' : ''}`);

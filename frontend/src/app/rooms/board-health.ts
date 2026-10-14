@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { BoardComponent, BoardEntry, BoardPose, BoardStats } from '../api';
 import { T, t } from '../i18n';
 import { BomCost } from './bom-cost';
+import { TasteStrip } from './taste-strip';
 
 /** The board room's "Board health" tab (Turkish "Kart durumu").
  *
@@ -142,7 +143,7 @@ function plural(n: number, one: string, many: string): string {
 
 @Component({
   selector: 'app-board-health',
-  imports: [BomCost, NgTemplateOutlet, T],
+  imports: [BomCost, NgTemplateOutlet, T, TasteStrip],
   styleUrls: ['../settings.css', './board-health.css'],
   template: `
 <div class="bh">
@@ -160,6 +161,8 @@ function plural(n: number, one: string, many: string): string {
     </div>
   </section>
   @if (note()) { <div class="bh-note">{{ note() }}</div> }
+  <!-- The Taste palettes that apply to the board (rooms/taste-strip.ts). -->
+  @if (board(); as bd) { <wb-taste-strip class="bh-taste" kind="board" [ref]="bd._id" [folder]="$any(bd).folder" /> }
 
   <!-- THE CHECKS: a traffic light each; opened, what and where. -->
   @if (checks().length) {

@@ -1,6 +1,7 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { Toast, ToastTone } from '../toast';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { tap } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
@@ -140,8 +141,10 @@ export class TasteApi {
   /** A palette as a file for someone else, and such a file made a palette here (backend/taste.py). */
   exportFile(id: string) { return this.http.get<unknown>(`/api/taste/${id}/export`); }
   importFile(data: unknown) { return this.http.post<Palette>('/api/taste/import', data); }
+  /** Bumps `changed`: what applies to a project is read again where it is shown (taste-strip.ts). */
   attach(id: string, attached: { kind: string; id: string; specifics?: boolean }[]) {
-    return this.http.put<Palette>(`/api/taste/${id}/attached`, { attached });
+    return this.http.put<Palette>(`/api/taste/${id}/attached`, { attached })
+      .pipe(tap(() => this.changed.update(n => n + 1)));
   }
   /** Models, boards and firmware; with `folders`, the folders too (extraction reads a folder whole). */
   projects(q = '', folders = false) {
