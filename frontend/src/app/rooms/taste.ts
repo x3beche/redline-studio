@@ -751,9 +751,11 @@ function why(e: HttpErrorResponse, fallback: string): string {
                         @for (s of strengths; track s.id) { @if (r.s[s.id]) { <i [style.flex-grow]="r.s[s.id]" [style.background]="sc(s.id)"></i> } }</span>
                       <span class="mono dim">{{ r.s.must }}·{{ r.s.prefer }}·{{ r.s.avoid }}</span></td>
                     <td class="give-s">
-                      @for (a of r.p.attached.slice(0, 2); track a.kind + a.id) { <span class="st-tag tsh-tag" [title]="(kindName(a.kind) | t) + ': ' + a.label">@if (a.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }{{ a.label }}</span> }
-                      @if (r.p.attached.length > 2) { <span class="dim"> +{{ r.p.attached.length - 2 }}</span> }
-                      @if (!r.p.attached.length) { <span class="dim">–</span> }</td>
+                      <!-- the first one, as wide as the column lets it; the rest as +N, named in its tooltip -->
+                      @if (r.p.attached[0]; as a) {
+                        <span class="tsh-tags"><span class="st-tag tsh-tag" [title]="(kindName(a.kind) | t) + ': ' + a.label">@if (a.kind === 'folder') { <svg class="tst-ficon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="folderPath" /></svg> }{{ a.label }}</span>
+                          @if (r.p.attached.length > 1) { <span class="st-tag tsh-more" [title]="attachedLine(r.p)">+{{ r.p.attached.length - 1 }}</span> }</span>
+                      } @else { <span class="dim">–</span> }</td>
                     <td class="r">{{ when(r.p.updated_at) }} <span class="dim">· {{ r.p.by.name || ('someone' | t) }}</span></td>
                   </tr>
                 }

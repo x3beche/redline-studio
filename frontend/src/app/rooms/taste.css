@@ -296,6 +296,10 @@ td.tsh-scol { width: 130px; white-space: nowrap; }
 .tsh-stack-s { display: inline-flex; width: 56px; height: 5px; margin-right: 6px; vertical-align: 1px; }
 .tsh-ptable td.give-s { width: 22%; text-overflow: clip; }
 .tsh-tag { max-width: 120px; margin-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--ink); }
+/* the overview's Attached to: one tag, shrinking with the column, and +N - never cut at its edge */
+.tsh-tags { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.tsh-tags > .tsh-tag { flex: 0 1 auto; min-width: 0; max-width: none; margin-right: 0; }
+.tsh-more { flex: none; font-family: 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); cursor: default; }
 
 /* how it works: three steps in one row */
 .tsh-steps { list-style: none; margin: 0; padding: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
