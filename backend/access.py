@@ -299,6 +299,9 @@ _RULES: list[tuple[str, str, str]] = [
     # bringing a board in makes a board
     ("POST", "/api/boards/import", "edit"),
     ("POST", "/api/tools/(find|usage)", "view"),
+    # a datasheet put in the datasheet library (backend/datasheets.py): a cache of what LCSC or the product
+    # holds, kept for search - as much as asking the Chat, which may do the same
+    ("POST", "/api/datasheets/product/{}/{}", "draw"),
     # one's own space's settings (auto-archive, auto-translate)
     ("PUT", "/api/settings", "space"),
     # the server's

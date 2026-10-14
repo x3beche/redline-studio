@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import re
 import threading
+from collections import Counter
 
 MAX_BYTES = 60 * 1024 * 1024      # a PDF larger than this is not opened
 MAX_PAGES = 50                    # pages of text in one answer
@@ -182,3 +183,126 @@ def render_png(blob: bytes, n: int, dpi: float | int | None = 150) -> tuple[byte
     im.save(buf, "PNG", optimize=False, compress_level=6)
     return buf.getvalue(), {"n": n, "count": count, "dpi": round(dpi_used, 1),
                             "width": im.width, "height": im.height}
+
+
+# ---------------------------------------------------------------- a page's lines, its tables as rows
+
+# A datasheet's numbers are in tables, and PDFium's plain text gives a table
+# one cell a line: "VIN", "–0.3", "40", "V" under each other, the row lost.
+# `layout` puts each line of the page back together from PDFium's text
+# rectangles (one run of text each): runs at the same height are one line,
+# left to right, and a gap wider than the text's height between two runs is
+# a column - written " | ". A minus sign PDFium sets a little off its number
+# goes back onto it. Small pictures of text (a scan) have no runs at all:
+# `images` says how many picture objects the page has, so a page with next
+# to no text and a picture is called a scan, not a blank page.
+
+_DASH = "–-−"
+
+
+def _rows(tp) -> str:
+    segs = []
+    for i in range(tp.count_rects()):
+        left, bottom, right, top = tp.get_rect(i)
+        s = tp.get_text_bounded(left, bottom, right, top)
+        s = _CONTROL.sub("", s.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")).strip()
+        if s:
+            segs.append((left, bottom, right, top, s))
+    segs.sort(key=lambda x: (-x[3], x[0]))
+    lines: list[dict] = []
+    for sg in segs:
+        _, b, _, t, _ = sg
+        mid, h = (b + t) / 2, t - b
+        for ln in lines:
+            if ln["b"] - 1 <= mid <= ln["t"] + 1 and abs((ln["t"] - ln["b"]) - h) < max(6.0, h):
+                ln["s"].append(sg)
+                ln["b"], ln["t"] = min(ln["b"], b), max(ln["t"], t)
+                break
+        else:
+            lines.append({"b": b, "t": t, "s": [sg]})
+    # A line of nothing but a stray sign or two (a minus set lower than its number): onto the nearest line.
+    big = [ln for ln in lines if any(len(x[4]) > 2 for x in ln["s"])]
+    for ln in [ln for ln in lines if not any(len(x[4]) > 2 for x in ln["s"])]:
+        mid = (ln["b"] + ln["t"]) / 2
+        near = min(big, key=lambda o: abs((o["b"] + o["t"]) / 2 - mid), default=None)
+        if near and abs((near["b"] + near["t"]) / 2 - mid) < 0.9 * max(4.0, near["t"] - near["b"]):
+            near["s"].extend(ln["s"])
+        else:
+            big.append(ln)
+    big.sort(key=lambda x: -x["t"])
+    cut = _two_columns(big)
+    if cut is not None:
+        # Two columns of prose (a first page's Features beside its Description): the left one, then the right.
+        left = [{**ln, "s": [x for x in ln["s"] if x[0] < cut]} for ln in big]
+        right = [{**ln, "s": [x for x in ln["s"] if x[0] >= cut]} for ln in big]
+        big = [ln for ln in left + right if ln["s"]]
+    return "\n".join(_line(ln) for ln in big)
+
+
+def _line(ln: dict) -> str:
+    ss = sorted(ln["s"], key=lambda x: x[0])
+    h = max(1.0, ln["t"] - ln["b"])
+    text = ss[0][4]
+    for a, c in zip(ss, ss[1:]):
+        if a[4] in _DASH:
+            text += c[4]                                # "–" "0.3" -> "–0.3"
+        elif c[0] - a[2] > 1.2 * h:
+            text += " | " + c[4]
+        else:
+            text += " " + c[4]
+    return text
+
+
+def _two_columns(lines: list[dict]) -> float | None:
+    """Where a page of two columns of prose splits, when it is one: many lines
+    that are two long runs of words with the same wide gap between them (a
+    table's rows are many short cells, and stay rows)."""
+    starts = []
+    for ln in lines:
+        ss = sorted(ln["s"], key=lambda x: x[0])
+        h = max(1.0, ln["t"] - ln["b"])
+        groups, cur = [], [ss[0]]
+        for a, c in zip(ss, ss[1:]):
+            if c[0] - a[2] > 1.2 * h:
+                groups.append(cur)
+                cur = []
+            cur.append(c)
+        groups.append(cur)
+        if len(groups) == 2 and all(len(" ".join(x[4] for x in g)) >= 18 for g in groups):
+            starts.append(groups[1][0][0])
+    if len(starts) < 6 or len(starts) < 0.25 * len(lines):
+        return None
+    bins = Counter(round(x / 12) for x in starts)
+    b, n = bins.most_common(1)[0]
+    if n < 0.6 * len(starts):
+        return None
+    return min(x for x in starts if round(x / 12) == b) - 2
+
+
+def layout(blob: bytes, pages: str | None = None, limit: int = 1000) -> dict:
+    """{"count": N, "pages": [{"n", "text", "images"}]}: each page's lines with
+    its tables as rows (cells " | "), for at most `limit` pages."""
+    import pypdfium2.raw as pdfium_c
+
+    with _LOCK:
+        pdf = _open(blob)
+        try:
+            count = len(pdf)
+            out = []
+            for n in parse_pages(pages, count, limit):
+                page = pdf[n - 1]
+                try:
+                    tp = page.get_textpage()
+                    try:
+                        text = _clean(_rows(tp))
+                    finally:
+                        tp.close()
+                    images = sum(1 for _ in page.get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE], max_depth=2))
+                    out.append({"n": n, "text": text, "images": images})
+                except Exception as exc:                # noqa: BLE001 - one bad page, not the whole PDF
+                    out.append({"n": n, "text": "", "images": 0, "error": f"page {n} could not be read ({exc})"})
+                finally:
+                    page.close()
+            return {"count": count, "pages": out}
+        finally:
+            pdf.close()

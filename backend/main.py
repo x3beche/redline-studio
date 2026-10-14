@@ -166,6 +166,9 @@ app.include_router(mcmaster.router)
 # Files on any Parts product: its 3D model (measured), datasheets, drawings, pictures (backend/product_files.py).
 from . import product_files  # noqa: E402
 app.include_router(product_files.router)
+# The datasheet library: each part's datasheet read once, kept, searched by page (backend/datasheets.py).
+from . import datasheets as datasheets_api  # noqa: E402
+app.include_router(datasheets_api.router)
 # Each project's wiki: decisions, limits, sourcing, open questions, with every version (backend/wiki.py).
 from . import wiki_api  # noqa: E402
 app.include_router(wiki_api.router)
