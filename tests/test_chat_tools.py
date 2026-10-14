@@ -169,6 +169,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
                   "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
                   "inventory_edit": False, "inventory_remove": True,
+                  "price_history": True, "stock_low": True, "manufacturer_explore": False, "files_search": True,
+                  "files_restore": True, "taste_propose": True, "dm_read": False, "dm_send": False,
+                  "settings_read": True,
                   "product_find": True, "product_files_read": True, "product_file_attach": True,
                   "product_file_detach": True, "product_set_main": True, "product_to_model": True,
                   "product_files_missing": True, "product_to_my_items": False,
@@ -179,7 +182,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
                   "clock": True, "memory_read": True, "memory_write": True,
                   "wiki_search": True, "wiki_read": True, "wiki_write": True}
-    assert [t["package"] for t in got["tools"]][:13] == ["general"] * 4 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
+    assert [t["package"] for t in got["tools"]][:14] == ["general"] * 5 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
