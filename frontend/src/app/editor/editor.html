@@ -501,10 +501,9 @@
          docking survives. -->
     <div #drawTools class="tcv-draw tcv-dock-wait" [hidden]="!frozen()">
       @for (t of tools; track t.id) {
-        <button (click)="tool.set(t.id)" [title]="t.label"
-                class="tcv-btn tcv-draw-btn"
-                [style.background]="tool() === t.id ? 'var(--accent)' : null"
-                [style.color]="tool() === t.id ? 'var(--ink-bright)' : null">{{ t.glyph }}</button>
+        <button (click)="tool.set(t.id)" [title]="t.label" [attr.aria-label]="t.label"
+                class="tcv-btn tcv-draw-btn" [attr.data-on]="tool() === t.id ? '' : null"
+                ><span class="tcv-dt-glyph">{{ t.glyph }}</span><i class="tcv-dt" [attr.data-i]="t.id"></i></button>
       }
       <span class="tcv-draw-sep"></span>
       @for (c of PENS; track c) {

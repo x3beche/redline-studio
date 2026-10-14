@@ -12,6 +12,7 @@ import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
 import { ModelSwitch, SWITCHES, SWITCH_DEFAULT, SWITCH_INFO, reducedMotion } from './editor/switch-pref';
+import { ICON_PACKS, ICON_PACK_DEFAULT, ICON_PACK_INFO, ICON_SIZES, ICON_SIZE_DEFAULT, PREVIEW } from './icon-packs';
 import { SwitchPreview } from './editor/switch-preview';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
@@ -189,6 +190,46 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 }
               </div>
             </div>
+            <!-- The toolbars' icons in the 3D, PCB and Firmware rooms
+                 (icon-packs.ts): the pack and the size, and under them a
+                 sample of the three bars as the rooms draw them now. -->
+            <div class="st-card">
+              <div class="st-card-head"><h3>{{ 'Toolbar icons' | t }}</h3>
+                <span class="st-sub">{{ 'The icons of the 3D, PCB and Firmware toolbars. They follow the theme\\'s colours.' | t }}</span></div>
+              <div class="st-card-body">
+                <div class="st-icons-row">
+                  <span class="st-sec-title">{{ 'Pack' | t }}</span>
+                  <span class="st-pick" role="radiogroup" [attr.aria-label]="'Pack' | t">
+                    @for (p of iconPacks; track p) {
+                      <button role="radio" [attr.aria-checked]="prefs.icons() === p" [class.on]="prefs.icons() === p"
+                              (click)="prefs.pickIcons(p)">{{ packInfo[p].name | t }}</button>
+                    }
+                  </span>
+                  <span class="st-sec-title">{{ 'Size' | t }}</span>
+                  <span class="st-pick" role="radiogroup" [attr.aria-label]="'Size' | t">
+                    @for (z of iconSizes; track z) {
+                      <button role="radio" [attr.aria-checked]="prefs.iconSize() === z" [class.on]="prefs.iconSize() === z"
+                              (click)="prefs.pickIconSize(z)">{{ z }}</button>
+                    }
+                    <span class="st-pick-unit">px</span>
+                  </span>
+                  <span class="st-icons-about">{{ packInfo[prefs.icons()].about | t }}@if (prefs.icons() === packDefault && prefs.iconSize() === sizeDefault) { · {{ 'default' | t }} }</span>
+                </div>
+                <div class="tcv_cad_toolbar st-icons-bar" aria-hidden="true"
+                     [attr.data-theme]="isLight(prefs.theme()) ? 'light' : 'dark'">
+                  @for (r of packPreview; track r.room) {
+                    <span class="st-icons-group">
+                      <span class="st-icons-cap">{{ r.room | t }}</span>
+                      @for (c of r.items; track $index) {
+                        @if (c) {
+                          <span class="tcv_button_frame" [class.tcv_btn_click2]="c === 'tcv_button_perspective' || c === 'tcv-ico tcv-ico-layout'"><span class="tcv_reset tcv_btn" [class]="c"></span></span>
+                        } @else { <span class="tcv_separator"></span> }
+                      }
+                    </span>
+                  }
+                </div>
+              </div>
+            </div>
             @for (grp of groups; track grp.name) {
               @if (themeFilter() === 'All' || themeFilter() === grp.name) {
                 <div class="st-card">
@@ -294,6 +335,12 @@ export class RoomSettings {
   readonly switches = SWITCHES;
   readonly switchInfo = SWITCH_INFO;
   readonly switchDefault = SWITCH_DEFAULT;
+  readonly iconPacks = ICON_PACKS;
+  readonly packInfo = ICON_PACK_INFO;
+  readonly packDefault = ICON_PACK_DEFAULT;
+  readonly packPreview = PREVIEW;
+  readonly iconSizes = ICON_SIZES;
+  readonly sizeDefault = ICON_SIZE_DEFAULT;
   /** The transition whose preview is open (editor/switch-preview.ts). */
   previewing = signal<ModelSwitch | null>(null);
   readonly reduced = reducedMotion();

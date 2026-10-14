@@ -1,0 +1,97 @@
+/* THE TOOLBARS' ICONS (icon-packs.ts)
+   The 3D room's bar is the viewer's own (three-cad-viewer); the PCB and
+   Firmware rooms wear the same markup (rooms/frame.ts). A button is a
+   frame around an <input class="tcv_btn">: the frame takes the hover and
+   the "on" state, the input paints currentColor through its glyph, so a
+   glyph has no colour of its own and every theme reaches it. Classic
+   keeps the pictures as they were. --tcv-isz is how large a glyph looks
+   (picked in Settings, set on the root): a pack's glyph is drawn in 18 of
+   its 24 units, Classic's in about 22 of 26, so each image is scaled to
+   put that live area at the size. A button is the glyph and 5 px round it. */
+
+/* The bar, in every pack: buttons 2 px apart, groups split by a short
+   hairline rather than a full-height rule. */
+/* Large glyphs on a narrow window: the bar wraps rather than running out
+   of the side. */
+.tcv_cad_toolbar { align-items: center; flex-wrap: wrap; column-gap: 2px; row-gap: 2px; height: auto !important;
+  min-height: calc(var(--tcv-isz, 18px) + 18px); padding-inline: 4px !important; }
+.tcv_cad_toolbar .tcv_separator {
+  align-self: center; flex: none; width: 0; height: calc(var(--tcv-isz, 18px) * .9);
+  margin: 0 5px; padding: 0; border-left: 1px solid var(--line);
+}
+.tcv_cad_toolbar .tcv_tooltip { flex: none; }
+.tcv_cad_toolbar .tcv_button_frame { display: block; margin: 0; border-radius: 5px; }
+.tcv_cad_toolbar .tcv_btn {
+  display: block;
+  width: calc(var(--tcv-isz, 18px) + 10px);
+  height: calc(var(--tcv-isz, 18px) + 10px);
+}
+/* Classic: the viewer's pictures are 26 px drawings with their own margin. */
+:root[data-icons="classic"] .tcv_cad_toolbar .tcv_btn { background-size: calc(var(--tcv-isz, 18px) * 1.18); }
+:root[data-icons="classic"] .tcv_cad_toolbar .tcv-freeze { background-size: calc(var(--tcv-isz, 18px) * 1.1); }
+
+/* ---- a pack other than Classic ---- */
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_button_frame {
+  border: 0;
+  background: transparent;
+}
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_btn {
+  color: var(--ink-dim);
+  background: currentColor !important;
+  -webkit-mask: var(--tcv-i) center / calc(var(--tcv-isz, 18px) * 4 / 3) no-repeat;
+  mask: var(--tcv-i) center / calc(var(--tcv-isz, 18px) * 4 / 3) no-repeat;
+  border-radius: 0;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: transform .12s ease-out;
+}
+/* Hover: the frame lights, the glyph comes up to full ink. */
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_button_frame:hover:not(:has(> .tcv_btn:disabled)) {
+  background: var(--hover);
+}
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_button_frame:hover > .tcv_btn:not(:disabled) {
+  color: var(--ink);
+}
+/* Pressed: a short give, no colour. */
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_btn:active:not(:disabled) {
+  transform: scale(.9);
+}
+/* On (a toggle that is in, the picture that is shown, the pen held): a
+   neutral well with the glyph in the accent - no filled colour block. */
+:root:not([data-icons="classic"]) .tcv_cad_toolbar .tcv_button_frame:is(.tcv_btn_click2, :has(> .tcv-freeze[data-on="1"])) {
+  background: var(--pressed);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+:root:not([data-icons="classic"]) .tcv_cad_toolbar .tcv_button_frame:is(.tcv_btn_click2, :has(> .tcv-freeze[data-on="1"])) > .tcv_btn {
+  color: var(--accent) !important;
+}
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_btn:disabled {
+  opacity: .32;
+  cursor: default;
+}
+:root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_button_frame:has(> .tcv_btn:focus-visible) {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* The pen's tools, docked in the bar while the view is held: the same
+   buttons; Classic keeps the letters they had. */
+.tcv-draw .tcv-draw-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: calc(var(--tcv-isz, 18px) + 10px); height: calc(var(--tcv-isz, 18px) + 10px); padding: 0;
+  color: var(--ink-dim); background: transparent; border: 0; border-radius: 5px;
+}
+.tcv-draw .tcv-draw-btn:hover { color: var(--ink); background: var(--hover); }
+.tcv-draw .tcv-draw-btn[data-on] { color: var(--accent); background: var(--pressed); box-shadow: inset 0 0 0 1px var(--line); }
+.tcv-dt {
+  display: none; width: calc(var(--tcv-isz, 18px) * 4 / 3); height: calc(var(--tcv-isz, 18px) * 4 / 3); background: currentColor;
+  -webkit-mask: var(--tcv-i) center / 100% 100% no-repeat;
+  mask: var(--tcv-i) center / 100% 100% no-repeat;
+}
+:root:not([data-icons="classic"]) .tcv-draw-btn > .tcv-dt { display: block; }
+:root:not([data-icons="classic"]) .tcv-draw-btn > .tcv-dt-glyph { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_btn { transition: none; }
+  :root:not([data-icons="classic"]) :is(.tcv_cad_toolbar, .tcv_cad_animation) .tcv_btn:active:not(:disabled) { transform: none; }
+}

@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { CustomTheme, Font, THEME_NAMES, ThemeId, cachedCustom, currentFont, currentTheme, isCustom, setFont, setTheme } from '../theme';
 import { redlineTheme } from './rooms/code-view';
 import { ModelSwitch, currentSwitch, setSwitch } from './editor/switch-pref';
+import { IconPack, IconSize, currentIconSize, currentIcons, setIconSize, setIcons } from './icon-packs';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
@@ -24,6 +25,9 @@ export class Prefs {
   font = signal<Font>(currentFont());
   /** How the 3D room goes from one model to the next (editor/model-switch.ts). */
   modelSwitch = signal<ModelSwitch>(currentSwitch());
+  /** The toolbars' icons in the 3D, PCB and Firmware rooms (icon-packs.ts). */
+  icons = signal<IconPack>(currentIcons());
+  iconSize = signal<IconSize>(currentIconSize());
 
   constructor() {
     // "?" opens the shortcuts wherever you are - unless you are typing it.
@@ -51,6 +55,10 @@ export class Prefs {
 
   /** Pick the model switch; the next switch uses it. */
   pickSwitch(m: ModelSwitch) { this.modelSwitch.set(setSwitch(m)); }
+
+  /** Pick the toolbars' icon pack; every room wears it at once. */
+  pickIcons(p: IconPack) { this.icons.set(setIcons(p)); }
+  pickIconSize(px: IconSize) { this.iconSize.set(setIconSize(px)); }
 
   /** What a theme is called where it is shown. */
   nameOf(t: ThemeId): string {

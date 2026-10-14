@@ -6,6 +6,8 @@
    identifier but found "-"" warning. They have no classes to find. */
 @source not "../public/tools/*/tool.js";
 @import "./fonts.css";
+/* The toolbars' icon packs (app/icon-packs.ts). */
+@import "./app/icon-packs.css";
 
 /* ============================ THEME ============================
    Every colour in this application is one of the tokens below. Nothing

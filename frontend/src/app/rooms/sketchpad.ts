@@ -21,10 +21,9 @@ export class PenState {
   host: { class: 'tcv-draw' },
   template: `
 @for (t of tools; track t.id) {
-  <button (click)="pen().tool.set(t.id)" [title]="t.label"
-          class="tcv-btn tcv-draw-btn"
-          [style.background]="pen().tool() === t.id ? 'var(--accent)' : null"
-          [style.color]="pen().tool() === t.id ? 'var(--ink-bright)' : null">{{ t.glyph }}</button>
+  <button (click)="pen().tool.set(t.id)" [title]="t.label" [attr.aria-label]="t.label"
+          class="tcv-btn tcv-draw-btn" [attr.data-on]="pen().tool() === t.id ? '' : null"
+          ><span class="tcv-dt-glyph">{{ t.glyph }}</span><i class="tcv-dt" [attr.data-i]="t.id"></i></button>
 }
 <span class="tcv-draw-sep"></span>
 @for (c of PENS; track c) {
