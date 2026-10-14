@@ -342,13 +342,11 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-dfiles { margin-top: 4px; }
 
 /* ---- one product in full (manufacturers.ts detail), in the LCSC part card's own language (part-card.ts,
-   part-desk.ts), over the whole page: a head with the name, one quiet line of what it is, the figures that matter
-   as label and value, small buttons; under it the gallery down the left and the rest beside it, plain sections
-   under hairline headers on one ground, the parts that can grow - the gallery, the price's line - filling what is
-   left. Where a price was read from, and "this is wrong", open on asking. */
-/* full screen under the app's top bar (its open tab and account stay in front of any room), a small margin round it */
-.mf-modal:has(> .mf-pd) { align-items: stretch; padding: 44px 12px 12px; }
-.mf-pd { position: relative; display: flex; flex-direction: column; width: 100%; height: calc(100vh - 56px);
+   part-desk.ts): a head with the name, one quiet line of what it is, the figures that matter as label and value,
+   small buttons; under it three columns down to the box's foot, plain sections under hairline headers on one
+   ground, the parts that can grow - the picture, the files, the stock log - filling what is left. Where a
+   price was read from, and "this is wrong", open on asking. */
+.mf-pd { position: relative; display: flex; flex-direction: column; width: min(1640px, 100%); height: min(920px, calc(100vh - 48px));
   overflow: hidden; box-sizing: border-box; font-size: 12px; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 12px 36px var(--shadow-hard); }
 .mf-pd-head { position: relative; flex: none; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line); }
@@ -402,12 +400,7 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-pd-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mf-pd-dim { font-size: 10.5px; color: var(--ink-dim); }
 .mf-pd-src .mf-fix { padding: 0; }
-.mf-pd-body { display: grid; grid-template-columns: minmax(300px, 5fr) minmax(0, 11fr); flex: 1 1 auto; min-height: 0; }
-.mf-pd-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); }
-.mf-pd-pair { display: grid; grid-template-columns: minmax(0, 6fr) minmax(380px, 5fr); flex: 1 1 auto; min-height: 0; }
-.mf-pd-body[data-hist] .mf-pd-pair { flex: 0 1 auto; }
-.mf-pd-body[data-nogal] { grid-template-columns: minmax(0, 1fr); }
-.mf-pd-body[data-nogal] .mf-pd-main { border-left: 0; }
+.mf-pd-body { display: grid; grid-template-columns: minmax(300px, 4fr) minmax(0, 6fr) minmax(380px, 5fr); flex: 1 1 auto; min-height: 0; }
 .mf-pd-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; overflow: auto; padding: 12px 16px 14px;
   overscroll-behavior: contain; }
 .mf-pd-col + .mf-pd-col { border-left: 1px solid var(--line); }
@@ -415,6 +408,11 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-pd-grow { flex: 1 0 auto; min-height: 0; }
 .mf-pd-sh { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
 .mf-pd-sh h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.mf-pd-img { position: relative; flex: 1 1 200px; min-height: 200px; border-radius: 4px; background: var(--shot-bg); }
+.mf-pd-img[data-solid], .mf-pd-img:has(.mf-noimg) { background: var(--surface-2); }
+.mf-pd-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 12px; box-sizing: border-box; }
+.mf-pd-img .mf-noimg { position: absolute; inset: 0; margin: auto; }
+.mf-pd-thumbs button { width: 44px; height: 44px; }
 .mf-pd-desc { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
 .mf-pd-none { margin: 0; font-size: 11.5px; color: var(--ink-dim); }
 .mf-pd-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 18px; margin: 0; }
@@ -423,46 +421,23 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-pd-specs dd { margin: 0; color: var(--ink-bright); overflow-wrap: anywhere; }
 .mf-pd-spark { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 0 8px; font-size: 10.5px; color: var(--ink-dim); }
 .mf-pd-spark svg { grid-row: span 2; width: 100%; height: 40px; }
-/* beside the gallery: the specs and its files, the stock and where its figures came from, each column fitting the
-   box (the long ones scrolling on their own); under both the price as read, its line beside its readings filling
-   what is left */
-.mf-pd-fit { overflow: hidden; }
-.mf-pd-specsec { flex: 0 1 auto; min-height: 96px; }
-.mf-pd-scroll { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: auto; overscroll-behavior: contain; }
-.mf-pd-filesec { flex: 0 0 auto; min-height: 0; max-height: 62%; overflow: auto; overscroll-behavior: contain; }
-.mf-pd-whence { flex: 0 0 auto; }
-.mf-pd-whence dd { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mf-pd-stocksec { flex: 0 1 auto; min-height: 0; }
-.mf-pd-stocksec .inv-logwrap { max-height: 196px; }
-.mf-pd-histsec { flex: 0 1 auto; min-height: 0; padding: 12px 16px 14px; border-top: 1px solid var(--line); }
-.mf-pd-body[data-hist] .mf-pd-histsec { flex: 1 1 auto; min-height: 180px; }
-.mf-pd-histrow { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 34%); gap: 24px; }
-.mf-pd-histsec .mf-pd-spark { min-height: 0; grid-template-rows: auto 1fr auto; }
-.mf-pd-spark .mf-pd-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
-.mf-pd-spark .mf-pd-dots { stroke-width: 6; stroke-linecap: round; }
-.mf-pd-when { grid-column: 1; display: flex; justify-content: space-between; padding-top: 4px; }
-.mf-pd-histsec .mf-pd-spark svg { height: 100%; min-height: 72px; }
-.mf-pd-spark > span:nth-child(3) { align-self: end; }
-.mf-pd-histwrap { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .mf-pd-spark path { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.mf-pd-spark > span:nth-child(3) { align-self: end; }
+.mf-pd-spark span:last-child { align-self: end; }
 .mf-pd-hist { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 .mf-pd-hist td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
 .mf-pd-hist td.r { text-align: right; }
 .mf-pd-hist td[data-up] { color: var(--danger); }
 .mf-pd-hist td[data-down] { color: var(--ok); }
 .mf-pd-fill { flex: 1 1 auto; min-height: 0; }
-/* narrower: the gallery beside one column of the rest and the whole box scrolls; narrowest, one column */
+/* narrower: the stock column under the specs; narrowest, one column and the whole box scrolls */
 @container (max-width: 1240px) {
-  .mf-pd { height: auto; max-height: calc(100vh - 56px); overflow: auto; }
+  .mf-pd { height: auto; max-height: calc(100vh - 48px); overflow: auto; }
   .mf-pd-body { flex: none; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); }
   .mf-pd-grow { flex: none; }
-  .mf-pd-col, .mf-pd-fit, .mf-pd-scroll, .mf-pd-filesec, .mf-pd-histwrap { overflow: visible; }
-  .mf-pd-pair { display: flex; flex-direction: column; }
-  .mf-pd-pair > .mf-pd-col + .mf-pd-col { border-left: 0; border-top: 1px solid var(--line); }
-  .mf-pd-specsec, .mf-pd-filesec, .mf-pd-stocksec, .mf-pd-histsec, .mf-pd-pair { flex: none; min-height: 0; max-height: none; }
-  .mf-pd-histrow { grid-template-columns: minmax(0, 1fr); }
-  .mf-pd-histsec .mf-pd-spark svg { height: 64px; }
+  .mf-pd-img { flex: none; min-height: 0; aspect-ratio: 4 / 3; }
+  .mf-pd-col { overflow: visible; }
+  .mf-pd-col:last-child { grid-column: 2; border-top: 1px solid var(--line); }
+  .mf-pd-col:first-child { grid-row: span 2; }
 }
 @container (max-width: 760px) {
   .mf-pd { height: auto; max-height: calc(100vh - 16px); overflow: auto; }
@@ -472,7 +447,6 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
   .mf-pd-name { white-space: normal; }
   .mf-pd-body { display: flex; flex-direction: column; overflow: visible; }
   .mf-pd-col { overflow: visible; }
-  .mf-pd-main { border-left: 0; border-top: 1px solid var(--line); }
-  .mf-pd-pair { grid-template-columns: minmax(0, 1fr); }
+  .mf-pd-col + .mf-pd-col { border-left: 0; border-top: 1px solid var(--line); }
   .mf-pd-src { top: auto; }
 }

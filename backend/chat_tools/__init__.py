@@ -50,7 +50,6 @@ class Ctx:
     vision: bool = False
     actor: dict = field(default_factory=dict)
     chat: str = ""
-    step: str = ""                   # the answer's step running the tool (ccgen.run_step): its change is kept for undo
 
 
 @dataclass
@@ -76,21 +75,6 @@ class Tool:
     default: bool = True             # on for someone who never chose
     order: int = 100
     package: str = "other"           # its package (PACKAGES below): how the Tools panel and the model see it
-    # How what it changed is undone (backend/chat_undo.py): None - the generic inverse of every write it made;
-    # False - nothing kept (a cache); "words" - kept and shown, not undoable, the words say why; or its own
-    # `async (ctx, change, apply: bool)`, which raises chat_undo.Conflict when it cannot.
-    undo: Any = None
-
-    def __post_init__(self) -> None:
-        # A writing tool run as a step is recorded: what it wrote, for the Chat's undo.
-        handler = self.run
-
-        async def run(ctx: Ctx, args: dict) -> Result:
-            if self.level == "read" or self.undo is False or not getattr(ctx, "step", ""):
-                return await handler(ctx, args)
-            from .. import chat_undo
-            return await chat_undo.recorded(self, handler, ctx, args)
-        self.run = run
 
     def spec(self) -> dict:
         """As a model is told about it (OpenAI's shape; llm.py turns it

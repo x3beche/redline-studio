@@ -23,7 +23,11 @@ NAMES = ["body"]
 
 import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, FirmwareNode, ModelEntry,
          Revision, RevisionStatus } from '../api';
-import { OcpViewer, ViewApplied, viewHash } from './ocp';
+import type { OcpViewer, ViewApplied } from './ocp';
+import { viewHash } from './view-hash';
+/** The viewer, with three.js under it, is two megabytes: a chunk of its own,
+ *  asked for the moment this module runs, so the shell paints without it. */
+const OCP = import('./ocp');
 import { Markdown, plain } from '../markdown';
 import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
@@ -368,6 +372,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.restorePanels();
     const box = this.stage().nativeElement;
     try {
+      const { OcpViewer } = await OCP;
       this.viewer = new OcpViewer(this.host().nativeElement);
       // tools/render.py: the viewer alone, its canvas pinned to the size of
       // the picture (styles.css, html[data-shot]).

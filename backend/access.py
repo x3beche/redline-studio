@@ -198,8 +198,6 @@ _RULES: list[tuple[str, str, str]] = [
     # first (cc_chat.py keeps that to whoever asked, or who may delete)
     ("PUT", "/api/cc/tools", "draw"),
     ("POST", "/api/cc/chats/{}/steps/{}", "draw"),
-    # Undo and redo of what a tool changed: each also needs the rights the change needed (chat_undo.py).
-    ("POST", "/api/cc/chats/{}/changes/(undo|{}/redo)", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
     # custom themes (backend/themes.py): anyone may make one in their own
     # space; the routes keep changing or deleting one to its maker or the

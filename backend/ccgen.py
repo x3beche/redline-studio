@@ -413,8 +413,6 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
             end(status="denied")
             return "Not run: the person did not allow it.", True
         end(status="running")
-    if ctx is not None:
-        ctx.step = step["id"]                                    # what it writes is kept under this step (chat_undo.py)
     t0 = time.monotonic()
     try:
         res = await asyncio.wait_for(tool.run(ctx, args), TOOL_TIMEOUT)

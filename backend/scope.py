@@ -56,8 +56,6 @@ SCOPED = frozenset({
     "product_files",
     # the agent sessions' heartbeats: who holds a note, and whether it is still there (backend/asks.py)
     "agent_sessions",
-    # what the Chat's tools changed, kept for undo (backend/chat_undo.py)
-    "cc_changes",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

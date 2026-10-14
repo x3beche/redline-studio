@@ -22,7 +22,7 @@ import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
-import { BackCloses, GalleryModel, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
+import { ProductFilesPanel, ProductFilesState } from './product-files';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
@@ -327,7 +327,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
@@ -1012,74 +1012,53 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             </div>
           }
         </header>
-        <!-- the body: three columns down to the box's foot, sections under plain headers, the parts that can grow filling it:
-             the gallery (its pictures and its 3D model); the specs, its files, where its figures came from; the stock over
-             the price as read, the price's line filling what is left -->
-        <!-- the body: the gallery (its pictures and its 3D model) down the left, when it has any; beside it the specs and
-             its files over against the stock and where its figures came from, and under both, as wide as they are, the
-             price and the seller's stock as read - its line, when there are two readings or more, filling what is left -->
-        <div class="mf-pd-body" [attr.data-hist]="spark(d) ? 1 : null" [attr.data-nogal]="!gallery().length && !galModel() ? 1 : null">
-          @if (gallery().length || galModel()) {
+        <!-- the body: three columns down to the box's foot, sections under plain headers, the parts that can grow filling it -->
+        <div class="mf-pd-body">
           <div class="mf-pd-col">
             <section class="mf-pd-sec mf-pd-grow">
-              <div class="mf-pd-sh"><h3>{{ (galModel() ? 'Pictures and 3D model' : 'Pictures') | t }}</h3>@if (gallery().length > 1) { <span class="st-sub">{{ gallery().length }}</span> }</div>
-              <wb-pd-gallery class="mf-pd-fill" [key]="d.maker.id + ':' + d.id" [pics]="gallery()" [model]="galModel()" [canDrop]="can()"
-                             (files)="pfl.upload($event)" (broke)="broke($event)" />
+              <div class="mf-pd-sh"><h3>{{ 'Pictures' | t }}</h3>@if (gallery().length > 1) { <span class="st-sub">{{ gallery().length }}</span> }</div>
+              <div class="mf-pd-img" [attr.data-solid]="bigImg()?.includes('/thumb?v=') ? 1 : null">@if (bigImg(); as src) { <img [class.tcv-fm-solid]="src.includes('/thumb?v=')" [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+                @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
+              @if (gallery().length > 1) {
+                <div class="mf-thumbs mf-pd-thumbs">@for (u of gallery(); track u) {
+                  <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+              }
+            </section>
+            <section class="mf-pd-sec">
+              <div class="mf-pd-sh"><h3>{{ 'Price and stock, as read' | t }}</h3><span class="st-sub">{{ d.history?.length || '' }}</span></div>
+              @if (d.history?.length) {
+                @if (spark(d); as sp) {
+                  <div class="mf-pd-spark"><svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sp.line" /></svg>
+                    <span class="mono">{{ moneyIn(sp.max, sp.cur) }}</span><span class="mono">{{ moneyIn(sp.min, sp.cur) }}</span></div>
+                }
+                <table class="mf-pd-hist">
+                  <tbody>@for (h of histRows(d).slice(0, 6); track h.at) {
+                    <tr><td class="dim">{{ ago(h.at) }}</td>
+                      <td class="r mono" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}</td>
+                      <td class="dim">{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
+                      <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
+                  }</tbody>
+                </table>
+              } @else { <p class="mf-pd-none">{{ 'Read once a price or a stock is on its page.' | t }}</p> }
             </section>
           </div>
-          }
-          <div class="mf-pd-main">
-            <div class="mf-pd-pair">
-              <div class="mf-pd-col mf-pd-fit">
-                <section class="mf-pd-sec mf-pd-specsec">
-                  <div class="mf-pd-sh"><h3>{{ 'Specs' | t }}</h3>@if (specList(d).length) { <span class="st-sub">{{ specList(d).length }}</span> }</div>
-                  <div class="mf-pd-scroll">
-                    @if (d.description) { <p class="mf-pd-desc">{{ d.description }}</p> }
-                    @if (specList(d).length) {
-                      <dl class="mf-pd-specs">@for (s of specList(d); track s[0]) { <div><dt [title]="s[0]">{{ s[0] }}</dt><dd [title]="s[1]">{{ s[1] }}</dd></div> }</dl>
-                    } @else { <p class="mf-pd-none">{{ 'Its page gave no specs.' | t }}</p> }
-                  </div>
-                </section>
-                <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts); the whole section takes a drop -->
-                <wb-product-files #pfl class="mf-pd-sec mf-pd-filesec" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
-              </div>
-              <div class="mf-pd-col mf-pd-fit">
-                <section class="mf-pd-sec mf-pd-stocksec">
-                  <div class="mf-pd-sh"><h3>{{ 'Stock' | t }}</h3></div>
-                  <!-- how many are on hand, where, the log (stock.ts) -->
-                  <wb-stock-panel class="mf-pd-fill" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
-                </section>
-                <!-- where its figures came from and when: the dates and the readings' sources, plainly (the head's link has the doubts and "this is wrong") -->
-                <section class="mf-pd-sec mf-pd-whence">
-                  <div class="mf-pd-sh"><h3>{{ 'From its page' | t }}</h3></div>
-                  <dl class="mf-pd-specs">
-                    @for (r of whence(d); track r[0]) { <div><dt [title]="r[0]">{{ r[0] }}</dt><dd [title]="r[1]">{{ r[1] }}</dd></div> }
-                  </dl>
-                </section>
-              </div>
-            </div>
-            <!-- the price and the seller's stock each time its page was read, under both: the line of the price beside its readings -->
-            @if (d.history?.length) {
-              <section class="mf-pd-sec mf-pd-histsec">
-                <div class="mf-pd-sh"><h3>{{ 'Price and stock, as read' | t }}</h3><span class="st-sub">{{ d.history!.length }}</span></div>
-                <div class="mf-pd-histrow">
-                  @if (spark(d); as sp) {
-                    <div class="mf-pd-spark"><svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
-                        <path class="mf-pd-grid" [attr.d]="sp.grid" /><path [attr.d]="sp.line" /><path class="mf-pd-dots" [attr.d]="sp.dots" /></svg>
-                      <span class="mono">{{ moneyIn(sp.max, sp.cur) }}</span><span class="mono">{{ moneyIn(sp.min, sp.cur) }}</span>
-                      <span class="mf-pd-when"><span>{{ sp.from }}</span><span>{{ sp.to }}</span></span></div>
-                  }
-                  <div class="mf-pd-histwrap"><table class="mf-pd-hist">
-                    <tbody>@for (h of histRows(d); track h.at) {
-                      <tr><td class="dim">{{ ago(h.at) }}</td>
-                        <td class="r mono" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}</td>
-                        <td class="dim">{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
-                        <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
-                    }</tbody>
-                  </table></div>
-                </div>
-              </section>
-            }
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec">
+              <div class="mf-pd-sh"><h3>{{ 'Specs' | t }}</h3>@if (specList(d).length) { <span class="st-sub">{{ specList(d).length }}</span> }</div>
+              @if (d.description) { <p class="mf-pd-desc">{{ d.description }}</p> }
+              @if (specList(d).length) {
+                <dl class="mf-pd-specs">@for (s of specList(d); track s[0]) { <div><dt [title]="s[0]">{{ s[0] }}</dt><dd [title]="s[1]">{{ s[1] }}</dd></div> }</dl>
+              } @else { <p class="mf-pd-none">{{ 'Its page gave no specs.' | t }}</p> }
+            </section>
+            <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts) -->
+            <wb-product-files class="mf-pd-sec mf-pd-grow" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
+          </div>
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec mf-pd-grow">
+              <div class="mf-pd-sh"><h3>{{ 'Stock' | t }}</h3></div>
+              <!-- how many are on hand, where, the log (stock.ts) -->
+              <wb-stock-panel class="mf-pd-fill" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
+            </section>
           </div>
         </div>
       </div>
@@ -1409,8 +1388,9 @@ export class RoomMfr implements OnDestroy {
     { value: 'out', label: t('Out of stock') }]);
   filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck() || this.gheld()));
   filteredButHeld = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck()));
-  /** The product open in full (?p=, its maker ?pm=). */
+  /** The product open in full (?p=, its maker ?pm=), and the picture shown big. */
   detail = signal<GridItem | null>(null);
+  shot = signal<string | null>(null);
   /** Pictures that did not load: the placeholder instead. */
   broken = signal<Set<string>>(new Set());
 
@@ -1738,11 +1718,9 @@ export class RoomMfr implements OnDestroy {
     // A McMaster-Carr part or a GrabCAD model: its page, its CAD files, what was written of it.
     if (p.linked) { this.linked.show(p.maker.id, p.linked); return; }
     this.detail.set(p);
-    this.back.opened();
+    this.shot.set(null);
   }
-  /** Back closes the product open in full. */
-  private back = new BackCloses(() => this.closeDetail());
-  closeDetail() { this.back.closed(); this.detail.set(null); this.fix.set(null); this.src.set(false); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
+  closeDetail() { this.detail.set(null); this.fix.set(null); this.src.set(false); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
 
   // ---- what a price or a stock was read from, its doubts, "Wrong", and "Re-read all products"
 
@@ -1923,23 +1901,19 @@ export class RoomMfr implements OnDestroy {
     }));
   }
   /** Its pictures, the main one first; those that did not load left out. */
-  pics(p: Product, solid = true): string[] {
+  pics(p: Product): string[] {
     if (p.linked) { const s = this.linked.pic(p.linked); return s ? [s] : []; }
     const b = this.broken();
     // A picture attached and made the product's own comes first (product-files.ts).
     const mid = (p as GridItem).maker?.id;
     const got = [...new Set([this.pfiles.picture(mid, p.id), p.image, ...(p.images ?? [])].filter(u => !!u && !b.has(u!)))] as string[];
     // None of its own: its attached 3D model's picture.
-    const thumb = got.length || !solid ? null : this.pfiles.solid(mid, p.id);
-    return thumb && !b.has(thumb) ? [thumb] : got;
+    const solid = got.length ? null : this.pfiles.solid(mid, p.id);
+    return solid && !b.has(solid) ? [solid] : got;
   }
   img(p: Product): string | null { return this.pics(p)[0] ?? null; }
-  /** The detail's gallery: its own pictures, and its attached 3D model as an item of it (product-files.ts ProductGallery). */
-  gallery = computed(() => { const d = this.detail(); return d ? this.pics(d, false).slice(0, 12) : []; });
-  galModel = computed((): GalleryModel | null => {
-    const d = this.detail(), h = d ? this.pfiles.model(d.maker?.id, d.id) : null;
-    return h?.cad_file ? { file: h.cad_file, name: h.cad_name || '', kind: h.cad || 'step', thumb: h.thumb } : null;
-  });
+  gallery = computed(() => { const d = this.detail(); return d ? this.pics(d).slice(0, 12) : []; });
+  bigImg = computed(() => { const s = this.shot(), g = this.gallery(); return s && g.includes(s) ? s : g[0] ?? null; });
   broke(src: string) { if (!this.broken().has(src)) this.broken.update(s => new Set(s).add(src)); }
   /** The seller's site: its own little icon (loaded from it, like the pictures). */
   fav(p: GridItem): string {
@@ -1969,15 +1943,6 @@ export class RoomMfr implements OnDestroy {
     if (meta.snippet) return t('read from') + ' "' + meta.snippet + '" (' + t(this.srcName(meta.source)) + ')';
     return meta.source ? t(this.srcName(meta.source)) : '';
   }
-  /** The detail's "From its page": its dates, then where its price and stock were read. */
-  whence(d: Product): [string, string][] {
-    const out: [string, string][] = [[t('Added to the catalog'), this.stamp(d.added_at)], [t('Page read'), this.stamp(d.read_at)],
-      [t('Price read'), this.stamp(d.price?.at)], [t("Seller's update"), d.updated ? this.stamp(d.updated) : t('not given')]];
-    const p = this.srcTip('price', d.price), s = this.srcTip('stock', d.stock_read);
-    if (p) out.push([t('Price'), p]);
-    if (s) out.push([t('Stock'), s]);
-    return out;
-  }
   /** Every date of a product in one tooltip. */
   datesTip(d: Product): string {
     return [[t('Added to the catalog'), this.stamp(d.added_at)], [t('Price read'), this.stamp(d.price?.at)], [t('Page read'), this.stamp(d.read_at)],
@@ -1986,17 +1951,14 @@ export class RoomMfr implements OnDestroy {
   /** "40 × 40 × 12.13 mm". */
   boxOf(b: number[]): string { return b.map(x => String(Math.round(x * 100) / 100)).join(' × ') + ' mm'; }
   /** The price readings as a line, oldest left: its path, its area and its range. */
-  spark(p: Product): { line: string; area: string; dots: string; grid: string; min: number; max: number; cur: string; from: string; to: string } | null {
+  spark(p: Product): { line: string; area: string; min: number; max: number; cur: string } | null {
     const cur = p.price?.currency;
     const h = (p.history ?? []).filter(x => x.amount != null && (!cur || !x.currency || x.currency === cur));
     if (h.length < 2) return null;
     const v = h.map(x => x.amount as number), min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
     const pts = v.map((y, i) => [i / (v.length - 1) * 200, 40 - (y - min) / span * 36]);
     const line = pts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
-    // Each reading a round dot (a zero-length stroke keeps round however the line is stretched), quiet rules at the top, middle and foot.
-    const dots = pts.map(([x, y]) => 'M' + x.toFixed(1) + ' ' + y.toFixed(1) + 'l0 0').join(' ');
-    const grid = [4, 22, 40].map(y => `M0 ${y}H200`).join(' ');
-    return { line, area: line + ' L200 44 L0 44 Z', dots, grid, min, max, cur: cur || h[0].currency || 'TRY', from: this.ago(h[0].at), to: this.ago(h[h.length - 1].at) };
+    return { line, area: line + ' L200 44 L0 44 Z', min, max, cur: cur || h[0].currency || 'TRY' };
   }
   copyText(v: string) {
     try { navigator.clipboard.writeText(v).then(() => Toast.show(this.fmt('{c} copied', { c: v })), () => {}); } catch { /* no clipboard */ }

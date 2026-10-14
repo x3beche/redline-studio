@@ -72,9 +72,6 @@ app.include_router(imports_api.router)
 from . import cc_chat, llm, llm_api, netproxy  # noqa: E402
 app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
-# What the Chat's tools changed, and undoing it (backend/chat_undo.py).
-from . import chat_undo  # noqa: E402
-app.include_router(chat_undo.router)
 # People writing to each other in the Chat tab: direct messages, outside every space (backend/dm.py).
 from . import dm  # noqa: E402
 app.include_router(dm.router)
@@ -3140,7 +3137,6 @@ async def _start_sampler():
         try:
             # The trash of the Command Code room empties itself after 30 days.
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace
-            await chat_undo.ensure_indexes(db().raw)     # the Chat's changes, by conversation and by expiry
         except Exception as exc:                       # noqa: BLE001 - the trash still works, only fuller
             LOG.warning("Command Code trash index not made: %s", exc)
         try:

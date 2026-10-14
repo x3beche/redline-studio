@@ -66,4 +66,4 @@ TOOL = Tool(
         "again": {"type": "boolean", "description": "Add it even though a maker is kept for that site"}},
         "required": ["url"]},
     running="Adding a manufacturer", failed="Could not add the manufacturer",
-    run=run, undo="a maker's exploration runs on its own - remove the maker on the Parts page")
+    run=run)

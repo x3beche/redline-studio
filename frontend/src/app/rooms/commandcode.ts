@@ -15,7 +15,6 @@ import { CcUsageLine, pingUsage } from '../cc-usage';
 import { money as shownMoney } from '../money';
 import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
-import { CcChanged, CcChangesPanel } from './cc-changes';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
@@ -410,7 +409,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel],
+  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -759,9 +758,6 @@ type Ask = { text: string; label: string; go: () => void };
                   {{ 'Copy conversation' | t }}</button>
                 <button (click)="exportChat()" [disabled]="!messages().length"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" />
                   {{ 'Export as Markdown' | t }}</button>
-                <!-- What the tools changed here, with undo (rooms/cc-changes.ts). -->
-                <button (click)="changesOpen.set(true)"><ng-container *ngTemplateOutlet="ico; context: { $implicit: UNDO_ICO }" />
-                  {{ 'Changes made' | t }}</button>
                 @if (mayDelete(c)) {
                   <hr>
                   <button class="tcv-cc-danger" (click)="deleteChats([c])"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" />
@@ -776,9 +772,6 @@ type Ask = { text: string; label: string; go: () => void };
           }
         </div>
       </header>
-      @if (changesOpen()) {
-        <rl-cc-changes [cid]="c.id" [messages]="messages()" (close)="changesOpen.set(false)" />
-      }
 
       <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)" (scroll)="logScrolled()"
            [class.tcv-att-over]="att.over()" (dragover)="auth.can('draw') && att.dragOver($event)"
@@ -827,7 +820,6 @@ type Ask = { text: string; label: string; go: () => void };
                     }
                     }
                   }
-                  <rl-cc-changed [cid]="c.id" [steps]="m.steps" />
                   @if (pkgLine(m); as pk) { <div class="tcv-cc-pkgs" [title]="'Tool packages sent with this line' | t">{{ 'Tools sent' | t }}: {{ pk }}</div> }
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
@@ -3216,9 +3208,6 @@ export class RoomCommandCode implements OnDestroy {
   toolsReady = signal(false);
   /** The tools are shown where the conversation is (cc-tools.ts) until closed or a conversation is picked. */
   toolsOpen = signal(false);
-  /** The conversation's changes made by tools, with undo (rooms/cc-changes.ts). */
-  changesOpen = signal(false);
-  UNDO_ICO = 'M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11';
   toolsOn = computed(() => this.tools().filter(x => x.on).length);
   private toolsLoaded = (() => { this.loadTools(); return true; })();
   private loadTools() {

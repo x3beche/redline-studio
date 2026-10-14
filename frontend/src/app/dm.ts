@@ -6,7 +6,6 @@ import { Auth } from './auth';
 import { Avatar } from './avatar';
 import { T, t } from './i18n';
 import { Selection } from './selection';
-import { FileModal } from './rooms/file-modal';
 import { EmptyState } from './empty-state';
 
 /** Direct messages: people writing to each other in the Chat tab
@@ -330,7 +329,8 @@ export class DmStore {
       // A stock line sent before stock was a part of the Parts page: its product, there.
       case 'inventory': s.room.set('mfr'); s.ask('mfr-stock-item', it.id); break;
       case 'note': s.room.set('notes'); s.ask('note', it.id); break;
-      case 'file': s.room.set('files'); FileModal.open({ id: it.id, name: it.label }); break;
+      // The file's box comes with the viewers it needs (PDF, 3D, code): loaded when asked.
+      case 'file': { const f = { id: it.id, name: it.label }; s.room.set('files'); void import('./rooms/file-modal').then(m => m.FileModal.open(f)); break; }
       case 'firmware': s.jumpToFirmware(it.id, null); break;
     }
   }

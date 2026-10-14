@@ -5,8 +5,6 @@ import { Catalog, FolderNode } from './api';
 import { CcWant, Selection } from './selection';
 import { PARTS_LABEL, WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
-import { TasteApi } from './rooms/taste';
-import { MfrApi } from './rooms/manufacturers';
 import { Prefs } from './preferences';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
@@ -124,8 +122,6 @@ export class Palette {
   /** Direct messages: "Send to a person…" for what is open (dm.ts). */
   private dms = inject(DmStore);
   private notes = inject(NotesApi);
-  private taste = inject(TasteApi);
-  private mfrs = inject(MfrApi);
   private prefs = inject(Prefs);
   private threads = inject(AgentThreads);
   private box = viewChild<ElementRef<HTMLInputElement>>('box');
@@ -394,8 +390,12 @@ export class Palette {
     this.asking.set(null);
     this.open.set(true);
     this.catalog.tree().subscribe(t => this.tree.set(t));
-    this.taste.list().subscribe({ next: ps => this.palettes.set(ps), error: () => {} });
-    this.mfrs.list().subscribe({ next: ms => this.makers.set(ms), error: () => {} });
+    // Asked here rather than through the Taste and Parts rooms' services
+    // (TasteApi.list, MfrApi.list): those would bring the whole rooms along.
+    this.http.get<{ id: string; name: string; items: unknown[] }[]>('/api/taste?q=')
+      .subscribe({ next: ps => this.palettes.set(ps), error: () => {} });
+    this.http.get<{ id: string; name: string; domain: string; product_count: number }[]>('/api/manufacturers?q=')
+      .subscribe({ next: ms => this.makers.set(ms), error: () => {} });
     if (!this.tools().length) {
       fetch('/api/tools/catalog').then(r => r.ok ? r.json() : null)
         .then(d => d && this.tools.set(d.tools)).catch(() => {});

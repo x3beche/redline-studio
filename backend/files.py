@@ -20,7 +20,6 @@ Files belong to the workspace (backend/scope.py), and so do the folders.
 
 from __future__ import annotations
 
-import contextvars
 import csv
 import hashlib
 import io
@@ -119,11 +118,6 @@ def kind_of(name: str, head: bytes = b"") -> str:
     return "table"
 
 
-# While set (a list), a removed file's bytes are handed to it instead of deleted:
-# the Chat's undo keeps them until its window ends (backend/chat_undo.py).
-HOLD: contextvars.ContextVar[list | None] = contextvars.ContextVar("files_hold", default=None)
-
-
 def _bucket(db):
     from .store import bucket
     return bucket(db, BUCKET)
@@ -196,14 +190,10 @@ async def remove(db, fid: str) -> bool:
     doc = await db[COLL].find_one({"_id": fid}, {"gridfs_id": 1, "sha256": 1})
     if not doc:
         return False
-    held = HOLD.get()
-    if held is not None:
-        held.append(doc["gridfs_id"])         # the Chat's undo keeps the bytes for its window (chat_undo.py)
-    else:
-        try:
-            await _bucket(db).delete(doc["gridfs_id"])
-        except Exception:
-            pass                              # the bytes are gone already; drop the record anyway
+    try:
+        await _bucket(db).delete(doc["gridfs_id"])
+    except Exception:
+        pass                                  # the bytes are gone already; drop the record anyway
     await db[COLL].delete_one({"_id": fid})
     # A 3D file's picture is kept by content: it goes with the last copy.
     sha = doc.get("sha256")

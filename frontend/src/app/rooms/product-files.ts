@@ -1,14 +1,12 @@
-import { Component, Injectable, OnDestroy, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, Injectable, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { Auth } from '../auth';
 import { Confirm } from '../confirm';
 import { LANG, T, t } from '../i18n';
 import { Toast } from '../toast';
 import { MeshThumbs } from './mesh-thumb';
-import { StoredFile, inlineUrl, meshUrl } from './files-model';
-import { MeshView } from './mesh-view';
+import { StoredFile } from './files-model';
 import { LinkedMeasured, kb, measuredBox, measuredRows, mismatchTip } from './linked';
 
 /** Files on any Parts product (backend/product_files.py): its 3D model -
@@ -70,12 +68,11 @@ export class ProductFilesState {
  *  zone, what the model measured, the files with their roles. */
 @Component({
   selector: 'wb-product-files',
-  imports: [T, NgTemplateOutlet],
+  imports: [T],
   host: { style: 'display: block' },
   styleUrls: ['../settings.css', './manufacturers.css', './linked.css', './product-files.css'],
   template: `
-<section class="pfl" [attr.aria-label]="'Files' | t" [attr.data-compact]="compact() ? 1 : null" [attr.data-on]="compact() && dropping() ? 1 : null"
-         (dragover)="over($event)" (dragleave)="leave($event)" (drop)="dropped($event)">
+<section class="pfl" [attr.aria-label]="'Files' | t" [attr.data-compact]="compact() ? 1 : null">
   <div class="pfl-head" [class.pfl-sh]="compact()">
     @if (compact()) { <h3>{{ '3D model and files' | t }}</h3> } @else { <span class="mf-label">{{ 'Files' | t }}</span> }
     @if (v(); as x) {
@@ -85,8 +82,7 @@ export class ProductFilesState {
   </div>
   @if (v(); as x) {
    <div class="pfl-main">
-    @if (!compact()) {
-    <div class="pfl-top" [attr.data-solo]="!can() ? 1 : null">
+    <div class="pfl-top" [attr.data-solo]="!can() ? 1 : null" [attr.data-nocad]="compact() && !x.cad && can() ? 1 : null">
       <div class="ln-pic pfl-pic">
         @if (pic(); as src) { <img class="tcv-fm-solid" [src]="src" alt=""> }
         @else { <svg class="ln-cube" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9" /></svg>
@@ -99,12 +95,11 @@ export class ProductFilesState {
                (drop)="$event.preventDefault(); dropping.set(false); upload($any($event).dataTransfer?.files)">
           <input type="file" multiple [accept]="x.accept" hidden (change)="upload($any($event.target).files); $any($event.target).value = ''">
           <b>{{ (busy() ? 'Keeping it…' : (x.cad ? 'Drop more files here' : 'Drop its STEP, datasheet or pictures here')) | t }}</b>
-          <span>{{ 'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.' | t }}</span>
+          <span [title]="'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.' | t">{{ (compact() ? 'STEP, STL, 3MF, OBJ, PDF, pictures, ZIP' : 'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.') | t }}</span>
           @if (busy()) { <span class="pfl-prog mono">{{ busy() }}</span> }
         </label>
       }
     </div>
-    }
     <!-- what its model measured (backend/linked_measure.py), a figure its words say otherwise marked -->
     @if (x.measured; as ms) {
       <div class="ln-meas pfl-meas">
@@ -142,28 +137,9 @@ export class ProductFilesState {
           </tr>
         }
       </tbody></table></div>
-      @if (x.cad && !compact()) { <ng-container *ngTemplateOutlet="cadT; context: { $implicit: x }" /> }
-    }
-    <!-- in the detail: the model's picture is the gallery's (ProductGallery); here one slim row - the CAD command and where to drop more -->
-    @if (compact() && (can() || x.cad)) {
-      <div class="pfl-foot">
-        @if (x.cad) { <ng-container *ngTemplateOutlet="cadT; context: { $implicit: x }" /> }
-        @if (can()) {
-          <label class="pfl-strip" [attr.data-busy]="busy() ? 1 : null"
-                 [title]="'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.' | t">
-            <input type="file" multiple [accept]="x.accept" hidden (change)="upload($any($event.target).files); $any($event.target).value = ''">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4 M7 9l5-5 5 5 M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
-            @if (busy()) { <b>{{ 'Keeping it…' | t }}</b><span class="mono">{{ busy() }}</span> }
-            @else { <b>{{ (x.files.length ? 'Drop more files anywhere here' : 'Drop its STEP, datasheet or pictures here') | t }}</b>
-                    <span>{{ 'STEP, STL, 3MF, OBJ, PDF, pictures, ZIP - or click' | t }}</span> }
-          </label>
-        }
-      </div>
+      @if (x.cad) { <button class="st-more pfl-cad" (click)="copyCad(x)" [title]="('The CAD rooms use it as a model of its own:' | t) + ' revisions.py product to-model ' + x.maker + ':' + x.product + ' --folder …'">{{ 'Use in CAD - copy the command' | t }}</button> }
     }
    </div>
-   <ng-template #cadT let-x>
-     <button class="st-more pfl-cad" (click)="copyCad(x)" [title]="('The CAD rooms use it as a model of its own:' | t) + ' revisions.py product to-model ' + x.maker + ':' + x.product + ' --folder …'">{{ 'Use in CAD - copy the command' | t }}</button>
-   </ng-template>
   }
 </section>`,
 })
@@ -174,7 +150,7 @@ export class ProductFilesPanel implements OnDestroy {
   private state = inject(ProductFilesState);
   readonly maker = input.required<string>();
   readonly product = input.required<string>();
-  /** In the product's detail: no picture (the gallery shows the model), the whole section the drop target, a slim row to choose. */
+  /** In a narrow column (the product's detail): the picture above the drop zone, the drop zone short. */
   readonly compact = input(false);
   v = signal<ProductFiles | null>(null);
   err = signal('');
@@ -195,13 +171,6 @@ export class ProductFilesPanel implements OnDestroy {
   ngOnDestroy() { clearTimeout(this.timer); }
 
   can() { return this.auth.can('draw'); }
-  /** In the detail the whole section takes a drop: files dragged over it, off it (not between its rows), let go on it. */
-  over(e: DragEvent) { if (this.compact() && this.can() && this.v()) { e.preventDefault(); this.dropping.set(true); } }
-  leave(e: DragEvent) { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) this.dropping.set(false); }
-  dropped(e: DragEvent) {
-    if (!this.compact() || !this.can()) return;
-    e.preventDefault(); this.dropping.set(false); this.upload(e.dataTransfer?.files ?? null);
-  }
   /** The measured rows, translated: [what, value, what its words say otherwise or '']. */
   rows = computed((): [string, string, string][] => {
     const ms = this.v()?.measured;
@@ -292,119 +261,5 @@ export class ProductFilesPanel implements OnDestroy {
       this.state.load();
       if (r.product?.measured?.pending) this.read(this.maker(), this.product(), 1);
     } catch (e) { Toast.show(why(e, 'Could not detach it.'), { tone: 'danger' }); }
-  }
-}
-
-/** The 3D model a gallery shows beside the pictures: its file, kind and the picture drawn of it. */
-export interface GalleryModel { file: string; name: string; kind: string; thumb?: string | null }
-
-/** A product's pictures and its 3D model in one gallery, at the head of its
- *  detail (the Parts product, a saved McMaster-Carr or GrabCAD item): the
- *  one picked large, the others in a strip. The model is an item like a
- *  picture - its drawn picture tinted as in Files, marked "3D" - and turns
- *  in the hand on asking (mesh-view.ts). With nothing to show, the stage is
- *  where its first picture or STEP is dropped. */
-@Component({
-  selector: 'wb-pd-gallery',
-  imports: [T, MeshView],
-  host: { class: 'pdg', style: 'display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0' },
-  styleUrls: ['./product-files.css'],
-  template: `
-<div class="pdg-stage" [attr.data-solid]="cur()?.solid ? 1 : null" [attr.data-empty]="!cur() ? 1 : null" [attr.data-on]="dropping() ? 1 : null"
-     (dragover)="over($event)" (dragleave)="dropping.set(false)" (drop)="drop($event)">
-  @if (cur(); as c) {
-    @if (c.solid && live() && model(); as m) {
-      <app-mesh-view [src]="meshSrc(m)" [name]="m.name" [step]="m.kind === 'step'" />
-    } @else if (c.src) {
-      <img [class.tcv-fm-solid]="c.solid" [src]="c.src" referrerpolicy="no-referrer" alt="" (error)="broke.emit(c.src)">
-    } @else {
-      <div class="pdg-none"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="CUBE" /></svg><span>{{ 'drawing its picture…' | t }}</span></div>
-    }
-    @if (c.solid && model(); as m) {
-      <span class="pdg-tag" [title]="m.name">3D · {{ m.kind === 'step' ? 'STEP' : ('mesh' | t) }}</span>
-      <button class="pdg-turn" (click)="live.set(!live())">{{ (live() ? 'Its picture' : 'Turn it in 3D') | t }}</button>
-    }
-  } @else if (canDrop()) {
-    <label class="pdg-none pdg-drop">
-      <input type="file" multiple [accept]="accept()" hidden (change)="files.emit($any($event.target).files); $any($event.target).value = ''">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4 M7 9l5-5 5 5 M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
-      <b>{{ 'No picture and no 3D model yet' | t }}</b>
-      <span>{{ 'Drop a picture or its STEP here, or click to choose' | t }}</span>
-    </label>
-  } @else {
-    <div class="pdg-none"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="CUBE" /></svg><span>{{ 'No picture and no 3D model yet' | t }}</span></div>
-  }
-</div>
-@if (items().length > 1) {
-  <div class="pdg-strip" role="listbox" [attr.aria-label]="'Pictures' | t">
-    @for (it of items(); track it.key) {
-      <button role="option" [attr.aria-selected]="it.key === cur()?.key" [class.on]="it.key === cur()?.key" (click)="pick.set(it.key)"
-              [title]="it.solid ? ('3D model' | t) : ''">
-        @if (it.src) { <img [class.tcv-fm-solid]="it.solid" [src]="it.src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke.emit(it.src)"> }
-        @else { <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="CUBE" /></svg> }
-        @if (it.solid) { <i>3D</i> }
-      </button>
-    }
-  </div>
-}`,
-})
-export class ProductGallery {
-  private solids = inject(MeshThumbs);
-  /** Whose gallery: picking and turning start again for another. */
-  readonly key = input('');
-  readonly pics = input<string[]>([]);
-  readonly model = input<GalleryModel | null>(null);
-  /** Files may be dropped on an empty stage: given out as they are, for the files panel to keep. */
-  readonly canDrop = input(false);
-  readonly accept = input('.step,.stp,.stl,.3mf,.obj,.pdf,.png,.jpg,.jpeg,.webp,.zip');
-  readonly files = output<FileList | File[]>();
-  readonly broke = output<string>();
-  readonly CUBE = 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9';
-  pick = signal<string | null>(null);
-  live = signal(false);
-  dropping = signal(false);
-
-  constructor() {
-    effect(() => { this.key(); untracked(() => { this.pick.set(null); this.live.set(false); }); });
-  }
-  /** The pictures, then the model; the model first when it is all there is of it to see. */
-  items = computed(() => {
-    const m = this.model();
-    const out = this.pics().map(src => ({ key: src, src: src as string | null, solid: false }));
-    if (m) {
-      const it = { key: '3d:' + m.file, src: this.solids.drawn()[m.file] ?? m.thumb ?? null, solid: true };
-      if (out.length) out.push(it); else out.unshift(it);
-    }
-    return out;
-  });
-  cur = computed(() => { const l = this.items(), k = this.pick(); return l.find(x => x.key === k) ?? (l.length ? l[0] : null); });
-  meshSrc(m: GalleryModel) { return m.kind === 'step' ? meshUrl(m.file) : inlineUrl(m.file); }
-  over(e: DragEvent) { if (this.canDrop() && !this.cur()) { e.preventDefault(); this.dropping.set(true); } }
-  drop(e: DragEvent) {
-    if (!this.canDrop() || this.cur()) return;
-    e.preventDefault(); this.dropping.set(false);
-    const l = e.dataTransfer?.files;
-    if (l?.length) this.files.emit(l);
-  }
-}
-
-/** A full-screen detail the browser's Back closes: while it is open it has
- *  one history entry of its own (the address stays as the page sets it);
- *  closed by hand, that entry is gone again. */
-export class BackCloses {
-  private on = false;
-  private pop = () => { if (!this.on) return; this.on = false; removeEventListener('popstate', this.pop); this.close(); };
-  constructor(private close: () => void) {}
-  opened() {
-    if (this.on) return;
-    this.on = true;
-    history.pushState(history.state, '', location.href);
-    addEventListener('popstate', this.pop);
-  }
-  closed() {
-    if (!this.on) return;
-    this.on = false;
-    removeEventListener('popstate', this.pop);
-    history.back();
   }
 }

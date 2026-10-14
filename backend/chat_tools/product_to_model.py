@@ -56,4 +56,4 @@ TOOL = Tool(
         "file": {"type": "string", "description": "One of its attached models' Files id, instead of its main one"}},
         "required": ["folder"]},
     running="Adding a product's model to a project", failed="Could not add the model",
-    run=run, undo="a model put in a project is built - remove it in the 3D room")
+    run=run)

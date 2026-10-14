@@ -133,60 +133,6 @@ through the workspace, and the list of them when the name fits nothing).
   (`POST /api/cc/chats/{id}/steps/{step}`), for whoever asked or anyone who
   may delete; nothing runs without a yes (`ASK_WAIT` seconds, then no).
 
-## Undo
-
-Everything a `change` or `delete` tool writes while it runs as a step is
-kept for undo (backend/chat_undo.py): `Tool` wraps the handler, the
-handler gets `ctx.db` seen through a recorder, and each write - through
-any helper, in any collection - is read before and after. What changed is
-one document of `cc_changes` per step: the conversation (`ctx.chat`), the
-step (`ctx.step`, set by ccgen.run_step), the tool, who, when, the rights
-its handler checked with `need()` (`_rights.py`), and per document the
-whole of it (made or deleted) or only its changed fields - a list of dicts
-with an `id` (or `file`, `_id`, `key`) by its members, a log by the lines
-it gained. A tool that changes nothing keeps nothing.
-
-The Chat shows "Changed: n things · Undo" under the answer and every
-change of the conversation in its header menu's "Changes"
-(`GET /api/cc/chats/{id}/changes`, `POST .../changes/undo` with `ids`,
-`POST .../changes/{change}/redo`). Undo sets back only a target that is
-as the tool left it - else it says, field by field, what changed since and
-undoes nothing of that change - and needs the rights the change needed. It
-is kept as a change of its own (`of`), so it can be redone. Changes stay
-undoable for `REDLINE_CC_UNDO_DAYS` (30) days; a Files file a tool (or an
-undo) removed keeps its bytes until then (`files.HOLD`).
-
-A new tool needs nothing for this: the generic inverse covers whatever it
-writes through `ctx.db`. When that is not right, say so on its `Tool`:
-
-```python
-TOOL = Tool(..., undo=False)                       # a cache: nothing kept, nothing shown
-TOOL = Tool(..., undo="a build cannot be unbuilt")  # kept and shown; not undoable, the words say why
-
-async def undo(ctx: Ctx, change: dict, apply: bool) -> None:
-    """Its own inverse (drawer_add.py): `change` has its `args`, `vars` and
-    `docs`; raise chat_undo.Conflict("why") when it cannot, PermissionError
-    without the right; change nothing unless `apply`."""
-TOOL = Tool(..., undo=undo)
-```
-
-Per collection, `chat_undo.VOLATILE_IN` names fields a background job
-writes after the tool (never a conflict, never set back - a STEP's
-`measured`), `chat_undo.AFTER` a hook after an undo (the conversation's
-new title said to its open pages, a model measured again) and
-`chat_undo.KIND` what the page calls its documents (an English key of
-i18n.ts). Write outside `ctx.db` (a file on disk, a job started) and it is
-not undone: give the tool an `undo` string or function.
-
-Which tools: generic - stock (`inventory_add`, `_adjust`, `_edit`,
-`_remove`), catalog products (`catalog_add_product`, `_edit_product`,
-`_remove_product`), a product's files (`product_file_attach`, `_detach`,
-`product_set_main`, `product_to_my_items`), notes (`note_write`,
-`note_edit`, `note_todo`), `rename_chat`, `chat_archive`, `mcmaster_save`,
-`grabcad_save`, `room_note`, `pdf_make`, `drawing_layout`; its own -
-`drawer_add`; shown, not undoable - `catalog_read_page`,
-`catalog_add_maker`, `product_to_model`; not kept - `datasheet_get`.
-
 ## Who gets which
 
 Each person turns tools on or off for themselves (the Chat tab's "Tools"

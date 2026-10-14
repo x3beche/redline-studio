@@ -5,7 +5,7 @@ import { TREE_MOVED } from '../api';
 import { Selection } from '../selection';
 import { T, t } from '../i18n';
 import { Toast } from '../toast';
-import { Palette, TasteApi } from './taste';
+import { Palette, TasteApi } from './taste-api';
 
 /** Which Taste palettes apply to the model, board or firmware on show, in
  *  one line where the room shows the project itself (the 3D room's Model

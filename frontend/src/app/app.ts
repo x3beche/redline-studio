@@ -1,17 +1,22 @@
-import { Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
+// The rooms are each a chunk of their own, loaded when their tab is first
+// opened (the @defer blocks below): only what is on screen is downloaded.
 import { RoomAnalyze } from './rooms/analyze';
 import { RoomPcb } from './rooms/pcb';
 import { RoomFirmware } from './rooms/firmware';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
-import { RoomTaste, TasteRuns } from './rooms/taste';
-import { MfrRuns, RoomMfr } from './rooms/manufacturers';
+import { RoomTaste } from './rooms/taste';
+import { RoomMfr } from './rooms/manufacturers';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
+import { TasteRuns } from './rooms/taste-api';
+import type { MfrRuns } from './rooms/manufacturers';
 import { Palette } from './palette';
-import { Prefs, RoomSettings } from './preferences';
+import { Prefs } from './preferences';
+import { RoomSettings } from './settings-room';
 import { T } from './i18n';
 import { BudgetStatus, Money, money, moneyShort } from './money';
 import { budgetTip } from './budget-bars';
@@ -130,16 +135,16 @@ import { Avatar } from './avatar';
        empty flex child took half the column. -->
   <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
     @switch (here()) {
-      @case ('pcb') { <app-room-pcb /> }
-      @case ('firmware') { <app-room-firmware /> }
-      @case ('notes') { <app-room-notes /> }
-      @case ('taste') { <app-room-taste /> }
-      @case ('mfr') { <app-room-mfr /> }
-      @case ('commandcode') { <app-room-commandcode /> }
-      @case ('files') { <app-room-files /> }
-      @case ('tools') { <app-room-tools /> }
-      @case ('settings') { <app-room-settings /> }
-      @case ('analyze') { <app-room-analyze /> }
+      @case ('pcb') { @defer { <app-room-pcb /> } }
+      @case ('firmware') { @defer { <app-room-firmware /> } }
+      @case ('notes') { @defer { <app-room-notes /> } }
+      @case ('taste') { @defer { <app-room-taste /> } }
+      @case ('mfr') { @defer { <app-room-mfr /> } }
+      @case ('commandcode') { @defer { <app-room-commandcode /> } }
+      @case ('files') { @defer { <app-room-files /> } }
+      @case ('tools') { @defer { <app-room-tools /> } }
+      @case ('settings') { @defer { <app-room-settings /> } }
+      @case ('analyze') { @defer { <app-room-analyze /> } }
     }
   </div>
 </app-editor>
@@ -149,9 +154,10 @@ import { Avatar } from './avatar';
 <app-palette />
 <!-- "Send to...": a thing of any tab, to people in Chat (dm.ts). -->
 <app-dm-send />
-<app-dm-viewer />
+<!-- Loaded the first time something sent is opened: it draws every kind of thing. -->
+@defer (when dms.viewing()) { <app-dm-viewer /> }
 } @else if (auth.state()) {
-  <app-landing />
+  @defer { <app-landing /> }
 }
 <!-- The one question box (confirm.ts): every "Delete …?" and name-asking
      in the app awaits it, signed in or not. -->
@@ -181,10 +187,13 @@ export class App {
   tabs = WORKSPACES;
   /** The top bar's tabs, in the order and the look chosen (topbar.ts). */
   bar = inject(TopBar);
+  private injector = inject(Injector);
   /** The Taste extractions running in the server, for the tab's mark. */
   tasteRuns = inject(TasteRuns);
-  /** The manufacturers' explorations, for the tab's mark. */
-  mfrRuns = inject(MfrRuns);
+  /** The manufacturers' explorations, for the Parts tab's mark. They live in
+   *  the Parts room's module, so they are taken once the page is up (watchRuns). */
+  private mfrSvc = signal<MfrRuns | null>(null);
+  mfrRuns = { running: computed(() => this.mfrSvc()?.running() ?? 0), unseen: computed(() => this.mfrSvc()?.unseen() ?? 0) };
   /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'mfr' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
@@ -286,7 +295,7 @@ export class App {
     this.auth.load();
     // Once someone is signed in: whether an extraction is running (it is
     // asked again only while one is).
-    effect(() => { if (this.auth.signedIn()) untracked(() => { this.tasteRuns.watch(); this.mfrRuns.watch(); }); });
+    effect(() => { if (this.auth.signedIn()) untracked(() => { this.tasteRuns.watch(); this.watchRuns(); }); });
     this.here.set(currentWorkspace());
     // Whoever changed it - a tab up here, or a file clicked in the catalog
     // - the address bar and the memory follow, so a room can be linked to
@@ -315,4 +324,14 @@ export class App {
   }
 
   open(id: Workspace['id']) { this.here.set(id); }
+
+  /** The Parts room's run watcher, once the first paint is done: its module
+   *  (the biggest room) comes after the shell rather than before it. */
+  private watchRuns() {
+    setTimeout(() => void import('./rooms/manufacturers').then(m => {
+      const runs = this.injector.get(m.MfrRuns);
+      runs.watch();
+      this.mfrSvc.set(runs);
+    }), 1500);
+  }
 }

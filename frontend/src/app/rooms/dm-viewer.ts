@@ -12,7 +12,7 @@ import { NoteDoc } from './note-doc';
 import { Board3d } from './board3d';
 import { BodyNode, PartBodyView } from './part-body-view';
 import { MeshView } from './mesh-view';
-import { DOMAINS, DOMAIN_COLOR, Domain, STRENGTHS, STRENGTH_COLOR, Strength } from './taste';
+import { DOMAINS, DOMAIN_COLOR, Domain, STRENGTHS, STRENGTH_COLOR, Strength } from './taste-api';
 import { Skeleton } from '../skeleton';
 
 type Rule = { text: string; domain: Domain; strength: Strength; why?: string };
