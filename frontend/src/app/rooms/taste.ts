@@ -45,7 +45,7 @@ type Column = Domain | 'specific';
 const SCOPE_TAG: Record<string, string> = { visible: 'visible', hidden: 'hidden', internal: 'internal' };
 /** A folder, as the project tree draws one. */
 const FOLDER_PATH = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
-const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model', board: 'Board', firmware: 'Firmware' };
+const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model', board: 'Board', firmware: 'Firmware', chat: 'Chat' };
 type Tally = Record<Strength, number>;
 const tally = (items: TasteItem[]): Tally => {
   const n: Tally = { must: 0, prefer: 0, avoid: 0 };
@@ -1286,6 +1286,9 @@ export class RoomTaste implements OnDestroy {
     if (j.status === 'done' && (fresh || !this.proposals().length || this.propsOf !== j.id)) {
       this.propsOf = j.id;
       this.proposals.set((j.proposals ?? []).map(i => ({ ...i, keep: true })));
+      // Proposed in the Chat (chat_tools/taste_propose.py) for a palette: that one is offered first.
+      const meant = j.target?.id;
+      if (meant && this.palettes().some(p => p.id === meant)) this.saveTo.set(meant);
       if (!this.saveTo() && !this.newName()) this.newName.set(this.fmt('Taste of {p}', { p: j.project.label }));
     } else if (j.status !== 'done' && fresh) {
       this.propsOf = null;

@@ -48,6 +48,8 @@ export interface TasteJob {
   provider?: string; provider_name?: string; model?: string;
   steps: JobStep[]; totals: JobTotals; error?: string | null; count: number;
   saved_to?: { id: string; name: string; count: number; at: string } | null;
+  /** A Chat proposal's palette (chat_tools/taste_propose.py): offered first when they are saved. */
+  target?: { id: string; name: string } | null;
   proposals?: TasteItem[];
   references?: RefShot[]; notice?: string; measures?: string; vision?: boolean;
 }

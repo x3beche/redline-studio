@@ -18,6 +18,7 @@ import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
 import { CcMemoryPanel, MEMORY_ICO } from './cc-memory';
 import { CcChanged, CcChangesPanel } from './cc-changes';
+import { CcToolCard } from './cc-tool-card';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
@@ -417,7 +418,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel],
+  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel, CcToolCard],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -1094,6 +1095,8 @@ type Ask = { text: string; label: string; go: () => void };
           }
         </div>
       }
+      <!-- What it gave, or - asking first - what it will do (rooms/cc-tool-card.ts); nothing for most tools. -->
+      <app-cc-tool-card [step]="s" />
       @if (s.status === 'ask' && auth.can('draw')) {
         <div class="tcv-cc-stepask">
           <span>{{ 'This tool asks before it runs.' | t }}</span>

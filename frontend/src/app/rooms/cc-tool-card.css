@@ -1,0 +1,34 @@
+/* What a step of an answer gave, as one flat row under it (cc-tool-card.ts):
+   the line of a tool's own facts, filling the answer's width - no tiles,
+   no stripes; the figures in the app's mono, the names in its ink. */
+:host { display: block; }
+.cct { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; overflow: hidden; margin: 3px 0 5px; padding: 6px 12px 6px 10px;
+  font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.cct > svg.ico { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--ink-dim); stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.cct-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.cct-fig { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); font: 11px 'IBM Plex Mono', ui-monospace, monospace; }
+.cct-fig b { font-weight: 600; color: var(--ink); }
+.cct-grow { flex: 1 1 0; min-width: 0; }
+.cct-spark { flex: 1 1 0; min-width: 0; height: 22px; }
+.cct-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round;
+  vector-effect: non-scaling-stroke; }
+.cct-spark circle { fill: var(--accent); }
+.cct a, .cct-link { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0; font: inherit; font-size: 12px; color: var(--ink-dim); background: none; border: 0;
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
+.cct a:hover, .cct-link:hover { color: var(--ink); text-decoration-color: var(--ink-dim); }
+.cct a:focus-visible, .cct-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.cct-files { display: flex; gap: 14px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.cct-files a { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* What a tool that asks first will do, read before Allow / Deny: who it goes to, and the exact words. */
+.cct.ask { flex-wrap: wrap; row-gap: 6px; }
+.cct-label { flex: none; color: var(--ink-dim); font-size: 11.5px; }
+.cct-quote { flex: 1 0 100%; margin: 0; padding: 6px 10px; font: inherit; font-size: 13px; line-height: 1.5; color: var(--ink-bright);
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 4px; }
+.cct-word { flex: none; font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; color: var(--ink); }
+.cct-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .cct { flex-wrap: wrap; row-gap: 4px; }
+  .cct-spark { flex-basis: 100%; }
+}
