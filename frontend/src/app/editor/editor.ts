@@ -273,7 +273,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     addEventListener('keydown', this.foldKey, true);
     // The Clip tab's wheel-step control is built outside Angular; its words
     // follow the language by hand.
-    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); this.viewer?.modelTab?.relabel(); }); });
+    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); this.viewer?.modelTab?.relabel(); this.viewer?.treePanel?.relabel(); }); });
     // The note at work is fetched by itself whenever the list in view does
     // not hold it (the archive is showing), so its card stays under the tree.
     effect(() => {

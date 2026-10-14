@@ -1,0 +1,375 @@
+/* THE VIEWER'S SIDE PANEL (three-cad-viewer's Tree / Clip / Studio, our
+   Motion and Model): in the app's own look, as the catalog tree and the
+   Chat's and Files' side columns are. CSS over the library's markup; what
+   CSS cannot do (tooltips, the count of a repeated part) is tree-panel.ts.
+   The library's stylesheet comes after ours, so every rule here is under
+   .tcv_cad_tree to outweigh it.
+
+   Settings > Theme > Model tree sets the variables and attributes on the
+   root (viewer-panel-prefs.ts):
+     --tcv-tv-row   a tree row's height        (density)
+     --tcv-tv-fs    the tree's type size
+     --tcv-tv-isz   its glyphs' size           (the toolbars' size, or its own)
+     data-tv-guides="off", data-tv-counts="off", data-tv-dots="off"
+   The glyphs are the toolbars' icon pack's (icon-packs.ts): each element
+   wears its --tcv-i, painted in currentColor; Classic keeps the viewer's
+   pictures and letters. */
+
+.tcv_cad_tree {
+  --tcv-tv-row-h: var(--tcv-tv-row, 24px);
+  --tcv-tv-f: var(--tcv-tv-fs, 12px);
+  --tcv-tv-g: var(--tcv-tv-isz, clamp(12px, calc(var(--tcv-isz, 18px) * .8), 18px));
+  /* The tabs over the content, the tab's own tools at the row's right end. */
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--surface);
+}
+.tcv_cad_tree > .tcv_tabnav { grid-area: 1 / 1 / 2 / 2; }
+.tcv_cad_tree > .tcv_cad_tree_toggles { grid-area: 1 / 2 / 2 / 3; }
+.tcv_cad_tree > .tcv_box_content { grid-area: 2 / 1 / 3 / 3; }
+
+/* ---- the tabs: text, the open one underlined in the accent ---- */
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--line);
+}
+.tcv_cad_tree > .tcv_cad_tree_toggles { border-bottom: 1px solid var(--line); }
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav > span { flex: 0 1 auto !important; display: flex; min-width: 0; }
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab {
+  width: auto !important;
+  height: auto;
+  min-width: 0;
+  padding: 0 1px;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -1px;
+  border-radius: 0;
+  background: none !important;
+  color: var(--ink-dim);
+  font-weight: 400 !important;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab:hover { color: var(--ink); }
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab.tcv_tab-selected {
+  color: var(--ink);
+  border-bottom-color: var(--accent) !important;
+}
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* The PCB and Firmware rooms' tabs share the strip, not the 3D one's tools. */
+.tcv-frame-side .tcv_tabnav .tcv_tab { flex: 0 1 auto; }
+
+/* ---- a tab's tools: small icon buttons at the end of the tab row ---- */
+.tcv_cad_tree .tcv_cad_tree_toggles {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin: 0;
+  padding: 0 6px 0 4px;
+}
+/* The viewer shows a tab's tools with an inline display: block. */
+.tcv_cad_tree:not([data-motion="1"], [data-model="1"]) .tcv_cad_tree_toggles:not([style*="none"]) { display: flex !important; }
+.tcv_cad_tree .tcv_cad_tree_toggles > .tcv_tooltip { display: flex; }
+.tcv_cad_tree .tcv_small_btn {
+  width: calc(var(--tcv-tv-g) + 8px) !important;
+  height: calc(var(--tcv-tv-g) + 8px) !important;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--ink-dim);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color .12s, background-color .12s;
+}
+.tcv_cad_tree .tcv_small_btn:hover { color: var(--ink); background-color: var(--hover); }
+.tcv_cad_tree .tcv_small_btn:active { background-color: var(--pressed); }
+.tcv_cad_tree .tcv_small_btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* In a pack: the glyph through a mask in the text colour; the letter goes.
+   The hover well is a ring round it, drawn by the shadow, as the mask
+   clips the button's own background to the glyph. */
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_small_btn {
+  font-size: 0 !important;
+  background: currentColor !important;
+  -webkit-mask: var(--tcv-i) center / var(--tcv-tv-g) no-repeat;
+  mask: var(--tcv-i) center / var(--tcv-tv-g) no-repeat;
+}
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_cad_tree_toggles > .tcv_tooltip { border-radius: 4px; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_cad_tree_toggles > .tcv_tooltip:hover { background: var(--hover); }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_cad_tree_toggles > .tcv_tooltip:hover > .tcv_small_btn { color: var(--ink); }
+.tcv_cad_tree .tcv_studio_spinner { align-self: center; margin-right: 4px; }
+
+/* ---- the tree ---- */
+.tcv_cad_tree .tcv_box_content { padding: 4px 4px 8px; box-sizing: border-box; }
+.tcv_cad_tree .tcv_cad_tree_container { min-width: 0; }
+.tcv_cad_tree .tv-tree-node { min-width: 0; }
+/* A row: chevron, kind, name, count, colour; the edges and eye at the end. */
+.tcv_cad_tree .tv-node-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--tcv-tv-row-h);
+  min-width: 0;
+  padding: 0 4px 0 2px;
+  border-radius: 4px;
+  color: var(--ink);
+  cursor: default;
+  transition: background-color .1s;
+}
+.tcv_cad_tree .tv-node-content:hover { background: color-mix(in srgb, var(--hover) 60%, transparent); }
+/* The part picked in the view or the tree: the row lit, the name brighter -
+   no colour of its own, as in the catalog tree. */
+.tcv_cad_tree .tv-node-content:has(> .tv-node-label-highlight) { background: var(--hover); }
+.tcv_cad_tree .tv-node-label-highlight { color: var(--ink-bright) !important; }
+
+.tcv_cad_tree .tv-nav-marker {
+  order: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-radius: 3px;
+  color: var(--ink-dim);
+  font-size: 10px !important;
+  cursor: pointer;
+}
+.tcv_cad_tree .tv-nav-marker:empty { cursor: default; }
+.tcv_cad_tree .tv-nav-marker:not(:empty):hover { color: var(--ink); }
+/* In a pack the chevron is the pack's, turned down while the row is open
+   (its children's box is shown: the viewer sets display on it). */
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-nav-marker:not(:empty) { font-size: 0 !important; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-nav-marker:not(:empty)::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--tcv-i-tv-chevron) center / 14px no-repeat;
+  mask: var(--tcv-i-tv-chevron) center / 14px no-repeat;
+  transition: transform .12s ease-out;
+}
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-tree-node:has(> .tv-children:not([style*="none"])) > .tv-node-content > .tv-nav-marker::before {
+  transform: rotate(90deg);
+}
+
+/* What the row is: an assembly (it has rows under it) or a part. */
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-node-content::before {
+  content: "";
+  order: 1;
+  flex: none;
+  width: var(--tcv-tv-g);
+  height: var(--tcv-tv-g);
+  color: var(--ink-dim);
+  background: currentColor;
+  -webkit-mask: var(--tcv-i-tv-part) center / 100% no-repeat;
+  mask: var(--tcv-i-tv-part) center / 100% no-repeat;
+}
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-tree-node:has(> .tv-children) > .tv-node-content::before {
+  -webkit-mask-image: var(--tcv-i-tv-assembly);
+  mask-image: var(--tcv-i-tv-assembly);
+}
+
+.tcv_cad_tree .tv-node-label {
+  order: 2;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--tcv-tv-f) !important;
+  line-height: var(--tcv-tv-row-h);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tcv_cad_tree .tv-node-label * { font-size: inherit !important; }
+.tcv_cad_tree .tcv-tv-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* An assembly heads the parts under it: the same size, a little heavier. */
+.tcv_cad_tree .tv-tree-node:has(> .tv-children) > .tv-node-content .tcv-tv-name { font-weight: 600; }
+/* "×6": how many of the part the model holds, as the app's small figures. */
+.tcv_cad_tree .tcv-tv-count {
+  flex: none;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace !important;
+  font-size: 10.5px !important;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* The part's colour in the view: a small swatch with a hairline ring, so a
+   dark part on the dark panel still shows it. */
+.tcv_cad_tree .tcv-tv-swatch {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  font-size: 0 !important;
+  background: currentColor;
+  box-shadow: 0 0 0 1px var(--line);
+}
+:root[data-tv-counts="off"] .tcv_cad_tree .tcv-tv-count,
+:root[data-tv-dots="off"] .tcv_cad_tree .tcv-tv-swatch { display: none; }
+
+/* The two switches at the row's end: edges, then the eye. */
+.tcv_cad_tree .tv-icon {
+  flex: none;
+  width: calc(var(--tcv-tv-g) + 4px);
+  height: calc(var(--tcv-tv-g) + 4px);
+  margin: 0;
+  border-radius: 3px;
+  background-size: calc(var(--tcv-tv-g) + 4px);
+}
+.tcv_cad_tree .tv-icon1 { order: 3; }
+.tcv_cad_tree .tv-icon0 { order: 4; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon {
+  color: var(--ink-dim);
+  background: currentColor !important;
+  -webkit-mask: var(--tcv-i) center / var(--tcv-tv-g) no-repeat;
+  mask: var(--tcv-i) center / var(--tcv-tv-g) no-repeat;
+  transition: color .12s, opacity .12s;
+}
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon.tv-pointer:hover { color: var(--ink-bright); }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon:not(.tv-pointer) { opacity: .3; }
+/* The edges switch is quiet: shown on the row's hover, or while it is off. */
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon1 { opacity: 0; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-node-content:hover > .tv-icon1,
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon1:focus-visible,
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon1:not(.tcv_button_mesh) { opacity: 1; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tv-icon1.tcv_button_mesh_empty { opacity: 0 !important; }
+/* A hidden part: its eye shut and its row dimmed; part shown, in between. */
+.tcv_cad_tree .tv-tree-node[data-state0="0"] > .tv-node-content > :is(.tv-node-label, .tv-nav-marker),
+.tcv_cad_tree .tv-tree-node[data-state0="0"] > .tv-node-content::before { opacity: .45; }
+
+/* The guides: a hairline under each open row's chevron, down its rows. */
+.tcv_cad_tree .tv-children {
+  margin-left: 10px;
+  padding-left: 5px;
+  border-left: 1px solid var(--line);
+}
+:root[data-tv-guides="off"] .tcv_cad_tree .tv-children { border-left-color: transparent; }
+
+/* ---- the Clip, Studio (and hidden Zebra, Material) tabs: the app's fields ---- */
+.tcv_cad_tree :is(.tcv_cad_clip_container, .tcv_cad_studio_container, .tcv_cad_material_container, .tcv_cad_zebra_container) {
+  --tcv-ui-row-gap: 6px;
+  padding: 6px 6px 8px;
+  color: var(--ink);
+}
+.tcv_cad_tree .tcv_label { font-size: 12px !important; padding-bottom: 0; }
+.tcv_cad_tree .tcv_studio_row { min-height: 26px; margin-bottom: 4px; gap: 8px; }
+.tcv_cad_tree .tcv_studio_row > .tcv_label { color: var(--ink-dim); flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv_cad_tree .tcv_studio_group_spacer { height: 6px; border-top: 1px solid var(--line); margin-top: 6px; }
+.tcv_cad_tree .tcv_studio_info, .tcv_cad_tree .tcv_material_info { font-style: normal; font-size: 11px !important; color: var(--ink-dim); opacity: 1; }
+
+/* A slider: a hairline track, a round knob that grows a little under the pointer. */
+.tcv_cad_tree .tcv_clip_slider {
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  opacity: 1;
+  cursor: pointer;
+  transition: none;
+}
+.tcv_cad_tree .tcv_clip_slider::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: var(--line); }
+.tcv_cad_tree .tcv_clip_slider::-moz-range-track { height: 3px; border-radius: 2px; background: var(--line); }
+.tcv_cad_tree .tcv_clip_slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: transform .12s ease-out;
+}
+.tcv_cad_tree .tcv_clip_slider::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.tcv_cad_tree .tcv_clip_slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+.tcv_cad_tree .tcv_clip_slider:focus-visible { outline: none; }
+.tcv_cad_tree .tcv_clip_slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent-deep); }
+
+/* The figure beside a slider: a small field in the app's mono. */
+.tcv_cad_tree .tcv_clip_input {
+  width: 42px;
+  height: 22px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  text-align: right;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.tcv_cad_tree .tcv_clip_input:focus { border-color: var(--accent); }
+
+.tcv_cad_tree .tcv_studio_select {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12px !important;
+  cursor: pointer;
+}
+.tcv_cad_tree .tcv_studio_select:hover { border-color: var(--ink-dim); }
+.tcv_cad_tree .tcv_studio_select:focus-visible { border-color: var(--accent); }
+.tcv_cad_tree .tcv_studio_select option, .tcv_cad_tree .tcv_studio_select optgroup { background: var(--surface-2); color: var(--ink); }
+
+/* The checkboxes are the app's (.tcv-check, added by tree-panel.ts): here
+   only where they sit. */
+.tcv_cad_tree .tcv_check.tcv-check { margin: 0 6px 0 0; vertical-align: -3px; }
+.tcv_cad_tree .tcv_clip_checks { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tcv_cad_tree .tcv_clip_checks > div { display: flex; gap: 16px; }
+.tcv_cad_tree .tcv_clip_checks .tcv_tooltip { display: inline-flex; align-items: center; cursor: pointer; }
+.tcv_cad_tree .tcv_clip_checks .tcv_label { margin: 0; }
+.tcv_cad_tree .tcv_studio_4k_row { align-items: center; margin-top: 0; }
+
+/* A clip plane: its name and normal on one line, the slider and figure under it. */
+.tcv_cad_tree .tcv_slider_group { margin-bottom: 8px; }
+.tcv_cad_tree .tcv_slider_group > div:first-child { align-items: center; min-height: 24px; }
+.tcv_cad_tree .tcv_slider_group .tcv_label { font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-size: 11px !important; }
+.tcv_cad_tree .tcv_plane {
+  width: calc(var(--tcv-tv-g) + 6px);
+  height: calc(var(--tcv-tv-g) + 6px);
+  border-radius: 4px;
+  background-size: calc(var(--tcv-tv-g) + 2px);
+}
+.tcv_cad_tree .tcv_plane:hover { background-color: var(--hover); }
+/* In a pack the button is the pack's plane glyph, in the plane's own colour. */
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_plane {
+  background: currentColor !important;
+  -webkit-mask: var(--tcv-i-tv-plane) center / var(--tcv-tv-g) no-repeat;
+  mask: var(--tcv-i-tv-plane) center / var(--tcv-tv-g) no-repeat;
+  opacity: .8;
+  transition: opacity .12s;
+}
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_plane:hover { opacity: 1; }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_slider_group:nth-child(1 of .tcv_slider_group) .tcv_plane { color: var(--tcv-x-color); }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_slider_group:nth-child(2 of .tcv_slider_group) .tcv_plane { color: var(--tcv-y-color); }
+:root:not([data-icons="classic"]) .tcv_cad_tree .tcv_slider_group:nth-child(3 of .tcv_slider_group) .tcv_plane { color: var(--tcv-z-color); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tcv_cad_tree :is(.tcv_tab, .tcv_small_btn, .tv-node-content, .tv-icon, .tcv_plane),
+  .tcv_cad_tree .tv-nav-marker::before,
+  .tcv_cad_tree .tcv_clip_slider::-webkit-slider-thumb { transition: none !important; }
+}

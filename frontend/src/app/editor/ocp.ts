@@ -4,6 +4,7 @@ import { ClipWheel } from './clip-wheel';
 import { ClipReverse } from './clip-reverse';
 import { Motions } from './motions';
 import { ModelTab } from './model-tab';
+import { TreePanel } from './tree-panel';
 import { SwitchMotion } from './model-switch';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
@@ -66,6 +67,8 @@ export class OcpViewer {
   motions: Motions | null = null;
   /** The Model tab: insert, release, drawing, help (model-tab.ts). */
   modelTab: ModelTab | null = null;
+  /** The side panel's tooltips and the tree rows' counts (tree-panel.ts). */
+  treePanel: TreePanel | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
   /** How one model gives way to the next (model-switch.ts). */
@@ -126,6 +129,7 @@ export class OcpViewer {
     (window as unknown as Record<string, unknown>)['redlineMotions'] = this.motions;
     this.modelTab = new ModelTab(this.container, () => this.viewer);
     this.modelTab.ensure();
+    this.treePanel = new TreePanel(this.container);
     // One of our two tabs at a time.
     this.motions.onOpen = () => this.modelTab?.show(false);
     this.modelTab.onOpen = () => this.motions?.showTab(false);
@@ -217,6 +221,7 @@ export class OcpViewer {
     if (!this.shot) this.modelTab?.restore();
     this.clipWheel?.ensure();
     this.clipReverse?.ensure();
+    this.treePanel?.ensure();
   }
 
   /** A canvas of a fixed size, for tools/render.py (?shot=WxH): the picture

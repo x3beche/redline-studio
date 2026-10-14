@@ -3947,6 +3947,16 @@ const TR: Record<string, string> = {
   'Cleared - new lines show here.': 'Temizlendi - yeni satırlar burada görünür.',
   'Show earlier lines': 'Önceki satırları göster', 'No line matches.': 'Eşleşen satır yok.',
   'No activity yet.': 'Henüz etkinlik yok.', 'Jump to latest': 'En yeniye git', 'running…': 'çalışıyor…',
+  // The 3D viewer's side panel (editor/tree-panel.ts) and its Model tree settings (editor/tree-prefs.ts)
+  'Fold groups that hold a single part': 'Tek parça tutan grupları katla', 'Open the top level only': 'Yalnızca üst düzeyi aç',
+  'Reset the clip planes': 'Kesit düzlemlerini sıfırla', 'Reset the material': 'Malzemeyi sıfırla',
+  'Reset the zebra stripes': 'Zebra çizgilerini sıfırla', 'Edit the selected part\'s material': 'Seçili parçanın malzemesini düzenle',
+  'Reset the studio': 'Stüdyoyu sıfırla', 'Show or hide': 'Göster ya da gizle', 'Edges on or off': 'Kenarları aç ya da kapat',
+  'Its colour in the view': 'Görünümdeki rengi', '{n} of this part in the model': 'Modelde bu parçadan {n} tane', 'Open or close': 'Aç ya da kapat',
+  'Model tree': 'Model ağacı', 'The tree in the 3D room\'s side panel. Its glyphs are the icon pack\'s.': '3D odasının yan panelindeki ağaç. Simgeleri simge paketinden gelir.',
+  'Compact': 'Sıkı', 'Normal': 'Normal', 'Comfortable': 'Rahat', 'Icons': 'Simgeler', 'As the toolbars': 'Araç çubukları gibi',
+  'Guide lines': 'Kılavuz çizgileri', 'Counts': 'Adetler', 'Colour dots': 'Renk noktaları', 'Back to the default': 'Varsayılana dön',
+  'Enclosure': 'Kutu', 'Case': 'Gövde', 'Bottom plate': 'Alt plaka', 'Screw M2 pan head': 'M2 yuvarlak baş vida',
   // Settings > Appearance: the toolbars' icon packs (icon-packs.ts)
   'Toolbar icons': 'Araç çubuğu simgeleri',
   'Pack': 'Paket',

@@ -3,6 +3,7 @@ import { CustomTheme, Font, THEME_NAMES, ThemeId, cachedCustom, currentFont, cur
 import { redlineTheme } from './rooms/code-view';
 import { ModelSwitch, currentSwitch, setSwitch } from './editor/switch-pref';
 import { IconPack, IconSize, currentIconSize, currentIcons, setIconSize, setIcons } from './icon-packs';
+import { TreeLook, currentTree, setTree } from './editor/tree-prefs';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
@@ -28,6 +29,8 @@ export class Prefs {
   /** The toolbars' icons in the 3D, PCB and Firmware rooms (icon-packs.ts). */
   icons = signal<IconPack>(currentIcons());
   iconSize = signal<IconSize>(currentIconSize());
+  /** How the 3D viewer's model tree looks (editor/tree-prefs.ts). */
+  tree = signal<TreeLook>(currentTree());
 
   constructor() {
     // "?" opens the shortcuts wherever you are - unless you are typing it.
@@ -59,6 +62,7 @@ export class Prefs {
   /** Pick the toolbars' icon pack; every room wears it at once. */
   pickIcons(p: IconPack) { this.icons.set(setIcons(p)); }
   pickIconSize(px: IconSize) { this.iconSize.set(setIconSize(px)); }
+  pickTree(change: Partial<TreeLook>) { this.tree.set(setTree({ ...this.tree(), ...change })); }
 
   /** What a theme is called where it is shown. */
   nameOf(t: ThemeId): string {

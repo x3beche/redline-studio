@@ -275,6 +275,19 @@ select.st-in { cursor: pointer; }
 .st-icons-group { display: inline-flex; align-items: center; gap: 2px; margin-left: 0 !important; }
 .st-icons-group:not(:last-child) { margin-right: 12px; padding-right: 12px; border-right: 1px solid var(--line); }
 .st-icons-cap { margin-right: 8px; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+/* The model tree: its choices in a column, a sample of the tree beside them
+   in the side panel's own look (editor/viewer-panel.css). */
+.st-card-body.st-tree { display: flex; flex-direction: row; align-items: flex-start; gap: 32px; }
+.st-tree-opts { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.st-tree-opts .st-sec-title { min-width: 44px; }
+.st-tree-opts .tcv-check-row { font-size: 12px; color: var(--ink); margin-right: 8px; }
+.st-tree-reset { padding: 0; font-size: 11px; color: var(--ink-dim); background: none; border: 0; text-decoration: underline; cursor: pointer; }
+.st-tree-reset:hover { color: var(--ink); }
+/* The panel's own rules make a tree fill its column (styles.css); the sample is the panel's width. */
+.st-tree-demo { flex: none !important; width: 340px !important; height: auto !important; border: 1px solid var(--line); border-radius: 6px; }
+.st-tree-sw1 { color: var(--accent); }
+.st-tree-sw2 { color: var(--ink-dim); }
+@media (max-width: 768px) { .st-card-body.st-tree { flex-direction: column; align-items: stretch; } .st-tree-demo { width: 100% !important; } }
 .st-swatch { display: flex; height: 30px; overflow: hidden; border-radius: 4px; border: 1px solid var(--line); }
 .st-swatch i { flex: 1; }
 .st-swatch i:nth-child(3), .st-swatch i:nth-child(4) { flex: .45; }

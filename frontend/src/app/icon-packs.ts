@@ -96,6 +96,9 @@ const WINDOW = rect(3, 4, 18, 16, 2);
 const BRACKETS = 'M4 8.5v-3A1.5 1.5 0 0 1 5.5 4h3 M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3 M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3 M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3';
 const PEN = 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z';
 
+const EYE = 'M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z';
+const PALETTE = 'M12 3a9 9 0 0 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z';
+
 /** Every glyph, by the name the stylesheet knows it by. */
 export const GLYPHS: Record<string, Glyph> = {
   // The viewer's toolbar (three-cad-viewer), in its order.
@@ -149,6 +152,25 @@ export const GLYPHS: Record<string, Glyph> = {
   'draw-ellipse': { s: ellipse(12, 12, 8.5, 6.5), a: ellipse(12, 12, 8.5, 6.5) },
   'draw-triangle': { s: 'M12 4.5l8.5 15h-17z', a: 'M12 4.5l8.5 15h-17z' },
   'draw-text': { s: 'M5 7V5h14v2 M12 5v14 M9.5 19h5' },
+
+  // The viewer's side panel (editor/viewer-panel.css): the tree's switches,
+  // chevron and kinds, the tabs' tools, the clip planes' "to view" button.
+  'tv-eye': { s: EYE, a: EYE, k: circle(12, 12, 3), kd: circle(12, 12, 1) },
+  'tv-eye-off': { s: 'M10.7 5.1A9.9 9.9 0 0 1 12 5c6.5 0 9.5 7 9.5 7a16 16 0 0 1-2.2 3.2 M6.6 6.6C3.8 8.4 2.5 12 2.5 12s3 7 9.5 7a9.6 9.6 0 0 0 5.4-1.6 M9.9 9.9a3 3 0 0 0 4.2 4.2 M3.5 3.5l17 17' },
+  'tv-eye-mix': { s: EYE + ' ' + circle(12, 12, 3), hb: 'M12 9a3 3 0 0 0 0 6z' },
+  'tv-edges': { s: HEX + ' ' + HEX_INNER, soft: HEX },
+  'tv-edges-off': { s: HEX, hid: HEX_INNER },
+  'tv-edges-mix': { s: HEX + ' M4.2 7.5L12 12l7.8-4.5', hid: 'M12 12v9' },
+  'tv-part': { s: HEX + ' ' + HEX_INNER, a: HEX_TOP, soft: HEX },
+  'tv-assembly': { s: rect(3, 13, 8, 8, 1.5) + ' ' + rect(13, 13, 8, 8, 1.5) + ' ' + rect(8, 3, 8, 8, 1.5),
+    a: rect(3, 13, 8, 8, 1.5) + ' ' + rect(13, 13, 8, 8, 1.5) + ' ' + rect(8, 3, 8, 8, 1.5) },
+  'tv-chevron': { s: 'M9.5 6l6 6-6 6' },
+  'tv-singles': { s: 'M5 4v5.5A2.5 2.5 0 0 0 7.5 12H19 M15.5 8.5L19 12l-3.5 3.5 M5 20h6' },
+  'tv-root': { s: 'M4 5.5h16', hid: 'M8 11.5h12 M8 17.5h12', dot: circle(4.5, 11.5, 1) + circle(4.5, 17.5, 1) },
+  'tv-collapse': { s: 'M7 4.5l5 5 5-5 M7 19.5l5-5 5 5' },
+  'tv-expand': { s: 'M7 9.5l5-5 5 5 M7 14.5l5 5 5-5' },
+  'tv-material': { s: PALETTE, a: PALETTE, kd: circle(7.5, 11, 1.25) + circle(10.5, 7, 1.25) + circle(15.5, 7.5, 1.25) },
+  'tv-plane': { s: 'M2.5 16l5-5h14l-5 5z M12 13.5V3.5 M9.5 6L12 3.5 14.5 6', a: 'M2.5 16l5-5h14l-5 5z' },
 };
 
 /** Which element wears which glyph: the viewer's buttons by their class,
@@ -162,6 +184,16 @@ const OURS: Record<string, string> = {
   release: 'release', code: 'code', schfile: 'schfile', flash: 'flash', monitor: 'monitor',
 };
 const DRAW = ['pen', 'line', 'arrow', 'rect', 'ellipse', 'triangle', 'text'];
+/** The viewer's side panel: which of its elements wears which glyph (the
+ *  chevron, kinds and plane button read their variables directly). */
+const PANEL: Record<string, string> = {
+  tcv_button_shape: 'tv-eye', tcv_button_shape_no: 'tv-eye-off', tcv_button_shape_mix: 'tv-eye-mix',
+  tcv_button_shape_empty: 'tv-eye-off', tcv_button_mesh: 'tv-edges', tcv_button_mesh_no: 'tv-edges-off',
+  tcv_button_mesh_mix: 'tv-edges-mix', tcv_button_mesh_empty: 'tv-edges-off',
+  tcv_collapse_singles: 'tv-singles', tcv_expand_root: 'tv-root', tcv_collapse_all: 'tv-collapse', tcv_expand: 'tv-expand',
+  tcv_clip_reset: 'reset', tcv_material_reset: 'reset', tcv_zebra_reset: 'reset', tcv_studio_reset: 'reset',
+  tcv_mat_editor_toggle: 'tv-material',
+};
 
 /** A sample of each toolbar for the picker's preview: the real buttons'
  *  classes, in the rooms' order (null: a group break). */
@@ -237,6 +269,7 @@ function sheet(pack: IconPack, px: number): string {
   for (const [cls, id] of Object.entries(OURS)) out.push(`.tcv-ico-${cls}{--tcv-i:var(${varName(id)})}`);
   out.push(`.tcv-freeze{--tcv-i:var(${varName('pen')})}`);
   for (const id of DRAW) out.push(`.tcv-dt[data-i="${id}"]{--tcv-i:var(${varName('draw-' + id)})}`);
+  for (const [cls, id] of Object.entries(PANEL)) out.push(`.tcv_cad_tree .${cls}{--tcv-i:var(${varName(id)})}`);
   return out.join('\n');
 }
 

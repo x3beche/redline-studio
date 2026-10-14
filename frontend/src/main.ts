@@ -3,6 +3,7 @@ import { appConfig } from './app/app.config';
 import { App } from './app/app';
 import { applyFont, applyTheme } from './theme';
 import { applyIcons } from './app/icon-packs';
+import { applyTree } from './app/editor/tree-prefs';
 
 // This browser's settings were once kept under another prefix: move them
 // to redline.* once, before anything reads them, so nobody loses a theme,
@@ -20,6 +21,7 @@ try {
 applyTheme();
 applyFont();
 applyIcons();
+applyTree();
 
 bootstrapApplication(App, appConfig)
   .catch((err) => console.error(err));

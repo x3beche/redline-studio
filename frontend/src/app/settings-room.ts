@@ -13,6 +13,7 @@ import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
 import { ModelSwitch, SWITCHES, SWITCH_DEFAULT, SWITCH_INFO, reducedMotion } from './editor/switch-pref';
 import { ICON_PACKS, ICON_PACK_DEFAULT, ICON_PACK_INFO, ICON_SIZES, ICON_SIZE_DEFAULT, PREVIEW } from './icon-packs';
+import { TREE_DEFAULT, TREE_DENSITIES, TREE_FONTS, TREE_ICONS, TreeDensity, isDefaultTree } from './editor/tree-prefs';
 import { SwitchPreview } from './editor/switch-preview';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
@@ -230,6 +231,84 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 </div>
               </div>
             </div>
+            <!-- The 3D viewer's model tree (editor/tree-prefs.ts): row height,
+                 type and glyph size, and what a row shows, beside a sample
+                 tree drawn with the side panel's own markup and stylesheet. -->
+            <div class="st-card">
+              <div class="st-card-head"><h3>{{ 'Model tree' | t }}</h3>
+                <span class="st-sub">{{ 'The tree in the 3D room\\'s side panel. Its glyphs are the icon pack\\'s.' | t }}</span></div>
+              <div class="st-card-body st-tree">
+                <div class="st-tree-opts">
+                  <div class="st-icons-row">
+                    <span class="st-sec-title">{{ 'Rows' | t }}</span>
+                    <span class="st-pick" role="radiogroup" [attr.aria-label]="'Rows' | t">
+                      @for (d of treeDensities; track d) {
+                        <button role="radio" [attr.aria-checked]="prefs.tree().density === d" [class.on]="prefs.tree().density === d"
+                                (click)="prefs.pickTree({ density: d })">{{ densityNames[d] | t }}</button>
+                      }
+                    </span>
+                    <span class="st-icons-about">@if (treeIsDefault()) { {{ 'default' | t }} } @else {
+                      <button type="button" class="st-tree-reset" (click)="prefs.pickTree(treeDefault)">{{ 'Back to the default' | t }}</button> }</span>
+                  </div>
+                  <div class="st-icons-row">
+                    <span class="st-sec-title">{{ 'Text' | t }}</span>
+                    <span class="st-pick" role="radiogroup" [attr.aria-label]="'Text' | t">
+                      @for (f of treeFonts; track f) {
+                        <button role="radio" [attr.aria-checked]="prefs.tree().font === f" [class.on]="prefs.tree().font === f"
+                                (click)="prefs.pickTree({ font: f })">{{ f }}</button>
+                      }
+                      <span class="st-pick-unit">px</span>
+                    </span>
+                  </div>
+                  <div class="st-icons-row">
+                    <span class="st-sec-title">{{ 'Icons' | t }}</span>
+                    <span class="st-pick" role="radiogroup" [attr.aria-label]="'Icons' | t">
+                      @for (z of treeIcons; track z) {
+                        <button role="radio" [attr.aria-checked]="prefs.tree().icon === z" [class.on]="prefs.tree().icon === z"
+                                (click)="prefs.pickTree({ icon: z })">{{ z ? z : ('As the toolbars' | t) }}</button>
+                      }
+                      <span class="st-pick-unit">px</span>
+                    </span>
+                  </div>
+                  <div class="st-icons-row">
+                    <span class="st-sec-title">{{ 'Show' | t }}</span>
+                    <label class="tcv-check-row"><input type="checkbox" class="tcv-check" [checked]="prefs.tree().guides"
+                           (change)="prefs.pickTree({ guides: $any($event.target).checked })">{{ 'Guide lines' | t }}</label>
+                    <label class="tcv-check-row"><input type="checkbox" class="tcv-check" [checked]="prefs.tree().counts"
+                           (change)="prefs.pickTree({ counts: $any($event.target).checked })">{{ 'Counts' | t }}</label>
+                    <label class="tcv-check-row"><input type="checkbox" class="tcv-check" [checked]="prefs.tree().dots"
+                           (change)="prefs.pickTree({ dots: $any($event.target).checked })">{{ 'Colour dots' | t }}</label>
+                  </div>
+                </div>
+                <div class="tcv_cad_tree st-tree-demo" aria-hidden="true">
+                  <div class="tcv_box_content"><div class="tcv_cad_tree_container"><div class="tcv_toplevel">
+                    <div class="tv-tree-node" data-state0="1">
+                      <div class="tv-node-content"><span class="tv-nav-marker">▾</span>
+                        <span class="tv-icon tv-icon0 tv-pointer tcv_tree_button tcv_button_shape"></span><span class="tv-icon tv-icon1 tv-pointer tcv_tree_button tcv_button_mesh"></span>
+                        <span class="tv-node-label"><span class="tcv-tv-name">{{ 'Enclosure' | t }}</span></span></div>
+                      <div class="tv-children" style="display: block">
+                        <div class="tv-tree-node" data-state0="1">
+                          <div class="tv-node-content"><span class="tv-nav-marker"></span>
+                            <span class="tv-icon tv-icon0 tv-pointer tcv_tree_button tcv_button_shape"></span><span class="tv-icon tv-icon1 tv-pointer tcv_tree_button tcv_button_mesh"></span>
+                            <span class="tv-node-label tv-node-label-highlight"><span class="tcv-tv-name">{{ 'Case' | t }}</span><span class="tcv-tv-swatch st-tree-sw1"></span></span></div>
+                        </div>
+                        <div class="tv-tree-node" data-state0="0">
+                          <div class="tv-node-content"><span class="tv-nav-marker"></span>
+                            <span class="tv-icon tv-icon0 tv-pointer tcv_tree_button tcv_button_shape_no"></span><span class="tv-icon tv-icon1 tv-pointer tcv_tree_button tcv_button_mesh_no"></span>
+                            <span class="tv-node-label"><span class="tcv-tv-name">{{ 'Bottom plate' | t }}</span><span class="tcv-tv-swatch st-tree-sw2"></span></span></div>
+                        </div>
+                        <div class="tv-tree-node" data-state0="1">
+                          <div class="tv-node-content"><span class="tv-nav-marker">▸</span>
+                            <span class="tv-icon tv-icon0 tv-pointer tcv_tree_button tcv_button_shape"></span><span class="tv-icon tv-icon1 tv-pointer tcv_tree_button tcv_button_mesh"></span>
+                            <span class="tv-node-label"><span class="tcv-tv-name">{{ 'Screw M2 pan head' | t }}</span><span class="tcv-tv-count">×6</span></span></div>
+                          <div class="tv-children" style="display: none"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div></div></div>
+                </div>
+              </div>
+            </div>
             @for (grp of groups; track grp.name) {
               @if (themeFilter() === 'All' || themeFilter() === grp.name) {
                 <div class="st-card">
@@ -341,6 +420,12 @@ export class RoomSettings {
   readonly packPreview = PREVIEW;
   readonly iconSizes = ICON_SIZES;
   readonly sizeDefault = ICON_SIZE_DEFAULT;
+  readonly treeDensities = TREE_DENSITIES;
+  readonly densityNames: Record<TreeDensity, string> = { compact: 'Compact', normal: 'Normal', comfortable: 'Comfortable' };
+  readonly treeFonts = TREE_FONTS;
+  readonly treeIcons = TREE_ICONS;
+  readonly treeDefault = TREE_DEFAULT;
+  readonly treeIsDefault = computed(() => isDefaultTree(this.prefs.tree()));
   /** The transition whose preview is open (editor/switch-preview.ts). */
   previewing = signal<ModelSwitch | null>(null);
   readonly reduced = reducedMotion();
