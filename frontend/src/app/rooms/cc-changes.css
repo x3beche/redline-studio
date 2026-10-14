@@ -1,0 +1,68 @@
+/* What the Chat's tools changed (cc-changes.ts): a quiet line under the
+   answer, its rows on a click, and the conversation's list in a panel from
+   the right. Flat rows on hairlines, like the steps above them. */
+:host { display: block; }
+:host(rl-cc-change-rows) { display: contents; }
+
+.ccx-ico { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.ccx-dim { color: var(--ink-dim); }
+
+/* under an answer */
+.ccx-line { display: flex; align-items: center; gap: 6px; min-height: 24px; margin: 0 0 4px; font-size: 12px; color: var(--ink-dim); }
+.ccx-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; margin-left: -6px; font: inherit; color: inherit;
+  background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ccx-toggle:hover { color: var(--ink); background: var(--hover); }
+.ccx-chev { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+  stroke-linejoin: round; transition: transform 150ms var(--tcv-ease); }
+.ccx-chev.ccx-open { transform: rotate(90deg); }
+.ccx-under { margin: 0 0 8px; border-top: 1px solid var(--line); }
+
+/* one change: icon, sentence, what it touched, who and when, its action */
+.ccx-row { display: grid; grid-template-columns: 14px minmax(160px, 1.1fr) minmax(0, 1.4fr) auto auto auto; align-items: center;
+  gap: 10px; min-height: 30px; padding: 3px 2px; font-size: 12px; color: var(--ink); border-bottom: 1px solid var(--line); }
+.ccx-row .ccx-ico { color: var(--ink-dim); }
+.ccx-what, .ccx-things { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccx-things { color: var(--ink-dim); }
+.ccx-meta { color: var(--ink-dim); white-space: nowrap; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+.ccx-state { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); }
+.ccx-undone .ccx-what, .ccx-undone .ccx-things { color: var(--ink-dim); text-decoration: line-through; text-decoration-color: var(--line); }
+.ccx-act { flex: none; padding: 2px 8px; font: inherit; font-size: 12px; color: var(--accent); background: none;
+  border: 1px solid transparent; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.ccx-act:hover { background: var(--hover); border-color: var(--line); }
+.ccx-act:disabled { opacity: .5; cursor: default; }
+.ccx-act:focus-visible, .ccx-toggle:focus-visible, .ccx-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* an undo that did not go: what changed since */
+.ccx-conflict { display: flex; align-items: center; gap: 8px; padding: 6px 2px 6px 24px; font-size: 12px; color: var(--warn);
+  border-bottom: 1px solid var(--line); }
+.ccx-conflict > span { flex: 1; min-width: 0; }
+.ccx-diff { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 3px 14px; margin: 0; padding: 6px 2px 8px 24px;
+  font-size: 11.5px; border-bottom: 1px solid var(--line); }
+.ccx-diff dt { color: var(--ink-dim); }
+.ccx-diff dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; font: 11px/1.5 'IBM Plex Mono', ui-monospace, monospace; }
+.ccx-then { color: var(--ink-dim); text-decoration: line-through; }
+.ccx-arrow { color: var(--ink-dim); }
+
+/* the conversation's changes */
+.ccx-veil { position: fixed; inset: 0; z-index: 900; background: var(--overlay); }
+.ccx-panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 901; display: flex; flex-direction: column;
+  width: min(980px, 100vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-soft); }
+.ccx-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px 12px; border-bottom: 1px solid var(--line); }
+.ccx-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink-bright); }
+.ccx-head .ccx-dim { font-size: 12px; }
+.ccx-x { margin-left: auto; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--ink-dim);
+  background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.ccx-x:hover { color: var(--ink); background: var(--hover); }
+.ccx-x svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.ccx-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 18px 18px; }
+.ccx-group { margin-top: 14px; }
+.ccx-ghead { display: flex; align-items: center; gap: 10px; padding: 0 2px 5px; font-size: 11.5px; border-bottom: 1px solid var(--line); }
+.ccx-gtitle { color: var(--ink); font-weight: 600; }
+.ccx-ghead .ccx-act { margin-left: auto; }
+.ccx-empty { margin: 28px 2px; font-size: 12.5px; color: var(--ink-dim); }
+
+@media (max-width: 760px) {
+  .ccx-row { grid-template-columns: 14px minmax(0, 1fr) auto; }
+  .ccx-things, .ccx-meta { display: none; }
+}

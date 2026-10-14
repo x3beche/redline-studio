@@ -50,6 +50,7 @@ class Ctx:
     vision: bool = False
     actor: dict = field(default_factory=dict)
     chat: str = ""
+    step: str = ""                   # the answer's step running the tool (ccgen.run_step): its change is kept for undo
 
 
 @dataclass
@@ -77,6 +78,21 @@ class Tool:
     package: str = "other"           # its package (PACKAGES below): how the Tools panel and the model see it
     # A tool below "delete" that asks first for some inputs (memory_write's removals): given the input.
     asks: Callable[[dict], bool] | None = None
+    # How what it changed is undone (backend/chat_undo.py): None - the generic inverse of every write it made;
+    # False - nothing kept (a cache); "words" - kept and shown, not undoable, the words say why; or its own
+    # `async (ctx, change, apply: bool)`, which raises chat_undo.Conflict when it cannot.
+    undo: Any = None
+
+    def __post_init__(self) -> None:
+        # A writing tool run as a step is recorded: what it wrote, for the Chat's undo.
+        handler = self.run
+
+        async def run(ctx: Ctx, args: dict) -> Result:
+            if self.level == "read" or self.undo is False or not getattr(ctx, "step", ""):
+                return await handler(ctx, args)
+            from .. import chat_undo
+            return await chat_undo.recorded(self, handler, ctx, args)
+        self.run = run
 
     def spec(self) -> dict:
         """As a model is told about it (OpenAI's shape; llm.py turns it
@@ -240,8 +256,8 @@ SYSTEM_NOTE = (
     "product_to_my_items copies a product to My Items. How many of a board or a 3D assembly the stock builds, what "
     "limits it and what is short for a number of builds is build_count; shopping_list prices what is short (or a list "
     "given) across the sellers Parts knows, cheapest first per line; when the person says they built some, "
-    "stock_consume takes their parts out of stock (it asks first). To show a 3D model or a board (\"show me the "
-    "lid\"), render it with model_render: the Chat shows the pictures under its step. You do not know today's "
+    "stock_consume takes their parts out of stock (it asks first). To show a 3D model or a board (\"show me the lid\"), "
+    "render it with model_render: the Chat shows the pictures under its step. You do not know today's "
     "date or the time: when they matter - a date asked for, how long ago, a deadline, \"today\" - read them with "
     "clock first and never guess them."
 )
