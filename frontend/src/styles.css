@@ -4327,6 +4327,15 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   stroke-linecap: round; stroke-linejoin: round; }
 .tcv-cc-filename { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .tcv-cc-filemeta { flex: none; color: var(--ink-dim); font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+/* model_render's pictures under its step: one row across the answer, a caption under each */
+.tcv-cc-shots { display: grid; grid-template-columns: repeat(var(--tcv-shots, 1), minmax(0, 1fr)); gap: 8px;
+  max-width: calc(var(--tcv-shots, 1) * 420px); margin: 4px 0 6px; }
+.tcv-cc-shot { display: flex; flex-direction: column; min-width: 0; padding: 0; font: inherit; text-align: left; color: var(--ink-dim);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: zoom-in; }
+.tcv-cc-shot:hover { border-color: var(--ink-dim); }
+.tcv-cc-shot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-shot img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: var(--hover); }
+.tcv-cc-shot span { padding: 4px 8px; border-top: 1px solid var(--line); font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
 /* a link in an answer to a file of the Files room: opens in the same viewer */
 .md a.md-file { cursor: pointer; }
 .md a.md-file::before { content: ''; display: inline-block; width: .85em; height: 1em; margin-right: 3px; vertical-align: -.12em;

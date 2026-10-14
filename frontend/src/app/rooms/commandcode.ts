@@ -87,6 +87,9 @@ const PKG_LABEL: Record<string, string> = {
 
 /** An answer's text with its steps where they happened. */
 type Chunk = { text: string; steps?: undefined } | { text?: undefined; steps: CcStep[] };
+/** model_render's views as the page names them (tools/render.py VIEWS; a board's 3D and drawings). */
+const SHOT_LABEL: Record<string, string> = { iso: 'Iso', 'iso-back': 'Iso back', front: 'Front', right: 'Right', top: 'Top',
+  detail: 'Detail', bottom: 'Bottom', '3d': '3D' };
 /** An answer someone else is having written, as far as it got. */
 export interface CcWatch {
   gen: string; client?: string | null; by: { id?: string; name?: string }; model: string; provider: string;
@@ -1059,6 +1062,16 @@ type Ask = { text: string; label: string; go: () => void };
           <span class="tcv-cc-filename">{{ s.vars!['name'] }}</span>
           <span class="tcv-cc-filemeta">{{ s.vars!['pages'] }} {{ (+s.vars!['pages'] === 1 ? 'page' : 'pages') | t }} · {{ s.vars!['size'] }}</span>
         </button>
+      @if (s.status === 'done' && s.tool === 'model_render' && shots(s); as pics) {
+        <!-- The pictures it took (chat_tools/model_render.py), kept in Files: one row; a click opens one in the viewer. -->
+        <div class="tcv-cc-shots" [style.--tcv-shots]="pics.length">
+          @for (p of pics; track p.src) {
+            <button type="button" class="tcv-cc-shot" (click)="openShot(s, p)" [title]="'Open the picture' | t">
+              <img [src]="p.src" [alt]="s.vars!['title'] + ' · ' + (p.label | t)" loading="lazy" />
+              <span>{{ p.label | t }}</span>
+            </button>
+          }
+        </div>
       }
       @if (s.status === 'ask' && auth.can('draw')) {
         <div class="tcv-cc-stepask">
@@ -3155,6 +3168,22 @@ export class RoomCommandCode implements OnDestroy {
   openStepFile(s: CcStep) {
     const v = s.vars ?? {};
     FileModal.open({ id: String(v['file']), name: String(v['name'] ?? ''), pages: Number(v['pages']) || undefined });
+  }
+  /** model_render's pictures: shot0..3 are "view:<Files id>", or "view:@layout" for a board's own drawing. */
+  shots(s: CcStep): { label: string; src: string; file: string | null }[] | null {
+    const v = s.vars ?? {};
+    const out = [0, 1, 2, 3].map(i => String(v['shot' + i] ?? '')).filter(x => x.includes(':')).map(x => {
+      const at = x.indexOf(':'), view = x.slice(0, at), ref = x.slice(at + 1);
+      const drawn = ref.startsWith('@');
+      return { label: SHOT_LABEL[view] ?? view, file: drawn ? null : ref,
+               src: drawn ? `/api/boards/${encodeURIComponent(String(v['board'] ?? ''))}/${ref.slice(1)}.svg`
+                          : `/api/files/${ref}?inline=1` };
+    });
+    return out.length ? out : null;
+  }
+  openShot(s: CcStep, p: { label: string; src: string; file: string | null }) {
+    if (p.file) FileModal.open({ id: p.file, name: `${s.vars?.['title'] ?? ''} · ${t(p.label)}` });
+    else window.open(p.src, '_blank', 'noopener');
   }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   /** The step's sentence: translated, then its holes filled. */

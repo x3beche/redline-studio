@@ -238,7 +238,8 @@ SYSTEM_NOTE = (
     "product_to_my_items copies a product to My Items. How many of a board or a 3D assembly the stock builds, what "
     "limits it and what is short for a number of builds is build_count; shopping_list prices what is short (or a list "
     "given) across the sellers Parts knows, cheapest first per line; when the person says they built some, "
-    "stock_consume takes their parts out of stock (it asks first). You do not know today's "
+    "stock_consume takes their parts out of stock (it asks first). To show a 3D model or a board (\"show me the "
+    "lid\"), render it with model_render: the Chat shows the pictures under its step. You do not know today's "
     "date or the time: when they matter - a date asked for, how long ago, a deadline, \"today\" - read them with "
     "clock first and never guess them."
 )

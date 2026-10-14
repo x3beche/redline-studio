@@ -172,13 +172,13 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "product_find": True, "product_files_read": True, "product_file_attach": True,
                   "product_file_detach": True, "product_set_main": True, "product_to_model": True,
                   "product_files_missing": True, "product_to_my_items": False,
-                  "build_count": True, "shopping_list": True, "stock_consume": True,
+                  "build_count": True, "shopping_list": True, "stock_consume": True, "model_render": True,
                   "room_note": False, "queue_list": True, "queue_read": True, "analytics_read": True, "notes_search": True, "note_read": True,
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
                   "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
                   "clock": True}
-    assert [t["package"] for t in got["tools"]][:13] == ["general"] * 4 + ["cad"] * 2 + ["pcb"] * 7     # General, then the tabs
+    assert [t["package"] for t in got["tools"]][:13] == ["general"] * 4 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -194,7 +194,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "product_find", "product_files_read", "product_file_attach",
                                                                 "product_file_detach", "product_set_main", "product_to_model",
                                                                 "product_files_missing", "build_count", "shopping_list",
-                                                                "stock_consume",
+                                                                "stock_consume", "model_render",
                                                                 "inventory_search", "inventory_read", "inventory_add",
                                                                 "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",

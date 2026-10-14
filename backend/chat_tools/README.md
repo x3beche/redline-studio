@@ -80,6 +80,13 @@ through the workspace, and the list of them when the name fits nothing).
   pdf into Files > Documents) and `stock_consume` (delete: asks first; the
   parts of N builds taken out of stock, all or nothing, "used 4 for
   fan-board x2" in each line's log).
+- `model_render` (change, on; package `cad`): a model's last build
+  photographed from up to 4 views (taste.py `render_views`, tools/render.py)
+  or a board's 3D (render.py board:<id>; its top and bottom drawings when it
+  has none), kept as PNGs in Files > Chat/Renders with the model, build
+  version, view and size in their context - the cache, and what the step's
+  `shot0..3` vars point at so the Chat shows them inline. A model building
+  or broken is refused with why.
 - `basic_tool`: the Tools tab's calculators, in two steps - `task` finds
   them (tool_router.py, as the MCP server's find_tool) with their inputs,
   `id` + `input` runs one (tools_api.py `run_kit`: its own tool.js, in a
