@@ -11,6 +11,7 @@ import { warmPart } from './part-assets';
 import { StockPanel } from './stock';
 import { ProductFilesPanel } from './product-files';
 import { PartsTrash } from './parts-trash';
+import { DatasheetRow } from './datasheet-row';
 
 /** An add being watched (backend main.py /api/parts-add). */
 export interface PartAdd {
@@ -50,6 +51,8 @@ export class PartDesk implements OnDestroy {
   changed = signal(0);
 
   canEdit = () => this.auth.can('edit');
+  /** May put a datasheet in the datasheet library (as asking the Chat may). */
+  canDraw = () => this.auth.can('draw');
 
   load() {
     this.store.held().subscribe({ next: rows => this.held.set(rows) });
@@ -238,7 +241,7 @@ export class PartDesk implements OnDestroy {
  *  the Parts page's detail box. Esc or a click beside it closes it. */
 @Component({
   selector: 'app-part-modal',
-  imports: [T, PartCard, StockPanel, ProductFilesPanel],
+  imports: [T, PartCard, StockPanel, ProductFilesPanel, DatasheetRow],
   host: { '(document:keydown.escape)': 'desk.isOpen() && desk.closePart()' },
   styles: [`
     .pm-veil { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center;
@@ -263,6 +266,8 @@ export class PartDesk implements OnDestroy {
                          [canEdit]="desk.canEdit()" [canRun]="canRun()"
                          (closed)="desk.closePart()" (keep)="desk.addPart(s.lcsc)" (openDatasheet)="desk.openDatasheet(s.lcsc)"
                          (place)="desk.placeIt(s.lcsc, $event)" />
+          <!-- its datasheet in the datasheet library, which the Chat searches by question (datasheet-row.ts) -->
+          <wb-ds-row class="pm-stock" maker="lcsc" [product]="s.lcsc" [canFetch]="desk.canDraw()" />
           <!-- how many of it are on hand (stock.ts): a part kept in the drawer is a Parts product like any other -->
           @if (desk.heldRow(s.lcsc)) { <wb-stock-panel class="pm-stock" maker="lcsc" [product]="s.lcsc" />
             <!-- files attached to it beside its own EasyEDA 3D: an extra STEP, a datasheet, a drawing (product-files.ts) -->

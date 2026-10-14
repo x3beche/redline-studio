@@ -24,6 +24,7 @@ import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './ch
 import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
 import { FilesApi } from './files-model';
 import { FileModal, FileModalHost, fileIdOf } from './file-modal';
+import { DatasheetRefs } from './datasheet-row';
 import { ContextMenu } from '../context-menu';
 import { Confirm } from '../confirm';
 import { ComposerSuggest, SuggestChip } from './suggest';
@@ -418,7 +419,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel, CcToolCard],
+  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DatasheetRefs, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel, CcToolCard],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -1076,6 +1077,10 @@ type Ask = { text: string; label: string; go: () => void };
         </dl>
         }
       </details>
+      @if (s.status === 'done' && s.tool.startsWith('datasheet_') && s.vars?.['ref0']) {
+        <!-- The datasheet pages it found or read: each opens the library's PDF at that page (datasheet-row.ts). -->
+        <wb-ds-refs [vars]="s.vars" />
+      }
       @if (s.status === 'done' && s.tool === 'pdf_make' && s.vars?.['file']) {
         <!-- The PDF it made, as a card: opens in the viewer over the Chat (file-modal.ts). -->
         <button type="button" class="tcv-cc-filecard" (click)="openStepFile(s)" [title]="'Open the PDF' | t">

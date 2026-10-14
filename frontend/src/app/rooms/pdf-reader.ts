@@ -123,6 +123,8 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 })
 export class PdfReader implements AfterViewInit, OnDestroy {
   src = input.required<string>();
+  /** The page it opens at (a datasheet's page a Chat step cites). */
+  start = input(1);
   private box = viewChild.required<ElementRef<HTMLDivElement>>('box');
 
   readonly zooms = ZOOMS;
@@ -177,7 +179,11 @@ export class PdfReader implements AfterViewInit, OnDestroy {
         this.viewer = new web.PDFViewer({ container, viewer: container.firstElementChild, eventBus: this.bus,
                                           linkService: link, findController: finder });
         link.setViewer(this.viewer);
-        this.bus.on('pagesinit', () => { this.viewer.currentScaleValue = this.zoomKey(); });
+        this.bus.on('pagesinit', () => {
+          this.viewer.currentScaleValue = this.zoomKey();
+          const first = untracked(() => this.start());
+          if (first > 1) this.go(first);
+        });
         this.bus.on('pagechanging', (e: { pageNumber: number }) => this.page.set(e.pageNumber));
         this.bus.on('scalechanging', (e: { scale: number; presetValue?: string }) => {
           this.scale.set(e.scale);

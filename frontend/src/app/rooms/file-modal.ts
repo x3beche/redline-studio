@@ -18,7 +18,13 @@ import { PdfReader } from './pdf-reader';
  *  What is passed in is shown at once; the rest (size, folder, who made
  *  it) comes from GET /api/files/{id}/info. One at a time; Esc closes.
  *  The box itself is <rl-file-modal />, mounted in the Chat (commandcode.ts). */
-export interface FileAsk { id: string; name?: string; pages?: number }
+export interface FileAsk {
+  id: string; name?: string; pages?: number;
+  /** A PDF that is not a Files file (the datasheet library's, datasheet-row.ts): read from here, `id` unused. */
+  src?: string;
+  /** The page it opens at. */
+  page?: number;
+}
 
 interface FileInfo extends StoredFile { folder_path?: string }
 
@@ -65,7 +71,7 @@ export function fileIdOf(href: string | null | undefined): string | null {
       </div>
       <div class="fm-acts">
         <a class="tcv-btn fm-btn" [href]="download()" download>{{ 'Download' | t }}</a>
-        <button type="button" class="tcv-btn fm-btn" (click)="toFiles()">{{ 'Open in Files' | t }}</button>
+        @if (!cur()?.src) { <button type="button" class="tcv-btn fm-btn" (click)="toFiles()">{{ 'Open in Files' | t }}</button> }
         @if (info()?.ro) {
           <!-- What the app made is kept in its own area of Files: a copy of one's own, on asking -->
           <button type="button" class="tcv-btn fm-btn" (click)="saveMine()" [disabled]="saving()"
@@ -80,7 +86,7 @@ export function fileIdOf(href: string | null | undefined): string | null {
       @if (failed()) {
         <div class="fm-center">{{ failed() }}</div>
       } @else if (isPdf()) {
-        <app-pdf-reader [src]="inline()" />
+        <app-pdf-reader [src]="inline()" [start]="cur()?.page || 1" />
       } @else if (info(); as i) {
         <app-file-view [file]="i" />
       } @else {
@@ -138,11 +144,12 @@ export class FileModalHost implements OnDestroy {
   isPdf = computed(() => {
     const i = this.info();
     if (i) return i.preview === 'pdf';
+    if (this.cur()?.src) return true;
     return /\.pdf$/i.test(this.cur()?.name ?? '') || !!this.cur()?.pages;
   });
   icon = computed(() => this.info() ? iconOf(this.info()!) : this.isPdf() ? 'pdf' : 'file');
-  inline = computed(() => inlineUrl(this.cur()?.id ?? ''));
-  download = computed(() => downloadUrl(this.cur()?.id ?? ''));
+  inline = computed(() => this.cur()?.src || inlineUrl(this.cur()?.id ?? ''));
+  download = computed(() => this.cur()?.src || downloadUrl(this.cur()?.id ?? ''));
 
   constructor() {
     effect(() => {
@@ -153,6 +160,7 @@ export class FileModalHost implements OnDestroy {
       if (!f) return;
       if (!this.back) this.back = document.activeElement as HTMLElement | null;
       setTimeout(() => this.closer()?.nativeElement.focus());
+      if (f.src) return;                              // not a Files file: nothing more to ask about it
       this.http.get<FileInfo>(`/api/files/${encodeURIComponent(f.id)}/info`).subscribe({
         next: i => { if (n === this.seq) this.info.set(i); },
         error: e => {

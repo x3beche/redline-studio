@@ -51,7 +51,7 @@ const CAMERA = 'M4 8h4l2-3h4l2 3h4v11H4z M12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
-  drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
+  drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET, datasheet_search: SHEET,
   basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, manufacturer_search: FACTORY, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
   pdf_make: PDFDOC,
   room_note: NOTE, queue_list: QUEUE, queue_read: QUEUE, rename_chat: PEN,

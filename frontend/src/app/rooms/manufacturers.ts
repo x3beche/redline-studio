@@ -26,6 +26,7 @@ import { PriceChart } from './product-charts';
 import { PartsTrash, PartsTrashView } from './parts-trash';
 import { Fmt } from './charts';
 import { GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
+import { DatasheetRow } from './datasheet-row';
 import { BackCloses, navGo, navParams, navUrl } from '../nav';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
@@ -332,7 +333,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
+  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar, DatasheetRow,
             PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles, PartsTrashView, PriceChart],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
@@ -1056,6 +1057,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                     } @else { <p class="mf-pd-none">{{ 'Its page gave no specs.' | t }}</p> }
                   </div>
                 </section>
+                <!-- its datasheet in the datasheet library, which the Chat searches by question (datasheet-row.ts) -->
+                <wb-ds-row [maker]="d.maker.id" [product]="d.id" [canFetch]="can()" />
                 <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts); the whole section takes a drop -->
                 <wb-product-files #pfl class="mf-pd-sec mf-pd-filesec" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
                 <!-- the price and the seller's stock each time its page was read: the Analytics room's line (product-charts.ts)
