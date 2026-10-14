@@ -66,10 +66,14 @@ def _read_only(*ids: str) -> None:
             raise HTTPException(403, files_virtual.refusal(i))
 
 
+_REFUSAL = {"parts": files_virtual.PARTS_REFUSAL, "chat": files_virtual.CHAT_REFUSAL,
+            "agents": files_virtual.AGENT_REFUSAL}
+
+
 async def _not_parts(files_: list[str] = (), folders: list[str] = ()) -> None:
-    """The Parts page's own uploads and folders are changed there (or by the
-    Chat's product tools, which check their own rights), the Chat's own in the
-    Chat - never from Files: 403."""
+    """What the app made or keeps - the Parts page's uploads, the Chat's, an
+    agent's (files_virtual.area_of) - is changed where it belongs, never from
+    Files (a copy to My files is): 403. So are the Parts and Chat folders."""
     tops = await files_virtual.folder_tops(_db())
     for f in folders:
         if f and tops.get(f, "") in files_virtual.PART_FOLDERS:
@@ -78,20 +82,18 @@ async def _not_parts(files_: list[str] = (), folders: list[str] = ()) -> None:
             raise HTTPException(403, files_virtual.CHAT_REFUSAL)
     ids = [i for i in files_ if i and not files_virtual.is_virtual(i)]
     if ids:
-        async for d in _db()[files.COLL].find({"_id": {"$in": ids}}, {"context": 1, "folder": 1}):
-            if files_virtual.parts_owned(d, tops):
-                raise HTTPException(403, files_virtual.PARTS_REFUSAL)
-            if files_virtual.chat_owned(d, tops):
-                raise HTTPException(403, files_virtual.CHAT_REFUSAL)
+        async for d in _db()[files.COLL].find({"_id": {"$in": ids}}, {"context": 1, "folder": 1, "by": 1}):
+            area = files_virtual.area_of(d, tops)
+            # An agent keeps its own files in order (revisions.py files mv); nobody else changes them here.
+            mine = area == "agents" and (d.get("by") or {}).get("id") == (actors.current() or {}).get("id")
+            if area != "own" and not mine:
+                raise HTTPException(403, _REFUSAL[area])
 
 
 def _owner_of(d: dict, tops: dict) -> dict:
-    """Whose an upload is, for the page: the Parts page's, the Chat's, or one's own (nothing)."""
-    if files_virtual.parts_owned(d, tops):
-        return {"ro": True, "where": "parts"}
-    if files_virtual.chat_owned(d, tops):
-        return {"ro": True, "where": "chat"}
-    return {}
+    """Whose an upload is, for the page: the app's (read-only, where it belongs), or one's own (nothing)."""
+    area = files_virtual.area_of(d, tops)
+    return {} if area == "own" else {"ro": True, "where": area}
 
 
 def _disposition(how: str, name: str) -> str:
@@ -505,6 +507,7 @@ async def files_info(fid: str):
         return out
     folder = await _db()[files.FOLDERS].find_one({"_id": out["folder"]}) if out["folder"] else None
     out["folder_path"] = (folder or {}).get("path") or ""
+    out.update(_owner_of(out | {"_id": fid}, await files_virtual.folder_tops(_db())))
     return out
 
 
@@ -686,6 +689,39 @@ async def files_pdf_page(fid: str, n: int, dpi: float = 150):
     longer side would pass 4000 px)."""
     doc, data = await _pdf_of(fid)
     return await pdf_page_response(data, n, dpi, doc.get("name") or fid)
+
+
+class CopyIn(BaseModel):
+    folder: str = Field(default="", max_length=64)
+    # or by its path, made if missing (`revisions.py files save-mine --folder`)
+    folder_path: str | None = Field(default=None, max_length=1000)
+    name: str | None = Field(default=None, max_length=180)
+
+
+@router.post("/api/files/{fid}/copy")
+async def files_copy(fid: str, body: CopyIn):
+    """A copy of any file - one the app or an agent made, a room's own, an
+    upload - into one's own folders (files.copy_to_mine): the one way what
+    is generated reaches My files. Not into the Chat's or the Parts page's folders."""
+    folder = body.folder
+    try:
+        if body.folder_path and not folder:
+            folder = (await files.make_path(_db(), body.folder_path, actors.current()))["_id"]
+        name = files.check_name(body.name) if body.name else None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    _read_only(folder)
+    await _not_parts(folders=[folder])
+    if folder and not await _db()[files.FOLDERS].find_one({"_id": folder}, {"_id": 1}):
+        raise HTTPException(404, f"no folder {folder!r}")
+    try:
+        doc = await files.copy_to_mine(_db(), fid, actors.current(), folder, name)
+    except KeyError as exc:
+        raise HTTPException(404, fid) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await actors.audit(_db(), "copy", f"file {doc['name']} to My files", {"from": fid, "id": doc["_id"]})
+    return file_out(doc)
 
 
 class FilePatch(BaseModel):

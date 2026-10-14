@@ -58,3 +58,7 @@ This room has a thread of its own: `revisions.py chat --room firmware`,
 over MCP (the `redline` server in .mcp.json): `next`, `show`, `start`,
 `log`, `finish`, `fw_files`, `fw_get`, `fw_put`, `fw_build`, `fw_diff`,
 `fw_pins`, `ask`, `chat`, `say`.
+
+## Files you make
+
+A file you hand back (`revisions.py files put`) is kept under Files > In the app > Agents, read-only, never in the person's My files - as is everything the app generates (renders, drawings, releases, builds). Copy one to My files only when the person asks: `revisions.py files save-mine <file-id> [--folder PATH] [--name NAME]` (MCP `files_save_to_mine`).

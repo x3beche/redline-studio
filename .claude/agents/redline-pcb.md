@@ -87,3 +87,7 @@ makes that reference wear it on this board (the 3D is redrawn without
 re-routing; `board body <board>` lists them). A drawn body is used as-is,
 and a pose is not applied on top of it. See AGENTS.md: Board notes, *A part
 needs another 3D body*.
+
+## Files you make
+
+A file you hand back (`revisions.py files put`) is kept under Files > In the app > Agents, read-only, never in the person's My files - as is everything the app generates (renders, drawings, releases, builds). Copy one to My files only when the person asks: `revisions.py files save-mine <file-id> [--folder PATH] [--name NAME]` (MCP `files_save_to_mine`).

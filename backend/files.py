@@ -228,6 +228,19 @@ async def remove(db, fid: str, *, forever: bool = False) -> bool:
     return True
 
 
+async def copy_to_mine(db, fid: str, by: dict, folder: str = "", name: str | None = None) -> dict:
+    """A copy of any file - an upload, one the app or an agent made, a
+    room's own (files_virtual: v: ids) - put in one's own folders: a new,
+    independent file, its own bytes, which can be renamed, moved and deleted
+    without touching what it was copied from. What the app generates is
+    kept in its own read-only area (In the app); this is the one way it
+    reaches My files - when the person asks."""
+    doc, data = await get(db, fid)
+    note = f"Copied from {doc.get('name') or fid}" + (f" - {doc['note']}" if doc.get("note") else "")
+    return await put(db, name or doc.get("name") or "file", data, doc.get("content_type"),
+                     {"room": "files", "copied_from": fid}, by, note=note[:2000], folder=folder)
+
+
 # ---------------------------------------------------------------- the trash
 
 # A file deleted from Files keeps its bytes this long, then a sweep deletes it

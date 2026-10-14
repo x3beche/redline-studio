@@ -2377,6 +2377,16 @@ async def cmd_files(args):
         got = _json.loads(call(f"/api/files/{args.target}/to-model", "POST",
                                _json.dumps(body).encode(), "application/json"))
         print(f"model {got['model']} ({got['title']}) from {got['upload']} - building (job {got.get('build_job')})")
+    elif args.what == "save-mine":
+        # What the app or an agent made is kept in its own read-only area (In the
+        # app); the person's own folders get it only as a copy, when they ask.
+        if not args.target:
+            sys.exit("files save-mine needs a file id (files list), [--folder PATH] [--name NAME]")
+        body = {**({"folder_path": args.folder.strip("/")} if args.folder and args.folder.strip("/") else {}),
+                **({"name": args.name} if args.name else {})}
+        got = _json.loads(call(f"/api/files/{args.target}/copy", "POST", _json.dumps(body).encode(), "application/json"))
+        print(f"saved a copy to My files{'/' + args.folder.strip('/') if args.folder and args.folder.strip('/') else ''}: "
+              f"{got['name']} as {got['id']} (the person's own; the original stays)")
     elif args.what == "put":
         src = Path(args.target or "")
         if not src.is_file():
@@ -2809,8 +2819,11 @@ def main() -> None:
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
-    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put", "to-model", "mkdir", "mv"],
+    s.add_argument("what", nargs="?", default="list",
+                   choices=["list", "get", "put", "to-model", "mkdir", "mv", "save-mine"],
                    help="list (the default), get <id> [-o PATH], put <path>, mkdir <path>, "
+                        "save-mine <id> [--folder PATH] [--name NAME] (a copy into the person's My files, "
+                        "only when they ask), "
                         "mv <id|folder path> <folder path>, "
                         "to-model <id> --folder F [--title T] (a STEP/mesh copied into a project as a model)")
     s.add_argument("target", nargs="?", help="get: the file's id; put: the file to upload; mkdir: a folder path; "
@@ -2824,6 +2837,7 @@ def main() -> None:
     s.add_argument("--folder", help="list/put: a Files folder by path ('/' the top; put makes it if missing); "
                                     "to-model: the catalog folder it goes in")
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
+    s.add_argument("--name", help="save-mine: the copy's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
     s = sub.add_parser("linked", help="bought and downloaded parts: McMaster-Carr and GrabCAD, saved in the "
                                       "Parts page with their STEP (backend/linked.py)")

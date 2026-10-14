@@ -17,13 +17,16 @@ from .. import actors, files, pdfdoc
 from . import Ctx, Result, Tool, ToolError, size
 from ._rights import need
 
-FOLDER = "Documents"
+# What the Chat makes is the Chat's (Files > In the app > Chat), kept under the Chat folder;
+# it reaches My files only as a copy (file_save_to_my_files).
+FOLDER = "Chat/Documents"
 NAME_MAX = 120
 
 SKILL = (
     "Make a PDF document - a report, a datasheet summary, a BOM, a comparison, a spec, a test plan - printed in "
     "Workbench's white theme (the Workbench mark at the top of every page; the author, date and time, purpose and "
-    "page N of M at the bottom) and kept in the Files room. Use it when the person asks for a PDF, a report or a "
+    "page N of M at the bottom) and kept in the Chat's own area of Files (In the app > Chat - not in the person's "
+    "My files: when they ask to keep it in their files, copy it there with file_save_to_my_files). Use it when the person asks for a PDF, a report or a "
     "document to keep or share; not for a short answer. Gather the facts first with the other tools (drawer, "
     "datasheets, LCSC, boards, BOM cost, stock...) and only then write it: every value in it comes from them, "
     "not from memory. How to write it: `title` a few words; `purpose` one line saying what the document is for "
@@ -94,7 +97,10 @@ async def run(ctx: Ctx, args: dict) -> Result:
     author = " ".join(str(args.get("author") or "").split())[:120] or str(by.get("name") or "")
     purpose = " ".join(str(args.get("purpose") or "").split())[:300]
     project = " ".join(str(args.get("project") or "").split())[:120]
-    where = str(args.get("folder") or "").strip().strip("/") or (f"{FOLDER}/{project.replace('/', '-')}"
+    asked = str(args.get("folder") or "").strip().strip("/")
+    if asked and asked.split("/")[0].lower() != "chat":
+        asked = f"{FOLDER}/{asked}"
+    where = asked or (f"{FOLDER}/{project.replace('/', '-')}"
                                                                  if project else FOLDER)
     doc = pdfdoc.Doc(title=title, body=body, purpose=purpose, author=author, project=project, size=page,
                      lang=lang if lang in pdfdoc.LABELS else "en", sections=sections)

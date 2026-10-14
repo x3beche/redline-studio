@@ -100,6 +100,16 @@ TOOLS: dict[str, tuple] = {
         {"id": _s("revision id"),
          "force": {"type": "boolean", "description": "mark it applied past a failing Taste check"}},
         ["id"], lambda a: ["done", a["id"]] + (["--force"] if a.get("force") else [])),
+    "files_save_to_mine": (
+        "Copy a file into the person's own folders (My files). What you or the app generate - "
+        "files you put, renders, PDFs, the rooms' STEPs and drawings - is kept in the app's own "
+        "read-only area (Files > In the app); copy it to My files only when the person asks.",
+        {"file": _s("the file's id (files list), or a v: id from Files' In the app"),
+         "folder": _s("a folder path of theirs, made if missing (default: the top)"),
+         "name": _s("the copy's name (default: the file's)")},
+        ["file"], lambda a: ["files", "save-mine", a["file"]]
+        + (["--folder", a["folder"]] if a.get("folder") else [])
+        + (["--name", a["name"]] if a.get("name") else [])),
     "chat": (
         "Read the room's thread (in the Chat tab), and pick up what the person said. "
         "Each room (tab) has its own thread; with a room, only that one. A picture the person "

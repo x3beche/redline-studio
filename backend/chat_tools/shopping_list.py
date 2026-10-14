@@ -17,7 +17,7 @@ from . import Ctx, Result, Tool, ToolError, clip, size
 from . import _build as b
 from ._rights import need
 
-FOLDER = "Documents"
+FOLDER = "Chat/Documents"            # the Chat's own (Files > In the app > Chat); copied to My files on asking
 ALTS = 3                            # alternatives written per line
 
 

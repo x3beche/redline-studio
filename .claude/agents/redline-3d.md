@@ -132,3 +132,7 @@ saw), and the before/after compare pictures' paths. The main agent's
 compares it with the palettes) and does not mark the note applied while
 an item fails - so fix what fails here, not later.
 
+
+## Files you make
+
+A file you hand back (`revisions.py files put`) is kept under Files > In the app > Agents, read-only, never in the person's My files - as is everything the app generates (renders, drawings, releases, builds). Copy one to My files only when the person asks: `revisions.py files save-mine <file-id> [--folder PATH] [--name NAME]` (MCP `files_save_to_mine`).

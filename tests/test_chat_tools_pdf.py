@@ -63,11 +63,12 @@ def test_it_keeps_the_pdf_in_the_askers_files(env, fake_print):
     assert f["name"] == "Fan BOM comparison.pdf" and f["content_type"] == "application/pdf" and f["kind"] == "pdf"
     assert f["workspace_id"] == "default" and f["by"] == ME and f["note"] == "Pick the cheaper build"
     assert f["context"] == {"room": "commandcode", "chat": "c1"}
-    (folder,) = raw["file_folders"].rows.values()
-    assert folder["path"] == "Documents" and f["folder"] == folder["_id"] and folder["workspace_id"] == "default"
+    # the Chat's own (Files > In the app > Chat): kept under the Chat folder, not in My files
+    folder = next(x for x in raw["file_folders"].rows.values() if x["_id"] == f["folder"])
+    assert folder["path"] == "Chat/Documents" and folder["workspace_id"] == "default"
     assert got.say == "Made {name} · {pages} pages"
     assert got.vars == {"name": "Fan BOM comparison.pdf", "pages": 3, "file": f["_id"], "size": "3 KB",
-                        "folder": "Documents"}
+                        "folder": "Chat/Documents"}
     assert f"[Fan BOM comparison.pdf](/api/files/{f['_id']}?inline=1)" in got.text
 
     # The same title again: a name of its own, beside the first.
@@ -76,10 +77,10 @@ def test_it_keeps_the_pdf_in_the_askers_files(env, fake_print):
     # A project: its own folder under Documents; a folder asked for wins; a name asked for is cleaned.
     p = run(_tool().run(Ctx(db=db, actor=ME), {"title": "Spec", "body": "x", "project": "fan-ctrl-b",
                                                "author": "Ann", "filename": "../../etc/spec v2"}))
-    assert p.vars["folder"] == "Documents/fan-ctrl-b" and p.vars["name"] == "etc spec v2.pdf"
+    assert p.vars["folder"] == "Chat/Documents/fan-ctrl-b" and p.vars["name"] == "etc spec v2.pdf"
     assert fake_print[-1][0].author == "Ann" and fake_print[-1][0].project == "fan-ctrl-b"
     q = run(_tool().run(Ctx(db=db, actor=ME), {"title": "Q", "body": "x", "folder": "Reports/2026"}))
-    assert q.vars["folder"] == "Reports/2026"
+    assert q.vars["folder"] == "Chat/Documents/Reports/2026"
 
 
 def test_another_workspace_does_not_see_it(env, fake_print):

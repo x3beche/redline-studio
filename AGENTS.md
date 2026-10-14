@@ -788,8 +788,24 @@ and open the file with the Read tool to look at it before you answer.
 ```
 
 Files sit in folders the person makes (`file_folders`); a file from before
-folders is at the top. Put what you give back where they keep that kind of
-thing, and do not move or rename their files unless they ask.
+folders is at the top. Do not move or rename their files unless they ask.
+
+**What is generated goes to In the app; My files only gets a copy, and only
+when the person asks.** Files has two sides: *My files* - what the person
+brought, theirs to rename, move and delete - and *In the app*, read-only:
+the projects' own files (sources, STEPs, drawings, releases, firmware
+builds, drawn notes), what the Chat made (PDFs, renders, lists - by
+conversation), the Parts page's files, the taste palettes' reference renders,
+and **Agents**: every file an agent puts (`files put`, by its name). So a
+file you give back is yours, shown under In the app > Agents, never in My
+files. When the person asks to have it in their files, copy it:
+
+```bash
+.venv/bin/python tools/revisions.py files save-mine <file-id> [--folder Reports/2026] [--name "BOM v2.csv"]
+```
+
+(the MCP tool `files_save_to_mine`; any id from Files works, an In the app
+one too). The copy is theirs to change; the original stays.
 
 Before guessing parts for an imported board, look here: a BOM someone
 uploaded replaces every guess.

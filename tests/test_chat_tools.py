@@ -164,7 +164,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True, "drawing_layout": False,
-                  "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
+                  "firmware_build": True, "file_read": False, "file_save_to_my_files": True, "taste_read": False, "manufacturer_search": True,
                   "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
                   "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
                   "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
@@ -194,7 +194,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "product_find", "product_files_read", "product_file_attach",
                                                                 "product_file_detach", "product_set_main", "product_to_model",
                                                                 "product_files_missing", "build_count", "shopping_list",
-                                                                "stock_consume", "model_render",
+                                                                "stock_consume", "model_render", "file_save_to_my_files",
                                                                 "inventory_search", "inventory_read", "inventory_add",
                                                                 "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",

@@ -176,6 +176,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/files/(folders|move|bulk-delete)", "draw"),
     # the trash: putting back or deleting for good one's own, anyone's with "delete" (files_api.py)
     ("POST", "/api/files/trash/(restore|purge)", "draw"),
+    # a copy of anything - the app's, an agent's, a room's - into one's own folders: like bringing a file in
+    ("POST", "/api/files/{}/copy", "draw"),
     ("PATCH", "/api/files/folders/{}", "draw"),
     ("DELETE", "/api/files/folders/{}", "draw"),
     ("PATCH", "/api/files/{}", "draw"),

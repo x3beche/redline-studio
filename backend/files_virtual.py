@@ -42,7 +42,8 @@ from . import files
 
 ROOT = "v:"
 PROJECTS, CHAT, PARTS = "v:projects", "v:chat", "v:parts"
-ROOTS = {PROJECTS: "Projects", CHAT: "Chat", PARTS: "Parts"}
+AGENTS, TASTE = "v:agents", "v:taste"
+ROOTS = {PROJECTS: "Projects", CHAT: "Chat", PARTS: "Parts", AGENTS: "Agents", TASTE: "Taste"}
 
 # What a model's and a board's stored outputs are called as files, by
 # label; any other label is the build's own data, in a "Build data" folder.
@@ -54,10 +55,11 @@ BUILD_DATA = "Build data"
 # Where each kind of entry is changed, for the lock's tooltip and refusal().
 WHERE = {"pf": "cad", "pm": "cad", "ms": "cad", "ma": "cad", "md": "cad", "pb": "pcb", "bs": "pcb", "ba": "pcb",
          "pw": "firmware", "fs": "firmware", "fb": "firmware", "pr": "releases", "rl": "releases",
-         "cc": "chat", "qm": "parts", "qp": "parts", "projects": "projects", "chat": "chat", "parts": "parts"}
+         "cc": "chat", "qm": "parts", "qp": "parts", "projects": "projects", "chat": "chat", "parts": "parts",
+         "rv": "cad", "pn": "cad", "ag": "agents", "agents": "agents", "tp": "taste", "tr": "taste", "taste": "taste"}
 ROOM = {"cad": "the 3D Drawing room", "pcb": "the PCB Design room", "firmware": "the Firmware room",
         "releases": "the project's releases", "chat": "the Chat", "parts": "the Parts page",
-        "projects": "the project tree"}
+        "projects": "the project tree", "agents": "the agent that made it", "taste": "the Taste room"}
 
 
 def is_virtual(fid: str | None) -> bool:
@@ -115,6 +117,7 @@ async def projects(db) -> tuple[list[dict], list[dict]]:
     dirs: list[dict] = []
     out: list[dict] = []
     tree = [f async for f in db.folders.find({}, {"name": 1, "parent": 1})]
+    seen_notes: set[str] = set()
     known = {f["_id"] for f in tree}
 
     def under(path: str) -> str:
@@ -124,9 +127,11 @@ async def projects(db) -> tuple[list[dict], list[dict]]:
         dirs.append(_folder(vid("pf", f["_id"]), f.get("name") or f["_id"], under(f.get("parent") or ""), "cad",
                             path=f["_id"], open={"room": "cad"}))
 
+    model_ids: set[str] = set()
     async for m in db.models.find({}, {"name": 1, "title": 1, "folder": 1, "source": 1, "sha256": 1,
                                         "artifacts": 1, "updated_at": 1, "drawing_layout": 1}):
         mid, name = m["_id"], m.get("name") or m["_id"].rpartition("/")[2]
+        model_ids.add(mid)
         here, see = vid("pm", mid), {"room": "cad", "model": mid}
         dirs.append(_folder(here, f"{name}.3d", under(m.get("folder") or ""), "cad", open=see,
                             title=m.get("title") or name, at=m.get("updated_at")))
@@ -154,6 +159,22 @@ async def projects(db) -> tuple[list[dict], list[dict]]:
             if st:
                 out.append(_file(vid("md", mid), f"{name}-drawing.pdf", here, st.st_size, "cad",
                                  at=datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(), open_=see))
+
+    # The drawn notes on each model: the drawing it was asked on, and the picture after the work.
+    async for r in db.revisions.find({"image": {"$exists": True}}, {"image": 1, "image_after": 1, "model": 1,
+                                                                    "created_at": 1, "by": 1}):
+        mid = r.get("model") or ""
+        if mid not in model_ids:
+            continue
+        here = vid("pn", mid)
+        if here not in seen_notes:
+            seen_notes.add(here)
+            dirs.append(_folder(here, "Drawn notes", vid("pm", mid), "cad", open={"room": "cad", "model": mid}, tr=True))
+        for which, label in (("image", "drawn"), ("image_after", "after")):
+            shot = r.get(which)
+            if isinstance(shot, dict) and shot.get("gridfs_id") is not None:
+                out.append(_file(vid("rv", r["_id"], which), f"{r['_id']} {label}.png", here, shot.get("bytes") or 0, "cad",
+                                 at=r.get("created_at"), by=r.get("by"), open_={"room": "cad", "model": mid}))
 
     boards: dict[str, dict] = {}
     async for b in db.boards.find({}, {"title": 1, "folder": 1, "source": 1, "artifacts": 1, "saved_at": 1}):
@@ -322,8 +343,44 @@ async def tree(db) -> dict:
     pdirs, pfiles = await projects(db)
     cdirs, clinks = await chats(db, live)
     qdirs, qlinks = await parts(db, live)
+    adirs, alinks = await agents(db, live)
+    tdirs, tfiles = await tastes(db)
     roots = [_folder(k, v, "", WHERE[k[2:]], root=True) for k, v in ROOTS.items()]
-    return {"folders": roots + pdirs + cdirs + qdirs, "files": pfiles, "links": clinks + qlinks}
+    return {"folders": roots + pdirs + cdirs + qdirs + adirs + tdirs, "files": pfiles + tfiles,
+            "links": clinks + qlinks + alinks}
+
+
+async def agents(db, live: dict[str, dict]) -> tuple[list[dict], list[dict]]:
+    """A folder per agent, with the files the rooms' agents put in Files
+    (revisions.py files put, the MCP server): theirs, read-only here."""
+    tops = await folder_tops(db)
+    dirs, links, seen = [], [], set()
+    for fid, d in sorted(live.items(), key=lambda kv: kv[1].get("created_at") or "", reverse=True):
+        if area_of(d, tops) != "agents":
+            continue
+        who = str((d.get("by") or {}).get("name") or "agent")
+        here = vid("ag", who)
+        if here not in seen:
+            seen.add(here)
+            dirs.append(_folder(here, who, AGENTS, "agents"))
+        links.append({"folder": here, "file": fid})
+    return dirs, links
+
+
+async def tastes(db) -> tuple[list[dict], list[dict]]:
+    """A folder per taste palette, with the reference renders it was made from."""
+    dirs, out = [], []
+    async for p in db["taste_palettes"].find({}, {"name": 1, "references": 1, "updated_at": 1}):
+        refs = [r for r in p.get("references") or [] if isinstance(r, dict) and r.get("gridfs_id") is not None]
+        if not refs:
+            continue
+        here = vid("tp", p["_id"])
+        dirs.append(_folder(here, p.get("name") or p["_id"], TASTE, "taste", open={"room": "taste"}))
+        for r in refs:
+            name = " - ".join(x for x in (r.get("label") or r.get("model") or "", r.get("view") or "") if x) or r.get("id")
+            out.append(_file(vid("tr", p["_id"], str(r.get("id"))), f"{name}.png".replace("/", "-"), here,
+                             r.get("bytes") or 0, "taste", at=r.get("at"), open_={"room": "taste"}))
+    return dirs, out
 
 
 # ---------------------------------------------------------------- one entry, with its bytes
@@ -333,9 +390,9 @@ async def doc(db, v: str, data: bool = True) -> dict:
     bytes (`_data`) or where they are kept as they are (`_grid`). KeyError
     when there is no such entry for this workspace."""
     kind, ref = unvid(v)
-    if kind not in ("ms", "ma", "md", "bs", "ba", "fs", "fb", "rl"):
+    if kind not in ("ms", "ma", "md", "bs", "ba", "fs", "fb", "rl", "rv", "tr"):
         raise KeyError(v)
-    _, rows = await projects(db)
+    _, rows = await (tastes(db) if kind == "tr" else projects(db))
     row = next((r for r in rows if r["id"] == v), None)
     if row is None:
         raise KeyError(v)
@@ -377,6 +434,16 @@ async def doc(db, v: str, data: bool = True) -> dict:
         if not d or not d.get("zip_id"):
             raise KeyError(v)
         out["_grid"] = (release.BUCKET, d["zip_id"])
+    elif kind in ("rv", "tr"):
+        if kind == "rv":
+            r = await db.revisions.find_one({"_id": ref[0]}, {ref[1]: 1})
+            shot = (r or {}).get(ref[1]) if ref[1] in ("image", "image_after") else None
+        else:
+            p = await db["taste_palettes"].find_one({"_id": ref[0]}, {"references": 1})
+            shot = next((x for x in (p or {}).get("references") or [] if str(x.get("id")) == ref[1]), None)
+        if not isinstance(shot, dict) or shot.get("gridfs_id") is None:
+            raise KeyError(v)
+        out["_grid"] = ("shots", shot["gridfs_id"])
     if "_data" in out:
         out["bytes"] = len(out["_data"])
     return out
@@ -438,6 +505,29 @@ async def _release(db, ids: set[str], chats: list[str]) -> list[str]:
     return out
 
 
+AGENT_REFUSAL = "read-only: an agent made it - copy it to My files to change it there"
+
+
+def agent_made(doc: dict) -> bool:
+    """A file a room's agent put in Files (revisions.py files put, the MCP server)."""
+    return (doc.get("by") or {}).get("type") == "agent"
+
+
+def area_of(doc: dict, tops: dict[str, str]) -> str:
+    """Whose an upload is: "parts", "chat", "agents" - made or kept by the app,
+    read-only in Files and never in My files - or "own". A copy saved to My
+    files (copy_to_mine) is always one's own."""
+    if (doc.get("context") or {}).get("copied_from"):
+        return "own"
+    if parts_owned(doc, tops):
+        return "parts"
+    if chat_owned(doc, tops):
+        return "chat"
+    if agent_made(doc):
+        return "agents"
+    return "own"
+
+
 def parts_owned(doc: dict, tops: dict[str, str]) -> bool:
     """An upload kept for a Parts product or a saved McMaster-Carr / GrabCAD part
     (its context says so, or it is kept under Parts, McMaster-Carr or GrabCAD):
@@ -476,6 +566,8 @@ def _day(iso: str | None) -> str:
 
 
 RANGES = {"7d": 7, "30d": 30, "90d": 90}
+# The areas counted, in the order the page draws them.
+AREAS = ("projects", "chat", "parts", "agents", "taste", "own")
 # Where an upload is kept says what it is for, when nothing else does.
 CHAT_FOLDERS = ("chat",)
 PART_FOLDERS = ("parts", "mcmaster-carr", "grabcad")
@@ -512,41 +604,32 @@ async def usage(db, range_: str = "auto") -> dict:
     in_chat = await _chat_refs(db)
     in_parts = {x["file"] for x in qlinks}
     tops = await folder_tops(db)
-    area_of: dict[str, str] = {}
+    owner: dict[str, str] = {}
     shared: dict[str, set[str]] = {}
     for fid, d in live.items():
-        ctx, top = d.get("context") or {}, tops.get(d.get("folder") or "", "")
-        if ctx.get("chat") or ctx.get("room") in ("chat", "commandcode") or top in CHAT_FOLDERS:
-            a = "chat"
-        elif ctx.get("product") or ctx.get("linked") or top in PART_FOLDERS:
-            a = "parts"
-        elif fid in in_chat:
-            a = "chat"
-        elif fid in in_parts:
-            a = "parts"
-        else:
-            a = "own"
-        area_of[fid] = a
+        owner[fid] = a = area_of(d, tops)
         for other, used in (("chat", in_chat), ("parts", in_parts)):
             if other != a and fid in used:
                 shared.setdefault(other, set()).add(fid)
     areas = {a: {"files": 0, "bytes": 0, "stored": 0, "shared": {"files": 0, "bytes": 0}}
-             for a in ("projects", "chat", "parts", "own")}
+             for a in AREAS}
     rows: list[dict] = []
-    for f in pfiles:
-        a = areas["projects"]
+    _, tfiles = await tastes(db)
+    for f in [*pfiles, *tfiles]:
+        area = "taste" if f["where"] == "taste" else "projects"
+        a = areas[area]
         a["files"] += 1
         a["bytes"] += f["bytes"]
         a["stored"] += f["stored"]
-        rows.append({"id": f["id"], "name": f["name"], "bytes": f["bytes"], "area": "projects", "folder": f["folder"],
+        rows.append({"id": f["id"], "name": f["name"], "bytes": f["bytes"], "area": area, "folder": f["folder"],
                      "kind": "build" if f.get("build") else f["kind"], "at": f["created_at"]})
     for fid, d in live.items():
-        a = areas[area_of[fid]]
+        a = areas[owner[fid]]
         a["files"] += 1
         a["bytes"] += int(d.get("bytes") or 0)
         a["stored"] += int(d.get("bytes") or 0)
         rows.append({"id": fid, "name": d.get("name") or fid, "bytes": int(d.get("bytes") or 0),
-                     "area": area_of[fid], "folder": d.get("folder") or "", "kind": d.get("kind") or "other",
+                     "area": owner[fid], "folder": d.get("folder") or "", "kind": d.get("kind") or "other",
                      "at": d.get("created_at") or ""})
     for other, ids in shared.items():
         areas[other]["shared"] = {"files": len(ids), "bytes": sum(int(live[i].get("bytes") or 0) for i in ids)}
@@ -566,7 +649,7 @@ async def usage(db, range_: str = "auto") -> dict:
         step = 7 if days > 120 else 1
     n = max(1, -(-days // step))
     start = today - timedelta(days=n * step - 1)
-    names = ("projects", "chat", "parts", "own")
+    names = AREAS
     values = {a: [0] * n for a in names}
     added = {"files": 0, "bytes": 0}
     for r in rows:

@@ -216,7 +216,7 @@ def test_projects_mirror_the_project_tree_with_each_rooms_files(env):
     t = env["web"].get("/api/files/virtual").json()
     dirs, rows = t["folders"], t["files"]
     roots = [d for d in dirs if d.get("root")]
-    assert [d["name"] for d in roots] == ["Projects", "Chat", "Parts"] and all(d["ro"] for d in dirs)
+    assert [d["name"] for d in roots] == ["Projects", "Chat", "Parts", "Agents", "Taste"] and all(d["ro"] for d in dirs)
     lamp = by_name(dirs, "lamp")
     parts = by_name(dirs, "parts")
     assert lamp["parent"] == fv.PROJECTS and parts["parent"] == lamp["id"]
@@ -367,9 +367,10 @@ def test_usage_counts_every_file_once_per_area(env):
                                      "files": [{"file": b["id"], "name": "datasheet.pdf"}]})
     u = web.get("/api/files/usage").json()
     ar = u["areas"]
-    assert ar["chat"] == {"files": 1, "bytes": 100, "stored": 100, "shared": {"files": 0, "bytes": 0}}
-    assert ar["parts"]["files"] == 1 and ar["parts"]["bytes"] == 200
-    assert ar["own"]["files"] == 1 and ar["own"]["bytes"] == 40
+    # one's own files a conversation and a product only refer to stay one's own, said shared there
+    assert ar["chat"] == {"files": 0, "bytes": 0, "stored": 0, "shared": {"files": 1, "bytes": 100}}
+    assert ar["parts"]["files"] == 0 and ar["parts"]["shared"] == {"files": 1, "bytes": 200}
+    assert ar["own"]["files"] == 3 and ar["own"]["bytes"] == 340
     projects = web.get("/api/files/virtual").json()["files"]
     assert ar["projects"]["files"] == len(projects) and ar["projects"]["bytes"] == sum(f["bytes"] for f in projects)
     assert u["total"]["files"] == sum(x["files"] for x in ar.values())
@@ -380,7 +381,7 @@ def test_usage_counts_every_file_once_per_area(env):
     assert u["kinds"]["build"]["bytes"] >= 8000 and by_name(u["files"], "arm.viewer.json")["kind"] == "build"
     # everything was added today: the range picked is the shortest, and the chart holds it all
     assert u["range"] == "7d" and u["chart"]["n"] == 7 and u["chart"]["step"] == 86400
-    assert [x["name"] for x in u["chart"]["series"]] == ["projects", "chat", "parts", "own"]
+    assert [x["name"] for x in u["chart"]["series"]] == ["projects", "chat", "parts", "agents", "taste", "own"]
     assert sum(sum(x["values"]) for x in u["chart"]["series"]) == u["added"]["bytes"] == u["total"]["bytes"]
     every = web.get("/api/files/usage?range=all").json()
     assert every["range"] == "all" and every["total"] == u["total"]
@@ -486,7 +487,8 @@ def test_files_writes_follow_the_role_and_a_page_session_only_looks(env, monkeyp
     monkeypatch.setattr(auth, "session_user", session)
     monkeypatch.setattr(auth, "csrf_ok", lambda *a: True)
     tries = [web.patch(f"/api/files/{f['id']}", headers=H, json={"note": "n"}),
-             web.post("/api/files/trash/restore", headers=H, json={"files": []})]
+             web.post("/api/files/trash/restore", headers=H, json={"files": []}),
+             web.post(f"/api/files/{f['id']}/copy", headers=H, json={})]
     for r in tries:
         assert (r.status_code == 200) == ok, (role, page, r.status_code, r.text)
     # reading is everyone's
@@ -566,3 +568,84 @@ def test_the_trash_is_swept_on_a_timer_too(env):
         task.cancel()
     asyncio.run(once())
     assert db["file_trash"].rows == []
+
+
+# ---------------------------------------------------------------- generated files reach My files only as a copy
+
+def test_an_agents_file_is_the_agents_and_reaches_my_files_only_as_a_copy(env):
+    web, db, sdb = env["web"], env["db"], env["sdb"]
+    agent = {"type": "agent", "id": "pcb room", "name": "pcb room"}
+    fid = asyncio.run(files.put(sdb, "bom-out.csv", b"a,b\n", None, {"room": "pcb"}, agent))["_id"]
+    listed = {x["id"]: x for x in web.get("/api/files").json()}
+    assert listed[fid]["ro"] is True and listed[fid]["where"] == "agents"
+    t = web.get("/api/files/virtual").json()
+    assert {"folder": by_name(t["folders"], "pcb room")["id"], "file": fid} in t["links"]
+    r = web.delete(f"/api/files/{fid}", headers=H)
+    assert r.status_code == 403 and "agent made it" in r.json()["detail"]
+    # a copy: one's own, its own bytes; deleting it leaves the agent's alone
+    mine = web.post(f"/api/files/{fid}/copy", headers=H, json={"folder_path": "Reports/2026", "name": "bom v2.csv"}).json()
+    assert mine["name"] == "bom v2.csv" and "ro" not in {x["id"]: x for x in web.get("/api/files").json()}[mine["id"]]
+    assert web.get(f"/api/files/{mine['id']}").content == b"a,b\n"
+    assert web.delete(f"/api/files/{mine['id']}", headers=H).status_code == 200
+    assert web.get(f"/api/files/{fid}").content == b"a,b\n"
+    # a room's own file copies the same way; never into the Chat's or the Parts page's folders
+    src = by_name(t["files"], "arm.py")["id"]
+    assert web.post(f"/api/files/{src}/copy", headers=H, json={}).json()["name"] == "arm.py"
+    assert web.post(f"/api/files/{src}/copy", headers=H, json={"folder_path": "Chat/x"}).status_code == 403
+    assert web.post("/api/files/nope/copy", headers=H, json={}).status_code == 404
+
+
+def test_the_chats_save_to_my_files_tool_copies_the_last_file_it_made(env, monkeypatch):
+    from backend import access, chat_tools
+    from backend.chat_tools import Ctx, ToolError
+    web, db, sdb = env["web"], env["db"], env["sdb"]
+    pdf = chat_upload(env, "Parts and Stock Report.pdf", b"%PDF-1.4 r", chat="c1")
+    tool = chat_tools.tools()["file_save_to_my_files"]
+    assert tool.level == "change" and "dosyalarıma kaydet" in tool.description
+    got = asyncio.run(tool.run(Ctx(db=sdb, actor={"id": "u1", "name": "One"}, chat="c1"), {"file": "last", "folder": "Reports"}))
+    new = got.vars["file"]
+    row = {x["id"]: x for x in web.get("/api/files").json()}[new]
+    assert row["name"] == "Parts and Stock Report.pdf" and "ro" not in row and new != pdf
+    assert web.get(f"/api/files/{new}/info").json()["folder_path"] == "Reports"
+    # the Chat's original stays, the Chat's
+    assert {x["id"]: x for x in web.get("/api/files").json()}[pdf]["where"] == "chat"
+    monkeypatch.setattr(access, "current", lambda: "viewer")
+    with pytest.raises(ToolError):
+        asyncio.run(tool.run(Ctx(db=sdb, actor={"id": "u1"}, chat="c1"), {"file": pdf}))
+
+
+def test_the_agents_save_mine_command_copies_through_the_api(env, monkeypatch, capsys):
+    import argparse
+    import io
+    import urllib.request
+    from tools import revisions
+    web = env["web"]
+    agent = {"type": "agent", "id": "3d room", "name": "3d room"}
+    fid = asyncio.run(files.put(env["sdb"], "render.png", b"png", None, {"room": "cad"}, agent))["_id"]
+
+    class Answer(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def urlopen(req, timeout=None):
+        r = web.request(req.get_method(), req.full_url.removeprefix("http://localhost:8000"), content=req.data,
+                        headers={**dict(req.header_items()), **H})
+        assert r.status_code < 400, r.text
+        return Answer(r.content)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.delenv("REDLINE_TOKEN", raising=False)
+    monkeypatch.delenv("REDLINE_API", raising=False)
+    p = argparse.ArgumentParser()
+    p.add_argument("what")
+    p.add_argument("target")
+    p.add_argument("dest", nargs="?")
+    for o in ("-o", "--board", "--kind", "-q", "--note", "--folder", "--title", "--name"):
+        p.add_argument(o)
+    asyncio.run(revisions.cmd_files(p.parse_args(["save-mine", fid, "--folder", "Renders", "--name", "lid.png"])))
+    out = capsys.readouterr().out
+    assert "saved a copy to My files/Renders: lid.png" in out
+    copy = next(x for x in web.get("/api/files").json() if x["name"] == "lid.png")
+    assert "ro" not in copy and web.get(f"/api/files/{copy['id']}").content == b"png"
