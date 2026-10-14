@@ -245,9 +245,11 @@ def test_regenerate_cuts_after_the_last_question():
 
 
 @pytest.mark.parametrize("raw,want", [
-    ('"Power Budget for the Fan Board."', "Power Budget for the Fan Board"),
+    ('"Power Budget for the Fan Board."', "Power Budget"),
+    ('"Fan board power budget."', "Fan board power budget"),
     ("Title: STM32 clock tree setup\nmore", "STM32 clock tree setup"),
-    ("**One two three four five six seven eight**", "One two three four five six"),
+    ("**One two three four five six seven eight**", "One two three four"),
+    ("Pathology scanner Z-stage ve UB0228 adaptörü", "Pathology scanner Z-stage"),
     ("Başlık: Fan kartı güç bütçesi", "Fan kartı güç bütçesi"),
     ("  \n", ""),
 ])
@@ -256,7 +258,7 @@ def test_titles_are_cleaned(raw, want):
 
 
 def test_the_fallback_title_is_the_first_line_cut_short():
-    assert cc_chat.fallback_title("  how   do I\nroute USB? ") == "how do I route USB?"
+    assert cc_chat.fallback_title("  how   do I\nroute USB? ") == "how do I route"
     assert len(cc_chat.fallback_title("x" * 500)) == cc_chat.TITLE_CHARS
     assert cc_chat.fallback_title("") == cc_chat.DEFAULT_TITLE
 
@@ -556,7 +558,7 @@ def test_a_title_falls_back_and_never_overwrites_a_rename(env):
     seed(db, title=cc_chat.DEFAULT_TITLE)
     state["title"] = RuntimeError("no model")
     ev = events(cc_chat.say("c1", cc_chat.SayIn(text="How do I flash   an ESP32-S3?")))
-    assert ev[-1] == {"type": "title", "title": "How do I flash an ESP32-S3?"}
+    assert ev[-1] == {"type": "title", "title": "How do I flash"}
     seed(db, "c2", title="Mine")
     ev = events(cc_chat.say("c2", cc_chat.SayIn(text="hi")))
     assert "title" not in [e["type"] for e in ev] and db.coll.rows["c2"]["title"] == "Mine"
@@ -703,3 +705,31 @@ def test_retitle_keeps_the_title_when_the_model_does_not_answer(env):
     with pytest.raises(HTTPException) as e:
         run(cc_chat.retitle("c1"))
     assert e.value.status_code == 502 and db.coll.rows["c1"]["title"] == "Old"
+
+
+def test_a_title_fits_one_short_line():
+    for raw in ("GrabCAD'de kızaklı ray lineer kılavuz bloğu", "x" * 80, "Supercalifragilisticexpialidocious word"):
+        assert len(cc_chat.clean_title(raw)) <= cc_chat.TITLE_CHARS
+    assert cc_chat.fit_title("GrabCAD'de kızak blok modeli arayışı") == "GrabCAD'de kızak blok modeli"
+
+
+def test_it_is_named_again_every_few_lines_unless_named_by_hand():
+    lines = lambda n: [msg(str(i), "user", "q") for i in range(n)]
+    auto = {"title": "Fan kartı", "title_auto": True, "titled_n": 1}
+    assert cc_chat.want_title({"title": cc_chat.DEFAULT_TITLE}, [])
+    assert not cc_chat.want_title(auto, lines(1))                       # the 2nd line
+    assert cc_chat.want_title(auto, lines(cc_chat.RETITLE_EVERY))       # RETITLE_EVERY after the 1st
+    assert not cc_chat.want_title({**auto, "title_auto": False}, lines(9))
+    # From before it was kept: a short title may be someone's own, a long one was the model's.
+    assert not cc_chat.want_title({"title": "Mine"}, lines(9))
+    assert cc_chat.want_title({"title": "y" * (cc_chat.TITLE_CHARS + 5)}, lines(9))
+
+
+def test_a_rename_stops_the_naming(env):
+    db, state = env
+    seed(db, title="Fan kartı")
+    db.coll.rows["c1"].update(title_auto=True, titled_n=1)
+    assert run(cc_chat.set_auto_title(db, "c1", "Fan kartı güç", 3)) == "Fan kartı güç"
+    run(cc_chat.rename(db, "c1", "Benim adım"))
+    assert db.coll.rows["c1"]["title_auto"] is False
+    assert not cc_chat.want_title(db.coll.rows["c1"], [msg(str(i), "user", "q") for i in range(9)])

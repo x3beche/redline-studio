@@ -3159,6 +3159,8 @@ async def _start_sampler():
             # The Command Code account every ten minutes: the usage chart's
             # points and the weekly window's alert (backend/llm.py cc_loop).
             asyncio.create_task(llm.cc_loop(lambda: db().raw))
+            # The Chat's conversations at rest ten minutes, named again by all of them.
+            asyncio.create_task(cc_chat.retitle_loop(db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
         except Exception as exc:                       # noqa: BLE001 - the rest of the server still starts

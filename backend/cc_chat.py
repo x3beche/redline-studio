@@ -80,8 +80,15 @@ MAX_MESSAGES = 400               # in one conversation
 CONTEXT_CHARS = 400_000          # history sent with a new line, newest kept
 MAX_ANSWER = 16_000              # tokens
 DEFAULT_TITLE = "New conversation"
-TITLE_WORDS = 6
-TITLE_CHARS = 60
+# A title fits the Chat's list on one line beside its time: a few words,
+# the subject first. Named again by the whole conversation every
+# RETITLE_EVERY lines of the person's, and once it has rested RETITLE_IDLE
+# seconds since the last line - unless someone named it by hand.
+TITLE_WORDS = 4
+TITLE_CHARS = 28
+RETITLE_EVERY = 3
+RETITLE_IDLE = 600
+RETITLE_LOOK = 60                # seconds between looks for conversations at rest
 TITLE_TIMEOUT = 20.0             # seconds the summary model gets to name it
 # Room for the title after whatever thinking a model does anyway: Haiku on
 # Command Code spent all of 40 on it and answered with nothing.
@@ -114,15 +121,20 @@ SYSTEM = (
     "model first (+ New part in the 3D room, or +M on the project) and the task targets it."
 )
 
+_TITLE_RULES = (
+    f"2 to {TITLE_WORDS} words and at most {TITLE_CHARS} characters, so it fits one short line. "
+    "Name the subject as a noun phrase, the most specific thing first (the part, product, board, "
+    "error or code it is about: 'UB0228 Z-stage STEP', 'Fan kartı güç bütçesi'). No verbs or filler "
+    "words such as help, question, about, search, how to, yardım, hakkında, arayışı, nasıl. "
+    "Reply with the title only: no quotes, no Markdown, no full stop at the end."
+)
 TITLE_PROMPT = (
-    "Write a title for a conversation that begins with the message below. At most "
-    f"{TITLE_WORDS} words, in the language of the message. Reply with the title only: "
-    "no quotes, no Markdown, no full stop at the end."
+    "Write a title for a conversation that begins with the message below, in the language of the message. "
+    + _TITLE_RULES
 )
 RETITLE_PROMPT = (
-    "Write a title for the conversation below: what it is about as a whole, not only how it began. At most "
-    f"{TITLE_WORDS} words, in the language the person writes in. Reply with the title only: "
-    "no quotes, no Markdown, no full stop at the end."
+    "Write a title for the conversation below: what it is about as a whole now, not only how it began; "
+    "in the language the person writes in. " + _TITLE_RULES
 )
 
 
@@ -430,12 +442,53 @@ def clean_title(raw: str) -> str:
     line = next((ln for ln in (raw or "").splitlines() if ln.strip()), "")
     line = re.sub(r"^\s*(title|başlık)\s*:\s*", "", line, flags=re.I)
     line = line.strip().strip("#*_`\"'“”‘’«» ").rstrip(".。!").strip()
-    words = line.split()
-    return " ".join(words[:TITLE_WORDS])[:TITLE_CHARS].strip()
+    return fit_title(" ".join(line.split()[:TITLE_WORDS]))
+
+
+def fit_title(text: str) -> str:
+    """At most TITLE_CHARS, cut at a word: the last words go first; one
+    word too long by itself is cut."""
+    words = " ".join((text or "").split()).split(" ")
+    while len(words) > 1 and len(" ".join(words)) > TITLE_CHARS:
+        words.pop()
+    while len(words) > 1 and words[-1].lower().strip(",;:-") in _TAIL_WORDS:   # not "... and", "... ve"
+        words.pop()
+    return " ".join(words)[:TITLE_CHARS].strip(" ,;:-")
+
+
+_TAIL_WORDS = {"", "and", "or", "of", "for", "the", "a", "an", "to", "in", "with", "on",
+               "ve", "ile", "veya", "ya", "da", "de", "için", "bir", "&", "+", "-"}
 
 
 def fallback_title(text: str) -> str:
-    return " ".join((text or "").split())[:TITLE_CHARS] or DEFAULT_TITLE
+    return fit_title(" ".join((text or "").split()[:TITLE_WORDS])) or DEFAULT_TITLE
+
+
+def asks(msgs: list[dict]) -> int:
+    """How many lines the people wrote in it."""
+    return sum(1 for m in msgs if m.get("role") == "user")
+
+
+def named_by_hand(doc: dict) -> bool:
+    """Someone gave it its title (the list's rename, the rename_chat tool):
+    it is never named again by itself. A conversation from before this was
+    kept is taken as named by hand unless its title is longer than a title
+    is now - those were all the summary model's."""
+    if "title_auto" in doc:
+        return not doc["title_auto"]
+    return len(doc.get("title") or "") <= TITLE_CHARS and doc.get("title") not in ("", DEFAULT_TITLE, None)
+
+
+def want_title(doc: dict, msgs: list[dict], keep: int | None = None) -> bool:
+    """Whether the answer about to be written names the conversation: when
+    it has no title yet, or RETITLE_EVERY lines after it was last named by
+    itself."""
+    if doc.get("title") in ("", DEFAULT_TITLE, None):
+        return True
+    if named_by_hand(doc):
+        return False
+    n = asks(msgs[:keep] if keep is not None else msgs) + 1
+    return n - int(doc.get("titled_n") or 0) >= RETITLE_EVERY
 
 
 async def make_title(first: str, answer: str = "", whole: str = "") -> tuple[str, dict]:
@@ -818,7 +871,8 @@ async def rename(db, cid: str, title: str) -> str | None:
     so the API's tail (`_tail`) says it from there. None: no such
     conversation (or in the trash)."""
     title = title.strip() or DEFAULT_TITLE
-    res = await db[COLL].update_one({"_id": cid, **LIVE}, {"$set": {"title": title}})
+    # Named by hand: never named again by itself (`want_title`, `rest_and_name`).
+    res = await db[COLL].update_one({"_id": cid, **LIVE}, {"$set": {"title": title, "title_auto": False}})
     if not getattr(res, "matched_count", 1):
         return None
     HUB.publish(live_key(cid), {"type": "title", "gen": None, "title": title})
@@ -887,6 +941,9 @@ async def retitle(cid: str) -> dict:
                      surface="chat", kind="cc-title", used=d.get("usage") or {})
     if await rename(db, cid, title) is None:
         raise HTTPException(404, cid)
+    # Asked of the model, not typed: it goes on being named by itself.
+    await db[COLL].update_one({"_id": cid}, {"$set": {"title_auto": True, "titled_n": asks(doc.get("messages") or []),
+                                                      "titled_at": _now()}})
     return {"title": title}
 
 
@@ -1575,18 +1632,85 @@ async def answer_step(cid: str, sid: str, body: StepIn) -> dict:
 
 
 async def _name(db, cid: str, msgs: list[dict], answer: dict) -> str | None:
-    """Name the conversation after its first line, if nobody has yet."""
+    """Name the conversation: after its first line when it has no title,
+    else again by all of it (`want_title` decided it is time)."""
     first = next((m.get("content") or "" for m in msgs if m["role"] == "user"), "")
     if not first:
         return None
-    title, used = await make_title(first, "" if answer.get("error") else answer.get("content") or "")
-    # Only over the default: someone may have renamed it meanwhile.
-    res = await db[COLL].update_one({"_id": cid, "title": {"$in": ["", DEFAULT_TITLE]}},
-                                    {"$set": {"title": title}})
+    doc = await db[COLL].find_one({"_id": cid}, {"title": 1}) or {}
+    said = "" if answer.get("error") else answer.get("content") or ""
+    if doc.get("title") in ("", DEFAULT_TITLE, None):
+        title, used = await make_title(first, said)
+    else:
+        title, used = await make_title(first, whole=gist([*msgs, {"role": "assistant", "content": said}]))
+        if not used:                                   # no model: the title it has stays
+            return None
     if used:
         await llm.record(db, provider=used.pop("provider"), model=used.pop("model"),
                          surface="chat", kind="cc-title", used=used)
+    return await set_auto_title(db, cid, title, asks(msgs))
+
+
+async def set_auto_title(db, cid: str, title: str, n: int) -> str | None:
+    """A title the app gave: only over the default or another title of its
+    own - someone may have renamed it meanwhile. None when it did not stay."""
+    res = await db[COLL].update_one(
+        {"_id": cid, "$or": [{"title": {"$in": ["", DEFAULT_TITLE, None]}}, {"title_auto": True},
+                             {"title_auto": {"$exists": False}, "title": {"$regex": f"^.{{{TITLE_CHARS + 1},}}$"}}]},
+        {"$set": {"title": title, "title_auto": True, "titled_n": n, "titled_at": _now()}})
     return title if getattr(res, "matched_count", 1) else None
+
+
+async def rest_and_name(raw) -> int:
+    """Conversations at rest RETITLE_IDLE seconds with lines the title has
+    not seen yet, named again by all of them - in every workspace, each in
+    its own (the API's loop, `retitle_loop`). How many were named."""
+    from datetime import timedelta
+    edge = (datetime.now(timezone.utc) - timedelta(seconds=RETITLE_IDLE)).isoformat()
+    named = 0
+    async for d in raw[COLL].find({**LIVE, "gen": None, "updated_at": {"$lt": edge},
+                                   "$or": [{"title_auto": True},
+                                           {"title_auto": {"$exists": False},
+                                            "title": {"$regex": f"^.{{{TITLE_CHARS + 1},}}$"}}]},
+                                  {"messages.role": 1, "titled_n": 1, "workspace_id": 1}).limit(200):
+        n = asks(d.get("messages") or [])
+        if not n or n <= int(d.get("titled_n") or 0):
+            continue
+        ws = d.get("workspace_id") or scope.DEFAULT
+        token = scope.WORKSPACE.set(ws)
+        try:
+            db = scope.ScopedDb(raw, ws)
+            cid = scope.Ids(ws).out(d["_id"])
+            doc = await db[COLL].find_one({"_id": cid}) or {}
+            msgs = doc.get("messages") or []
+            first = next((m.get("content") or "" for m in msgs if m.get("role") == "user"), "")
+            title, used = await make_title(first, whole=gist(msgs))
+            if not used:
+                # No summary model to ask: it is not tried again for these lines.
+                await db[COLL].update_one({"_id": cid}, {"$set": {"titled_n": n}})
+                continue
+            await llm.record(db, provider=used.pop("provider"), model=used.pop("model"),
+                             surface="chat", kind="cc-title", used=used)
+            if await set_auto_title(db, cid, title, n):
+                HUB.publish(live_key(cid), {"type": "title", "gen": None, "title": title})
+                named += 1
+        except Exception as exc:                       # noqa: BLE001 - the next look tries again
+            _log.warning("naming %s at rest failed: %s", d.get("_id"), exc)
+        finally:
+            scope.WORKSPACE.reset(token)
+    return named
+
+
+async def retitle_loop(raw) -> None:
+    """Every RETITLE_LOOK seconds: the conversations at rest, named again."""
+    while True:
+        await asyncio.sleep(RETITLE_LOOK)
+        try:
+            await rest_and_name(raw)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:                       # noqa: BLE001 - looked at again next time
+            _log.warning("naming conversations at rest failed: %s", exc)
 
 
 async def _line(db, msgs: list[dict], text: str, mentions: list, provider: str, model: str) -> tuple[dict, list[dict]]:
@@ -1650,7 +1774,7 @@ async def say(cid: str, body: SayIn):
         keep = len(msgs)
     gen = await ccgen.new(db, cid, keep=keep, upto=keep + 1, question=mine["id"], message=public(mine),
                           provider=provider, model=model, client=body.client, images=bool(pics),
-                          want_title=doc.get("title") in ("", DEFAULT_TITLE, None))
+                          want_title=want_title(doc, msgs, keep))
     try:
         if body.edit is not None:
             await _cut(db, cid, msgs, keep, [mine], {**sets, "gen": gen["_id"]})
@@ -1743,7 +1867,8 @@ async def send_next(db, cid: str) -> dict | None:
     gen = await ccgen.new(db, cid, keep=len(msgs), upto=len(msgs) + 1, question=mine["id"], message=public(mine),
                           provider=item.get("provider") or doc.get("provider"), model=item.get("model") or doc.get("model"),
                           client=item.get("client"), images=bool(item.get("images")),
-                          want_title=doc.get("title") in ("", DEFAULT_TITLE, None) and not msgs,
+                          want_title=(doc.get("title") in ("", DEFAULT_TITLE, None) and not msgs)
+                          or (bool(msgs) and doc.get("title") not in ("", DEFAULT_TITLE, None) and want_title(doc, msgs)),
                           actor=item.get("actor"), role=item.get("asker_role"))
     res = await db[COLL].update_one(
         {"_id": cid, "gen": None, "queue_rev": doc.get("queue_rev")},
