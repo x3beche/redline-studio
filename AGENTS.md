@@ -16,15 +16,24 @@ artifacts live in the database — do not go looking for a `models/` folder.
 `resume` says this session is the agent now, and shows what the session
 before it left unfinished - notes it had started that were put back in the
 queue ("interrupted, requeued"), notes finished and waiting for your
-review, lines in the thread it read and never answered - then the queue.
-Pick those up first. Nothing in that list has been redone by itself: an
+review, lines in the thread it read and never answered (the thread marks
+them "read before a restart"), answers to its questions that came after it
+had gone - then the queue. Pick those up first. Nothing in that list has been redone by itself: an
 interrupted note may be half done, so the room agent that starts it again
 reads the sources before changing anything.
 
-A note whose agent's session goes away - restarted, or not heard from for
-45 minutes (`REDLINE_LEASE_MINUTES`) - is put back in the queue this way on
-its own. Every `revisions.py` command a session runs, and `wait` while it
-waits, is what says the session is still there.
+A note whose agent goes away - its session restarted, or the agent holding
+it not heard from for 45 minutes (`REDLINE_LEASE_MINUTES`) - is put back in
+the queue this way on its own. The lease is the holder's own: a room's
+sub-agent runs in your session under its own `REDLINE_AGENT`, and only its
+own signs of life keep its note - its `revisions.py` commands (an `ask`
+while it waits for the answer), its log lines and progress, its transcript
+as it works, a process (a long build) still running under its name. Your
+`wait` says the session is there, not that the sub-agent is working, so a
+sub-agent that ended without `finish` has its note requeued and your `wait`
+wakes for it. An answer to a question whose asker had gone wakes `wait` too.
+So set `REDLINE_AGENT` in every command a sub-agent runs. The full rule is
+in backend/asks.py.
 
 If something is queued, write the drawing to disk with `show` and **open that
 file with the Read tool**. The comment alone is not enough: when the user says
@@ -67,7 +76,7 @@ for work already in hand. Questions to the person go through `ask` from
 whichever agent has the fork in front of it.
 
 The same operations are an MCP server - `redline` in `.mcp.json`
-(`tools/mcp_server.py`): `queue` (by room), `show`, `start`, `log`,
+(`tools/mcp_server.py`): `resume`, `queue` (by room), `show`, `start`, `log`,
 `finish`, `done`, `code_diff`, `code_test`, `chat`, `say`, `ask`. Each
 one runs the matching revisions.py command, so the answers and the
 refusals are the same either way.

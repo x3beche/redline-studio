@@ -193,6 +193,9 @@ export function sender(it: ThreadItem): string {
                   <button class="tcv-cc-textbtn" (click)="unsay(m)" [title]="'take it back - only while it is unread' | t">{{ 'undo' | t }}</button>
                 }
               }
+              @if (m.role === 'user' && m.read_lost) {
+                <span class="tcv-th-wait" [title]="'The agent read this, then its session restarted or went quiet before it answered. The next session is shown it first.' | t">{{ 'read by the agent before a restart, not answered yet' | t }}</span>
+              }
               @if (m.edited; as ed) {
                 <span class="tcv-cc-dim" [title]="(ed.why || '') + ' · ' + stamp(ed.at)">· {{ ed.why || ('edited' | t) }}</span>
               }

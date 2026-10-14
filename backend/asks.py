@@ -27,14 +27,50 @@ So:
   ``queued``, so it is back in the queue - ``wait`` and ``next`` offer it
   again, and the card says "interrupted, requeued" and why;
 - ``unfinished`` is what a session starting up is shown: notes interrupted,
-  notes finished and waiting for review, and lines read before the restart
-  that nobody answered. Shown, not done: nothing here acts on them.
+  notes finished and waiting for review, lines read before the restart
+  that nobody answered, and answers to an ``ask`` that came after the
+  session asking had gone. Shown, not done: nothing here acts on them.
+
+A room's sub-agent runs in its main session (the same Claude Code session
+id) under a name of its own (``REDLINE_AGENT="3d room"``), so a session's
+heartbeat is kept per agent name as well (``agents``): the note a sub-agent
+holds lives by that sub-agent's own commands, not by its main session's
+``wait`` - a sub-agent that dies while the session goes on is requeued
+after the lease. Waiting (``wait``) says the session is there, not that it
+is working on anything.
+
+When is a holder gone (``stale_reason``): its session was superseded since
+it took the note, or nothing below is newer than the lease, newest first
+from the cheapest:
+
+1. the run itself - taken, picked up again, its progress moved (``beat_at``);
+2. its agent's own commands in this session (``agents.<name>``), or, for a
+   session recorded before beats were kept per agent, any command of the
+   session; for a session that never left a heartbeat at all (started
+   before there were any), the newest line in the run's room log;
+3. its agent's own lines in the room log;
+4. its tool activity: the transcript Claude Code writes as it works - the
+   sub-agent's own (``<session>/subagents/agent-<id>.jsonl``, by the id the
+   run's start resolved to, or the sub-agent transcripts that name the
+   note), the main thread's for the session's own agent;
+5. a process still running under the session and agent name (a long build
+   writes nothing anywhere until it ends: ``REDLINE_AGENT`` and the session
+   id are in its environment), ``revisions.py wait`` not counted;
+6. for the session's own agent in tmux, the tmux session's last activity.
+
+4-6 are looked at only when 1-3 are stale. 5 and 6 are only seen from the
+machine the agents run on: the page's sweep (the API, in its container)
+does not see them, so it gives a note back only after ``BLIND_FACTOR``
+times the lease - the command line, which every waiting agent runs every
+half minute, decides first.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from . import runs
 
@@ -46,6 +82,12 @@ INTERRUPTED = "interrupted"
 LEASE_MIN = 45
 # Lines read before a restart older than this are history, not asks.
 CHAT_DAYS = 2
+# Where the agents' processes and tmux cannot be seen (the API), a note is
+# given back only after this many leases.
+BLIND_FACTOR = 3
+# An answer the asking `ask` has not taken this long after it came: the
+# asker is gone (it looks every 3 s), so the answer is offered to the next.
+ANSWER_GRACE = timedelta(minutes=2)
 
 
 def seat_from_env(agent: str, env=None) -> str:
@@ -82,16 +124,27 @@ def _dt(v) -> datetime | None:
         return None
 
 
+def name_key(agent: str | None) -> str:
+    """An agent's name as a field name (no dots, no leading $)."""
+    return re.sub(r"[.$]", "_", (agent or "agent").strip() or "agent")
+
+
 async def beat(db, session: str | None, agent: str, at: str | None = None,
-               seat: str | None = None) -> None:
-    """This session is alive. Nothing to do without a session id."""
+               seat: str | None = None, work: bool = True) -> None:
+    """This session is alive - and, with `work`, this agent in it (a room's
+    sub-agent shares its main session's id). `wait` beats without: waiting
+    is not working on a note. Nothing to do without a session id."""
     if not session:
         return
     at = at or runs.now()
     await db[SESSIONS].update_one(
         {"_id": session},
-        {"$set": {"agent": agent, "last_seen": at, **({"seat": seat} if seat else {})},
-         "$setOnInsert": {"first_seen": at, "superseded_at": None}},
+        {"$set": {"last_seen": at, "per_agent": True,
+                  **({f"agents.{name_key(agent)}": at} if work else {}),
+                  **({"seat": seat} if seat else {})},
+         # The session's own agent: the one that registered it (`resume`),
+         # else the first that ran a command in it.
+         "$setOnInsert": {"agent": agent, "first_seen": at, "superseded_at": None}},
         upsert=True)
 
 
@@ -103,6 +156,7 @@ async def register(db, session: str | None, agent: str, seat: str | None = None)
     await beat(db, session, agent, at, seat)
     if not session:
         return []
+    await db[SESSIONS].update_one({"_id": session}, {"$set": {"agent": agent}})
     old = [s async for s in db[SESSIONS].find({"seat": seat, "superseded_at": None})
            if s["_id"] != session]
     for s in old:
@@ -111,35 +165,155 @@ async def register(db, session: str | None, agent: str, seat: str | None = None)
     return old
 
 
-async def _last_line(db, room: str | None, since: str | None) -> str | None:
-    """The newest log line in the run's room: how a run whose session left
-    no heartbeat (started before there were any) shows it is alive."""
+async def _last_line(db, room: str | None, since: str | None, by: str | None = None) -> str | None:
+    """The newest log line in the run's room after `since` - anybody's, or
+    only those written by the agent named `by`."""
     newest = None
-    async for a in db.activity.find({"room": room or "cad"}, {"at": 1}).sort("at", -1).limit(1):
-        newest = a.get("at")
+    q = db.activity.find({"room": room or "cad"}, {"at": 1, "by": 1}).sort("at", -1)
+    async for a in q.limit(1 if by is None else 200):
+        if by is None or ((a.get("by") or {}).get("name") == by):
+            newest = a.get("at")
+            break
     return newest if newest and (not since or str(newest) > str(since)) else None
+
+
+def _mtime(p: Path) -> datetime | None:
+    try:
+        return datetime.fromtimestamp(p.stat().st_mtime, timezone.utc)
+    except OSError:
+        return None
+
+
+_NAMES: dict[tuple, bool] = {}
+
+
+def _names(p: Path, rid: str) -> bool:
+    """Whether a sub-agent's transcript mentions the note (cached by size)."""
+    try:
+        k = (str(p), p.stat().st_size, rid)
+    except OSError:
+        return False
+    if k not in _NAMES:
+        try:
+            _NAMES[k] = rid.encode() in p.read_bytes()
+        except OSError:
+            _NAMES[k] = False
+    return _NAMES[k]
+
+
+def transcript_seen(session: str | None, holder: dict, rid: str, main: bool,
+                    since: datetime | None = None) -> datetime | None:
+    """When the holder's transcript was last written: its tool activity.
+    A sub-agent's own; the main thread's only for the session's own agent."""
+    from . import usage
+    if not session:
+        return None
+    root = Path(usage.CLAUDE_HOME) / "projects"
+    if not root.is_dir():
+        return None
+    if holder.get("resolved"):
+        if holder.get("agent"):
+            files = list(root.glob(f"*/{session}/subagents/agent-{holder['agent']}.jsonl"))
+        else:
+            files = list(root.glob(f"*/{session}.jsonl"))
+    else:
+        files = [p for p in root.glob(f"*/{session}/subagents/agent-*.jsonl")
+                 if (since is None or (_mtime(p) or since) >= since) and _names(p, rid)]
+        if not files and main:
+            files = list(root.glob(f"*/{session}.jsonl"))
+    return max((t for t in map(_mtime, files) if t), default=None)
+
+
+def processes() -> list[dict]:
+    """The processes this user runs under a Claude Code session: its id,
+    the agent name and the command line. Empty where they cannot be seen."""
+    out = []
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            env = dict(kv.split("=", 1) for kv in (d / "environ").read_bytes()
+                       .decode("utf-8", "replace").split("\0") if "=" in kv)
+            sess = runs.session_from_env(env)
+            if not sess:
+                continue
+            cmd = (d / "cmdline").read_bytes().decode("utf-8", "replace").replace("\0", " ")
+        except (OSError, ValueError):
+            continue
+        out.append({"session": sess, "agent": (env.get("REDLINE_AGENT") or "agent").strip() or "agent",
+                    "cmd": cmd})
+    return out
+
+
+def _working(p: dict) -> bool:
+    # A waiting watcher (perhaps left behind by a sub-agent that ended) is
+    # not work on a note.
+    return not re.search(r"revisions\.py\s+wait\b", p["cmd"])
+
+
+def process_seen(session: str | None, agent: str, now: datetime) -> datetime | None:
+    """Now, while a process runs under this session and agent name."""
+    if not session:
+        return None
+    try:
+        ps = processes()
+    except Exception:                       # noqa: BLE001 - a signal, not a must
+        return None
+    return now if any(p["session"] == session and p["agent"] == agent and _working(p)
+                      for p in ps) else None
+
+
+def tmux_seen(seat: str | None) -> datetime | None:
+    """When the tmux session's windows last printed anything, for a seat
+    that is one: Claude Code redraws its spinner and timer while it works,
+    a long foreground command included, and prints nothing while idle."""
+    import shutil
+    import subprocess
+    if not seat or not seat.startswith("tmux:") or not shutil.which("tmux"):
+        return None
+    try:
+        got = subprocess.run(["tmux", "list-windows", "-t", seat[5:], "-F", "#{window_activity}"],
+                             capture_output=True, text=True, timeout=5)
+        ts = [int(x) for x in got.stdout.split() if x.isdigit()] if got.returncode == 0 else []
+        return datetime.fromtimestamp(max(ts), timezone.utc) if ts else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
 
 
 async def stale_reason(db, run: dict, now: datetime | None = None,
                        lease: float | None = None) -> str | None:
-    """Why this open run's holder is gone, or None while it is not."""
+    """Why this open run's holder is gone, or None while it is not. The
+    signs of life, cheapest first, are in this module's docstring."""
     now = now or datetime.now(timezone.utc)
     lease = lease_minutes() if lease is None else lease
+    cut = now - timedelta(minutes=lease)
     held = runs.holders_of(run)
     holder = held[-1] if held else {}
+    name = ((holder.get("by") or run.get("by") or {}).get("name")) or "agent"
+    session = holder.get("session")
     since = holder.get("since") or run.get("started_at")
-    seen = [run.get("beat_at"), since, run.get("started_at")]
-    s = await db[SESSIONS].find_one({"_id": holder["session"]}) if holder.get("session") else None
-    if s:
-        if s.get("superseded_at") and str(s["superseded_at"]) > str(since or ""):
-            return "the session working on it restarted"
-        seen.append(s.get("last_seen"))
+    s = await db[SESSIONS].find_one({"_id": session}) if session else None
+    if s and s.get("superseded_at") and str(s["superseded_at"]) > str(since or ""):
+        return "the session working on it restarted"
+
+    def fresh(*vals) -> bool:
+        return any((d := _dt(v)) and d > cut for v in vals)
+
+    if fresh(run.get("beat_at"), since, run.get("started_at")):
+        return None
+    if s and s.get("per_agent"):
+        own = (s.get("agents") or {}).get(name_key(name))
+    elif s:
+        own = s.get("last_seen")            # recorded before beats were per agent
     else:
-        seen.append(await _last_line(db, run.get("room"), since))
-    last = max((d for d in map(_dt, seen) if d), default=None)
-    if last is None or now - last > timedelta(minutes=lease):
-        return f"no sign of the session working on it for {int(lease)} min"
-    return None
+        own = await _last_line(db, run.get("room"), since)   # before heartbeats
+    if fresh(own, await _last_line(db, run.get("room"), since, by=name)):
+        return None
+    main = not s or name == s.get("agent")
+    if (fresh(transcript_seen(session, holder, run.get("_id") or run.get("revision") or "",
+                              main, _dt(since)))
+            or fresh(process_seen(session, name, now))
+            or (main and s and fresh(tmux_seen(s.get("seat"))))):
+        return None
+    return f"no sign of the session working on it for {int(lease)} min"
 
 
 async def interrupt(db, rid: str, reason: str, at: str | None = None) -> dict | None:
@@ -204,7 +378,7 @@ async def unfinished(db, session: str | None = None, now: datetime | None = None
     """What a session starting up should pick up: notes given back,
     notes finished and waiting for review, and lines read but not answered
     by a session that is not this one."""
-    from . import chat
+    from . import chat, questions
 
     now = now or datetime.now(timezone.utc)
     queued = [d async for d in db.revisions.find({"status": "queued"}) if not d.get("archived")]
@@ -232,5 +406,31 @@ async def unfinished(db, session: str | None = None, now: datetime | None = None
         if d.get("role") == chat.USER and d.get("seen_at") and str(d.get("at") or "") >= since
         and (not session or d.get("seen_session") != session)
         and str(d.get("at")) > last_agent.get(chat.room_of(d), "")), key=lambda d: d["at"])
+    answers = [q for q in await questions.undelivered(db, ANSWER_GRACE.total_seconds())
+               if str(q.get("answered_at") or "") >= since]
     return {"interrupted": interrupted, "review": review, "unanswered": unanswered,
-            "unread": len(await chat.unread(db))}
+            "answers": answers, "unread": len(await chat.unread(db))}
+
+
+async def lost_reads(db, rows: list[dict], now: datetime | None = None,
+                     lease: float | None = None) -> set[str]:
+    """Of these thread lines, the person's that an agent session read and
+    then went away without answering (superseded, or not heard from for the
+    lease): the thread marks them until an agent line in the room answers."""
+    from . import chat
+
+    now = now or datetime.now(timezone.utc)
+    lease = lease_minutes() if lease is None else lease
+    last_agent: dict[str, str] = {}
+    for d in rows:
+        if d.get("role") == chat.AGENT:
+            room = chat.room_of(d)
+            last_agent[room] = max(last_agent.get(room, ""), str(d.get("at") or ""))
+    cand = [d for d in rows if d.get("role") == chat.USER and d.get("seen_at")
+            and d.get("seen_session") and str(d.get("at")) > last_agent.get(chat.room_of(d), "")]
+    gone: dict[str, bool] = {}
+    for sid in {d["seen_session"] for d in cand}:
+        s = await db[SESSIONS].find_one({"_id": sid}) or {}
+        seen = _dt(s.get("last_seen"))
+        gone[sid] = bool(s.get("superseded_at")) or not seen or now - seen > timedelta(minutes=lease)
+    return {d["_id"] for d in cand if gone[d["seen_session"]]}

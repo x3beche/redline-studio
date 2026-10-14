@@ -189,12 +189,15 @@ async def cmd_queue(args):
         print(f"   image : python tools/revisions.py show {d['_id']}")
 
 
-async def _beat(db) -> None:
-    """This Claude Code session is alive (backend/asks.py). Best effort."""
+async def _beat(db, work: bool = True) -> None:
+    """This Claude Code session is alive - and, with `work`, this agent in it
+    (a room's sub-agent runs in its main session under its own name), so the
+    note it holds is not given back while it works (backend/asks.py). Best
+    effort."""
     from backend import actors, asks, runs
     try:
         name = actors.agent()["name"]
-        await asks.beat(db, runs.session_from_env(), name, seat=asks.seat_from_env(name))
+        await asks.beat(db, runs.session_from_env(), name, seat=asks.seat_from_env(name), work=work)
     except Exception:                           # noqa: BLE001 - never block a command
         pass
 
@@ -224,7 +227,7 @@ async def cmd_resume(args):
           + (f"  - takes over from {len(old)} earlier session(s)" if old else ""))
     for g in given:
         print(f"interrupted, requeued now: {g['revision']}  {g.get('title') or ''}  ({g['reason']})")
-    if got["interrupted"] or got["review"] or got["unanswered"]:
+    if got["interrupted"] or got["review"] or got["unanswered"] or got["answers"]:
         print("\nUnfinished asks from before the restart:")
     for d in got["interrupted"]:
         print(f"  note {d['revision']} [{d['kind']}]  interrupted {str(d.get('at'))[:16].replace('T', ' ')}"
@@ -236,10 +239,27 @@ async def cmd_resume(args):
     for d in got["unanswered"]:
         print(f"  said {d['at'][:16].replace('T', ' ')} [{chat.room_of(d)}], read but not answered:"
               f" {chat.agent_text(d)[:100]}")
+    await _print_answers(db, got["answers"])
     if got["unread"]:
         print(f"\n{got['unread']} unread line(s) in the thread: revisions.py chat")
     print("\nQueue:")
     await cmd_queue(argparse.Namespace(room=getattr(args, "room", None)))
+
+
+async def _print_answers(db, rows: list[dict]) -> None:
+    """Answers to an `ask` whose asking session had gone when they came:
+    printed for this session, and marked delivered so they are not again."""
+    from backend import questions, runs
+    for q in rows:
+        by = (q.get("asked_by") or {}).get("name") or "agent"
+        print(f"  answer to {by}'s question {q['_id']} [{q.get('room')}]"
+              + (f" about note {q['revision']}" if q.get("revision") else "")
+              + f", asked {str(q.get('at'))[:16].replace('T', ' ')}, answered after it had gone:\n"
+              f"     Q: {' '.join((q.get('text') or '').split())[:160]}\n"
+              f"     A: {q.get('answer')}")
+    if rows:
+        print("     carry on with it: the asker is not waiting any more")
+        await questions.delivered(db, [q["_id"] for q in rows], runs.session_from_env())
 
 
 async def cmd_wait(args):
@@ -260,12 +280,22 @@ async def cmd_wait(args):
     seen = set(args.ignore or [])
     waited = 0
     while True:
-        # Waiting is this session's heartbeat; and a note whose agent went
-        # away is given back here, so it wakes this loop as work again.
-        await _beat(db)
+        # Waiting is this session's heartbeat (the session's, not working on
+        # a note); and a note whose agent went away is given back here, so
+        # it wakes this loop as work again.
+        await _beat(db, work=False)
         given = await _sweep(db)
         for g in given:
             print(f"interrupted, requeued: {g['revision']}  {g.get('title') or ''}  ({g['reason']})")
+        # An answer that came after the agent asking it had gone (a room's
+        # sub-agent that ended, a session restarted) is the person's word
+        # waiting for somebody: it wakes this loop too.
+        from backend import questions
+        late = await questions.undelivered(db, room=getattr(args, "room", None))
+        if late:
+            print(f"{len(late)} answer(s) to a question whose asker has gone, after waiting {waited}s")
+            await _print_answers(db, late)
+            return
         # Either kind of work wakes it: a queued revision, or something the
         # person typed into the thread. Both are them asking for something.
         said = await chat.unread(db, getattr(args, "room", None))
@@ -1406,11 +1436,12 @@ async def cmd_ask(args):
     """
     import time as _time
 
-    from backend import questions
+    from backend import questions, runs
 
     db = connect()
     doc = await questions.ask(db, args.text, args.option, args.revision,
-                              args.context, args.multi, getattr(args, "room", None))
+                              args.context, args.multi, getattr(args, "room", None),
+                              session=runs.session_from_env(), track=True)
     print(f"asked: {doc['_id']}")
     if doc["options"]:
         print("options: " + " | ".join(doc["options"]))
@@ -1418,8 +1449,11 @@ async def cmd_ask(args):
 
     deadline = _time.monotonic() + args.timeout if args.timeout else None
     while True:
+        # Asking is working on the note: the lease holds while it waits.
+        await _beat(db)
         cur = await questions.get(db, doc["_id"])
         if cur and cur.get("status") == questions.ANSWERED:
+            await questions.delivered(db, [doc["_id"]], runs.session_from_env())
             print(f"\nanswer: {cur['answer']}")
             return
         if deadline and _time.monotonic() > deadline:
@@ -1877,8 +1911,9 @@ async def cmd_log(args):
         key = compute.run_key(args.room)
         cur = await db.runs.find_one({"_id": key}) or {}
         ids = [key] + ([cur["revision"]] if cur.get("revision") else [])
+        # Progress is the run's own sign of life (backend/asks.py).
         await db.runs.update_many({"_id": {"$in": ids}},
-                                  {"$set": {"percent": args.percent}})
+                                  {"$set": {"percent": args.percent, "beat_at": _now()}})
     pct = "" if args.percent is None else f"  [{args.percent:.0f}%]"
     print(f"{args.text}{pct}")
 
@@ -2869,10 +2904,11 @@ def main() -> None:
 
 async def _beating(fn, args):
     # Any command an agent session runs says that session is alive, so a
-    # note it holds is not given back while it works (backend/asks.py).
+    # note it holds is not given back while it works (backend/asks.py);
+    # `wait` only says the session is there.
     if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID"):
         try:
-            await _beat(connect())
+            await _beat(connect(), work=getattr(args, "cmd", None) != "wait")
         except BaseException:                   # noqa: BLE001 - connect() may sys.exit
             pass
     return await fn(args)

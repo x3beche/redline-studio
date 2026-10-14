@@ -1190,7 +1190,10 @@ async def _sweep_leases() -> None:
         return
     _SWEPT[ws] = time.monotonic()
     try:
-        await asks.sweep(db())
+        # The page cannot see the agents' processes or tmux, only the
+        # database and the transcripts: it waits longer than the command
+        # line, which the waiting agents run every half minute.
+        await asks.sweep(db(), lease=asks.lease_minutes() * asks.BLIND_FACTOR)
     except Exception as exc:                           # noqa: BLE001 - the list still loads
         LOG.warning("stale runs not checked: %s", exc)
 
@@ -3242,8 +3245,17 @@ class ChatIn(BaseModel):
 @app.get("/api/chat")
 async def chat_history(limit: int = 200, room: str | None = None):
     """The thread, oldest first - one room's, or all of them. The page
-    polls its room's with the health."""
-    return await chat.history(db(), limit, room)
+    polls its room's with the health. A line the agent read and then went
+    away without answering (its session restarted or went quiet) says so:
+    `read_lost` (backend/asks.py), until an agent line in the room answers."""
+    from . import asks
+    rows = await chat.history(db(), limit, room)
+    try:
+        lost = await asks.lost_reads(db(), rows)
+    except Exception as exc:                           # noqa: BLE001 - the thread still loads
+        LOG.warning("lost reads not checked: %s", exc)
+        lost = set()
+    return [{**d, "read_lost": True} if d["_id"] in lost else d for d in rows]
 
 
 @app.get("/api/chat/rooms")

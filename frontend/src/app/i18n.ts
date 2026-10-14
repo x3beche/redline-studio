@@ -813,6 +813,8 @@ const TR: Record<string, string> = {
   'anywhere in the world': 'dünyanın herhangi bir yeri',
   'Exit health': 'Çıkış sağlığı',
   'waiting': 'bekleniyor',
+  'read by the agent before a restart, not answered yet': 'yeniden başlamadan önce ajan okudu, henüz yanıtlanmadı',
+  'The agent read this, then its session restarted or went quiet before it answered. The next session is shown it first.': 'Ajan bunu okudu, ancak yanıtlamadan önce oturumu yeniden başladı ya da sessiz kaldı. Sonraki oturuma ilk olarak bu gösterilir.',
   'checks': 'kontrol',
   'every': 'her',
   'Where it comes out': 'Nereden çıktığı',

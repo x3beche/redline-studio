@@ -34,8 +34,13 @@ def _now() -> str:
 
 async def ask(db, text: str, options: list[str] | None = None,
               revision: str | None = None, context: str | None = None,
-              multi: bool = False, room: str | None = None) -> dict:
-    """Write one question and return it. The agent then waits for an answer."""
+              multi: bool = False, room: str | None = None,
+              session: str | None = None, track: bool = False) -> dict:
+    """Write one question and return it. The agent then waits for an answer.
+
+    `track` (the command line's `ask`, which blocks for it): the answer is
+    marked delivered when the asker takes it, so one that comes after the
+    asking session went away is offered to the next (`undelivered`)."""
     doc = {
         "_id": uuid.uuid4().hex[:12],
         "at": _now(),
@@ -52,6 +57,7 @@ async def ask(db, text: str, options: list[str] | None = None,
         "answer": None,
         "answered_at": None,
         "asked_by": actors.current() if actors.current()["type"] == "agent" else actors.agent(),
+        **({"asked_session": session, "delivered_at": None} if track else {}),
     }
     await db[QUESTIONS].insert_one(doc)
     return doc
@@ -86,6 +92,30 @@ async def answered(db, room: str | None = None, limit: int = 200) -> list[dict]:
         rows = [q for q in rows if q.get("room") == room]
     rows.sort(key=lambda d: d["at"])
     return rows[-limit:] if limit else rows
+
+
+async def delivered(db, qids: list[str], session: str | None = None) -> None:
+    """The answers reached an agent: the asker, or a session after it."""
+    for qid in qids:
+        await db[QUESTIONS].update_one(
+            {"_id": qid, "delivered_at": None},
+            {"$set": {"delivered_at": _now(), "delivered_session": session}})
+
+
+async def undelivered(db, grace_s: float = 120, room: str | None = None) -> list[dict]:
+    """Answers nobody took: asked with `track`, answered more than `grace_s`
+    ago, and not delivered - the asking `ask` looks every few seconds, so
+    its session is gone. Oldest first."""
+    from datetime import timedelta
+    cut = (datetime.now(timezone.utc) - timedelta(seconds=grace_s)).isoformat()
+    rows = [d async for d in db[QUESTIONS].find({"status": ANSWERED})
+            if "delivered_at" in d and d["delivered_at"] is None
+            and str(d.get("answered_at") or "") <= cut]
+    rows = await with_rooms(db, rows)
+    if room is not None:
+        rows = [q for q in rows if q.get("room") == room]
+    rows.sort(key=lambda d: d["at"])
+    return rows
 
 
 async def drop(db, qid: str) -> bool:

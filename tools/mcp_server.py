@@ -43,6 +43,15 @@ def _s(desc: str) -> dict:
 
 # name -> (description, input schema properties, required, argv builder)
 TOOLS: dict[str, tuple] = {
+    "resume": (
+        "The first thing to run in a new session: it takes over from the agent's "
+        "earlier session in this seat and lists what that one left unfinished - notes "
+        "interrupted and put back in the queue, notes done and waiting for review, "
+        "lines in the thread it read and never answered, answers to its questions "
+        "that came after it had gone - then the queue. Nothing is redone by itself.",
+        {"room": {"type": "string", "enum": ROOMS,
+                  "description": "only this room's queue"}},
+        [], lambda a: ["resume"] + (["--room", a["room"]] if a.get("room") else [])),
     "queue": (
         "What is queued, oldest first. With a room, only that room's notes: "
         "cad (3D models), pcb (boards) or firmware.",

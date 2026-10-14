@@ -956,6 +956,10 @@ export interface ChatLine {
   /** Null until the agent has picked it up - that is what its idle wait
    *  watches, and what the page shows as "not read yet". */
   seen_at: string | null;
+  /** Read by an agent session that then went away (restarted, or quiet past
+   *  its lease) before answering; gone once an agent line answers
+   *  (backend/asks.py, lost_reads). The next session is shown it first. */
+  read_lost?: boolean;
   /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
   tasks?: Record<string, { note_id?: string; at: string; by?: { id?: string; name?: string };
                            room?: string; target?: string; pending?: boolean }>;
