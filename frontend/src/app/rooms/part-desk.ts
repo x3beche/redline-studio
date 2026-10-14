@@ -7,6 +7,7 @@ import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { PartCard } from './part-card';
 import { warmPart } from './part-assets';
+import { StockPanel } from './stock';
 
 /** An add being watched (backend main.py /api/parts-add). */
 export interface PartAdd {
@@ -18,7 +19,7 @@ export interface PartAdd {
 /** THE PARTS DRAWER'S WORK, for a room that shows it: what the drawer
  *  holds, a search of LCSC, adding a part (watched step by step), and one
  *  part open in full - its card (part-card.ts), its datasheet, which
- *  drawer it is in. The board room's Parts tab and the Product Catalog's
+ *  drawer it is in. The board room's Parts tab and the Parts page's
  *  LCSC seller each provide their own (`providers: [PartDesk]`); the
  *  drawer itself is the server's, so both see the same parts. */
 @Injectable()
@@ -229,10 +230,10 @@ export class PartDesk implements OnDestroy {
 }
 
 /** One part in full, over the whole page: the part card (part-card.ts) in
- *  the Product Catalog's detail box. Esc or a click beside it closes it. */
+ *  the Parts page's detail box. Esc or a click beside it closes it. */
 @Component({
   selector: 'app-part-modal',
-  imports: [T, PartCard],
+  imports: [T, PartCard, StockPanel],
   host: { '(document:keydown.escape)': 'desk.isOpen() && desk.closePart()' },
   styles: [`
     .pm-veil { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center;
@@ -243,6 +244,7 @@ export class PartDesk implements OnDestroy {
     .pm-wait { display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 11px; color: var(--ink-dim); }
     .pm-wait .mono { color: var(--ink); }
     .pm-x { margin-left: auto; }
+    .pm-stock { display: block; padding: 0 16px 14px; }
     @media (max-width: 640px) { .pm-veil { padding: 8px; } .pm-box { max-height: calc(100vh - 16px); } }
   `],
   template: `
@@ -256,6 +258,8 @@ export class PartDesk implements OnDestroy {
                          [canEdit]="desk.canEdit()" [canRun]="canRun()"
                          (closed)="desk.closePart()" (keep)="desk.addPart(s.lcsc)" (openDatasheet)="desk.openDatasheet(s.lcsc)"
                          (place)="desk.placeIt(s.lcsc, $event)" />
+          <!-- how many of it are on hand (stock.ts): a part kept in the drawer is a Parts product like any other -->
+          @if (desk.heldRow(s.lcsc)) { <wb-stock-panel class="pm-stock" maker="lcsc" [product]="s.lcsc" /> }
         } @else {
           <div class="pm-wait">
             <span class="mono">{{ desk.seeing() }}</span>

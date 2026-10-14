@@ -16,7 +16,7 @@ export function routeLine(order: readonly string[] | null | undefined, tr: (s: s
 }
 
 /** The order of routes a lookup tries (Settings > Proxy & Data, and a
- *  maker's own in the Product Catalog): one chip per route the lookup can
+ *  maker's own in Parts): one chip per route the lookup can
  *  take, in a row - the ones that are on first, numbered in the order they
  *  are tried, then the ones that are off. A chip moves left or right and
  *  turns on or off; a route that is not set up says why and is passed over.

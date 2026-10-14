@@ -231,12 +231,12 @@ type BoardView = Pane | 'split' | 'focus';
 
         <!-- The kept parts, one line each, narrowed by what is typed above;
              the whole drawer - its groups, cards, selection - is the
-             Product Catalog's LCSC seller. -->
+             Parts page's LCSC seller. -->
         <div class="tcv-pp-head">
           <span class="tcv-label">{{ 'in the drawer' | t }}</span>
           <span class="mono tcv-pp-n">{{ desk.term().trim() && !desk.isNumber(desk.term()) ? kept().length + ' / ' : '' }}{{ desk.held().length }}</span>
-          <button class="tcv-pp-link" (click)="openDrawer()" [title]="'The parts drawer as the LCSC seller of the Product Catalog' | t">
-            {{ 'Open the drawer in Catalog' | t }} &rsaquo;</button>
+          <button class="tcv-pp-link" (click)="openDrawer()" [title]="'The parts drawer as the LCSC seller of Parts' | t">
+            {{ 'Open the drawer in Parts' | t }} &rsaquo;</button>
         </div>
         @for (p of kept(); track p.lcsc) {
           <div class="tcv-pp-row" role="button" tabindex="0" [attr.data-lcsc]="p.lcsc"
@@ -932,7 +932,7 @@ export class RoomPcb implements OnDestroy {
   partPkg(p: PartHeld): string { const k = (p.name || '').split('_')[0]; return /^[RCL]\d{4}$/.test(k) ? k.slice(1) : k; }
   /** Out of the drawer, asked first as in the Catalog (part-desk.ts). */
   async forget(p: PartHeld) { if (await this.desk.sureToDrop([p.lcsc])) this.desk.drop(p.lcsc); }
-  /** The whole drawer: the Product Catalog's LCSC seller, with the part open
+  /** The whole drawer: the Parts page's LCSC seller, with the part open
    *  in full there when one is open here (?ws=catalog&m=lcsc&p=C…&pm=lcsc). */
   openDrawer() {
     const c = this.desk.seen()?.lcsc ?? null;

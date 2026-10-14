@@ -13,7 +13,8 @@ import { Skeleton } from '../skeleton';
 
 const MAX_TEXT = 20_000;
 const MAX_ITEMS = 8;
-const KINDS: DmKind[] = ['model', 'board', 'project', 'taste', 'product', 'inventory', 'note', 'file', 'firmware'];
+/** What can be sent: stock goes with its product (a product's card says how many are on hand). */
+const KINDS: DmKind[] = ['model', 'board', 'project', 'taste', 'product', 'note', 'file', 'firmware'];
 
 function stamp(iso: string) {
   const d = new Date(iso);

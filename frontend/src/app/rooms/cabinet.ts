@@ -77,7 +77,7 @@ interface Pin { number: string; name: string }
 /** THE CABINET: the parts drawer's look for any list of things - groups as
  *  plain rows (chevron, name, count) that open to trays of bins, a label
  *  per branch inside, each bin its picture, name, a line or two, its price
- *  and stock. Flat, in the app's own tones. The Product Catalog shows every
+ *  and stock. Flat, in the app's own tones. The Parts shows every
  *  seller's products this way (rooms/manufacturers.ts): the LCSC seller's
  *  parts by the drawer's groups with their footprints and pins, a site's
  *  products by their categories with their photos.

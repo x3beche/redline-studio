@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'inventory' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -54,17 +54,13 @@ export const WORKSPACES: Workspace[] = [
     ready: true,
   },
   {
+    // The parts you buy and keep: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and
+    // your own items - and how many of each are on hand (the stock, a part of this page). Its name is
+    // this label, here only: the tab, the page's title and the palette read it (PARTS_LABEL).
     id: 'mfr',
-    label: 'Product Catalog',
-    blurb: 'Makers whose catalogs you keep, read from their own sites: add one by its address, watch it '
-         + 'explored, search its products - and Chat looks here when you need a part from a maker.',
-    ready: true,
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    blurb: 'What you have on hand: each thing, how many and where it is kept - added here or by telling '
-         + 'the Chat, taken with a reason, and flagged when it runs low.',
+    label: 'Parts',
+    blurb: 'The parts you buy and keep - from makers\' sites, the LCSC drawer, McMaster-Carr, GrabCAD or '
+         + 'typed in by hand - and how many of each are on hand, where, and when they run low.',
     ready: true,
   },
   {
@@ -112,10 +108,19 @@ const KEY = 'redline.workspace';
  *  so does ?ws=supply, its name for a while). */
 const URL_NAME: Partial<Record<Workspace['id'], string>> = { commandcode: 'chat', mfr: 'catalog' };
 export function urlName(id: Workspace['id']): string { return URL_NAME[id] ?? id; }
-const OLD_NAMES: Record<string, Workspace['id']> = { supply: 'mfr' };
+/** ?ws=inventory was the stock's own tab: it opens the Parts page at its stock (STOCK_ASKED). */
+const OLD_NAMES: Record<string, Workspace['id']> = { supply: 'mfr', inventory: 'mfr' };
 function fromUrl(name: string | null): string | null {
   return (Object.entries(URL_NAME).find(([, n]) => n === name)?.[0]) ?? (name ? OLD_NAMES[name] : undefined) ?? name;
 }
+
+/** The Parts page's name, the one place it is written (the tab, the page's title, the palette). */
+export const PARTS_LABEL = WORKSPACES.find(w => w.id === 'mfr')!.label;
+
+/** Whether the page was opened by an old link to the stock's own tab (?ws=inventory): the Parts page
+ *  opens at its stock then, an item's product open when the link named one (?item=). Read once. */
+export const STOCK_ASKED = new URLSearchParams(location.search).get('ws') === 'inventory'
+  || (() => { try { return localStorage.getItem(KEY) === 'inventory'; } catch { return false; } })();
 
 export function currentWorkspace(): Workspace['id'] {
   const asked = fromUrl(new URLSearchParams(location.search).get('ws'));
@@ -123,7 +128,7 @@ export function currentWorkspace(): Workspace['id'] {
   try {
     saved = localStorage.getItem(KEY);
   } catch { /* private window */ }
-  const want = asked ?? saved;
+  const want = asked ?? (saved === 'inventory' ? 'mfr' : saved);
   return WORKSPACES.some(w => w.id === want)
     ? (want as Workspace['id']) : 'cad';
 }

@@ -8,7 +8,8 @@ import { Prefs } from '../preferences';
 import { LANG, T, t } from '../i18n';
 import { money as shownMoney, moneyAlt, moneyIn, moneyTip } from '../money';
 import { Confirm } from '../confirm';
-import { CatalogStock, InventoryApi, qty } from './inventory';
+import { CatalogStock, InventoryApi, Item, StockPanel, StockState, StockView, qty } from './stock';
+import { PARTS_LABEL, STOCK_ASKED } from '../workspaces';
 import { RouteOrder, routeLine } from '../route-order';
 import { DmSendButton } from '../dm';
 import { SelectOption, UiSelect, plainOptions } from '../ui-select';
@@ -22,8 +23,13 @@ import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked } from './linked';
 
-/** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
- *  read from their own websites (backend/manufacturers.py).
+/** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
+ *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
+ *  read from their own websites (backend/manufacturers.py), the built-in
+ *  sources (the LCSC drawer, McMaster-Carr, GrabCAD, Own items:
+ *  backend/catalog_builtin.py) - and how many of each are on hand: the
+ *  stock (stock.ts). Every row, card and bin says its count; a product's
+ *  detail has its stock section; "Stock" lists every product on hand.
  *
  *  A manufacturer is added by its site's address. Exploring it is a run in
  *  the server - the site crawled politely (robots.txt, the same domain, a
@@ -38,7 +44,7 @@ import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, is
  *  server's, not the page's).
  */
 /** How a run goes out: an order of routes ('local', 'proxy', 'jina'; backend/netroutes.py),
- *  or null for the Product Catalog's default order (Settings > Proxy & Data). */
+ *  or null for the Parts page's default order (Settings > Proxy & Data). */
 export type RouteChoice = string[] | null;
 export type MfrStatus = 'queued' | 'crawling' | 'asking' | 'merging' | 'done' | 'failed' | 'cancelled';
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
@@ -113,7 +119,7 @@ export interface GridAnswer {
   /** How many of every product were read with a doubt on their price or stock ("Needs checking"). */
   doubtful?: number;
 }
-export interface GridQuery { q: string; cat: string; maker: string; seller: string; min: string; max: string; stock: string; sort: string; size: number; check: string }
+export interface GridQuery { q: string; cat: string; maker: string; seller: string; min: string; max: string; stock: string; sort: string; size: number; check: string; held: string }
 /** What the Add a product form sends: specs as "name: value" lines; the price as typed, its currency and VAT. */
 export interface ProductFields {
   name: string; category: string; sku: string; description: string; specs: string; url: string; image: string;
@@ -319,9 +325,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView],
   providers: [PartDesk, LinkedDesk],
-  styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
+  styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <!-- How the next run goes out: the default order, or one of its own (the route order below) -->
@@ -478,6 +484,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       } @else if (m.view === 'linked') {
         <!-- McMaster-Carr, GrabCAD: the search front and centre (linked.ts), the saved ones below as any maker's catalog -->
         <wb-linked-head [src]="m.id" [url]="m.url" [items]="m.products ?? []" />
+      } @else if (m.view === 'own') {
+        <!-- Own items (backend/catalog_own.py): things no site sells, typed in by hand - a head of a line, the catalog below -->
+        <header class="tst-head">
+          <div class="tst-title">
+            <h2>{{ m.name | t }}</h2>
+            <span class="st-sub">{{ m.summary | t }} · {{ fmt('{n} products · {s} in stock', { n: m.product_count, s: heldCount(m.id) }) }}</span>
+          </div>
+        </header>
       } @else {
       <header class="tst-head">
         <div class="tst-title">
@@ -580,7 +594,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <wb-select class="mf-csel" label="Category" [options]="productCatOpts()" [value]="cat()" (pick)="cat.set($event)" />
           <span class="st-right st-sub">{{ fmt('{n} of {m}', { n: found().length, m: m.products?.length ?? 0 }) }}</span>
           <ng-container *ngTemplateOutlet="layoutT" />
-          @if (can() && !m.builtin) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
+          @if (can() && (!m.builtin || m.view === 'own')) { <button class="tcv-btn" (click)="openProduct(null)" [disabled]="editing() === ''">{{ 'Add a product' | t }}</button> }</div>
         @if (editing() !== null) {
           <div class="mf-pform mf-ctl">
             <input class="tst-in mf-pf-name" [placeholder]="'Name' | t" [value]="pf().name" (input)="pfSet('name', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Name' | t">
@@ -639,12 +653,13 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <div class="st-table-wrap">
             <table class="st-table mf-table">
               <thead><tr>@if (can()) { <th class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th> }
-                <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pprice r">{{ 'Price' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
+                <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-ponhand r">{{ 'On hand' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pprice r">{{ 'Price' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
               <tbody>
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
-                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="r mf-ponhand">@if (onHand(m.id, p.id); as s) { <button class="mf-onhand mf-onhand-btn" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null" (click)="openDetail(asItem(p, m))" [title]="'On hand - open it for its stock' | t">{{ qty(s.quantity) }} {{ s.unit }}</button> } @else { <span class="dim">–</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
                       @if (p.stock) { <br><span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></td>
@@ -655,7 +670,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                       @if (p.image) { <a class="st-more mf-open" [href]="p.image" target="_blank" rel="noopener noreferrer">{{ 'Image' | t }}</a> }
                       @if (can()) {
                         <div class="tcv-cc-itemacts mf-rowacts">
-                          <button class="tcv-cc-ib" (click)="openStock(p.id)" [title]="'Add to stock' | t">
+                          <button class="tcv-cc-ib" (click)="openDetail(asItem(p, m))" [title]="'Stock: count it, take some, see its log' | t">
                             <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.stock" /></svg></button>
                           <button class="tcv-cc-ib" (click)="openProduct(p)" [title]="'Edit the product' | t">
                             <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.edit" /></svg></button>
@@ -664,17 +679,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                         </div>
                       }</td>
                   </tr>
-                  @if (stockFor() === p.id) {
-                    <tr class="mf-stockrow"><td [attr.colspan]="can() ? 8 : 7">
-                      <div class="mf-stockform mf-ctl">
-                        <span class="mf-stocklabel">{{ stock()[p.id] ? fmt('Top up {name} in stock', { name: p.name }) : fmt('Add {name} to stock', { name: p.name }) }}</span>
-                        <ng-container *ngTemplateOutlet="stockFields" />
-                        <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m.id, [p.id])" [disabled]="saving()">{{ (stock()[p.id] ? 'Top up' : 'Add to stock') | t }}</button>
-                        <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
-                      </div>
-                    </td></tr>
-                  }
-                } @empty { <tr><td [attr.colspan]="can() ? 8 : 7" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+                } @empty { <tr><td [attr.colspan]="can() ? 9 : 8" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
               </tbody>
             </table>
           </div>
@@ -682,7 +687,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <wb-empty icon="table" [text]="m.view === 'linked' ? linkedEmpty(m.id) : m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
+          <wb-empty icon="table" [text]="m.view === 'own' ? 'Nothing here yet: add a thing no site sells - filament, your own screws, a cable you made - with Add a product, or from Stock.' : m.view === 'linked' ? linkedEmpty(m.id) : m.view === 'drawer' ? 'The drawer is empty: add a part by its LCSC number above.' : runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
         }
       </section>
 
@@ -690,12 +695,13 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       <!-- ================= the overview: every product as a grid, or the sites and adding one ================= -->
       <header class="tst-head tsh-head mf-homehead">
         <div class="tst-title">
-          <h2>{{ 'Product Catalog' | t }}</h2>
-          <span class="st-sub">{{ fmt('{n} products from {m} sites. Chat looks here when you need a part.', { n: num(totalProducts()), m: own().length }) }}</span>
+          <h2>{{ PARTS_LABEL | t }}</h2>
+          <span class="st-sub">{{ fmt('{n} products from {m} sites · {s} products in stock. Chat looks here when you need a part.', { n: num(totalProducts()), m: own().length, s: heldTotal() }) }}</span>
         </div>
         <div class="tst-acts">
-          <div class="st-seg" role="tablist" [attr.aria-label]="'Product Catalog' | t">
+          <div class="st-seg" role="tablist" [attr.aria-label]="PARTS_LABEL | t">
             <button [class.on]="sub() === 'products'" (click)="sub.set('products')">{{ 'All products' | t }}</button>
+            <button [class.on]="sub() === 'stock'" (click)="sub.set('stock')" [title]="'Every product on hand, from every source, in one list' | t">{{ fmt('Stock ({n})', { n: heldTotal() }) }}</button>
             <button [class.on]="sub() === 'sites'" (click)="sub.set('sites')">{{ fmt('Sites ({n})', { n: own().length }) }}</button>
           </div>
           @if (can()) {
@@ -716,8 +722,11 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <span class="dim">–</span>
             <input class="tst-in" inputmode="decimal" [placeholder]="'Max price' | t" [value]="gmax()" (change)="gmax.set($any($event.target).value.trim()); gpages.set(1)" [attr.aria-label]="'Max price' | t">
           </span>
-          <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gstock()" (click)="gstock.set(!gstock()); gpages.set(1)">
-            <span class="tcv-switch" [attr.data-on]="gstock() ? 1 : null" aria-hidden="true"></span>{{ 'In stock' | t }}</button>
+          <wb-select class="mf-gsel mf-gheld" label="On hand" [options]="heldOpts()" [value]="gheld()" (pick)="gheld.set($any($event)); gpages.set(1)"
+                     [title]="'In stock: what is on hand here, from every source; Low stock: at or below its minimum' | t" />
+          <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gstock()" (click)="gstock.set(!gstock()); gpages.set(1)"
+                  [title]="'Only what its seller\\'s page says is in stock' | t">
+            <span class="tcv-switch" [attr.data-on]="gstock() ? 1 : null" aria-hidden="true"></span>{{ 'Seller has it' | t }}</button>
           @if (grid()?.doubtful || gcheck()) {
             <button type="button" class="mf-stocktog" role="switch" [attr.aria-checked]="gcheck()" (click)="gcheck.set(!gcheck()); gpages.set(1)"
                     [title]="'Products whose price or stock was read with a doubt on it' | t">
@@ -742,13 +751,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           } @else {
             <div class="st-table-wrap mf-gtable-wrap">
               <table class="st-table mf-gtable">
-                <thead><tr><th class="mf-gthumb"></th><th>{{ 'Product' | t }}</th><th>{{ 'Seller' | t }}</th><th class="r">{{ 'Price' | t }}</th>
-                  <th>{{ 'Stock' | t }}</th><th>{{ 'Category' | t }}</th><th>{{ 'Code' | t }}</th><th class="r">{{ 'Read' | t }}</th></tr></thead>
+                <thead><tr><th class="mf-gthumb"></th><th>{{ 'Product' | t }}</th><th class="r">{{ 'On hand' | t }}</th><th>{{ 'Seller' | t }}</th><th class="r">{{ 'Price' | t }}</th>
+                  <th>{{ 'At the seller' | t }}</th><th>{{ 'Category' | t }}</th><th>{{ 'Code' | t }}</th><th class="r">{{ 'Read' | t }}</th></tr></thead>
                 <tbody>
                   @for (p of g.items; track p.maker.id + p.id) {
                     <tr class="mf-prow" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)">
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
                       <td class="give"><b>{{ p.name }}</b></td>
+                      <td class="r"><ng-container *ngTemplateOutlet="onHandT; context: { $implicit: p }" /></td>
                       <td class="dim">{{ sellerName(p) }}</td>
                       <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''"><ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" />@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
                       <td>@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
@@ -762,13 +772,16 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             </div>
           }
           @if (!g.items.length) {
-            <wb-empty [icon]="g.all ? 'search' : 'table'" [text]="g.all ? 'No product matches - try fewer words or clear the filters.' : 'No products yet: add a site, or read a product page into the catalog.'">
+            <wb-empty [icon]="g.all ? 'search' : 'table'" [text]="gheld() && !filteredButHeld() ? (gheld() === 'low' ? 'Nothing is low: every product on hand is above its minimum.' : 'Nothing is in stock yet: open a product and count it in its Stock section.') : g.all ? 'No product matches - try fewer words or clear the filters.' : 'No products yet: add a site, or read a product page into the catalog.'">
               @if (!g.all && can()) { <button class="tcv-btn" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }</wb-empty>
           }
           @if (g.total > g.items.length) {
             <button class="st-more mf-morerows" (click)="gpages.set(gpages() + 1)">{{ fmt('Show {n} more', { n: g.total - g.items.length }) }}</button>
           }
         } @else if (layout() === 'grid') { <wb-skel kind="cards" [count]="15" [min]="220" /> } @else { <wb-skel kind="rows" [count]="12" [h]="44" /> }
+      } @else if (sub() === 'stock') {
+        <!-- every product on hand, from every source, in one list (stock.ts); a line opens its product -->
+        <wb-stock-view (open)="openLine($event)" />
       } @else {
       <div class="st-tiles mf-htiles">
         <div class="st-tile" [attr.data-tone]="own().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b [wbCount]="own().length"></b>
@@ -953,7 +966,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             @if (d.sku) { <span class="mono">{{ fmt('Code {c}', { c: d.sku }) }}</span> }
             @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
             @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
-            @if (dStock()[d.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }
+            <ng-container *ngTemplateOutlet="onHandT; context: { $implicit: d }" />
           </div>
           <div class="mf-dprice">
             @if (d.price) {
@@ -983,18 +996,12 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <!-- To a person in Chat, as a card that opens it (dm.ts). -->
             <rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-btn tcv-dm-sendbtn" />
             @if (can()) {
-              <button class="tcv-btn" (click)="openStock(d.id)">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
               <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>
               <button class="tcv-btn tst-del" (click)="deleteFromDetail(d)">{{ 'Delete' | t }}</button>
             }
           </div>
-          @if (stockFor() === d.id) {
-            <div class="mf-stockform mf-ctl mf-dstockform">
-              <ng-container *ngTemplateOutlet="stockFields" />
-              <button class="tcv-btn tcv-btn-accent" (click)="addToStock(d.maker.id, [d.id])" [disabled]="saving()">{{ (dStock()[d.id] ? 'Top up' : 'Add to stock') | t }}</button>
-              <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
-            </div>
-          }
+          <!-- how many are on hand, where, the log (stock.ts) -->
+          <wb-stock-panel [maker]="d.maker.id" [product]="d.id" />
           @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
           @if (specList(d).length) {
             <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
@@ -1143,9 +1150,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       } @else if (p.linked; as l) { <span class="mf-card-price mono">{{ l.key }}@if (l.cad) { <small> · {{ l.cad.kind.toUpperCase() }}</small> }</span>
       } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span> }
       <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
-      <span class="mf-card-foot">@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
+      <span class="mf-card-foot"><ng-container *ngTemplateOutlet="onHandT; context: { $implicit: p }" />@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
     </span>
   </button>
+</ng-template>
+<!-- how many are on hand of a product (stock.ts): green, amber when low, red when none is left -->
+<ng-template #onHandT let-p>
+  @if (onHand(p.maker.id, p.id); as s) { <span class="mf-onhand" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null"
+        [title]="(s.low ? 'On hand - at or below its minimum' : 'On hand') | t">{{ qty(s.quantity) }} {{ s.unit }}</span> }
 </ng-template>
 <!-- the amber mark of a price or stock read with a doubt on it: the reasons in its tooltip, in full in the product -->
 <ng-template #doubtT let-p>
@@ -1230,7 +1242,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     <table class="st-table mf-gtable mf-partstable">
       <thead><tr><th class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th>
         <th class="mf-gthumb"></th><th>{{ 'Value' | t }}</th><th>{{ 'Part number' | t }}</th><th>{{ 'Package' | t }}</th><th>LCSC</th><th class="r">{{ 'Pins' | t }}</th>
-        <th class="r">{{ 'Price' | t }}</th><th class="r">{{ 'Stock' | t }}</th><th>{{ 'Category' | t }}</th><th>3D</th></tr></thead>
+        <th class="r">{{ 'On hand' | t }}</th><th class="r">{{ 'Price' | t }}</th><th class="r">{{ 'At LCSC' | t }}</th><th>{{ 'Category' | t }}</th><th>3D</th></tr></thead>
       <tbody>
         @for (p of found().slice(0, shownRows()); track p.id) {
           <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null" [class.mf-pulse-row]="desk.pulse() === p.id"
@@ -1242,12 +1254,13 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <td class="mono dim" [title]="p.part?.package || ''">{{ pkg(p.part?.package) || '–' }}</td>
             <td class="mono"><button class="mf-namebtn mono" (click)="$event.stopPropagation(); copyNumbers([p.id])" [title]="'Copy the LCSC number' | t">{{ p.id }}</button></td>
             <td class="r mono">{{ p.part?.pins ?? '–' }}</td>
+            <td class="r">@if (onHand(m.id, p.id); as s) { <span class="mf-onhand" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null">{{ qty(s.quantity) }} {{ s.unit }}</span> } @else { <span class="dim">–</span> }</td>
             <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b> } @else { <span class="dim">–</span> }</td>
             <td class="r">@if (p.stock) { <span class="mf-sdot" [attr.data-s]="p.stock">{{ p.stock_qty != null ? num(p.stock_qty) : stockName(p) }}</span> } @else { <span class="dim">–</span> }</td>
             <td class="dim mf-pt-cat" [title]="p.part?.group + ' › ' + p.category">{{ p.category }}</td>
             <td><i class="pdw-badge" [class.pdw-badge-3d]="p.part?.has_3d">{{ p.part?.has_3d ? '3D' : '2D' }}</i></td>
           </tr>
-        } @empty { <tr><td colspan="11" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+        } @empty { <tr><td colspan="12" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
       </tbody>
     </table>
   </div>
@@ -1290,8 +1303,10 @@ export class RoomMfr implements OnDestroy {
   pq = signal(this.url.get('q') ?? '');
   cat = signal(this.url.get('cat') ?? '');
   listQ = signal('');
-  /** The overview: every product (the grid, the default), or the sites and adding one. */
-  sub = signal<'products' | 'sites'>(this.url.get('sub') === 'sites' ? 'sites' : 'products');
+  /** The overview: every product (the grid, the default), every product on hand (an old link to the stock's
+   *  own tab opens here too), or the sites and adding one. */
+  sub = signal<'products' | 'stock' | 'sites'>(STOCK_ASKED || this.url.get('sub') === 'stock' ? 'stock' : this.url.get('sub') === 'sites' ? 'sites' : 'products');
+  readonly PARTS_LABEL = PARTS_LABEL;
   /** Cards or rows - the overview's and a maker's catalog alike. */
   layout = signal<Layout>(this.url.get('view') === 'table' ? 'table' : this.url.get('view') === 'drawer' ? 'drawer' : 'grid');
   gmaker = signal(this.url.get('maker') ?? '');
@@ -1299,6 +1314,8 @@ export class RoomMfr implements OnDestroy {
   gmin = signal(this.url.get('min') ?? '');
   gmax = signal(this.url.get('max') ?? '');
   gstock = signal(this.url.get('stock') === 'in');
+  /** On hand here (stock.ts): '1' what is in stock, 'low' what is at or below its minimum - from every source. */
+  gheld = signal<'' | '1' | 'low'>(this.url.get('held') === 'low' ? 'low' : this.url.get('held') === '1' ? '1' : '');
   /** Only the products read with a doubt on their price or stock ("Needs checking"). */
   gcheck = signal(this.url.get('check') === '1');
   gsort = signal(this.url.get('sort') ?? 'new');
@@ -1317,6 +1334,9 @@ export class RoomMfr implements OnDestroy {
   sellerOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All sellers') },
     ...(this.grid()?.sellers ?? []).map(k => ({ value: k[0], label: k[0], hint: k[1] }))]);
   sortOpts = computed<SelectOption[]>(() => this.sorts.map(o => ({ value: o.id, label: t(o.label) })));
+  /** On hand here: every product, what is in stock, what is low (stock.ts). */
+  heldOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All products') }, { value: '1', label: t('In stock'), hint: this.heldTotal() },
+    { value: 'low', label: t('Low stock'), hint: this.heldLow() }]);
   /** A maker's catalog: its categories; the product form: currency, VAT, stock. */
   productCatOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All categories') }, ...plainOptions(this.productCats())]);
   readonly curOpts = plainOptions(CURRENCIES);
@@ -1324,11 +1344,11 @@ export class RoomMfr implements OnDestroy {
     { value: 'incl', label: t('VAT included') }]);
   pfStockOpts = computed<SelectOption[]>(() => [{ value: '', label: t('Stock not said') }, { value: 'in', label: t('In stock') },
     { value: 'out', label: t('Out of stock') }]);
-  filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck()));
-  /** The product open in full (?p=, its maker ?pm=), the picture shown big, what the Inventory holds of its maker's. */
+  filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck() || this.gheld()));
+  filteredButHeld = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock() || this.gcheck()));
+  /** The product open in full (?p=, its maker ?pm=), and the picture shown big. */
   detail = signal<GridItem | null>(null);
   shot = signal<string | null>(null);
-  dStock = signal<Record<string, CatalogStock>>({});
   /** Pictures that did not load: the placeholder instead. */
   broken = signal<Set<string>>(new Set());
 
@@ -1355,10 +1375,10 @@ export class RoomMfr implements OnDestroy {
   saving = signal(false);
   picked_ = signal<Set<string>>(new Set());
   readonly I = I;
-  /** What the Inventory holds of each product of the open catalog (one read), and the
-   *  "Add to stock" form: open for one product (its id) or for the selected ones ('*'). */
+  /** What is on hand of every product (stock.ts, one read for the page), and the "Add to stock"
+   *  form for the selected products of a catalog ('*'); one product's is its stock section. */
   private inv = inject(InventoryApi);
-  stock = signal<Record<string, CatalogStock>>({});
+  readonly held = inject(StockState);
   stockFor = signal<string | null>(null);
   sf = signal({ quantity: '1', unit: 'pcs', location: '', note: '' });
   readonly units = ['pcs', 'm', 'cm', 'mm', 'kg', 'g', 'l', 'ml', 'roll', 'reel', 'box', 'pack', 'set', 'pair', 'sheet', 'bag'];
@@ -1389,11 +1409,17 @@ export class RoomMfr implements OnDestroy {
     const pid = this.url.get('p'), pm = this.url.get('pm');
     if (pid && pm === LCSC_MAKER) this.openPart(pid);
     else if (pid && pm) this.api.get(pm).subscribe({ next: m => { const p = (m.products ?? []).find(x => x.id === pid); if (p) this.openDetail(this.asItem(p, m)); }, error: () => {} });
+    // An old link to a stock line (?ws=inventory&item=): its product, open.
+    const old = this.url.get('item');
+    if (old && STOCK_ASKED) { this.openItem(old); }
+    this.held.load();
     // The overview's grid: read again when what it shows changes (a breath after typing).
     effect(() => {
       if (this.view() !== 'home' || this.sub() !== 'products') return;
+      this.held.changed();
       const f: GridQuery = { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(),
-                             max: this.gmax(), stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '' };
+                             max: this.gmax(), stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '',
+                             held: this.gheld() };
       untracked(() => { clearTimeout(this.gtimer); this.gtimer = setTimeout(() => this.loadGrid(f), this.grid() ? 180 : 0); });
     });
     // The address follows the page, so F5 comes back here.
@@ -1406,7 +1432,8 @@ export class RoomMfr implements OnDestroy {
       set('run', v === 'run' ? r : null);
       set('q', v === 'maker' || grid ? q : null);
       set('cat', v === 'maker' || grid ? c : null);
-      set('sub', home && this.sub() === 'sites' ? 'sites' : null);
+      set('sub', home && this.sub() !== 'products' ? this.sub() : null);
+      set('held', grid ? this.gheld() : null);
       set('maker', grid ? this.gmaker() : null);
       set('seller', grid ? this.gseller() : null);
       set('min', grid ? this.gmin() : null);
@@ -1430,16 +1457,22 @@ export class RoomMfr implements OnDestroy {
     // Asked from the command palette: one manufacturer, or the Add form.
     effect(() => {
       const w = this.picked.want();
-      if (!w || (w.what !== 'mfr' && w.what !== 'mfr-add' && w.what !== 'mfr-product' && w.what !== 'mfr-part')) return;
+      if (!w || !['mfr', 'mfr-add', 'mfr-product', 'mfr-part', 'mfr-open', 'mfr-stock', 'mfr-stock-add', 'mfr-stock-item'].includes(w.what)) return;
       untracked(() => {
         this.picked.want.set(null);
-        // An LCSC part (the board room, the palette, Chat, the Inventory): the drawer, the part open in full.
+        // A product by "maker:product" (a card sent in Chat): open, wherever it is kept.
+        if (w.what === 'mfr-open' && w.arg) { const i = w.arg.indexOf(':'); this.openRef(w.arg.slice(0, i), w.arg.slice(i + 1)); return; }
+        // Every product on hand; adding an own item; a stock line (an old card sent in Chat): its product.
+        if (w.what === 'mfr-stock' || w.what === 'mfr-stock-add') { this.goHome(); this.sub.set('stock');
+          if (w.what === 'mfr-stock-add') setTimeout(() => document.querySelector<HTMLInputElement>('.inv-a-name')?.focus(), 120); return; }
+        if (w.what === 'mfr-stock-item' && w.arg) { this.openItem(w.arg); return; }
+        // An LCSC part (the board room, the palette, Chat): the drawer, the part open in full.
         if (w.what === 'mfr-part') {
           if (this.view() !== 'maker' || this.mid() !== LCSC_MAKER) this.openMaker(LCSC_MAKER);
           if (w.arg) this.openPart(w.arg);
           return;
         }
-        // A product, from the Inventory: its maker open, searched for its name.
+        // A product by its maker and name: its maker open, searched for its name.
         if (w.what === 'mfr-product' && w.arg) {
           const [mid, name] = w.arg.split('\n');
           this.openMaker(mid, true);
@@ -1461,6 +1494,8 @@ export class RoomMfr implements OnDestroy {
         if (o) { const now = (m.products ?? []).find(p => p.linked?.id === o.id)?.linked; if (now) this.linked.open.set(now); }
       });
     });
+    // Stock changed here (a product's stock section, the stock view): what the page shows of it reads again.
+    effect(() => { if (this.held.changed()) untracked(() => { const m = this.maker(); if (m && this.view() === 'maker') this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} }); }); });
     // A run the overview counts that ends: the list reads again (its catalog changed).
     effect(() => { this.runs.running(); untracked(() => this.read()); });
   }
@@ -1469,13 +1504,42 @@ export class RoomMfr implements OnDestroy {
     this.api.list('').subscribe({ next: ms => { this.all.set(ms); this.listed.set(true); }, error: () => this.listed.set(true) });
     if (this.view() === 'home' && this.sub() === 'products') this.loadGrid();
     const m = this.maker();
-    if (m && this.view() === 'maker') { this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} }); this.readStock(m.id); }
-  }
-  private readStock(id: string) {
-    this.inv.stock(id).subscribe({ next: st => { if (this.mid() === id) this.stock.set(st); }, error: () => {} });
+    if (m && this.view() === 'maker') this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} });
+    this.held.load();
   }
 
-  // ---- taking products into the Inventory
+  // ---- what is on hand (stock.ts)
+
+  /** What is on hand of a product, or null when none is counted. */
+  onHand(mid: string, pid: string): CatalogStock | null { return this.held.of(mid, pid); }
+  /** How many products of a maker, of every maker, are counted in stock. */
+  heldCount(mid: string) { return Object.keys(this.held.held()[mid] ?? {}).length; }
+  heldTotal = computed(() => Object.values(this.held.held()).reduce((n, m) => n + Object.values(m).filter(s => s.quantity > 0).length, 0));
+  heldLow = computed(() => Object.values(this.held.held()).reduce((n, m) => n + Object.values(m).filter(s => s.low).length, 0));
+  /** A product by its maker and its id, open in full - the drawer's part card, a saved McMaster or GrabCAD item's, a product's. */
+  openRef(mid: string, pid: string) {
+    if (mid === LCSC_MAKER) { this.openPart(pid); return; }
+    this.api.get(mid).subscribe({
+      next: m => {
+        const p = (m.products ?? []).find(x => String(x.id) === pid);
+        if (!p) { this.say(t('That product is not in Parts any more.'), 'danger'); return; }
+        if (p.linked) this.linked.show(mid, p.linked); else this.openDetail(this.asItem(p, m));
+      },
+      error: () => this.say(t('That product is not in Parts any more.'), 'danger'),
+    });
+  }
+  /** A stock line: its product. */
+  openLine(i: Item) {
+    if (i.catalog?.product) this.openRef(i.catalog.manufacturer, i.catalog.product);
+    else this.say(t('That product is not in Parts any more.'), 'danger');
+  }
+  /** A stock line by its id (an old link or card): its product. */
+  private openItem(id: string) {
+    this.sub.set('stock');
+    this.inv.get(id).subscribe({ next: i => this.openLine(i), error: () => this.say(t('That stock line is gone.'), 'danger') });
+  }
+
+  // ---- the selected products of a catalog into stock
 
   openStock(id: string) {
     this.stockFor.set(this.stockFor() === id ? null : id);
@@ -1486,10 +1550,8 @@ export class RoomMfr implements OnDestroy {
     this.sf.update(f => ({ ...f, [k]: v }));
   }
   stockEnter() {
-    const f = this.stockFor(), d = this.detail();
-    if (!f) return;
-    if (d && f === d.id) this.addToStock(d.maker.id, [f]);
-    else if (this.mid()) this.addToStock(this.mid()!, f === '*' ? this.pickedIds() : [f]);
+    const f = this.stockFor();
+    if (f && this.mid()) this.addToStock(this.mid()!, f === '*' ? this.pickedIds() : [f]);
   }
   addToStock(mid: string, ids: string[]) {
     const f = this.sf(), q = Number(f.quantity.trim().replace(',', '.'));
@@ -1500,11 +1562,8 @@ export class RoomMfr implements OnDestroy {
     const done = (added: number, merged: number, bad: string[]) => {
       this.saving.set(false);
       this.stockFor.set(null);
-      this.readStock(mid);
-      if (this.detail()?.maker.id === mid) this.inv.stock(mid).subscribe({ next: st => this.dStock.set(st), error: () => {} });
-      this.say(ids.length === 1 && !bad.length
-        ? (merged ? t('Topped up in the Inventory: an item there is already that product.') : t('Added to the Inventory.'))
-        : this.fmt('{a} added to stock, {m} topped up', { a: added, m: merged }) + (bad.length ? ' · ' + bad.join('; ') : ''));
+      this.held.touch();
+      this.say(this.fmt('{a} added to stock, {m} topped up', { a: added, m: merged }) + (bad.length ? ' · ' + bad.join('; ') : ''));
     };
     if (ids.length === 1) {
       this.inv.fromCatalog({ ...body, product: ids[0] }).subscribe({
@@ -1518,11 +1577,6 @@ export class RoomMfr implements OnDestroy {
         error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add them.'), 'danger'); },
       });
     }
-  }
-  /** The stock chip: the item in the Inventory (the first, when several are linked). */
-  toStock(s: CatalogStock) {
-    this.picked.room.set('inventory');
-    setTimeout(() => this.picked.ask('inventory', s.items[0]), 50);
   }
 
   shown = computed(() => {
@@ -1581,8 +1635,6 @@ export class RoomMfr implements OnDestroy {
     this.view.set('maker');
     this.rows.set(200);
     if (this.maker()?.id !== id) this.maker.set(this.all().find(m => m.id === id) ?? null);
-    if (id !== this.maker()?.id || !Object.keys(this.stock()).length) this.stock.set({});
-    this.readStock(id);
     this.api.get(id).subscribe({
       next: m => { if (this.mid() === id) this.maker.set(m); },
       error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not open it.'), 'danger'); this.goHome(); },
@@ -1603,13 +1655,13 @@ export class RoomMfr implements OnDestroy {
 
   loadGrid(f?: GridQuery) {
     f ??= { q: this.pq().trim(), cat: this.cat(), maker: this.gmaker(), seller: this.gseller(), min: this.gmin(), max: this.gmax(),
-            stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '' };
+            stock: this.gstock() ? 'in' : '', sort: this.gsort(), size: 60 * this.gpages(), check: this.gcheck() ? '1' : '', held: this.gheld() };
     const n = ++this.gseq;
     this.api.products(f).subscribe({ next: g => { if (n === this.gseq) this.grid.set(g); }, error: () => { if (n === this.gseq && !this.grid()) this.grid.set(null); } });
   }
   clearFilters() {
     this.pq.set(''); this.cat.set(''); this.gmaker.set(''); this.gseller.set(''); this.gmin.set(''); this.gmax.set('');
-    this.gstock.set(false); this.gcheck.set(false); this.gpages.set(1);
+    this.gstock.set(false); this.gcheck.set(false); this.gheld.set(''); this.gpages.set(1);
   }
   asItem(p: Product, m: Pick<Maker, 'id' | 'name' | 'domain'>): GridItem {
     return { ...p, maker: { id: m.id, name: m.name, domain: m.domain } };
@@ -1621,9 +1673,6 @@ export class RoomMfr implements OnDestroy {
     if (p.linked) { this.linked.show(p.maker.id, p.linked); return; }
     this.detail.set(p);
     this.shot.set(null);
-    this.stockFor.set(null);
-    this.dStock.set({});
-    this.inv.stock(p.maker.id).subscribe({ next: st => { if (this.detail()?.maker.id === p.maker.id) this.dStock.set(st); }, error: () => {} });
   }
   closeDetail() { this.detail.set(null); this.fix.set(null); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
 
@@ -2260,7 +2309,7 @@ export class RoomMfr implements OnDestroy {
     const [group, ...rest] = (p.category || t('Uncategorised')).split(/\s*[>›»|/]\s*/).filter(Boolean);
     return { key: this.keyOf(p), group: group ?? t('Uncategorised'), sub: rest.join(' › ') || null, title: p.name,
              line: home ? this.sellerName(p) : p.sku || null, meta: home && p.sku ? p.sku : null,
-             note: p.price ? moneyIn(p.price.amount, p.price.currency) + (p.price.vat === 'excl' ? ' ' + t('+VAT') : '') : null,
+             note: [p.price ? moneyIn(p.price.amount, p.price.currency) + (p.price.vat === 'excl' ? ' ' + t('+VAT') : '') : '', this.onHandLine(p.maker.id, p.id)].filter(Boolean).join(' · ') || null,
              stock: p.stock ?? null, thumb: { srcs: this.pics(p) }, tip: p.name };
   }
   /** An LCSC part: the drawer's group and branch, its footprint, value, part number, package, LCSC number, pins. */
@@ -2270,10 +2319,15 @@ export class RoomMfr implements OnDestroy {
     return { key: m.id + ':' + p.id, group: pt.group || 'Other', sub: pt.branch || null, rank: magnitude(pt.value), title,
              line: pt.value ? pt.mpn : pt.maker, line2: pt.value ? pt.maker : null, meta: this.pkg(pt.package) || null, copy: p.id,
              badge: { text: pt.has_3d ? '3D' : '2D', on: pt.has_3d, tip: pt.has_3d ? 'came with a 3D model' : 'footprint only - it will not stand on the board' },
-             note: [p.price ? moneyIn(p.price.amount, p.price.currency) : '', p.stock === 'out' ? t('Out of stock')
-               : p.stock_qty != null ? this.fmt('{n} in stock', { n: this.num(p.stock_qty) }) : ''].filter(Boolean).join(' · ') || null,
+             note: [this.onHandLine(m.id, p.id), p.price ? moneyIn(p.price.amount, p.price.currency) : '', p.stock === 'out' ? t('Out of stock')
+               : p.stock_qty != null ? this.fmt('{n} at LCSC', { n: this.num(p.stock_qty) }) : ''].filter(Boolean).join(' · ') || null,
              stock: p.stock ?? null, thumb: { lcsc: p.id }, pins: wired ? p.id : null, removable: this.desk.canEdit(),
              tip: [p.part?.mpn, p.part?.maker, p.category].filter(Boolean).join(' · ') };
+  }
+  /** "12 pcs on hand" for a bin's line, or ''. */
+  private onHandLine(mid: string, pid: string) {
+    const s = this.onHand(mid, pid);
+    return s ? this.fmt('{n} on hand', { n: qty(s.quantity) + ' ' + s.unit }) + (s.low ? ' - ' + t('low') : '') : '';
   }
   /** A McMaster-Carr part or a GrabCAD model: its tag as the drawer, its CAD file's picture, its key, how many. */
   private linkedBin(p: Product, m: Maker): CabinetItem {
@@ -2281,7 +2335,7 @@ export class RoomMfr implements OnDestroy {
     return { key: m.id + ':' + p.id, group: l.tags[0] || t('Saved'), sub: l.tags[1] || null, title: p.name, line: l.author || null,
              copy: l.key,
              badge: { text: l.cad ? l.cad.kind.toUpperCase() : t('no CAD'), on: !!l.cad, tip: l.cad ? l.cad.name : 'no CAD file yet: download it from its page' },
-             note: l.quantity != null ? this.fmt('{n} needed', { n: l.quantity }) : null,
+             note: [this.onHandLine(m.id, p.id), l.quantity != null ? this.fmt('{n} needed', { n: l.quantity }) : ''].filter(Boolean).join(' · ') || null,
              thumb: src ? { srcs: [src], solid: true } : null, tip: [l.key, p.name].join(' · ') };
   }
   /** The open source's saved items, as its search and category leave them, for the table. */

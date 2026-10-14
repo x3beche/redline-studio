@@ -84,16 +84,16 @@ export const DM_ICONS: Record<DmKind, string> = {
   firmware: 'M6 6h12v12H6z M3 9h3 M3 15h3 M18 9h3 M18 15h3 M10.5 9.5L8.5 12l2 2.5 M13.5 9.5l2 2.5-2 2.5',
 };
 export const DM_KIND_NAME: Record<DmKind, string> = {
-  model: '3D model', board: 'Board', project: 'Project', taste: 'Taste palette', product: 'Catalog product',
+  model: '3D model', board: 'Board', project: 'Project', taste: 'Taste palette', product: 'Part',
   inventory: 'Stock item', note: 'Note', file: 'File', firmware: 'Firmware',
 };
 /** "Add to my ...", and what is said once it is there. */
 export const DM_ADD: Partial<Record<DmKind, string>> = {
-  taste: 'Add to my taste', model: 'Add to my models', product: 'Add to my catalog', note: 'Add to my notes',
+  taste: 'Add to my taste', model: 'Add to my models', product: 'Add to my parts', note: 'Add to my notes',
   file: 'Add to my files', inventory: 'Add to my stock',
 };
 export const DM_ADDED: Partial<Record<DmKind, string>> = {
-  taste: 'Added to your taste', model: 'Added to your models', product: 'Added to your catalog', note: 'Added to your notes',
+  taste: 'Added to your taste', model: 'Added to your models', product: 'Added to your parts', note: 'Added to your notes',
   file: 'Added to your files', inventory: 'Added to your stock',
 };
 export const SHARE_ICON = 'M15 5l4 4-4 4 M19 9H10a5 5 0 0 0-5 5v5';
@@ -326,8 +326,9 @@ export class DmStore {
       case 'project': if (it.open?.model) { s.room.set('cad'); s.ask('model', it.open.model); } else s.room.set('cad'); break;
       case 'board': s.openBoard(it.id); break;
       case 'taste': s.room.set('taste'); s.ask('taste', it.id); break;
-      case 'product': s.room.set('mfr'); s.ask('mfr-product', (it.open?.maker ?? it.id.split(':')[0]) + '\n' + (it.open?.name ?? it.label)); break;
-      case 'inventory': s.room.set('inventory'); s.ask('inventory', it.id); break;
+      case 'product': s.room.set('mfr'); setTimeout(() => s.ask('mfr-open', it.id), 50); break;
+      // A stock line sent before stock was a part of the Parts page: its product, there.
+      case 'inventory': s.room.set('mfr'); s.ask('mfr-stock-item', it.id); break;
       case 'note': s.room.set('notes'); s.ask('note', it.id); break;
       case 'file': s.room.set('files'); FileModal.open({ id: it.id, name: it.label }); break;
       case 'firmware': s.jumpToFirmware(it.id, null); break;

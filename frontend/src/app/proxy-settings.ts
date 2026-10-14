@@ -18,7 +18,7 @@ import { CountUp } from './count';
 import { Skeleton } from './skeleton';
 
 /** Settings > Proxy & Data: the order of routes each outside lookup
- *  tries (backend/netroutes.py) - the Product Catalog's crawler and the
+ *  tries (backend/netroutes.py) - the Parts page's crawler and the
  *  Drawer's LCSC / EasyEDA part lookups - and the proxy, a second way out
  *  for them (backend/netproxy.py). Only those go through it - the model
  *  providers and everything else stay direct. The password is kept on the server
@@ -70,7 +70,7 @@ interface ProxyUsage {
 
 /** The lookups with an order of routes, as the page names them. */
 const CONSUMERS = [
-  { id: 'catalog', label: 'Product Catalog', about: 'makers\' web pages; robots.txt and sitemaps never through Jina' },
+  { id: 'catalog', label: 'Parts', about: 'makers\' web pages; robots.txt and sitemaps never through Jina' },
   { id: 'parts', label: 'Drawer', about: 'LCSC / EasyEDA part lookups (JSON, so no Jina)' },
 ];
 const LAST_TEST = 'redline.settings.proxy.lastTest';
@@ -91,7 +91,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 @if (data(); as d) {
 <div class="st-page wb-in">
   <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while, and some sites turn a crawler away. The route order says which way each lookup tries first - directly, through the proxy or through Jina - and which next. The model providers and everything else always go out directly.' | t }}
-    {{ 'Jina AI reads web pages and searches the web for the Product Catalog and the Chat.' | t }}</p>
+    {{ 'Jina AI reads web pages and searches the web for Parts and the Chat.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <!-- Which way each lookup tries first, and next -->
@@ -441,7 +441,7 @@ export class ProxySettingsPanel {
     const r = this.data()?.routes.routes ?? {};
     return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.ready ? null : t(v.why ?? 'not set up')]));
   });
-  /** Where the proxy comes in each lookup's order: "Drawer #1 · Product Catalog #2". */
+  /** Where the proxy comes in each lookup's order: "Drawer #1 · Parts #2". */
   proxyUse = computed(() => {
     const c = this.data()?.routes.consumers ?? {};
     return CONSUMERS.filter(x => c[x.id]?.order.includes('proxy'))

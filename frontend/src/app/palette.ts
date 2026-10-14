@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { Catalog, FolderNode } from './api';
 import { CcWant, Selection } from './selection';
-import { WORKSPACES } from './workspaces';
+import { PARTS_LABEL, WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
 import { TasteApi } from './rooms/taste';
 import { MfrApi } from './rooms/manufacturers';
@@ -45,7 +45,7 @@ interface Hit {
 }
 
 const ROOM_ICON: Record<string, string> = {
-  cad: '◆', pcb: '▦', notes: '✎', taste: '≡', mfr: '▥', inventory: '▣', tools: '⚒', analyze: '▤',
+  cad: '◆', pcb: '▦', notes: '✎', taste: '≡', mfr: '▥', tools: '⚒', analyze: '▤',
 };
 
 function words(q: string) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
@@ -169,12 +169,13 @@ export class Palette {
       { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', run: () => this.picked.room.set('taste') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '≡', label: 'Extract taste from a project', hint: 'a model proposes, you review',
         run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste-extract'), 50); } }] : []),
-      { group: 'Actions', icon: '▥', label: 'Open Product Catalog', hint: 'makers and their catalogs', run: () => this.picked.room.set('mfr') },
+      { group: 'Actions', icon: '▥', label: 'Open ' + PARTS_LABEL, hint: 'makers\' catalogs, the LCSC drawer, own items, stock', run: () => this.picked.room.set('mfr') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▥', label: 'Add a manufacturer', hint: 'by its website; its products are read',
         run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-add'), 50); } }] : []),
-      { group: 'Actions', icon: '▣', label: 'Open Inventory', hint: 'what is on hand, and where', run: () => this.picked.room.set('inventory') },
-      ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▣', label: 'Add to the inventory', hint: 'one item, or paste a list',
-        run: () => { this.picked.room.set('inventory'); setTimeout(() => this.picked.ask('inventory-add'), 50); } }] : []),
+      { group: 'Actions', icon: '▣', label: 'Open stock', hint: 'what is on hand, and where - on the Parts page',
+        run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-stock'), 50); } },
+      ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▣', label: 'Add an own item to stock', hint: 'a thing no site sells: one, or paste a list',
+        run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-stock-add'), 50); } }] : []),
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
       { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy, Jina', run: () => this.prefs.open.set('appearance') },
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },

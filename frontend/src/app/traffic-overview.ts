@@ -10,7 +10,7 @@ import { Skeleton } from './skeleton';
 /** Settings > Proxy & Data, at the foot of the page and always in sight:
  *  the data traffic of every outside lookup together (GET
  *  /api/proxy/overview, backend/netoverview.py) - the Drawer's LCSC lookups,
- *  the Product Catalog's crawler and the Chat's web tools, by the route each
+ *  the Parts page's crawler and the Chat's web tools, by the route each
  *  request took (Local, Proxy, Jina), in the same buckets; what the proxy
  *  carried on the wire and costs, and the Jina tokens. The period is the
  *  page's one (TrafficPeriod). */
@@ -35,7 +35,7 @@ const ROUTES: { id: RouteId; name: string; about: string }[] = [
   { id: 'jina', name: 'Jina', about: 'Reader and Search' },
 ];
 const CONSUMER_NAMES: Record<string, string> = {
-  parts: 'Drawer · LCSC lookups', catalog: 'Product Catalog', chat: 'Chat web tools', checks: 'Health checks and tests',
+  parts: 'Drawer · LCSC lookups', catalog: 'Parts', chat: 'Chat web tools', checks: 'Health checks and tests',
 };
 const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v / 1000).toFixed(1) + ' s' : Math.round(v) + ' ms';
 
@@ -94,7 +94,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
         <section class="st-chart c6"><h4>{{ 'Jina tokens' | t }} · {{ 'used per bucket' | t }}<em>{{ f.count(v.cost.jina_tokens) }}</em></h4>
           <app-time-chart [data]="charts()!.tokens" kind="bar" [f]="f.count" [legend]="false" [height]="110" /></section>
       </div>
-      <p class="st-hint">{{ 'The Product Catalog\\'s direct requests are counted per run, at its start, and are not timed one by one: the Local median is the part lookups\\'.' | t }}
+      <p class="st-hint">{{ 'The Parts page\\'s direct requests are counted per run, at its start, and are not timed one by one: the Local median is the part lookups\\'.' | t }}
         {{ 'Buckets are hours for 24h and days otherwise, in the server\\'s time zone' | t }} ({{ v.tz }}).</p>
     } @else if (err()) {
       <p class="st-err">{{ err() }}</p>

@@ -9,8 +9,9 @@ import { Toast } from '../toast';
 import { Skeleton } from '../skeleton';
 import { MeshThumbs } from './mesh-thumb';
 import { StoredFile } from './files-model';
+import { StockPanel, StockState, qty } from './stock';
 
-/** McMaster-Carr and GrabCAD in the Product Catalog: search-and-link sources
+/** McMaster-Carr and GrabCAD in Parts: search-and-link sources
  *  (backend/linked.py). Their parts and models are found through a web
  *  search of the site - the site itself is never read -, each links to its
  *  own page, where the person downloads its STEP, and the saved ones keep
@@ -357,7 +358,7 @@ export class LinkedHead {
 /** A saved item in full: its page and the hint, its CAD files and a drop zone for more, what the person wrote of it. */
 @Component({
   selector: 'wb-linked-card',
-  imports: [T],
+  imports: [T, StockPanel],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './linked.css'],
   template: `
 @if (desk.open(); as it) {
@@ -433,6 +434,8 @@ export class LinkedHead {
         @if (desk.canEdit()) {
           <div class="mf-dacts"><button class="tcv-btn tst-del" (click)="desk.remove(it.source, [it.key])">{{ 'Remove' | t }}</button></div>
         }
+        <!-- how many are on hand (stock.ts): a saved part is a Parts product like any other -->
+        <wb-stock-panel [maker]="it.source" [product]="it.key" />
       </div>
     </div>
   </div>
@@ -455,13 +458,13 @@ export class LinkedCard {
 @Component({
   selector: 'wb-linked-table',
   imports: [T],
-  styleUrls: ['../settings.css', './manufacturers.css', './linked.css'],
+  styleUrls: ['../settings.css', './manufacturers.css', './linked.css', './stock.css'],
   template: `
 <div class="st-table-wrap">
   <table class="st-table mf-gtable ln-table">
     <thead><tr><th class="mf-gthumb"></th><th>{{ m().key | t }}</th><th>{{ 'Name' | t }}</th>
       @if (src() === 'grabcad') { <th>{{ 'Uploaded by' | t }}</th><th>{{ 'Licence' | t }}</th> }
-      <th>{{ 'Tags' | t }}</th><th class="r">{{ 'Qty' | t }}</th><th>{{ 'CAD file' | t }}</th><th>{{ 'Saved' | t }}</th><th class="r"></th></tr></thead>
+      <th>{{ 'Tags' | t }}</th><th class="r" [title]="'How many are needed' | t">{{ 'Needed' | t }}</th><th class="r">{{ 'On hand' | t }}</th><th>{{ 'CAD file' | t }}</th><th>{{ 'Saved' | t }}</th><th class="r"></th></tr></thead>
     <tbody>
       @for (it of items(); track it.id) {
         <tr class="mf-prow" (click)="desk.show(src(), it)">
@@ -472,19 +475,22 @@ export class LinkedCard {
           @if (src() === 'grabcad') { <td class="dim">{{ it.author || '–' }}</td><td class="dim">{{ it.licence || '–' }}</td> }
           <td class="dim">{{ it.tags.join(', ') || '–' }}</td>
           <td class="r mono">{{ it.quantity ?? '–' }}</td>
+          <td class="r">@if (stock.of(src(), it.key); as s) { <span class="mf-onhand" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null">{{ qty(s.quantity) }} {{ s.unit }}</span> } @else { <span class="dim">–</span> }</td>
           <td>@if (it.cad; as c) { <span class="st-tag" data-tone="ok" [title]="c.name">{{ c.kind.toUpperCase() }}</span>
                 @if (it.files.length > 1) { <span class="dim"> +{{ it.files.length - 1 }}</span> } }
               @else { <span class="dim">{{ 'not yet' | t }}</span> }</td>
           <td class="dim">{{ it.by?.name || '' }}</td>
           <td class="r"><a class="st-more" [href]="it.url" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ 'Open' | t }} ↗</a></td>
         </tr>
-      } @empty { <tr><td colspan="10" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
+      } @empty { <tr><td colspan="11" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
     </tbody>
   </table>
 </div>`,
 })
 export class LinkedTable {
   readonly desk = inject(LinkedDesk);
+  readonly stock = inject(StockState);
+  qty = qty;
   readonly src = input.required<string>();
   readonly items = input<LinkedItem[]>([]);
   m = computed(() => this.desk.meta(this.src()));

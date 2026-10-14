@@ -1,7 +1,7 @@
-/* Inventory (rooms/inventory.ts): the Product Catalog's language
-   (manufacturers.css: the bar, the cards, the panel) with the Taste room's
-   (taste.css, settings.css) - the types on the left, tiles for the
-   figures, one section of cards per type, the same items as a table.
+/* Stock on the Parts page (rooms/stock.ts): the page's own language
+   (manufacturers.css: the bar, the cards, the detail) with the Taste room's
+   (taste.css, settings.css) - tiles for the figures, one section of cards
+   per type or the same lines as a table, and a product's stock section.
    Inputs and buttons in a row share one height. Colours are the theme's;
    a filament's swatch is the one colour that comes from the item. */
 .inv { --inv-h: 28px; --mf-h: 28px; }
@@ -10,38 +10,28 @@
 .inv .mono, .inv-tn { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .nowrap { white-space: nowrap; }
 
-/* ---- the left column: what to add, the types, the places */
-.inv-side-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 8px 8px 6px; }
-.inv-side-acts .tcv-btn { padding: 4px 6px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.inv-nav { padding-top: 2px; }
-.inv-tnav { display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 32px; padding: 5px 12px; }
-.inv-tico { flex: none; display: inline-flex; width: 18px; height: 18px; color: var(--ink-dim); }
-.inv-tico svg, .inv-secico svg, .inv-dtico svg, .inv-growin svg, .inv-thumb0 svg { width: 100%; height: 100%; fill: none; stroke: currentColor;
-  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.inv-tnav[data-on] .inv-tico { color: var(--accent); }
-.inv-tname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--ink); }
-.inv-tnav[data-on] .inv-tname { color: var(--ink-bright); font-weight: 600; }
-.inv-tn { flex: none; font-size: 11px; color: var(--ink-dim); }
-.inv-tlow { flex: none; min-width: 16px; padding: 0 4px; box-sizing: border-box; font-size: 10px; font-weight: 600; line-height: 15px; text-align: center;
-  color: var(--ink-on-warn); background: var(--warn); border-radius: 8px; }
-.inv-navhead { display: block; padding: 12px 12px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
-.inv-pnav .inv-tname { font-size: 12px; }
-
 /* ---- tiles: one row, as wide as the room */
 .inv-tiles { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .inv-tiles .st-tile[data-tone="warn"] > b { color: var(--warn); }
 .inv-value > b { font-size: 13.5px; line-height: 20px; }
 
-/* ---- adding: one row that fills the width */
+/* ---- adding: one row that fills the width (an own item, a product's line) */
+.inv-view { display: flex; flex-direction: column; gap: 10px; }
+.inv-addbar { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+.inv-addbar > .tst-in { flex: 1 1 90px; min-width: 0; }
+.inv-addbar > .inv-a-name { flex: 2.4 1 200px; }
+.inv-addbar > .inv-a-qty, .inv-addbar > .inv-a-min { flex: 0 1 64px; }
+.inv-addbar > .inv-a-unit { flex: 0 1 72px; }
+.inv-addbar > .tcv-btn { flex: none; padding: 0 12px; }
+.inv-addbar > .inv-pastebox { flex: 1 1 0; }
+.inv-addbar > .inv-pastepre { flex: 1.3 1 0; }
 .inv-addrow { display: flex; gap: 6px; align-items: center; }
 .inv-addrow > .tst-in { flex: 1 1 90px; min-width: 0; }
 .inv-addrow > .inv-a-name { flex: 2.4 1 180px; }
 .inv-addrow > .inv-a-qty, .inv-addrow > .inv-a-min { flex: 0 1 64px; }
 .inv-addrow > .inv-a-unit { flex: 0 1 72px; }
 .inv-addrow > .inv-a-lcsc { flex: 0 1 96px; }
-.inv-addrow > .inv-a-type { flex: 0 1 170px; min-width: 120px; height: var(--inv-h); }
 .inv-addrow > .tcv-btn { flex: none; padding: 0 16px; }
-.inv-paste { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; align-items: stretch; }
 .inv-pastebox { width: 100%; min-height: 128px; resize: vertical; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; }
 .inv-pastepre { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .inv-prewrap { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; }
@@ -53,6 +43,7 @@
 /* ---- the bar: as the catalog's, a little tighter so it keeps to one line */
 .inv-gbar > .mf-gfind { flex: 1 1 200px; min-width: 140px; }
 .inv-gbar > .mf-gsel { flex: 0 1 140px; min-width: 96px; }
+.inv-gbar > .tcv-btn { flex: none; }
 
 /* ---- one section per type: a header line, then its cards */
 .inv-sec { display: flex; flex-direction: column; gap: 8px; }
@@ -142,18 +133,27 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
 .inv-growin b { color: var(--ink-bright); font-weight: 600; }
 .inv-growv { margin-left: auto; color: var(--ink); }
 
-/* ---- one item, in the panel */
-.inv-detail { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); width: min(1180px, 100%); }
-.inv-bigico { width: 30%; height: 30%; stroke-linecap: round; stroke-linejoin: round; }
-.mf-dimg:has(.inv-bigico) { aspect-ratio: 2 / 1; }
-.mf-dimg:has(.inv-bigico) .inv-bigico { width: 22%; height: 44%; }
-.inv-detail .mf-dgal { align-self: start; }
-.inv-dtype { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; font-size: 12.5px; color: var(--ink); }
-.inv-dtico { display: inline-flex; width: 20px; height: 20px; color: var(--accent); }
-.inv-dsel { flex: 0 1 200px; min-width: 140px; height: 28px; }
-.inv-dname-in { width: 100%; height: 34px !important; font-size: 16px; font-weight: 600; }
-.inv-go { display: inline; margin: 0; padding: 0; font-size: 12px; color: var(--accent); border: 0; background: none; cursor: pointer; }
-.inv-go:hover { text-decoration: underline; }
+/* ---- a product's stock section (the detail of a product, the drawer's part, a saved McMaster or GrabCAD item) */
+.inv-panel { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.inv-phead { display: flex; align-items: baseline; gap: 10px; }
+.inv-phead > .inv-pmore { margin-left: auto; }
+.inv-pnone { margin: 0; }
+.inv-line { display: flex; flex-direction: column; gap: 8px; }
+.inv-line + .inv-line { padding-top: 8px; border-top: 1px dashed var(--line); }
+.inv-pfields { display: grid; grid-template-columns: 90px minmax(0, 1fr) 90px minmax(0, 1.4fr) auto; gap: 6px; align-items: end; }
+.inv-pfields > label { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.inv-pfields > label > span { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.inv-pfields .tst-in[readonly] { background: transparent; }
+.inv-pdel { align-self: end; margin-bottom: 2px; }
+.inv-addrow > .tst-in { flex: 1 1 90px; min-width: 0; }
+.inv-addrow > .inv-a-qty { flex: 0 1 64px; }
+.inv-addrow > .inv-a-unit { flex: 0 1 72px; }
+.inv-addrow > .tcv-btn { flex: none; padding: 0 12px; }
+/* the on-hand count beside a product, everywhere on the page */
+.mf-onhand { display: inline-flex; align-items: baseline; gap: 3px; padding: 0 5px; font: 600 11px/16px 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ok); border: 1px solid var(--line); border-radius: 3px; white-space: nowrap; }
+.mf-onhand[data-low] { color: var(--warn); border-color: var(--warn); }
+.mf-onhand[data-out] { color: var(--danger); }
 
 .inv-qrow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 22px; }
 .inv-qbig { display: flex; align-items: baseline; gap: 6px; }
@@ -162,50 +162,21 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
 .inv-qbig .st-tag { align-self: center; }
 .inv-qbig[data-low] b { color: var(--warn); }
 .inv-qbig[data-out] b { color: var(--danger); }
-.inv-dspool { flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--ink); }
-.inv-dspool .inv-bar { height: 7px; }
-.inv-adjust { display: flex; align-items: center; gap: 6px; }
+.inv-adjust { display: flex; flex: 1 1 360px; align-items: center; gap: 6px; }
 .inv-pm { width: var(--inv-h); padding: 0; font-size: 15px; line-height: 1; }
 .inv-step { width: 64px; flex: none; text-align: center; }
 .inv-reason { flex: 1; min-width: 0; }
-.inv-hint { margin-top: -6px; }
-.inv-dates dd .dim { color: var(--ink-dim); }
-
-.inv-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; padding: 10px; background: var(--surface-2);
-  border: 1px solid var(--line); border-radius: 4px; }
-.inv-fields > label { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.inv-fields > label > span:first-child { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
-.inv-fields .tst-in { background: var(--surface); }
-.inv-full { grid-column: 1 / -1; }
-.inv-price { display: flex; gap: 4px; }
-.inv-price .tst-in { flex: 1; min-width: 0; }
-.inv-price .inv-cur { flex: 0 0 60px; }
-.inv-notes { width: 100%; resize: vertical; line-height: 1.45; }
-
-.inv-links { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 0; border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line); font-size: 12px; }
-.inv-link { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
-.inv-unlink { display: inline; margin: 0; padding: 0 4px; color: var(--ink-dim); }
-.inv-unlink:hover { color: var(--danger); }
-.inv-linker { display: flex; flex: 1 1 320px; gap: 6px; min-width: 0; }
-.inv-linker > .inv-linksel { flex: 1 1 200px; min-width: 0; height: 28px; }
-.inv-linker > .tst-in { flex: 1.3 1 200px; min-width: 0; }
-.inv-chart { margin-top: -4px; }
-.inv-logwrap { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+.inv-logwrap { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
 .inv-log td { vertical-align: top; }
-.inv-derr { grid-column: 1 / -1; margin: 30px 0; }
+.inv-mark[data-tone="warn"] { color: var(--warn); border-color: var(--warn); }
+.inv-mark-first { margin: 0 6px 0 0; }
 
 @container (max-width: 1100px) {
-  .inv-addrow { flex-wrap: wrap; }
-  .inv-paste { grid-template-columns: minmax(0, 1fr); }
-  .inv-table .inv-c-category, .inv-table td:nth-child(7), .inv-table .inv-c-min_stock, .inv-table td:nth-child(9),
-  .inv-table .inv-c-price, .inv-table td:nth-child(10) { display: none; }
-}
-@container (max-width: 820px) {
-  .inv-detail { grid-template-columns: minmax(0, 1fr); }
-  .inv-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inv-addbar > .mf-rowlabel { display: none; }
+  .inv-table .inv-c-code, .inv-table td:nth-child(8), .inv-table .inv-c-min_stock, .inv-table td:nth-child(9) { display: none; }
 }
 @container (max-width: 640px) {
+  .inv-addbar { flex-wrap: wrap; }
   .inv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inv-tiles > .st-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .inv-gbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
@@ -214,15 +185,17 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
   .inv-gbar > .mf-gcount { justify-self: start; margin: 0; }
   .inv-gbar > .mf-layout { justify-self: end; }
   .inv-adjust { flex-wrap: wrap; }
-  .inv-hint { display: none; }
+  .inv-pfields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inv-secv { margin-left: 0; }
-  .inv-table .inv-c-mpn, .inv-table td:nth-child(8), .inv-table .inv-c-price, .inv-table td:nth-child(10),
-  .inv-table .inv-c-updated_at, .inv-table td:nth-child(12), .inv-table .inv-c-location, .inv-table td:nth-child(6) { display: none; }
+  .inv-table .inv-c-maker, .inv-table td:nth-child(5), .inv-table .inv-c-value, .inv-table td:nth-child(10),
+  .inv-table .inv-c-updated_at, .inv-table td:nth-child(11), .inv-table .inv-c-location, .inv-table td:nth-child(7) { display: none; }
 }
 @media (max-width: 700px) {
   .inv-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .inv-detail .mf-dimg { width: 100%; max-width: 220px; margin: 0 auto; box-sizing: border-box; }
-  /* an item open on a phone has the whole room: the types make way */
-  .tcv-room:has(.mf-modal) > .inv-side { display: none; }
-  .inv-side-acts { padding-top: 4px; }
 }
+.mf-onhand-btn { margin-left: 6px; background: none; cursor: pointer; }
+.mf-onhand-btn:hover { border-color: currentColor; }
+.mf-card-foot .mf-onhand { flex: none; }
+.mf-table .mf-ponhand { width: 84px; white-space: nowrap; }
+.mf-table .mf-ponhand .mf-onhand-btn { margin-left: 0; }
+.mf-gbar > .mf-gheld { flex: 0 1 150px; min-width: 120px; }

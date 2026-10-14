@@ -52,7 +52,7 @@ const LAST_TAB: Record<string, string> = {};
 @Component({
   selector: 'app-dm-viewer',
   imports: [Skeleton, T, Markdown, PartBodyView, BarList, TimeChart, DmCode, FileView, NoteDoc, Board3d, MeshView],
-  styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css', './dm-viewer.css'],
+  styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css', './dm-viewer.css'],
   host: { '(window:keydown.escape)': 'close()' },
   template: `
 @if (store.viewing(); as sid) {
@@ -265,6 +265,16 @@ const LAST_TAB: Record<string, string> = {};
                     } @else if (c['price_label']) { <b>{{ c['price_label'] }}</b> }
                     @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
                   </div>
+                  <!-- what the sender had on hand of it when it was sent (backend/dm.py _on_hand) -->
+                  @if (c['stock']; as st) {
+                    <div class="inv-qrow dmv-onhand">
+                      <div class="inv-qbig" [attr.data-low]="st.low ? 1 : null" [attr.data-out]="st.quantity <= 0 ? 1 : null">
+                        <b>{{ qty(st.quantity) }}</b><span>{{ st.unit }}</span>
+                        @if (st.low) { <span class="st-tag" data-tone="warn">{{ 'low' | t }}</span> }
+                      </div>
+                      <span class="st-sub">{{ (st.locations?.length ? fmt('on hand at {w} when it was sent', { w: st.locations.join(', ') }) : t('on hand when it was sent')) }}</span>
+                    </div>
+                  }
                   <div class="mf-dstock">
                     @if (p.stock_text) { <span class="dim">"{{ p.stock_text }}"</span> }
                     @if (p.price?.at || p.read_at) { <span class="dim">{{ fmt('read {w}', { w: shortDate(p.read_at || p.price?.at) }) }}</span> }
@@ -296,7 +306,7 @@ const LAST_TAB: Record<string, string> = {};
               </div>
             }
 
-            <!-- ======================= a stock item ======================= -->
+            <!-- ======================= a stock line, as sent before stock went with its product ======================= -->
             @case ('inventory') {
               @let low = c['min_stock'] != null && (c['quantity'] ?? 0) <= c['min_stock'];
               <div class="inv-qrow">
@@ -327,7 +337,7 @@ const LAST_TAB: Record<string, string> = {};
                   <div class="st-card-head"><h3>{{ 'Details' | t }}</h3></div>
                   <dl class="dmv-dl">
                     @for (kv of invFields(c); track kv[0]) { <dt>{{ kv[0] | t }}</dt><dd>{{ kv[1] }}</dd> }
-                    @if (c['catalog']; as cat) { <dt>{{ 'Product Catalog' | t }}</dt><dd>{{ cat.manufacturer_name }}{{ cat.product_name ? ' / ' + cat.product_name : '' }}</dd> }
+                    @if (c['catalog']; as cat) { <dt>{{ 'Parts' | t }}</dt><dd>{{ cat.manufacturer_name }}{{ cat.product_name ? ' / ' + cat.product_name : '' }}</dd> }
                     @if (c['tags']?.length) { <dt>{{ 'Tags' | t }}</dt><dd>@for (g of c['tags']; track g) { <span class="dmv-chip">{{ g }}</span> }</dd> }
                   </dl>
                   @if (c['notes']) { <p class="dmv-desc dmv-pad">{{ c['notes'] }}</p> }

@@ -11,7 +11,7 @@ import { Skeleton } from './skeleton';
 
 /** Settings > Proxy & Data: Jina AI (backend/jina.py). Its Reader reads a
  *  web page in a browser on Jina's side and answers with the page as
- *  Markdown - for the Product Catalog's crawler (the Jina route of its route
+ *  Markdown - for the Parts page's crawler (the Jina route of its route
  *  order) and the Chat's web_read; its Search
  *  answers the Chat's web_search. One API key for both, kept on the server:
  *  only its last four characters come back. Under it: what the key has
@@ -84,7 +84,7 @@ export class TrafficPeriod {
   </div>
   @if (open()) {
   <div class="st-card-body">
-    <p class="pv-line">{{ 'Reader reads a web page - its script run on Jina\\'s side - as Markdown; Search searches the web. For the Product Catalog\\'s crawler and the Chat.' | t }}</p>
+    <p class="pv-line">{{ 'Reader reads a web page - its script run on Jina\\'s side - as Markdown; Search searches the web. For the Parts page\\'s crawler and the Chat.' | t }}</p>
     @if (s(); as st) {
       <div class="st-tiles tight wb-in">
         <div class="st-tile" [attr.data-tone]="st.set ? 'ok' : 'dim'"><span>{{ 'API key' | t }}</span>
@@ -171,7 +171,7 @@ export class TrafficPeriod {
       } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> }
       @else { <div class="st-charts"><section class="st-chart c6"><wb-skel kind="chart" [h]="150" /></section><section class="st-chart c6"><wb-skel kind="chart" [h]="150" /></section></div> }
 
-      <p class="st-hint">{{ 'Where it is used: the Jina route in the Product Catalog\\'s route order (above, or a maker\\'s own) reads a web page through it - first, or after a site refuses or a page comes back empty without its script. robots.txt is still read here and obeyed, and only public addresses are sent. The Chat\\'s web_search and web_read use Search and Reader.' | t }}
+      <p class="st-hint">{{ 'Where it is used: the Jina route in the Parts page\\'s route order (above, or a maker\\'s own) reads a web page through it - first, or after a site refuses or a page comes back empty without its script. robots.txt is still read here and obeyed, and only public addresses are sent. The Chat\\'s web_search and web_read use Search and Reader.' | t }}
         {{ 'Tokens are Jina\\'s unit: a page read costs about its length in tokens, a search a fixed amount.' | t }}</p>
     } @else {
       @if (err()) { <div class="st-empty">{{ err() }}</div> } @else { <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="6" [min]="110" /><wb-skel kind="chart" [h]="150" /></div> }
