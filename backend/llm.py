@@ -112,6 +112,14 @@ JOBS = {
     "chat_suggestions": {"label": "Chat example questions",
                          "about": "the example questions on an empty Chat, written from your own projects",
                          "default": CHEAP, "ideas": True},
+    # A spoken chat line or note, written out (backend/voice.py). The one
+    # job not on CHEAP: that model takes no audio. Gemini 3.1 Flash-Lite on
+    # OpenRouter does, for about $0.0013 a minute of speech (voice.py says
+    # what else was tried and what it cost). `audio`: its model must take
+    # audio, and its Test sends some.
+    "voice": {"label": "Voice to text",
+              "about": "a spoken chat message or note, written out word for word in the language spoken",
+              "default": ("openrouter", "google/gemini-3.1-flash-lite"), "audio": True},
 }
 
 # The example questions' settings: how often they are written again (the
@@ -131,7 +139,7 @@ CTX_MIN, CTX_MAX = 500, 1_000_000
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
          "part-category": "part_category", "suggest": "suggest", "taste": "taste",
-         "manufacturer": "manufacturer", "chat-suggestions": "chat_suggestions"}
+         "manufacturer": "manufacturer", "chat-suggestions": "chat_suggestions", "voice": "voice"}
 KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 
@@ -303,6 +311,8 @@ def public() -> dict:
         prov, model = route(j)
         jobs[j] = {"label": info["label"], "about": info["about"], "provider": prov, "model": model,
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
+        if info.get("audio"):
+            jobs[j]["audio"] = True                    # its model must take audio; its Test sends some
         if info.get("switch"):
             jobs[j].update(job_switch(j), switch=True, delay_range=[DELAY_MIN, DELAY_MAX])
             if "ctx" in info:
@@ -445,6 +455,9 @@ async def models(provider: str) -> list[dict]:
             # whether it reads images (the Command Code room's @-mentions)
             row = {"id": m["id"], "name": m.get("name") or m["id"],
                    "context": m.get("context_length"), "vision": vision(m)}
+            # whether it takes audio in (voice to text); None: the list does not say
+            mods = (m.get("architecture") or {}).get("input_modalities")
+            row["audio"] = "audio" in mods if isinstance(mods, list) else None
         row.update(anthropic=endpoint == "messages", endpoint=endpoint,
                    # the one a picker may land on by itself; anything else is chosen
                    cheap=(provider, m["id"]) == CHEAP)
