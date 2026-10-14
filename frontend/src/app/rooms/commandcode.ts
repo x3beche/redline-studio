@@ -18,6 +18,7 @@ import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
 import { CcMemoryPanel, MEMORY_ICO } from './cc-memory';
 import { CcChanged, CcChangesPanel } from './cc-changes';
+import { CcRoomCard } from './cc-room-card';
 import { CcToolCard } from './cc-tool-card';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
@@ -419,7 +420,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DatasheetRefs, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel, CcToolCard],
+  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DatasheetRefs, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel, CcRoomCard, CcToolCard],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -1089,7 +1090,9 @@ type Ask = { text: string; label: string; go: () => void };
           <span class="tcv-cc-filemeta">{{ s.vars!['pages'] }} {{ (+s.vars!['pages'] === 1 ? 'page' : 'pages') | t }} · {{ s.vars!['size'] }}</span>
         </button>
       }
-      @if (s.status === 'done' && s.tool === 'model_render' && shots(s); as pics) {
+      <!-- What a room tool's button did (cc-room-card.ts): a build, a board's layout, a drawing, a note. -->
+      <app-cc-room-card [step]="s" />
+      @if (s.status === 'done' && (s.tool === 'model_render' || s.tool === 'board_render') && shots(s); as pics) {
         <!-- The pictures it took (chat_tools/model_render.py), kept in Files: one row; a click opens one in the viewer. -->
         <div class="tcv-cc-shots" [style.--tcv-shots]="pics.length">
           @for (p of pics; track p.src) {

@@ -64,6 +64,7 @@ export const TOOL_ICON: Record<string, string> = {
   product_find: SEARCH, product_files_read: FILE, product_file_attach: CLIP, product_file_detach: BOX, product_set_main: PEN,
   product_to_model: CUBE, product_files_missing: SEARCH, product_to_my_items: SHELF,
   build_count: CALC, shopping_list: CART, stock_consume: PLUSMINUS, model_render: CAMERA,
+  model_build: BUILD, drawing_get: SHEET, board_route: BOARD, board_render: CAMERA, firmware_read: FILE, note_status: QUEUE,
   clock: CLOCK, web_search: SEARCH, web_read: GLOBE,
   wiki_search: SEARCH, wiki_read: NOTE, wiki_write: PEN,
   analytics_read: CHART, memory_read: NOTE, memory_write: PEN,
