@@ -2222,6 +2222,7 @@ const TR: Record<string, string> = {
   '{n} priced in Parts': 'Parçalar\'da fiyatı olan {n}',
   '{n} products · {s} in stock': '{n} ürün · {s} stokta',
   'My Items': 'Ürünlerim',
+  'Show the revisions': 'Revizyonları göster',
   'Things no site sells - filament, your own screws, a cable you made - typed in by hand, so they can be counted in stock like any product.': 'Hiçbir sitenin satmadığı şeyler - filament, kendi vidalarınız, yaptığınız bir kablo - elle girilir, böylece her ürün gibi stokta sayılabilir.',
   'Add to my parts': 'Parçalarıma ekle',
   'Added to your parts': 'Parçalarınıza eklendi',

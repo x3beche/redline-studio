@@ -2598,9 +2598,15 @@ body {
 .tcv-fold:not(.tcv-fold-shut) > * { min-width: 298px; }
 .tcv-fold-l, .tcv-fold { will-change: width; }
 .tcv-fold-shut {
-  width: 32px !important;
-  max-width: 32px !important;
+  width: 44px !important;
+  max-width: 44px !important;
 }
+/* A folded rail's head: the app's mark in a square, the way back to the panel. */
+.tcv-rail-mark {
+  display: grid; place-items: center; width: 32px; height: 32px; margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); cursor: pointer;
+}
+.tcv-rail-mark:hover { border-color: var(--ink-dim); }
 
 /* The collapsed catalog is a rail, not a squeezed panel. At 18px with a
    three-letter label and a number under every bar it read as a broken
@@ -2611,8 +2617,8 @@ body {
 .tcv-rail-btn {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   margin: 0 auto;
   border-radius: 5px;
   cursor: pointer;
