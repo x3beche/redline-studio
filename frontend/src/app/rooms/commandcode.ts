@@ -1075,6 +1075,7 @@ type Ask = { text: string; label: string; go: () => void };
           <span class="tcv-cc-filename">{{ s.vars!['name'] }}</span>
           <span class="tcv-cc-filemeta">{{ s.vars!['pages'] }} {{ (+s.vars!['pages'] === 1 ? 'page' : 'pages') | t }} · {{ s.vars!['size'] }}</span>
         </button>
+      }
       @if (s.status === 'done' && s.tool === 'model_render' && shots(s); as pics) {
         <!-- The pictures it took (chat_tools/model_render.py), kept in Files: one row; a click opens one in the viewer. -->
         <div class="tcv-cc-shots" [style.--tcv-shots]="pics.length">
