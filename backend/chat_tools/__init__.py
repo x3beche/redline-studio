@@ -235,7 +235,10 @@ SYSTEM_NOTE = (
     "several match. product_files_read lists a product's files and its measured size, product_files_missing which "
     "products have no 3D model or datasheet, product_set_main makes an attached picture or model the product's own, "
     "product_to_model puts its model into a CAD project, product_file_detach takes a file off (only when asked) and "
-    "product_to_my_items copies a product to My Items. You do not know today's "
+    "product_to_my_items copies a product to My Items. How many of a board or a 3D assembly the stock builds, what "
+    "limits it and what is short for a number of builds is build_count; shopping_list prices what is short (or a list "
+    "given) across the sellers Parts knows, cheapest first per line; when the person says they built some, "
+    "stock_consume takes their parts out of stock (it asks first). You do not know today's "
     "date or the time: when they matter - a date asked for, how long ago, a deadline, \"today\" - read them with "
     "clock first and never guess them."
 )

@@ -68,6 +68,18 @@ through the workspace, and the list of them when the name fits nothing).
   project": a build, no agent), `product_files_missing` (which have no 3D
   model or datasheet) and `product_to_my_items` (change, off). A product
   left unnamed is the one the conversation's last product step named.
+- Building from stock (package `mfr`, helper `_build.py`): `build_count`
+  (read: a board's BOM lines - bom_cost.py `board_lines` - or a 3D
+  assembly's bought parts - the models it imports that are Parts products
+  or in purchased/ - against the stock lines counting the same product,
+  LCSC number or MPN: whole builds, the limiting parts, the shortfall for a
+  target), `shopping_list` (change: the shortfall or a given list priced
+  across LCSC's kept price breaks and least quantities, the sites' prices
+  and McMaster-Carr's snippet prices, cheapest first per line in the
+  display currency at fx.py's rates, totals per seller; `export` csv, md or
+  pdf into Files > Documents) and `stock_consume` (delete: asks first; the
+  parts of N builds taken out of stock, all or nothing, "used 4 for
+  fan-board x2" in each line's log).
 - `basic_tool`: the Tools tab's calculators, in two steps - `task` finds
   them (tool_router.py, as the MCP server's find_tool) with their inputs,
   `id` + `input` runs one (tools_api.py `run_kit`: its own tool.js, in a
