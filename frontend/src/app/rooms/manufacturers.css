@@ -334,3 +334,9 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-chk-notes { display: flex; flex-direction: column; gap: 2px; min-width: 260px; font-size: 12px; white-space: normal; }
 .mf-doubt-line { color: var(--warn); }
 .mf-chk-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+/* "3D": a model attached to the product (product-files.ts) - beside a name, or on a card's picture */
+.mf-3d { display: inline-block; margin-left: 6px; padding: 0 4px; font-size: 9.5px; font-weight: 600; line-height: 14px; letter-spacing: .03em;
+  vertical-align: 1px; color: var(--accent); border: 1px solid var(--accent); border-radius: 2px; }
+.mf-3d-img { position: absolute; left: 6px; bottom: 6px; margin: 0; background: var(--surface); }
+.mf-dfiles { margin-top: 4px; }

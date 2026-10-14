@@ -44,6 +44,7 @@ const PLUSMINUS = 'M5 8h6 M8 5v6 M13 16h6 M17 4L7 20';
 const PDFDOC = 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15h6 M9 18h3';
 const CLOCK = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 7v5l3.5 2';
 const CHART = 'M4 20h16 M7 16v-5 M11 16V7 M15 16v-7 M19 16V4';
+const CLIP = 'M15.5 6.5l-7 7a2 2 0 0 0 2.8 2.8l7.5-7.5a4 4 0 0 0-5.7-5.7L5.6 10.6a6 6 0 0 0 8.5 8.5L20 13.2';
 const GLOBE = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M3 12h18 M12 3c-3 3-3 15 0 18 M12 3c3 3 3 15 0 18';
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
@@ -58,6 +59,8 @@ export const TOOL_ICON: Record<string, string> = {
   inventory_remove: BOX,
   catalog_read_page: FACTORY, catalog_add_product: FACTORY, catalog_edit_product: PEN, catalog_remove_product: BOX,
   catalog_add_maker: FACTORY,
+  product_find: SEARCH, product_files_read: FILE, product_file_attach: CLIP, product_file_detach: BOX, product_set_main: PEN,
+  product_to_model: CUBE, product_files_missing: SEARCH, product_to_my_items: SHELF,
   clock: CLOCK, web_search: SEARCH, web_read: GLOBE,
   analytics_read: CHART,
 };

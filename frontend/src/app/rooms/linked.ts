@@ -38,6 +38,8 @@ export interface LinkedItem {
 export interface MeasuredScrew { length: number; head: number; head_d: number; shank: number; countersunk: boolean }
 export interface LinkedMeasured {
   pending?: boolean; error?: string; at?: string; size?: number[] | null; screw?: MeasuredScrew | null;
+  /** What was measured: a STEP, or a mesh (STL, 3MF, OBJ: its box alone). */
+  kind?: string;
   /** A figure its words give that the STEP does not bear out. */
   mismatch: { what: string; said: string; measured: string }[];
 }
@@ -477,7 +479,7 @@ export class LinkedHead {
         <!-- what its STEP measured (backend/linked_measure.py), a figure its words say otherwise marked -->
         @if (it.measured; as ms) {
           <div class="ln-meas">
-            <span class="mf-label">{{ 'Measured from the STEP' | t }}</span>
+            <span class="mf-label">{{ (ms.kind === 'mesh' ? 'Measured from the mesh' : 'Measured from the STEP') | t }}</span>
             @if (ms.pending) { <span class="dim">{{ 'measuring…' | t }}</span> }
             @else if (ms.error) { <span class="dim">{{ fmt('could not be measured: {e}', { e: ms.error }) }}</span> }
             @else {

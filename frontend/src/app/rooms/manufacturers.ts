@@ -22,6 +22,7 @@ import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
+import { ProductFilesPanel, ProductFilesState } from './product-files';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
@@ -325,7 +326,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
@@ -658,7 +659,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
-                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: m.id }" />@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="r mf-ponhand">@if (onHand(m.id, p.id); as s) { <button class="mf-onhand mf-onhand-btn" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null" (click)="openDetail(asItem(p, m))" [title]="'On hand - open it for its stock' | t">{{ qty(s.quantity) }} {{ s.unit }}</button> } @else { <span class="dim">–</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
@@ -757,7 +758,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                   @for (p of g.items; track p.maker.id + p.id) {
                     <tr class="mf-prow" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)">
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
-                      <td class="give"><b>{{ p.name }}</b></td>
+                      <td class="give"><b>{{ p.name }}</b><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: p.maker.id }" /></td>
                       <td class="r"><ng-container *ngTemplateOutlet="onHandT; context: { $implicit: p }" /></td>
                       <td class="dim">{{ sellerName(p) }}</td>
                       <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''"><ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" />@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
@@ -949,7 +950,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
           <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
         <div class="mf-dgal">
-          <div class="mf-dimg">@if (bigImg(); as src) { <img [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+          <div class="mf-dimg">@if (bigImg(); as src) { <img [class.tcv-fm-solid]="src.includes('/thumb?v=')" [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
             @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
           @if (gallery().length > 1) {
             <div class="mf-thumbs">@for (u of gallery(); track u) {
@@ -967,6 +968,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
             @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
             <ng-container *ngTemplateOutlet="onHandT; context: { $implicit: d }" />
+            <ng-container *ngTemplateOutlet="filesT; context: { $implicit: d, mid: d.maker.id }" />
           </div>
           <div class="mf-dprice">
             @if (d.price) {
@@ -1002,6 +1004,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </div>
           <!-- how many are on hand, where, the log (stock.ts) -->
           <wb-stock-panel [maker]="d.maker.id" [product]="d.id" />
+          <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts) -->
+          <wb-product-files class="mf-dfiles" [maker]="d.maker.id" [product]="d.id" />
           @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
           @if (specList(d).length) {
             <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
@@ -1133,9 +1137,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           (click)="cardClick($event, p)" (contextmenu)="openMenu($event, p)" [title]="p.name">
     <span class="mf-card-img">
       @if (p.part) { <wb-fp [lcsc]="p.id" /> }
-      @else if (img(p); as src) { <img [class.tcv-fm-solid]="!!p.linked" [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+      @else if (img(p); as src) { <img [class.tcv-fm-solid]="!!p.linked || src.includes('/thumb?v=')" [src]="src" loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
       @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="p.linked ? I.cube : I.photo" /></svg> }
       @if (p.stock) { <span class="mf-stock" [attr.data-s]="p.stock">{{ stockName(p) }}</span> }
+      @if (!p.part && !p.linked) { <ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: p.maker.id, onimg: true }" /> }
     </span>
     <span class="mf-card-body">
       <span class="mf-card-name">{{ p.name }}</span>
@@ -1162,6 +1167,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 <ng-template #onHandT let-p>
   @if (onHand(p.maker.id, p.id); as s) { <span class="mf-onhand" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null"
         [title]="(s.low ? 'On hand - at or below its minimum' : 'On hand') | t">{{ qty(s.quantity) }} {{ s.unit }}</span> }
+</ng-template>
+<!-- "3D": a model attached to the product (product-files.ts), its kind, box and file count in the tooltip -->
+<ng-template #filesT let-p let-mid="mid" let-onimg="onimg">
+  @if (pfiles.model(mid, p.id); as h) { <span class="mf-3d" [class.mf-3d-img]="onimg" [title]="pfiles.tip(h)">3D</span> }
 </ng-template>
 <!-- the amber mark of a price or stock read with a doubt on it: the reasons in its tooltip, in full in the product -->
 <ng-template #doubtT let-p>
@@ -1383,6 +1392,8 @@ export class RoomMfr implements OnDestroy {
    *  form for the selected products of a catalog ('*'); one product's is its stock section. */
   private inv = inject(InventoryApi);
   readonly held = inject(StockState);
+  /** Which products hold files - a "3D" badge, a picture of their own (product-files.ts). */
+  readonly pfiles = inject(ProductFilesState);
   stockFor = signal<string | null>(null);
   sf = signal({ quantity: '1', unit: 'pcs', location: '', note: '' });
   readonly units = ['pcs', 'm', 'cm', 'mm', 'kg', 'g', 'l', 'ml', 'roll', 'reel', 'box', 'pack', 'set', 'pair', 'sheet', 'bag'];
@@ -1417,6 +1428,7 @@ export class RoomMfr implements OnDestroy {
     const old = this.url.get('item');
     if (old && STOCK_ASKED) { this.openItem(old); }
     this.held.load();
+    this.pfiles.load();
     // The overview's grid: read again when what it shows changes (a breath after typing).
     effect(() => {
       if (this.view() !== 'home' || this.sub() !== 'products') return;
@@ -1510,6 +1522,7 @@ export class RoomMfr implements OnDestroy {
     const m = this.maker();
     if (m && this.view() === 'maker') this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} });
     this.held.load();
+    this.pfiles.load();
   }
 
   // ---- what is on hand (stock.ts)
@@ -1853,7 +1866,7 @@ export class RoomMfr implements OnDestroy {
     ]);
   }
   deleteFromDetail(d: GridItem) {
-    this.sure(t('Delete this product?'), d.name).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
+    this.sure(t('Delete this product?'), d.name + (this.pfiles.of(d.maker.id, d.id)?.files ? ' - ' + t('its attached files stay in Files') : '')).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
       next: r => { this.closeDetail(); this.replace(r.manufacturer); this.read(); },
       error: this.failed('Could not delete it.'),
     }));
@@ -1862,7 +1875,12 @@ export class RoomMfr implements OnDestroy {
   pics(p: Product): string[] {
     if (p.linked) { const s = this.linked.pic(p.linked); return s ? [s] : []; }
     const b = this.broken();
-    return [...new Set([p.image, ...(p.images ?? [])].filter(u => !!u && !b.has(u)))];
+    // A picture attached and made the product's own comes first (product-files.ts).
+    const mid = (p as GridItem).maker?.id;
+    const got = [...new Set([this.pfiles.picture(mid, p.id), p.image, ...(p.images ?? [])].filter(u => !!u && !b.has(u!)))] as string[];
+    // None of its own: its attached 3D model's picture.
+    const solid = got.length ? null : this.pfiles.solid(mid, p.id);
+    return solid && !b.has(solid) ? [solid] : got;
   }
   img(p: Product): string | null { return this.pics(p)[0] ?? null; }
   gallery = computed(() => { const d = this.detail(); return d ? this.pics(d).slice(0, 12) : []; });

@@ -8,6 +8,7 @@ import { T, t } from '../i18n';
 import { PartCard } from './part-card';
 import { warmPart } from './part-assets';
 import { StockPanel } from './stock';
+import { ProductFilesPanel } from './product-files';
 
 /** An add being watched (backend main.py /api/parts-add). */
 export interface PartAdd {
@@ -233,7 +234,7 @@ export class PartDesk implements OnDestroy {
  *  the Parts page's detail box. Esc or a click beside it closes it. */
 @Component({
   selector: 'app-part-modal',
-  imports: [T, PartCard, StockPanel],
+  imports: [T, PartCard, StockPanel, ProductFilesPanel],
   host: { '(document:keydown.escape)': 'desk.isOpen() && desk.closePart()' },
   styles: [`
     .pm-veil { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center;
@@ -259,7 +260,9 @@ export class PartDesk implements OnDestroy {
                          (closed)="desk.closePart()" (keep)="desk.addPart(s.lcsc)" (openDatasheet)="desk.openDatasheet(s.lcsc)"
                          (place)="desk.placeIt(s.lcsc, $event)" />
           <!-- how many of it are on hand (stock.ts): a part kept in the drawer is a Parts product like any other -->
-          @if (desk.heldRow(s.lcsc)) { <wb-stock-panel class="pm-stock" maker="lcsc" [product]="s.lcsc" /> }
+          @if (desk.heldRow(s.lcsc)) { <wb-stock-panel class="pm-stock" maker="lcsc" [product]="s.lcsc" />
+            <!-- files attached to it beside its own EasyEDA 3D: an extra STEP, a datasheet, a drawing (product-files.ts) -->
+            <wb-product-files class="pm-stock" maker="lcsc" [product]="s.lcsc" /> }
         } @else {
           <div class="pm-wait">
             <span class="mono">{{ desk.seeing() }}</span>
