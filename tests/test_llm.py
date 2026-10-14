@@ -11,8 +11,13 @@ def fresh(monkeypatch):
 
 def test_a_job_uses_its_default_until_one_is_chosen():
     # Every job starts on the one cheap model; anything dearer is a choice.
+    # Voice to text cannot (that model takes no audio): it starts on the
+    # cheap one that writes Turkish and English out well (backend/voice.py).
     assert llm.CHEAP == ("commandcode", "Qwen/Qwen3.8-Flash")
     for job in llm.JOBS:
+        if llm.JOBS[job].get("audio"):
+            assert llm.route(job) == ("openrouter", "google/gemini-3.1-flash-lite"), job
+            continue
         assert llm.route(job) == llm.CHEAP, job
     llm._conf["jobs"]["summary"] = {"provider": "openrouter", "model": "deepseek/deepseek-v4.1-flash"}
     assert llm.route("summary") == ("openrouter", "deepseek/deepseek-v4.1-flash")
