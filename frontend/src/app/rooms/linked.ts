@@ -11,7 +11,8 @@ import { MeshThumbs } from './mesh-thumb';
 import { StoredFile } from './files-model';
 import { StockPanel, StockState, qty } from './stock';
 import { PartsTrash } from './parts-trash';
-import { BackCloses, GalleryModel, ProductFilesPanel, ProductGallery } from './product-files';
+import { GalleryModel, ProductFilesPanel, ProductGallery } from './product-files';
+import { BackCloses } from '../nav';
 
 /** McMaster-Carr and GrabCAD in Parts: search-and-link sources
  *  (backend/linked.py). Their parts and models are found through a web

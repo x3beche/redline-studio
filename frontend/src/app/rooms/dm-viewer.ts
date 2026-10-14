@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { navBoxFollows } from '../nav';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
 import { Markdown } from '../markdown';
@@ -764,6 +765,8 @@ export class DmViewer {
   bomQ = signal('');
 
   constructor() {
+    // Open, it has a history entry of its own: Back closes it (nav.ts).
+    navBoxFollows(this.store.viewing, () => this.close());
     effect(() => {
       const sid = this.store.viewing();
       untracked(() => {

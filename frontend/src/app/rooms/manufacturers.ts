@@ -25,7 +25,8 @@ import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, is
 import { PriceChart } from './product-charts';
 import { PartsTrash, PartsTrashView } from './parts-trash';
 import { Fmt } from './charts';
-import { BackCloses, GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
+import { GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
+import { BackCloses, navGo, navParams, navUrl } from '../nav';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
@@ -1368,7 +1369,7 @@ export class RoomMfr implements OnDestroy {
 
   /** Where the page is: the overview, a manufacturer, or a run - and the
    *  product search - all from the address and kept in it. */
-  private url = new URLSearchParams(location.search);
+  private url = navParams();
   view = signal<'home' | 'maker' | 'run'>(this.url.get('run') ? 'run' : this.url.get('m') ? 'maker' : 'home');
   mid = signal<string | null>(this.url.get('m'));
   rid = signal<string | null>(this.url.get('run'));
@@ -1504,7 +1505,7 @@ export class RoomMfr implements OnDestroy {
     effect(() => {
       const v = this.view(), m = this.mid(), r = this.rid(), q = this.pq(), c = this.cat();
       const home = v === 'home', grid = home && this.sub() === 'products', d = this.detail();
-      const url = new URL(location.href);
+      const url = navUrl();
       const set = (k: string, val: string | null) => val ? url.searchParams.set(k, val) : url.searchParams.delete(k);
       set('m', v === 'maker' ? m : null);
       set('run', v === 'run' ? r : null);
@@ -1523,7 +1524,7 @@ export class RoomMfr implements OnDestroy {
       const part = this.desk.seen()?.lcsc ?? this.desk.seeing();
       set('p', d ? d.id : part);
       set('pm', d ? d.maker.id : part ? LCSC_MAKER : null);
-      if (url.href !== location.href) history.replaceState(null, '', url);
+      navGo(url);
     });
     // A manufacturer's own fetching choice, once it is open.
     effect(() => { const m = this.maker(); if (m && this.view() === 'maker') untracked(() => this.choice.set(m.route ?? null)); });

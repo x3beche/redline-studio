@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { navGo, navParams, navUrl } from '../nav';
 import { Toast, ToastTone } from '../toast';
 import { HttpErrorResponse } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
@@ -788,7 +789,7 @@ export class RoomTaste implements OnDestroy {
     // none, a run still going in this workspace is shown by itself.
     this.runs.here = true;
     this.runs.seen();
-    const asked = new URLSearchParams(location.search).get('run');
+    const asked = navParams().get('run');
     this.readFolders();
     this.runs.refresh().then(rows => {
       if (asked) { this.showJob(asked); return; }
@@ -797,9 +798,9 @@ export class RoomTaste implements OnDestroy {
     });
     effect(() => {
       const id = this.mode() === 'extract' ? this.job()?.id ?? null : null;
-      const url = new URL(location.href);
+      const url = navUrl();
       if (id) url.searchParams.set('run', id); else url.searchParams.delete('run');
-      if (url.href !== location.href) history.replaceState(null, '', url);
+      navGo(url);
     });
     effect(() => {
       this.q(); this.api.changed();

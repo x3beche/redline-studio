@@ -1,4 +1,5 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import { navGo, navParams, navUrl } from '../nav';
 import { Toast, ToastTone } from '../toast';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -597,7 +598,7 @@ export class StockView implements OnDestroy {
   ];
 
   /** The view's filters, kept in the address with the page's (?sub=stock&type=&iloc=&low=1&smaker=). */
-  private url = new URLSearchParams(location.search);
+  private url = navParams();
   q = signal(this.url.get('sq') ?? '');
   fType = signal(TYPE.has(this.url.get('type') ?? '') ? this.url.get('type')! : '');
   fLoc = signal(this.url.get('iloc') ?? '');
@@ -626,10 +627,10 @@ export class StockView implements OnDestroy {
     effect(() => { const w = this.words(); if (w) untracked(() => this.q.set(w)); });
     effect(() => {
       const q = this.q(), ty = this.fType(), l = this.fLoc(), low = this.fLow(), mk = this.fMaker(), v = this.layout();
-      const url = new URL(location.href);
+      const url = navUrl();
       const set = (k: string, val: string | null) => val ? url.searchParams.set(k, val) : url.searchParams.delete(k);
       set('sq', q); set('type', ty); set('iloc', l); set('low', low ? '1' : null); set('smaker', mk); set('sview', v === 'grid' ? 'grid' : null);
-      if (url.href !== location.href) history.replaceState(null, '', url);
+      navGo(url);
     });
   }
 
@@ -882,8 +883,8 @@ export class StockView implements OnDestroy {
 
   ngOnDestroy() {
     clearInterval(this.poll);
-    const url = new URL(location.href);
+    const url = navUrl();
     for (const k of ['sq', 'type', 'iloc', 'low', 'smaker', 'sview']) url.searchParams.delete(k);
-    history.replaceState(null, '', url);
+    navGo(url);
   }
 }

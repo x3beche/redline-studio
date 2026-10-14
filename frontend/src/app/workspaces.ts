@@ -1,3 +1,5 @@
+import { navParams } from './nav';
+
 /** The four sides of the application, and which one is on screen.
  *
  *  Workbench started as one room - a parametric model, a drawing over it, a
@@ -103,17 +105,6 @@ export const WORKSPACES: Workspace[] = [
 
 const KEY = 'redline.workspace';
 
-/** A tab's name in the address where it is not its id: the Chat is ?ws=chat,
- *  Catalog is ?ws=catalog (their ids, and old links, stay commandcode and mfr - both open them;
- *  so does ?ws=supply, its name for a while). */
-const URL_NAME: Partial<Record<Workspace['id'], string>> = { commandcode: 'chat', mfr: 'catalog' };
-export function urlName(id: Workspace['id']): string { return URL_NAME[id] ?? id; }
-/** ?ws=inventory was the stock's own tab: it opens the Parts page at its stock (STOCK_ASKED). */
-const OLD_NAMES: Record<string, Workspace['id']> = { supply: 'mfr', inventory: 'mfr' };
-function fromUrl(name: string | null): string | null {
-  return (Object.entries(URL_NAME).find(([, n]) => n === name)?.[0]) ?? (name ? OLD_NAMES[name] : undefined) ?? name;
-}
-
 /** The Parts page's name, the one place it is written (the tab, the page's title, the palette). */
 export const PARTS_LABEL = WORKSPACES.find(w => w.id === 'mfr')!.label;
 
@@ -123,7 +114,8 @@ export const STOCK_ASKED = new URLSearchParams(location.search).get('ws') === 'i
   || (() => { try { return localStorage.getItem(KEY) === 'inventory'; } catch { return false; } })();
 
 export function currentWorkspace(): Workspace['id'] {
-  const asked = fromUrl(new URLSearchParams(location.search).get('ws'));
+  // The room the address names (/pcb/…, or an old ?ws=pcb / ?ws=chat / ?ws=catalog: nav-url.ts).
+  const asked = navParams().get('ws');
   let saved: string | null = null;
   try {
     saved = localStorage.getItem(KEY);

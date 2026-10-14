@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import { navBoxFollows } from '../nav';
 import { Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { T, t } from '../i18n';
 import { Toast } from '../toast';
@@ -161,6 +162,8 @@ export class FileModalHost implements OnDestroy {
       });
     });
     window.addEventListener('keydown', this.key, true);
+    // Open, it has a history entry of its own: Back closes it (nav.ts).
+    navBoxFollows(this.cur, () => this.close());
   }
 
   ngOnDestroy() {

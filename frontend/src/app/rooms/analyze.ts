@@ -1,4 +1,5 @@
 import { ToolsUsage } from './tools-usage';
+import { navParams } from '../nav';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { AuditRow, BoardRunRow, InsightCosts, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
@@ -1055,7 +1056,7 @@ export class RoomAnalyze implements OnDestroy {
 
 /** ?range= or ?project= in the address, when it opened this room (one of `known`, if given). */
 function fromLink(key: string, known?: string[]): string | null {
-  const q = new URLSearchParams(location.search);
+  const q = navParams();
   const v = q.get('ws') === 'analyze' ? q.get(key) : null;
   return v && (!known || known.includes(v)) ? v : null;
 }

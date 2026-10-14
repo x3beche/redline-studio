@@ -77,7 +77,7 @@ export class TaskTargets {
         } @else {
           <button class="tcv-btn" disabled>{{ queuedLabel(d.room) | t }}</button>
           <span class="md-task-done">{{ fileName(d.target, d.room) }} ·
-            <a class="md-task-link" [href]="'?rev=' + d.note_id" (click)="openNote($event, d)"
+            <a class="md-task-link" [href]="'/3d?rev=' + d.note_id" (click)="openNote($event, d)"
                [title]="('open the note' | t) + ' ' + d.note_id">#{{ short(d.note_id) }}</a>
             · {{ stamp(d.at) }}@if (d.by?.name) { · {{ d.by!.name }} }</span>
         }

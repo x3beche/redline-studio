@@ -3,6 +3,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { moneyIn, moneyTip } from '../money';
+import { navParams, navSet } from '../nav';
 import {
   Activity, BoardComponent, BoardEntry, BoardGeometry, BoardSchematic, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LogLine, PartHeld, RuleSchema,
@@ -937,11 +938,7 @@ export class RoomPcb implements OnDestroy {
   openDrawer() {
     const c = this.desk.seen()?.lcsc ?? null;
     this.desk.closePart();
-    const url = new URL(location.href);
-    url.searchParams.set('m', 'lcsc');
-    for (const k of ['q', 'cat', 'sub', 'run']) url.searchParams.delete(k);
-    if (c) { url.searchParams.set('p', c); url.searchParams.set('pm', 'lcsc'); }
-    history.replaceState(null, '', url);
+    navSet('mfr', { m: 'lcsc', p: c, pm: c ? 'lcsc' : null });
     this.picked.room.set('mfr');
     setTimeout(() => this.picked.ask('mfr-part', c ?? ''), 50);
   }
@@ -1032,7 +1029,7 @@ export class RoomPcb implements OnDestroy {
   private readUrl() {
     if (RoomPcb.urlTaken) return;
     RoomPcb.urlTaken = true;
-    const q = new URLSearchParams(location.search);
+    const q = navParams();
     this.urlBoard = q.get('board');
     if (this.urlBoard) this.picked.board.set(this.urlBoard);
     const sheet = q.get('sheet');

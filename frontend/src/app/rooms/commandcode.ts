@@ -2,6 +2,7 @@ import {
   Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { navGo, navUrl } from '../nav';
 import { Observable } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
 import { Segment, TaskBlock, plain, splitTasks, toHtml } from '../markdown';
@@ -1064,7 +1065,7 @@ type Ask = { text: string; label: string; go: () => void };
           @if (s.summary) { <dt>{{ 'Result' | t }}</dt><dd><pre>{{ s.summary }}</pre></dd> }
           @if (s.tool === 'room_note' && s.status === 'done' && s.vars?.['note']; as nid) {
             <dt>{{ 'Note' | t }}</dt>
-            <dd><a class="md-task-link" [href]="'?rev=' + nid" (click)="openStepNote($event, s)"
+            <dd><a class="md-task-link" [href]="'/3d?rev=' + nid" (click)="openStepNote($event, s)"
                    [title]="('open the note' | t) + ' ' + nid">#{{ nid }}</a></dd>
           }
           @if (s.error) { <dt>{{ 'Error' | t }}</dt><dd class="tcv-cc-steperr">{{ s.error }}</dd> }
@@ -1569,13 +1570,14 @@ export class RoomCommandCode implements OnDestroy {
       const id = this.openId();
       untracked(() => this.connectLive(id));
     });
-    // The room thread open is in the address (?thread=cad), so it can be linked to.
+    // The conversation open, or the room thread, is in the address (/chat/<id>, /chat/thread/cad):
+    // it can be linked to, a reload comes back to it, and Back goes to the one before (nav.ts).
     effect(() => {
-      const room = this.sel.thread();
-      const url = new URL(location.href);
+      const room = this.sel.thread(), id = this.openId();
+      const url = navUrl();
       if (room) url.searchParams.set('thread', room); else url.searchParams.delete('thread');
-      url.searchParams.delete('chat');            // a linked conversation is opened once, not on every reload
-      if (url.href !== location.href) history.replaceState(null, '', url);
+      if (id) url.searchParams.set('chat', id); else url.searchParams.delete('chat');
+      navGo(url);
     });
     // Asked of this room by the command palette (Ctrl+K).
     effect(() => {

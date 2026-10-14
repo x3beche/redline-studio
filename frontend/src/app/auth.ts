@@ -1,4 +1,5 @@
 import { Component, Injectable, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { navHref, navParams } from './nav';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
@@ -156,10 +157,8 @@ export class Auth {
    *  account that was here goes with it. The room stays; what was open in
    *  it may not exist in the next account's space. */
   private restart() {
-    const url = new URL(location.href);
-    url.search = url.searchParams.get('ws') ? `?ws=${encodeURIComponent(url.searchParams.get('ws')!)}` : '';
-    url.hash = '';
-    location.replace(url.toString());
+    const ws = navParams().get('ws');
+    location.replace(ws ? navHref({ ws }) : '/');
   }
 
   /** Another remembered account, no password. Refused (its token is gone):

@@ -420,27 +420,6 @@ export class ProductGallery {
   }
 }
 
-/** A full-screen detail the browser's Back closes: while it is open it has
- *  one history entry of its own (the address stays as the page sets it);
- *  closed by hand, that entry is gone again. */
-export class BackCloses {
-  private on = false;
-  private pop = () => { if (!this.on) return; this.on = false; removeEventListener('popstate', this.pop); this.close(); };
-  constructor(private close: () => void) {}
-  opened() {
-    if (this.on) return;
-    this.on = true;
-    history.pushState(history.state, '', location.href);
-    addEventListener('popstate', this.pop);
-  }
-  closed() {
-    if (!this.on) return;
-    this.on = false;
-    removeEventListener('popstate', this.pop);
-    history.back();
-  }
-}
-
 /** A product deleted by hand whose files are still kept (backend/product_files.py `orphans`). */
 export interface Orphan { mid: string; pid: string; name: string; maker_name: string; cad: string | null; picture: string | null;
   updated_at?: string; files: (ProductFile & { in_files: boolean })[] }

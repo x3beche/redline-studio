@@ -1,4 +1,5 @@
 import { Component, HostListener, Type, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
+import { navGo, navUrl } from '../nav';
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import { COMPONENTS, GROUPS, NARROW, ROOMS, ToolInfo } from './registry';
 import { Selection } from '../selection';
@@ -193,6 +194,11 @@ export class RoomTools {
       if (loader) loader().then(c => { if (this.here() === t) this.component.set(c); });
     });
     effect(() => { this.query(); this.room(); this.cursor.set(0); });
+    // The tool open is in the address (/basic-tools/<tool>), so Back goes to the one before (nav.ts).
+    effect(() => {
+      const id = this.id();
+      untracked(() => { const url = navUrl(); url.searchParams.set('tool', id); navGo(url); });
+    });
     // A tool picked in the command palette (app/palette.ts).
     effect(() => {
       const w = this.picked.want();

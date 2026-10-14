@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 // The rooms are each a chunk of their own, loaded when their tab is first
@@ -22,7 +22,7 @@ import { BudgetStatus, Money, money, moneyShort } from './money';
 import { budgetTip } from './budget-bars';
 import { Auth, UserChip } from './auth';
 import { Landing } from './landing';
-import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace, urlName } from './workspaces';
+import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
@@ -32,6 +32,12 @@ import { Toasts } from './toast';
 import { DmSend, DmStore } from './dm';
 import { DmViewer } from './rooms/dm-viewer';
 import { Avatar } from './avatar';
+import { navHold, navHref, navParams, navPopped, navSet, navTitle } from './nav';
+import { ROOM_KEYS, RoomId, roomOf } from './nav-url';
+
+/** The sections of Settings an address may name (/settings/<section>; PrefsTab). */
+const SECTIONS = ['profile', 'appearance', 'language', 'llm', 'proxy', 'costs', 'telegram', 'tokens', 'shortcuts', 'topbar',
+                  'dashboard', 'admin', 'rustdesk', 'backups'];
 
 @Component({
   selector: 'app-root',
@@ -61,7 +67,8 @@ import { Avatar } from './avatar';
            hidden or does not fit (topbar-more.ts). -->
       <app-topbar-more [push]="b.push" />
       } @else {
-      <button (click)="open(b.ws.id)" class="tcv-tab" [class.tb-push]="b.push" [class.tb-iconic]="!bar.text(b.ws)"
+      <!-- A link, so a middle click or Ctrl+click opens the room in a tab of its own (nav.ts). -->
+      <a [href]="href(b.ws.id)" (click)="tab($event, b.ws.id)" class="tcv-tab" [class.tb-push]="b.push" [class.tb-iconic]="!bar.text(b.ws)"
               [attr.data-tb]="b.id"
               [attr.data-on]="here() === b.id ? 1 : null"
               [attr.aria-current]="here() === b.id ? 'page' : null"
@@ -106,18 +113,18 @@ import { Avatar } from './avatar';
             <span class="tcv-tab-run" data-done="1" [title]="n + ' ' + ('exploration finished' | t)"><i></i>{{ n }}</span>
           }
         }
-      </button>
+      </a>
       }
     }
     <!-- Settings: the theme and the language for this browser, the LLM
          keys and the proxy for the server - a tab, not a menu item. -->
     @if (settingsTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end" [class.tb-tight]="bar.tight()"
+      <a [href]="href(w.id)" (click)="tab($event, w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end" [class.tb-tight]="bar.tight()"
               [class.tb-iconic]="bar.display() === 'icon'"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [attr.aria-label]="w.label | t"
-              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name"> {{ w.label | t }}</span>}</button>
+              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name"> {{ w.label | t }}</span>}</a>
     }
     <!-- Who is signed in, over the right-hand column; nothing in local mode.
          Its width is measured (--layout-user-w) so the tabs keep clear of it
@@ -134,6 +141,8 @@ import { Avatar } from './avatar';
   <!-- Empty in the 3D room, and out of the layout with it: left in, an
        empty flex child took half the column. -->
   <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
+    <!-- Made again when Back or Forward lands on another place in the same room (mount). -->
+    @for (k of [mount()]; track k) {
     @switch (here()) {
       @case ('pcb') { @defer { <app-room-pcb /> } }
       @case ('firmware') { @defer { <app-room-firmware /> } }
@@ -145,6 +154,7 @@ import { Avatar } from './avatar';
       @case ('tools') { @defer { <app-room-tools /> } }
       @case ('settings') { @defer { <app-room-settings /> } }
       @case ('analyze') { @defer { <app-room-analyze /> } }
+    }
     }
   </div>
 </app-editor>
@@ -297,9 +307,9 @@ export class App {
     // asked again only while one is).
     effect(() => { if (this.auth.signedIn()) untracked(() => { this.tasteRuns.watch(); this.watchRuns(); }); });
     this.here.set(currentWorkspace());
-    // Whoever changed it - a tab up here, or a file clicked in the catalog
-    // - the address bar and the memory follow, so a room can be linked to
-    // and a reload comes back to the one you were in.
+    // Whoever changed it - a tab up here, a file clicked in the catalog, Back - the address
+    // follows (nav.ts): a room can be linked to, a reload comes back to the one you were in,
+    // and opening another room is a step the browser's Back goes back over.
     effect(() => {
       const id = this.here();
       // Not from inside a frame: when this application is shown in an
@@ -307,20 +317,109 @@ export class App {
       // opening on its own room, wrote over the room the outer page was
       // left in.
       if (window === window.top) rememberWorkspace(id);
-      const url = new URL(location.href);
-      if (id === 'cad') url.searchParams.delete('ws');
-      else url.searchParams.set('ws', urlName(id));
-      // A room thread belongs to the Chat tab's address only.
-      if (id !== 'commandcode') url.searchParams.delete('thread');
-      // An extraction run belongs to the Taste tab's address only (rooms/taste.ts).
-      if (id !== 'taste' && id !== 'mfr') url.searchParams.delete('run');
-      // A manufacturer and its product search, and the stock's filters, belong to the Parts page's
-      // (rooms/manufacturers.ts, rooms/stock.ts).
-      if (id !== 'mfr') for (const k of ['m', 'q', 'cat', 'sub', 'sq', 'type', 'iloc', 'low', 'smaker', 'sview', 'held']) url.searchParams.delete(k);
-      // An old link to the stock's own tab: its words go once the Parts page has read them.
-      for (const k of ['iq', 'icat', 'paste']) url.searchParams.delete(k);
-      history.replaceState(null, '', url);
+      // Signed out, the address stays the landing page's own (/, ?signin, ?reset=).
+      if (!this.auth.signedIn()) return;
+      untracked(() => navSet(id, this.placeIn(id), { fill: true }));
     });
+    // What is open in a room is in the address too - /3d/<model>, /notes/<note> - and
+    // opening another is a step of its own. The rooms that keep it in Selection are followed
+    // here; the others write it themselves (navGo).
+    this.follow('cad', 'model', () => this.picked.model());
+    this.follow('pcb', 'board', () => this.picked.board());
+    this.follow('firmware', 'fw', () => this.picked.firmware());
+    this.follow('notes', 'note', () => this.picked.note()?.id ?? null);
+    this.follow('taste', 'palette', () => this.picked.taste()?.id ?? null);
+    this.follow('settings', 'section', () => this.prefs.tab());
+    // The tab's title: the room, and what is open in it.
+    effect(() => {
+      const id = this.here(), p = this.picked;
+      const what = id === 'cad' ? p.model()?.split('/').pop() : id === 'pcb' ? p.board() : id === 'firmware' ? p.firmware()
+        : id === 'notes' ? p.note()?.label : id === 'taste' ? p.taste()?.label : id === 'mfr' ? p.mfr()?.label
+        : id === 'files' ? p.file()?.label : null;
+      untracked(() => navTitle(id, what || null));
+    });
+    // What the address names that the rooms do not read from it themselves.
+    this.restore(null, navParams());
+    // Back and Forward: the room, and what was open in it, as the address now has it.
+    effect(() => {
+      const p = navPopped();
+      if (p) untracked(() => this.restore(p.prev, p.next));
+    });
+  }
+
+  /** What a room has open, kept in Selection: its values in the address when it is opened. */
+  private placeIn(id: Workspace['id']): Record<string, string | null> {
+    const p = this.picked;
+    switch (id) {
+      case 'cad': return { model: p.model() };
+      case 'pcb': return { board: p.board() };
+      case 'firmware': return { fw: p.firmware() };
+      case 'notes': return { note: p.note()?.id ?? null };
+      case 'taste': return navParams().get('run') ? {} : { palette: p.taste()?.id ?? null };
+      case 'settings': return { section: this.prefs.tab() };
+      default: return {};
+    }
+  }
+
+  /** `key` in the address follows `read` while `room` is on screen; only a change is written. */
+  private follow(room: Workspace['id'], key: string, read: () => string | null) {
+    let was = untracked(read);
+    effect(() => {
+      const v = read();
+      if (v === was) return;
+      was = v;
+      untracked(() => { if (this.here() === room) navSet(room, { [key]: v }); });
+    });
+  }
+
+  /** Bumped to make the room again as an address has it, when Back lands on another place in
+   *  the same room (another manufacturer, another folder): it reads the address as on a load. */
+  mount = signal(0);
+  /** The rooms put back that way, by the values that make them again; the others are told what to
+   *  open (restore). Taste is told its palette, and made again only for an extraction run. */
+  private static REMAKE: Partial<Record<RoomId, string[]>> = { mfr: ROOM_KEYS.mfr, files: ROOM_KEYS.files, taste: ['run'] };
+
+  /** The address's values put on screen: at the start (`prev` null) what the rooms that do not read
+   *  the address themselves are to open; after Back or Forward, the room and all of it. */
+  private restore(prev: URLSearchParams | null, next: URLSearchParams) {
+    const room = roomOf(next.get('ws'));
+    if (!room) return;
+    const p = this.picked, v = (k: string) => next.get(k), was = (k: string) => prev?.get(k) ?? null;
+    const section = v('section');
+    if (room === 'settings' && section && SECTIONS.includes(section)) this.prefs.tab.set(section as never);
+    if (room === 'notes' && v('note') && v('note') !== p.note()?.id) p.ask('note', v('note')!);
+    if (room === 'taste' && v('palette') && !v('run') && v('palette') !== p.taste()?.id) p.ask('taste', v('palette')!);
+    if (room === 'tools' && v('tool') && (!prev || v('tool') !== was('tool'))) p.ask('tool', v('tool')!);
+    if (!prev) return;
+    // The rest the rooms read from the address when they are made; after Back they are told.
+    if (room === 'cad' && v('model') && v('model') !== p.model()) p.ask('model', v('model')!);
+    if (room === 'pcb' && v('board') && v('board') !== p.board()) p.board.set(v('board'));
+    if (room === 'firmware' && v('fw') && v('fw') !== p.firmware()) p.firmware.set(v('fw'));
+    if (room === 'commandcode') {
+      if (v('dm') !== was('dm')) this.dms.show(v('dm'));
+      if (!v('dm')) {
+        if (v('thread') && v('thread') !== p.thread()) p.openThread(v('thread')!);
+        else if (!v('thread') && p.thread()) p.thread.set(null);
+        if (!v('thread') && v('chat') && v('chat') !== was('chat')) p.askCc({ action: 'open', chat: v('chat')! });
+      }
+    }
+    const same = roomOf(prev.get('ws')) === room;
+    if (same && App.REMAKE[room]?.some(k => v(k) !== was(k))) {
+      // The room leaving must not write over the address the new one reads.
+      navHold(true);
+      this.mount.update(n => n + 1);
+      afterNextRender(() => navHold(false), { injector: this.injector });
+    }
+    this.here.set(room);
+  }
+
+  /** A tab's address, for its link. */
+  href(id: Workspace['id']) { return navHref({ ws: id }); }
+  /** A plain click opens the room here; a middle click, Ctrl or Shift is the browser's (a new tab). */
+  tab(e: MouseEvent, id: Workspace['id']) {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    this.open(id);
   }
 
   open(id: Workspace['id']) { this.here.set(id); }

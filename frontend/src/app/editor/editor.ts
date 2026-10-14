@@ -46,7 +46,7 @@ import { Prefs } from '../preferences';
 import { startFold, whenSettled } from '../fold';
 import { Confirm } from '../confirm';
 import { ContextMenu, MenuEntry } from '../context-menu';
-import { urlName } from '../workspaces';
+import { navBadge, navHref, navParams } from '../nav';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -247,7 +247,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private setAside = signal<Set<string>>(new Set());
   notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   private askedAlready = new Set<string>();
-  private plainTitle = 'Workbench';
   /* theme:pigment - a mark's colour is written into the revision and
      printed into the picture, so it must mean the same thing in every
      theme and on paper. These four are ink, not chrome, and are the one
@@ -644,8 +643,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (rows.map(q => q._id).join(',') === before) return;
     this.answerPicked.set(new Set());
 
-    document.title = rows.length ? `● ${rows.length} question${rows.length === 1 ? '' : 's'} · ${this.plainTitle}`
-                                 : this.plainTitle;
+    navBadge(rows.length ? `● ${rows.length} question${rows.length === 1 ? '' : 's'}` : null);
     if (!('Notification' in window)) { this.notifyState.set('unsupported'); return; }
     this.notifyState.set(Notification.permission as 'default' | 'granted' | 'denied');
     if (Notification.permission !== 'granted') return;
@@ -731,7 +729,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.answerText.set('');
         this.answerPicked.set(new Set());
         this.questions.update(list => list.filter(x => x._id !== q._id));
-        if (!this.questions().length) document.title = this.plainTitle;
+        if (!this.questions().length) navBadge(null);
         this.flash('answered');
       },
       error: () => this.flash('could not send the answer'),
@@ -750,14 +748,14 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** ?rev=<id> opens the model at that revision's camera; ?model=<id>
    *  opens a named model, which is how a shot of one is taken. */
   private readUrl() {
-    const q = new URLSearchParams(location.search);
+    const q = navParams();
     this.urlPin = q.get('model');
     this.urlPinPending = !this.urlPin && !!q.get('rev');
     this.urlRevOnPin = this.urlPin ? q.get('rev') : null;
   }
 
   private applyUrlCamera() {
-    const rev = new URLSearchParams(location.search).get('rev');
+    const rev = navParams().get('rev');
     if (!rev) return;
     if (!this.urlPinPending) { this.focusRevision(rev); return; }
     // Which model the revision is about decides the first load: opening
@@ -2290,16 +2288,14 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The tree's right-click menus: a row's hover buttons, with names, and
    *  a new tab on the address each room already reads (?model, ?board, ?fw). */
   private newTab(params: Record<string, string>) {
-    const url = new URL(location.origin + location.pathname);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    window.open(url.toString(), '_blank', 'noopener');
+    window.open(navHref(params), '_blank', 'noopener');
   }
   private ask = (what: string) => Confirm.ask({ title: t('Delete "{x}"?').replace('{x}', what), ok: t('Delete'), danger: true });
   modelMenu(e: MouseEvent, m: ModelEntry) {
     const edit = this.auth.can('edit');
     ContextMenu.open(e, [
       { label: 'Open', icon: 'cube', kbd: 'Enter', run: () => { this.pickModel(m); this.phoneShut(); } },
-      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ model: m.id }) },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: 'cad', model: m.id }) },
       { label: 'Copy path', icon: 'doc', run: () => navigator.clipboard?.writeText(m.id).then(() => this.flash(t('Copied'))) },
       { sep: true },
       edit && { label: 'Move to another folder', icon: 'move', run: () => this.armMove(m, new Event('menu')) },
@@ -2315,7 +2311,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   boardMenu(e: MouseEvent, b: { id: string; title: string }) {
     ContextMenu.open(e, [
       { label: 'Open', icon: 'board', kbd: 'Enter', run: () => { this.openBoard(b); this.phoneShut(); } },
-      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: urlName('pcb'), board: b.id }) },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: 'pcb', board: b.id }) },
       { sep: true },
       this.auth.can('edit') && { label: 'Move to another folder', icon: 'move', run: () => this.armMoveBoard(b, new Event('menu')) },
       { sep: true },
@@ -2329,7 +2325,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   firmwareMenu(e: MouseEvent, f: { id: string }) {
     ContextMenu.open(e, [
       { label: 'Open', icon: 'code', kbd: 'Enter', run: () => { this.openFirmware(f); this.phoneShut(); } },
-      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: urlName('firmware'), fw: f.id }) },
+      { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: 'firmware', fw: f.id }) },
     ]);
   }
   folderMenu(e: MouseEvent, path: string, depth: number) {

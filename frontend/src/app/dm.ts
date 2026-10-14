@@ -1,4 +1,5 @@
 import { Component, Injectable, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { navGo, navParams, navUrl } from './nav';
 import { Toast, ToastTone } from './toast';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -134,7 +135,7 @@ export class DmStore {
 
   state = signal<DmState | null>(null);
   /** The direct conversation open in the Chat tab, if one is. */
-  open = signal<string | null>(new URLSearchParams(location.search).get('dm'));
+  open = signal<string | null>(navParams().get('dm'));
   /** "Send to...": the thing waiting for its people (the dialog, DmSend). */
   sendTo = signal<{ kind: DmKind; id: string; label?: string } | null>(null);
   /** What was sent, open in the viewer (DmViewer), by its snapshot. */
@@ -289,9 +290,9 @@ export class DmStore {
       this.sel.thread.set(null);
       this.sel.room.set('commandcode');
     }
-    const url = new URL(location.href);
+    const url = navUrl();
     if (id) url.searchParams.set('dm', id); else url.searchParams.delete('dm');
-    if (url.href !== location.href) history.replaceState(null, '', url);
+    navGo(url);
   }
   /** Pinned or archived, for me: at once here, then as the server has it. */
   setFlags(id: string, p: { pinned?: boolean; archived?: boolean }) {

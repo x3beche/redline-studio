@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { BackCloses, navGo, navParams, navUrl } from '../nav';
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Toast, ToastTone } from '../toast';
 import { HttpEventType } from '@angular/common/http';
@@ -982,7 +983,23 @@ export class RoomFiles implements OnDestroy {
       if (here === STORAGE || here === TRASH || (isV(here) && !this.vLoaded())) return;
       if (!this.loading() && here && !this.byId().has(here)) untracked(() => this.here.set(''));
     });
+    // Where this is, in the address (/files/mine/<folder>, /files/app/…, /files/storage, /files/deleted;
+    // a preview as ?file=): a folder is a step Back goes back over, a preview a box Back closes (nav.ts).
+    const at = navParams();
+    if (at.get('dir')) this.go(at.get('dir')!);
+    if (at.get('file')) this.preview.set(at.get('file'));
+    effect(() => {
+      const dir = this.here(), file = this.preview();
+      untracked(() => {
+        const url = navUrl();
+        if (dir) url.searchParams.set('dir', dir); else url.searchParams.delete('dir');
+        if (file) url.searchParams.set('file', file); else url.searchParams.delete('file');
+        navGo(url);
+        if (file) this.back.opened(); else this.back.closed();
+      });
+    });
   }
+  private back = new BackCloses(() => this.closePreview());
 
   ngOnDestroy() { clearInterval(this.tick); }
 

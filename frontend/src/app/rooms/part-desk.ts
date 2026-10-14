@@ -1,4 +1,5 @@
 import { Component, Injectable, OnDestroy, inject, input, signal } from '@angular/core';
+import { navBoxFollows } from '../nav';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PartHeld, PartHit, PartPreview, PartUse, Parts } from '../api';
@@ -282,6 +283,8 @@ export class PartModal {
   desk = inject(PartDesk);
   /** Whether a 3D body may be asked for (part-bodies.ts): the room says. */
   canRun = input(false);
+  // Open, it has a history entry of its own: Back closes it (nav.ts).
+  constructor() { navBoxFollows(() => this.desk.isOpen(), () => this.desk.closePart()); }
 }
 
 /** An add, step by step, as the server goes (POST /api/parts-add). */

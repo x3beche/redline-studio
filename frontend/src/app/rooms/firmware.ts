@@ -2,6 +2,7 @@ import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { navParams } from '../nav';
 import type * as Monaco from 'monaco-editor';
 import { LogLine } from '../api';
 import { Auth } from '../auth';
@@ -956,7 +957,7 @@ export class RoomFirmware implements OnDestroy {
   private filesAt = -1;
 
   constructor() {
-    const q = new URLSearchParams(location.search).get('fw');
+    const q = navParams().get('fw');
     if (q && !this.picked.firmware()) this.picked.firmware.set(q);
     this.readList();
     // Opened from the catalog (or the PCB room): the room follows.

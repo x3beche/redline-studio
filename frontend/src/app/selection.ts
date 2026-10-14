@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { navParams } from './nav';
 import { Workspace } from './workspaces';
 
 /** What the command palette asks of the Chat room (id 'commandcode'). */
@@ -69,7 +70,7 @@ export class Selection {
    *  the first thing asked. */
   cc = signal<CcWant | null>(Selection.linkedChat());
   private static linkedChat(): CcWant | null {
-    const chat = new URLSearchParams(location.search).get('chat');
+    const chat = navParams().get('chat');
     return chat ? { n: 0, action: 'open', chat } : null;
   }
   private ccAsks = 0;
@@ -81,7 +82,7 @@ export class Selection {
   /** A room's agent thread to show in the Chat tab (rooms/agent-thread.ts):
    *  'cad' or 'pcb', or null for the AI conversations. Whatever used to
    *  open the "ask the agent" box under the queue opens this instead. */
-  thread = signal<string | null>(new URLSearchParams(location.search).get('thread'));
+  thread = signal<string | null>(navParams().get('thread'));
   /** Bumped each time a thread is asked for, so an already open one still
    *  takes the cursor (Ctrl+K on the room you are in). */
   threadAsked = signal(0);
