@@ -62,6 +62,9 @@ def test_a_viewer_only_looks():
             ("POST", "/api/me/password"), ("POST", "/api/me/sessions/revoke-others"),
             # where one left off, kept on one's own account (profile.py)
             ("PUT", "/api/me/last-open"),
+            # a shared link of what one may look at, and turning it off; the
+            # routes keep both to people, and turning off to the maker (shares.py)
+            ("POST", "/api/shares"), ("POST", "/api/shares/x/revoke"),
             ("POST", "/api/client-errors")}, (method, path)
 
 
@@ -130,7 +133,9 @@ def test_signed_out_reaches_only_signing_in():
         signing_in = path.startswith(("/api/auth/", "/api/reset/")) \
             and path not in ("/api/auth/page-session", "/api/auth/remember")
         # Telegram's webhook: no session; the route checks its secret header.
-        assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook")), (method, path)
+        # A shared link's own routes: the link is checked by the route (shares.py).
+        assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook")
+                         or path.startswith("/api/public/s/")), (method, path)
 
 
 def test_the_tool_pages_are_for_looking():

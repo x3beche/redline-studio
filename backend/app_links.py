@@ -83,6 +83,11 @@ def parts(maker: str | None = None, run: str | None = None) -> str:
     return "/parts" + (f"/{seg(maker)}" if maker else "")
 
 
+def share(token: str) -> str:
+    """A shared link's own page (backend/shares.py): no room, no sign-in."""
+    return f"/s/{seg(token)}"
+
+
 def analytics(range_: str | None = None, project: str | None = None) -> str:
     return "/analytics" + _q(range=range_, project=project)
 

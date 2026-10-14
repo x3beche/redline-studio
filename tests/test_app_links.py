@@ -25,6 +25,7 @@ def test_places():
     assert L.parts() == "/parts" and L.parts("lcsc") == "/parts/lcsc" and L.parts("m1", "j1") == "/parts/run/j1"
     assert L.analytics("7d") == "/analytics?range=7d"
     assert L.analytics("30d", "iot-fan") == "/analytics?range=30d&project=iot-fan"
+    assert L.share("Ab-_09") == "/s/Ab-_09"
 
 
 def test_segments_are_escaped_like_the_page():

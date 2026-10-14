@@ -163,6 +163,9 @@ app.include_router(mcmaster.router)
 # Files on any Parts product: its 3D model (measured), datasheets, drawings, pictures (backend/product_files.py).
 from . import product_files  # noqa: E402
 app.include_router(product_files.router)
+# Shared links: a model, board or drawing, read-only, for someone without an account (backend/shares.py).
+from . import shares as shares_api  # noqa: E402
+app.include_router(shares_api.router)
 
 
 def _raw_db():

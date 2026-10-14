@@ -92,6 +92,14 @@ _RULES: list[tuple[str, str, str]] = [
     ("*", "/api/auth/.*", NONE),
     ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),
+    # a shared link, opened by whoever holds it (backend/shares.py checks
+    # the link, its password and its end itself)
+    ("*", "/api/public/.*", NONE),
+    # making a shared link of something, and turning one off: whoever may
+    # look at it; the routes keep it to people, and turning off to the
+    # link's maker and the admins (backend/shares.py)
+    ("POST", "/api/shares", "view"),
+    ("POST", "/api/shares/{}/revoke", "view"),
     # a page telling the server what broke in it (backend/client_errors.py)
     ("POST", "/api/client-errors", "view"),
     # one's own profile (backend/profile.py): anyone signed in, and only

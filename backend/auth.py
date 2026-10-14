@@ -55,7 +55,9 @@ OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup",
         # Telegram's updates: no session, but the webhook's secret header (backend/tgbot/api.py)
         "/api/telegram/webhook"}
 # ... and a password-reset link's page: the link is the key.
-OPEN_PREFIX = ("/api/reset/", "/api/auth/accounts/")
+# ... and a shared link's own routes (backend/shares.py): a visitor with the
+# link and no account; the routes check the link themselves.
+OPEN_PREFIX = ("/api/reset/", "/api/auth/accounts/", "/api/public/")
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
