@@ -1,0 +1,51 @@
+# The "mongodb" Portainer stack's mongo-backup service, with the weekly restore
+# check added (docker/deploy/mongo-restore-check.sh). Two changes against the
+# running service, everything else as it is:
+#   1. the script mounted read-only at /restore-check.sh
+#   2. after Sunday's 03:30 dump, the loop runs it: the newest archive is
+#      restored into a throwaway mongod inside this container (127.0.0.1 only,
+#      data in /backups/.restore-check, deleted afterwards) and compared with
+#      the live database. The result goes to backup.log and
+#      metrics/restore_check.prom (node-exporter textfile collector).
+# Apply in Portainer: Stacks > mongodb > Editor, change the mongo-backup
+# service as below (keep the env values the stack already has), Update the stack.
+# A run by hand, any time: docker/deploy/mongo-restore-check.sh --docker
+
+services:
+  mongo-backup:
+    image: mongo:7.0
+    container_name: mongo-backup
+    restart: unless-stopped
+    depends_on: [mongo]
+    environment:
+      MONGO_USER: ${MONGO_USER}
+      MONGO_PASS: ${MONGO_PASS}
+      KEEP_DAYS: 7
+      TZ: Europe/Istanbul
+    volumes:
+      - /home/x3/backups/mongodb:/backups
+      - /home/x3/projects/redline-studio/docker/deploy/mongo-restore-check.sh:/restore-check.sh:ro   # new
+    logging:
+      driver: json-file
+      options: {max-size: "1m", max-file: "2"}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        dump() {
+          f=/backups/redline-$$(date +%Y-%m-%d_%H%M).archive.gz
+          if mongodump --quiet --gzip --archive=$$f.part \
+               --uri "mongodb://$$MONGO_USER:$$MONGO_PASS@mongo:27017/?authSource=admin"; then
+            mv $$f.part $$f; echo "$$(date -Is) ok $$f $$(du -h $$f | cut -f1)" >> /backups/backup.log
+          else
+            rm -f $$f.part; echo "$$(date -Is) FAILED" >> /backups/backup.log
+          fi
+          find /backups -name 'redline-*.archive.gz' -mtime +$$KEEP_DAYS -delete
+        }
+        ls /backups/redline-$$(date +%Y-%m-%d)_*.archive.gz >/dev/null 2>&1 || dump
+        while true; do
+          now=$$(date +%s); next=$$(date -d "$$(date +%Y-%m-%d) 03:30" +%s)
+          [ $$next -le $$now ] && next=$$((next + 86400))
+          sleep $$((next - now)); dump
+          # new: weekly restore check of the archive just written (Sunday)
+          [ "$$(date +%u)" = 7 ] && bash /restore-check.sh >/dev/null 2>&1
+        done
