@@ -213,7 +213,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "chat_list", "chat_read", "pdf_make", "web_search",
                                                                 "web_read", "mcmaster_find", "grabcad_find", "clock",
                                                                 "memory_read", "memory_write",
-                                                                "wiki_search", "wiki_read", "wiki_write"}
+                                                                "wiki_search", "wiki_read", "wiki_write",
+                                                                "price_history", "stock_low", "files_search", "files_restore", "taste_propose",
+                                                                "settings_read"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
