@@ -36,6 +36,7 @@ import json
 import logging
 import re
 import time
+from contextvars import ContextVar
 from typing import AsyncIterator
 
 from . import secretbox
@@ -513,7 +514,7 @@ def _blocks(content: list[dict]) -> list[dict]:
 
 
 def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | None, model: str,
-                  stream: bool = False, tools: list[dict] | None = None) -> dict:
+                  stream: bool = False, tools: list[dict] | None = None, cache: bool = False) -> dict:
     """The OpenAI-shaped conversation as Anthropic's /messages wants it - a
     tool loop's turns too: an assistant's `tool_calls` become tool_use
     blocks, and the "tool" lines after them one user turn of tool_result
@@ -565,7 +566,145 @@ def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | No
         body["system"] = system
     if temperature is not None:
         body["temperature"] = temperature
+    if cache:
+        _mark_anthropic(body)
     return body
+
+
+# ---- the prompt cache ----
+#
+# A conversation sends all of itself again with every line, and every round
+# of a tool loop again on top: the same long start each time. Where the
+# provider keeps a cache of that start, it is marked so (Anthropic's
+# `cache_control` breakpoints, at most four): the tools and the system line
+# (one mark on the system line covers both - the tools come first), the
+# person's latest line and the one before it (what the last answer's first
+# round wrote to the cache), and the request's last turn (the tool results
+# the next round adds to). A start read from the cache costs a tenth of
+# fresh input; writing it a quarter more, once.
+#
+# Marked only where the provider takes the marks: the Claude API, Command
+# Code's /messages (its docs: "Request and response bodies follow the
+# Anthropic Messages schema"; tried on its Claude Haiku, October 2026) and
+# OpenRouter's Claude models (OpenRouter passes `cache_control` in content
+# parts on to Anthropic). Not OpenCode Go's /messages models: its page
+# prices cache writes but does not say it takes the marks, only to send the
+# conversation in `x-opencode-session` (SESSION), which it does. Everyone
+# else caches a repeated start by itself (OpenAI, DeepSeek, Qwen, GLM...)
+# or not at all; their usage still says what came from a cache (_cached).
+
+CACHE = {"type": "ephemeral"}
+CACHE_MARKS = 4                                      # Anthropic's limit per request
+# The conversation a call belongs to (backend/ccgen.py sets it): OpenCode Go
+# routes a conversation's calls to the same place by it, for its cache.
+SESSION: ContextVar[str | None] = ContextVar("llm_session", default=None)
+
+
+# Provider and model pairs that answered 400 to the marks: asked without since.
+_NO_CACHE: set[tuple[str, str]] = set()
+
+
+def caches(provider: str, endpoint: str, model: str) -> bool:
+    """Whether calls to this provider and model are sent with cache marks."""
+    if (provider, model) in _NO_CACHE:
+        return False
+    if endpoint == "messages":
+        return provider in ("claude", "commandcode")
+    return provider == "openrouter" and endpoint == "chat" and model.startswith("anthropic/")
+
+
+def _human(m: dict) -> bool:
+    """A line a person wrote (not the tool results Anthropic carries as a user turn)."""
+    c = m.get("content")
+    return m.get("role") == "user" and not (isinstance(c, list) and c and isinstance(c[0], dict)
+                                            and c[0].get("type") == "tool_result")
+
+
+def _cache_spots(rest: list[dict]) -> list[int]:
+    """Which turns get a mark: the last, the latest person's line and the
+    one before it - turns of the user's side only (an assistant turn may
+    end in thinking, which takes no mark)."""
+    spots: list[int] = []
+    if rest and rest[-1].get("role") == "user":
+        spots.append(len(rest) - 1)
+    people = [i for i, m in enumerate(rest) if _human(m)]
+    for i in reversed(people[-2:]):
+        if i not in spots:
+            spots.append(i)
+    return spots
+
+
+def _mark_last(content) -> list | None:
+    """A turn's content with a mark on its last block; None when it cannot take one."""
+    if isinstance(content, str):
+        return [{"type": "text", "text": content, "cache_control": CACHE}] if content.strip() else None
+    if not isinstance(content, list) or not content:
+        return None
+    last = content[-1]
+    if not isinstance(last, dict) or last.get("type") in ("thinking", "redacted_thinking") \
+            or (last.get("type") == "text" and not (last.get("text") or "").strip()):
+        return None
+    return [*content[:-1], {**last, "cache_control": CACHE}]
+
+
+def _mark_anthropic(body: dict) -> None:
+    """Anthropic's body with its cache marks (see above)."""
+    left = CACHE_MARKS
+    if body.get("system"):
+        body["system"] = [{"type": "text", "text": body["system"], "cache_control": CACHE}]
+        left -= 1
+    elif body.get("tools"):
+        body["tools"] = [*body["tools"][:-1], {**body["tools"][-1], "cache_control": CACHE}]
+        left -= 1
+    msgs = body["messages"]
+    for i in _cache_spots(msgs)[:left]:
+        marked = _mark_last(msgs[i]["content"])
+        if marked is not None:
+            msgs[i] = {**msgs[i], "content": marked}
+
+
+def _mark_openai(messages: list[dict]) -> list[dict]:
+    """OpenRouter's Claude: the same marks on the OpenAI-shaped lines' parts."""
+    out = [dict(m) for m in messages]
+    left = CACHE_MARKS
+    sys_at = [i for i, m in enumerate(out) if m["role"] == "system"]
+    if sys_at:
+        marked = _mark_last(out[sys_at[-1]]["content"])
+        if marked is not None:
+            out[sys_at[-1]]["content"] = marked
+            left -= 1
+    # The people's lines only: a "tool" line holds plain text on this route.
+    for i in list(reversed([i for i, m in enumerate(out) if m["role"] == "user"][-2:]))[:left]:
+        marked = _mark_last(out[i]["content"])
+        if marked is not None:
+            out[i]["content"] = marked
+    return out
+
+
+def _cached(u: dict) -> tuple[int, int]:
+    """(read from the cache, written to it) out of a usage block of any of
+    the shapes: Anthropic's, OpenAI's (and OpenRouter's) and /responses'."""
+    if not isinstance(u, dict):
+        return 0, 0
+    det = u.get("prompt_tokens_details") or u.get("input_tokens_details") or {}
+    det = det if isinstance(det, dict) else {}
+    read = u.get("cache_read_input_tokens") or det.get("cached_tokens") or u.get("prompt_cache_hit_tokens") or 0
+    write = u.get("cache_creation_input_tokens") or det.get("cache_write_tokens") or det.get("cache_creation_tokens") or 0
+    return int(read or 0), int(write or 0)
+
+
+def _anthropic_usage(u: dict, into: dict) -> dict:
+    """Anthropic's usage counts fresh input apart from the cache's; here
+    `prompt_tokens` is all of the input, as in OpenAI's shape, and what
+    came from the cache (or went into it) is said beside it."""
+    if not isinstance(u, dict):
+        return into
+    read, write = _cached(u)
+    if u.get("input_tokens") is not None or read or write:
+        into["prompt_tokens"] = (u.get("input_tokens") or 0) + read + write
+        if read or write:
+            into["cache_read_tokens"], into["cache_write_tokens"] = read, write
+    return into
 
 
 # ---- the Claude API's own rules ----
@@ -629,21 +768,46 @@ CLAUDE_PRICES: dict[str, tuple[float, float]] = {
     "claude-opus-4-6": (5.0, 25.0), "claude-opus-4-5": (5.0, 25.0),
     "claude-sonnet-5-5": (2.0, 10.0), "claude-sonnet-5": (2.0, 10.0),
     "claude-sonnet-4-6": (3.0, 15.0), "claude-sonnet-4-5": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
+    "claude-haiku-5-5": (0.10, 0.50), "claude-haiku-4-5": (1.0, 5.0),
 }
+# Beyond its first 100K tokens of input a Haiku 5.5 call costs more, all of it.
+CLAUDE_LONG: dict[str, tuple[int, tuple[float, float]]] = {"claude-haiku-5-5": (100_000, (0.50, 2.50))}
+
+
+# What cached input costs, as a share of the input price: read back from the
+# cache, and written to it for five minutes (Anthropic's list, October 2026).
+CACHE_READ, CACHE_WRITE = 0.1, 1.25
+# Models whose cache reads are priced apart, USD per million.
+CLAUDE_CACHE_READ = {"claude-fable-5-1": 0.25, "claude-mythos-5-1": 0.25, "claude-opus-5-5": 0.20}
+
+
+def cache_rates(model: str) -> dict | None:
+    """{input, cache_read} USD per million for a listed Claude model (the
+    Analytics room's "what the cache saved"), or None."""
+    for name in sorted(CLAUDE_PRICES, key=len, reverse=True):
+        if model == name or model.startswith(name + "-"):
+            inp = CLAUDE_PRICES[name][0]
+            return {"input": inp, "cache_read": CLAUDE_CACHE_READ.get(name, inp * CACHE_READ)}
+    return None
 
 
 def claude_cost(model: str, used: dict) -> float | None:
     """A Claude API call's cost at list price, or None for an unlisted model."""
-    rate = None
+    rate = name = None
     for name in sorted(CLAUDE_PRICES, key=len, reverse=True):     # the longest name that fits
         if model == name or model.startswith(name + "-"):
             rate = CLAUDE_PRICES[name]
             break
     if rate is None:
         return None
-    inp, out = used.get("prompt_tokens") or 0, used.get("completion_tokens") or 0
-    return round((inp * rate[0] + out * rate[1]) / 1e6, 8)
+    read, write = used.get("cache_read_tokens") or 0, used.get("cache_write_tokens") or 0
+    prompt = used.get("prompt_tokens") or 0
+    fresh = max(0, prompt - read - write)
+    out = used.get("completion_tokens") or 0
+    if name in CLAUDE_LONG and prompt > CLAUDE_LONG[name][0]:
+        rate = CLAUDE_LONG[name][1]
+    reads = CLAUDE_CACHE_READ.get(name, rate[0] * CACHE_READ)
+    return round((fresh * rate[0] + read * reads + write * rate[0] * CACHE_WRITE + out * rate[1]) / 1e6, 8)
 
 
 def _headers(provider: str, endpoint: str = "chat", model: str | None = None) -> dict:
@@ -661,6 +825,10 @@ def _headers(provider: str, endpoint: str = "chat", model: str | None = None) ->
         h.update({"x-api-key": k, "anthropic-version": "2023-06-01"})
     if provider == "opencode-go":
         h["User-Agent"] = "redline-studio"         # OpenCode asks clients to say who they are
+        if SESSION.get():
+            # "Send a stable session ID in x-opencode-session for each
+            # conversation so we can optimize routing and prompt caching."
+            h["x-opencode-session"] = SESSION.get()
     return h
 
 
@@ -693,8 +861,11 @@ def _openai_messages(messages: list[dict]) -> list[dict]:
 
 def _openai_body(provider: str, model: str, messages: list[dict], max_tokens: int,
                  temperature: float | None, reasoning: bool, stream: bool = False,
-                 tools: list[dict] | None = None) -> dict:
-    body: dict = {"model": model, "messages": _openai_messages(messages), "max_tokens": max_tokens, "stream": stream}
+                 tools: list[dict] | None = None, cache: bool = False) -> dict:
+    lines = _openai_messages(messages)
+    if cache and caches(provider, "chat", model):
+        lines = _mark_openai(lines)
+    body: dict = {"model": model, "messages": lines, "max_tokens": max_tokens, "stream": stream}
     if tools:
         body["tools"] = [{"type": "function", "function": t} for t in tools]
     if temperature is not None:
@@ -807,10 +978,11 @@ def _declined(provider: str, d: dict) -> RuntimeError:
 
 def _build(provider: str, endpoint: str, model: str, messages: list[dict], max_tokens: int,
            temperature: float | None, reasoning: bool, stream: bool,
-           tools: list[dict] | None = None) -> tuple[str, dict]:
+           tools: list[dict] | None = None, cache: bool = False) -> tuple[str, dict]:
     base = PROVIDERS[provider]["base"]
+    cache = cache and caches(provider, endpoint, model)
     if endpoint == "messages":
-        body = _to_anthropic(messages, max_tokens, temperature, model, stream=stream, tools=tools)
+        body = _to_anthropic(messages, max_tokens, temperature, model, stream=stream, tools=tools, cache=cache)
         if provider == "claude":
             body = _claude_extras(body, model, reasoning, stream)
         return base + "/messages", body
@@ -818,7 +990,7 @@ def _build(provider: str, endpoint: str, model: str, messages: list[dict], max_t
         return base + "/responses", _to_responses(messages, max_tokens, model, stream=stream, tools=tools,
                                                   reasoning=reasoning)
     return base + "/chat/completions", _openai_body(provider, model, messages, max_tokens, temperature, reasoning,
-                                                    stream=stream, tools=tools)
+                                                    stream=stream, tools=tools, cache=cache)
 
 
 async def complete(messages: list[dict], *, job: str | None = None, provider: str | None = None,
@@ -864,13 +1036,20 @@ async def complete(messages: list[dict], *, job: str | None = None, provider: st
         text = "".join(b.get("text", "") for b in d.get("content") or [] if b.get("type") == "text")
         u = d.get("usage") or {}
         d = {"choices": [{"message": {"role": "assistant", "content": text}}],
-             "usage": {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}}
+             "usage": _anthropic_usage(u, {"prompt_tokens": u.get("input_tokens"),
+                                           "completion_tokens": u.get("output_tokens")})}
     elif endpoint == "responses":
         text = "".join(c.get("text", "") for it in d.get("output") or [] if it.get("type") == "message"
                        for c in it.get("content") or [] if c.get("type") == "output_text")
         u = d.get("usage") or {}
+        read, _ = _cached(u)
         d = {"choices": [{"message": {"role": "assistant", "content": text}}],
-             "usage": {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}}
+             "usage": {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens"),
+                       **({"cache_read_tokens": read} if read else {})}}
+    elif isinstance(d.get("usage"), dict):
+        read, write = _cached(d["usage"])
+        if read or write:
+            d["usage"].update(cache_read_tokens=read, cache_write_tokens=write)
     if provider == "claude":
         d.setdefault("usage", {})["cost"] = claude_cost(model, d["usage"])
     d["provider"], d["model"] = provider, model
@@ -878,18 +1057,23 @@ async def complete(messages: list[dict], *, job: str | None = None, provider: st
 
 
 async def stream(messages: list[dict], *, provider: str, model: str, max_tokens: int = 8000,
-                 temperature: float | None = None, tools: list[dict] | None = None) -> AsyncIterator[dict]:
+                 temperature: float | None = None, tools: list[dict] | None = None,
+                 cache: bool = True) -> AsyncIterator[dict]:
     """The answer as it is written: {"text": ...} pieces, {"thinking": ...}
     while the model reasons, and a last {"usage": {...}}. With `tools`
     ({name, description, parameters}): the tools the model asked for, once
     it has, as {"calls": [{id, name, arguments}]} before the usage - for
     the caller to run and hand back (backend/ccgen.py). On Anthropic's
     format the turn's own content blocks come with them, {"blocks": [...]},
-    for the caller to put on the assistant turn it sends back."""
+    for the caller to put on the assistant turn it sends back. The usage
+    says what came from the provider's cache (`cache_read_tokens`) and
+    what went into it (`cache_write_tokens`), within `prompt_tokens`; with
+    `cache` the request is marked for it where the provider takes marks.
+    """
     import httpx
 
     endpoint = await _endpoint(provider, model)
-    url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True, tools)
+    url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True, tools, cache)
     usage: dict = {}
     calls: dict[int, dict] = {}                        # by the block's (or the call's) index
     blocks: dict[int, dict] = {}                       # Anthropic's content blocks, by index
@@ -902,7 +1086,13 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
                     if attempt == 0 and r.status_code == 400 and "fallbacks" in body and _refuses_fallback(r):
                         _NO_FALLBACK.add(model)            # not offered here: once more without
                         url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True,
-                                           tools)
+                                           tools, cache)
+                        continue
+                    if attempt == 0 and r.status_code == 400 and "cache_control" in json.dumps(body) \
+                            and "cache" in (r.text or "").lower():
+                        _NO_CACHE.add((provider, model))   # the marks refused: once more without, and remembered
+                        url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True,
+                                           tools, False)
                         continue
                     raise _error(provider, r)
                 async for line in r.aiter_lines():
@@ -942,11 +1132,12 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
                         elif t == "message_start":
                             u = (ev.get("message") or {}).get("usage") or {}
                             usage["prompt_tokens"] = u.get("input_tokens")
+                            _anthropic_usage(u, usage)
                         elif t == "message_delta":
                             u = ev.get("usage") or {}
                             usage["completion_tokens"] = u.get("output_tokens")
                             if u.get("input_tokens") is not None:
-                                usage["prompt_tokens"] = u["input_tokens"]
+                                _anthropic_usage(u, usage)
                             stop = {**(ev.get("delta") or {})}
                         elif t == "error":
                             raise RuntimeError(str((ev.get("error") or {}).get("message") or ev)[:300])
@@ -973,12 +1164,18 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
                         elif t == "response.completed":
                             u = (ev.get("response") or {}).get("usage") or {}
                             usage = {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
+                            read, _ = _cached(u)
+                            if read:
+                                usage["cache_read_tokens"] = read
                         elif t in ("error", "response.failed"):
                             err = ev.get("error") or (ev.get("response") or {}).get("error") or ev
                             raise RuntimeError(str(err.get("message") if isinstance(err, dict) else err)[:300])
                         continue
                     if ev.get("usage"):
                         usage = {k: ev["usage"].get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
+                        read, write = _cached(ev["usage"])
+                        if read or write:
+                            usage.update(cache_read_tokens=read, cache_write_tokens=write)
                     if isinstance(ev.get("error"), dict):
                         raise RuntimeError(str(ev["error"].get("message") or ev["error"])[:300])
                     for ch in ev.get("choices") or []:
@@ -1051,11 +1248,15 @@ async def record(db, *, provider: str, model: str, surface: str, kind: str, used
     if cost is None and provider == "claude":
         cost = claude_cost(model, used)
     basis = "unpriced" if cost is None else "list" if provider == "claude" else "billed"
+    # Input as the usage log counts it: fresh, apart from what was read
+    # from the provider's cache or written to it (the Analytics room's cache
+    # figures - hit ratio, what it saved - read those).
+    read, write = int(used.get("cache_read_tokens") or 0), int(used.get("cache_write_tokens") or 0)
     try:
         await _usage.record_call(
             db, _id=f"{provider[:2]}:{uuid.uuid4().hex[:16]}", provider=provider, surface=surface,
-            kind=kind, model=model, input=used.get("prompt_tokens") or 0,
-            output=used.get("completion_tokens") or 0, cache_read=0, cache_write=0, thinking=0,
+            kind=kind, model=model, input=max(0, (used.get("prompt_tokens") or 0) - read - write),
+            output=used.get("completion_tokens") or 0, cache_read=read, cache_write=write, thinking=0,
             cost_usd=cost, cost_basis=basis, revision=None)
     except Exception:                                  # noqa: BLE001 - the answer matters more
         log.warning("could not record a %s call", provider)

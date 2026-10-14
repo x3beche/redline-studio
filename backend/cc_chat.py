@@ -222,6 +222,14 @@ def public(m: dict) -> dict:
 RECALL_RECENT = 1_500            # characters of a step's result replayed for the newest answers
 RECALL_OLD = 300                 # and for older ones
 RECENT_ANSWERS = 2
+# What is replayed of an answer changes in steps, not with every line, so the
+# start of the conversation the model is sent stays the same from one line to
+# the next and the provider's prompt cache keeps it (backend/llm.py): the
+# answers count as "newest" from a boundary that moves every RECALL_STEP
+# answers, and when the conversation is over CONTEXT_CHARS its oldest lines
+# go CUT_STEP at a time.
+RECALL_STEP = 6
+CUT_STEP = 20
 STEPS_NOTE = (
     "Earlier answers in this conversation show the tools they ran and what came back - as tool "
     "calls and results, or as a list the server wrote at the start of the answer ('[Tools run "
@@ -321,10 +329,9 @@ def history(msgs: list[dict], images: list[dict] | None = None, tools: set[str] 
     The newest answers keep more of each result than older ones."""
     people = {(m.get("by") or {}).get("id") for m in msgs if m["role"] == "user"}
     named = len(people) > 1
-    units: list[list[dict]] = []
-    used = 0
-    answers = 0
-    stepped = False
+    units: list[tuple[int, int, list[dict], bool]] = []          # (line, size, turns, has steps)
+    said = [i for i, m in enumerate(msgs) if m["role"] == "assistant"]
+    recent_from = said[(max(0, len(said) - RECENT_ANSWERS) // RECALL_STEP) * RECALL_STEP] if said else 0
     for idx in range(len(msgs) - 1, -1, -1):
         m = msgs[idx]
         text = m.get("content") or ""
@@ -336,17 +343,24 @@ def history(msgs: list[dict], images: list[dict] | None = None, tools: set[str] 
         if m["role"] == "user" and m.get("context"):
             text = m["context"] + "\n\n" + text
         if steps:
-            n = RECALL_RECENT if answers < RECENT_ANSWERS else RECALL_OLD
+            n = RECALL_RECENT if idx >= recent_from else RECALL_OLD
             calls = bool(tools) and all(s.get("tool") in tools for s in steps)
             unit, size = _replay(m, text, n, calls, str(idx))
-            stepped = True
         else:
             unit, size = [{"role": m["role"], "content": text}], len(text)
-        answers += m["role"] == "assistant"
+        units.append((idx, size, unit, bool(steps)))
+    # Over the budget: the newest that fit, cut at a step of CUT_STEP lines
+    # (the newest line always goes).
+    used, first = 0, None
+    for idx, size, _, _ in units:
         used += size
-        if used > CONTEXT_CHARS and units:
+        if used > CONTEXT_CHARS and first is not None:
+            start = -(-first // CUT_STEP) * CUT_STEP
+            units = [u for u in units if u[0] >= start] or units[:1]
             break
-        units.append(unit)
+        first = idx
+    stepped = any(u[3] for u in units)
+    units = [u[2] for u in units]
     # The API wants the turns to alternate and to start with the person;
     # two plain lines in a row from people (two people, or an answer that
     # failed) are joined into one.

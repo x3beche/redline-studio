@@ -568,12 +568,15 @@ def test_older_answers_keep_less_of_each_result(monkeypatch):
     big = _answered()
     big["steps"][0]["result"] = "x" * 5000
     msgs = []
-    for i in range(4):
+    for i in range(9):
         msgs += [{**_asked(f"q{i}"), "id": f"q{i}"}, {**big, "id": f"a{i}"}]
-    msgs.append({**_asked("again"), "id": "q9"})
+    msgs.append({**_asked("again"), "id": "q99"})
     h = cc_chat.history(msgs, tools=ALL)
     firsts = [m["content"] for m in h if m["role"] == "tool" and m["content"].startswith("x")]
-    assert len(firsts) == 4
+    assert len(firsts) == 9
+    # "Newer" starts at a boundary that moves every RECALL_STEP answers (the
+    # prompt cache keeps what is before it): here the last three answers.
+    assert [len(f) > cc_chat.RECALL_OLD + 200 for f in firsts] == [False] * 6 + [True] * 3
     assert len(firsts[-1]) < cc_chat.RECALL_RECENT + 200 and len(firsts[0]) < cc_chat.RECALL_OLD + 200
     assert len(firsts[0]) < len(firsts[-1])
     # A shortened result says it is only shortened here, not that the model lacked it.

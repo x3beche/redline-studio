@@ -121,7 +121,8 @@ export interface CcMessage {
   interrupted?: boolean;
   /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
   tasks?: Record<string, TaskState>;
-  usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null };
+  usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null;
+           cache_read_tokens?: number | null; cache_write_tokens?: number | null };
   timing?: CcTiming;
 }
 export interface CcChat {
@@ -2754,6 +2755,10 @@ export class RoomCommandCode implements OnDestroy {
     if (tm.first_at && tm.finished_at) add('Writing', this.secs(Math.max(0, Date.parse(tm.finished_at) - Date.parse(tm.first_at))));
     add('Total time', tm.total_ms != null ? this.secs(tm.total_ms) : m.ms ? this.secs(m.ms) : '');
     add('Tokens in', u.prompt_tokens ? this.num(u.prompt_tokens) : '');
+    // Of those, what the provider read back from its prompt cache, and wrote to it.
+    add('From cache', u.cache_read_tokens && u.prompt_tokens
+      ? `${this.num(u.cache_read_tokens)} · ${Math.round(u.cache_read_tokens / u.prompt_tokens * 100)}%` : '');
+    add('Written to cache', u.cache_write_tokens ? this.num(u.cache_write_tokens) : '');
     const outTok = u.completion_tokens ?? tm.out_tokens;
     add('Tokens out', outTok ? `${tm.estimated && !u.completion_tokens ? '~' : ''}${this.num(outTok)}` : '');
     add('Thinking tokens', m.thinking ? `~${this.num(Math.ceil(m.thinking.length / 4))}` : '');

@@ -315,6 +315,8 @@ const TR: Record<string, string> = {
   'Searching…': 'Aranıyor…',
   'Nothing found.': 'Hiçbir şey bulunamadı.',
   'Tokens in': 'Giren token',
+  'From cache': 'Önbellekten',
+  'Written to cache': 'Önbelleğe yazılan',
   'Tokens out': 'Çıkan token',
   'Cost': 'Maliyet',
   'answers priced': 'cevap fiyatlı',

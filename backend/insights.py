@@ -37,7 +37,7 @@ from pathlib import Path
 
 import psutil
 
-from . import compute, lcsc, scope, store, sysinfo, usage
+from . import compute, lcsc, llm, scope, store, sysinfo, usage
 
 METRICS = "metrics"
 TIMINGS = "api_timings"
@@ -1119,7 +1119,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     looked = cache["read"] + cache["write"] + cache["fresh"]
     cache["hit_ratio"] = round(cache["read"] / looked, 4) if looked else None
     for r in agg["model"]:
-        rates = usage._rates(r["_id"] or "")
+        rates = usage._rates(r["_id"] or "") or llm.cache_rates(r["_id"] or "")
         saved = None
         if rates:
             saved = r["cache_read"] * (rates["input"] - rates["cache_read"]) / 1e6

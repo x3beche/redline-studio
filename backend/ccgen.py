@@ -544,6 +544,9 @@ async def run(gid: str, db=None) -> dict | None:
             if rounds > MAX_ROUNDS + 1:
                 break
 
+    # The conversation the calls belong to: a provider that routes by it
+    # keeps its start in the same cache (llm.SESSION).
+    llm.SESSION.set(gen.get("chat") or None)
     task = asyncio.create_task(produce())
     stopped = False
     written = (0, 0, 0)
@@ -604,6 +607,9 @@ async def run(gid: str, db=None) -> dict | None:
         answer["thinking_ms"] = round(out["thought"] * 1000)
     used = out["used"]
     answer["usage"] = {k: used.get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
+    for k in ("cache_read_tokens", "cache_write_tokens"):         # of prompt_tokens: the provider's cache
+        if used.get(k):
+            answer["usage"][k] = used[k]
     answer["timing"] = timing(gen.get("started_at") or out["first_at"], out["first_at"], now(),
                               used.get("completion_tokens"), len(out["text"]) + len(out["thinking"]))
     status = "failed" if error else "stopped" if stopped else "done"
