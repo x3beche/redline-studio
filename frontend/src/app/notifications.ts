@@ -141,7 +141,9 @@ export class NotifyStore {
     this.fresh.update(n => n + 1);
     // Something new since the last look (not just the page's first look).
     const n = got.latest && !got.latest.read ? Math.max(1, got.unread - before) : 0;
-    if (n && this.toasts() && Date.now() - this.lastToast > TOAST_GAP_MS) {
+    // Not about the place on screen (a Chat answer in the conversation open): that is seen already.
+    const here = n === 1 && !!got.latest?.link && got.latest.link.split('?')[0] === location.pathname;
+    if (n && !here && this.toasts() && Date.now() - this.lastToast > TOAST_GAP_MS) {
       this.lastToast = Date.now();
       const x = got.latest!;
       const text = n > 1 ? `${n} ${t('new notifications')}` : t(x.title) + (ncCtx(x) ? ` · ${ncCtx(x)}` : '');
