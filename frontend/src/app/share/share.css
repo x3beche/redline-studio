@@ -1,6 +1,7 @@
 /* The Share dialog (share-dialog.ts). Flat: hairlines, no cards, no fills
    for what is chosen - the chosen word is set in ink and weight. */
-:host { position: fixed; inset: 0; z-index: 90; }
+/* Over every panel of the page; under Confirm (10000), which asks before Turn off. */
+:host { position: fixed; inset: 0; z-index: 9000; }
 .sh-wrap { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; }
 .sh-veil { position: absolute; inset: 0; background: var(--scrim); }
 .sh-box { position: relative; width: min(660px, 100%); max-height: calc(100dvh - 32px); overflow: auto;
@@ -10,7 +11,7 @@
 .sh-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
 .sh-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 500; color: var(--ink-dim);
               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sh-head h2 b { color: var(--ink-bright); font-weight: 600; }
+.sh-head h2 b { margin-left: .4em; color: var(--ink-bright); font-weight: 600; }
 .sh-x { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 4px;
         background: none; color: var(--ink-dim); cursor: pointer; }
 .sh-x svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
