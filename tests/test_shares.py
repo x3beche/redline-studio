@@ -372,6 +372,9 @@ def test_a_board_and_a_drawing(db):
     assert meta["downloads"] == ["step"] and meta["version"]["label"] == "v7"
     svg = v.get(f"/api/public/s/{b}/view/layout.svg")
     assert svg.headers["content-type"].startswith("image/svg+xml") and b"Owner" not in svg.content
+    assert v.get(f"/api/public/s/{b}/view/layout.svg?light=1").status_code == 200    # light inks, for a light theme
+    glb = v.get(f"/api/public/s/{b}/view/board.glb")
+    assert glb.content == b"glTF" and glb.headers["content-type"] == "model/gltf-binary"
     d = token_of(share(own, kind="drawing"))
     meta = v.get(f"/api/public/s/{d}").json()
     assert meta["views"] == ["sheet.png"] and meta["downloads"] == []
