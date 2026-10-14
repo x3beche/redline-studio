@@ -108,6 +108,13 @@ _RULES: list[tuple[str, str, str]] = [
     # one's own notifications and what comes in them (backend/notifications.py):
     # anyone signed in, about themselves only; a page session only reads them
     ("*", "/api/notifications(/.*)?", "view"),
+    # scheduled tasks (backend/sched): the scheduler's switch is the
+    # server's; making, changing, running and pausing a task is working
+    # (each type's own right is checked by the routes); deleting one falls
+    # under DELETE, and looking - the next times of a schedule too - under GET
+    ("PUT", "/api/scheduled/settings", "settings"),
+    ("POST", "/api/scheduled(/.*)?", "draw"),
+    ("PATCH", "/api/scheduled(/.*)?", "draw"),
     # the accounts (backend/admin.py): the owner and the admins; the routes
     # keep what only the owner may do (roles, deleting) to the owner
     ("*", "/api/admin(/.*)?", "users"),

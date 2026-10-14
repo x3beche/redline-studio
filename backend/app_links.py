@@ -20,6 +20,7 @@ ROOM_PATH = {
     "cad": "3d", "pcb": "pcb", "firmware": "firmware", "notes": "notes", "taste": "taste",
     "mfr": "parts", "commandcode": "chat", "files": "files", "tools": "basic-tools",
     "settings": "settings", "analyze": "analytics", "wiki": "wiki", "notifications": "notifications",
+    "tasks": "tasks",
 }
 #: The names rooms had in old links (?ws=chat, ?ws=catalog).
 OLD_NAMES = {"chat": "commandcode", "catalog": "mfr", "supply": "mfr", "inventory": "mfr", "parts": "mfr",
@@ -109,6 +110,11 @@ def wiki(project: str | None = None, page: str | None = None) -> str:
     if not project:
         return "/wiki"
     return f"/wiki/{seg(project)}" + (f"/{seg(page)}" if page else "")
+
+
+def task(tid: str | None = None) -> str:
+    """The Tasks tab, on one scheduled task (backend/sched)."""
+    return "/tasks" + (f"/{seg(tid)}" if tid else "")
 
 
 def analytics(range_: str | None = None, project: str | None = None) -> str:

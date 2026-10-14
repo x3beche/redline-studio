@@ -98,6 +98,9 @@ app.include_router(themes_api.router)
 # A ```task block in a chat, into the queue with one click (backend/tasks.py).
 from . import tasks as tasks_api  # noqa: E402
 app.include_router(tasks_api.router)
+# Scheduled tasks: built-in jobs on a schedule, the Tasks tab (backend/sched).
+from .sched import api as sched_api  # noqa: E402
+app.include_router(sched_api.router)
 # A part's 3D bodies - LCSC's and the drawn ones - and a board's choice (backend/bodies.py).
 from . import bodies_api  # noqa: E402
 app.include_router(bodies_api.router)
@@ -3198,6 +3201,9 @@ async def _start_sampler():
             asyncio.create_task(parts_trash.trash_loop(db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
+            # Scheduled tasks: one loop, under a lease, each run a process of its own (backend/sched/core.py).
+            from .sched import core as sched_core
+            asyncio.create_task(sched_core.loop(lambda: db().raw))
         except Exception as exc:                       # noqa: BLE001 - the rest of the server still starts
             LOG.warning("proxy settings or the loops not started: %s", exc)
 
