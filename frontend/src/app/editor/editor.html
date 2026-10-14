@@ -22,9 +22,9 @@
          [style.padding-inline]="collapsed() ? '0' : '8px'"
          [style.border-bottom]="collapsed() ? null : '1px solid var(--line)'">
       @if (collapsed()) {
-        <button (click)="toggleSidebar()" class="tcv-rail-btn tcv-rail-mark"
+        <button (click)="toggleSidebar()" class="tcv-rail-mark"
                 title="show the catalog">
-<svg viewBox="0 0 64 64" class="h-[20px] w-[20px] shrink-0" aria-hidden="true" fill="var(--ink)">
+<svg viewBox="8 8 48 48" class="shrink-0" aria-hidden="true" fill="var(--ink)">
             <!-- A section mark: a part cut open, the way a drawing shows it. -->
             <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
           </svg>
@@ -638,17 +638,8 @@
          [class.tcv-fold-shut]="queueShut()"
          style="border: 1px solid var(--line)">
 
-    <!-- Folded, the rail starts with the app's mark, like the catalog's - a
-         click opens it again - and still says how many are waiting. -->
-    @if (queueShut()) {
-      <div class="flex shrink-0 justify-center py-2">
-        <button class="tcv-rail-btn tcv-rail-mark" (click)="toggleQueue()" [title]="'Show the revisions' | t">
-          <svg viewBox="0 0 64 64" class="h-[20px] w-[20px] shrink-0" aria-hidden="true" fill="var(--ink)">
-            <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
-          </svg>
-        </button>
-      </div>
-    }
+    <!-- Folded, the rail still says how many are waiting: that is the one
+         thing worth knowing without opening it. -->
     @if (queueShut() && queueCount()) {
       <div class="flex shrink-0 justify-center px-1 py-2">
         <span class="mono rounded px-1 text-[10px] font-bold"

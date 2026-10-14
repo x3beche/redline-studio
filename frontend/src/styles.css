@@ -2601,12 +2601,15 @@ body {
   width: 44px !important;
   max-width: 44px !important;
 }
-/* A folded rail's head: the app's mark in a square, the way back to the panel. */
+/* A folded catalog's head: the app's mark, square, as far from the top as
+   from the sides (the rail is 42px inside its border: 8 + 26 + 8), on the
+   panel's own ground - no box round it. A click opens the catalog again. */
 .tcv-rail-mark {
-  display: grid; place-items: center; width: 32px; height: 32px; margin: 0 auto;
-  border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); cursor: pointer;
+  display: block; width: 26px; height: 26px; margin: 0 auto; padding: 0;
+  border: 0; border-radius: 0; background: transparent; cursor: pointer;
 }
-.tcv-rail-mark:hover { border-color: var(--ink-dim); }
+.tcv-rail-mark svg { display: block; width: 26px; height: 26px; }
+.tcv-rail-mark:hover { background: transparent; opacity: .8; }
 
 /* The collapsed catalog is a rail, not a squeezed panel. At 18px with a
    three-letter label and a number under every bar it read as a broken
