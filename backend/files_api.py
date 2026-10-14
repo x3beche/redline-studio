@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
-from . import access, actors, filemesh, files, pdftext
+from . import access, actors, filemesh, files, files_virtual, pdftext
 
 router = APIRouter()
 
@@ -58,6 +58,27 @@ def _refused() -> HTTPException:
     return HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
 
 
+def _read_only(*ids: str) -> None:
+    """A read-only folders' entry (backend/files_virtual.py) is not renamed,
+    moved or deleted here: 403, with where it is changed."""
+    for i in ids:
+        if files_virtual.is_virtual(i):
+            raise HTTPException(403, files_virtual.refusal(i))
+
+
+async def _not_parts(files_: list[str] = (), folders: list[str] = ()) -> None:
+    """The Parts page's own uploads and folders are changed there (or by the
+    Chat's product tools, which check their own rights), never from Files: 403."""
+    tops = await files_virtual.folder_tops(_db())
+    if any(tops.get(f, "") in files_virtual.PART_FOLDERS for f in folders if f):
+        raise HTTPException(403, files_virtual.PARTS_REFUSAL)
+    ids = [i for i in files_ if i and not files_virtual.is_virtual(i)]
+    if ids:
+        async for d in _db()[files.COLL].find({"_id": {"$in": ids}}, {"context": 1, "folder": 1}):
+            if files_virtual.parts_owned(d, tops):
+                raise HTTPException(403, files_virtual.PARTS_REFUSAL)
+
+
 def _disposition(how: str, name: str) -> str:
     ascii_name = re.sub(r'[^A-Za-z0-9._-]', "_", name)
     return f"{how}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
@@ -67,7 +88,93 @@ def _disposition(how: str, name: str) -> str:
 
 @router.get("/api/files/folders")
 async def folders_list():
-    return [folder_out(f) for f in await files.all_folders(_db())]
+    tops = await files_virtual.folder_tops(_db())
+    return [{**folder_out(f), **({"ro": True, "where": "parts"} if tops.get(f["_id"]) in files_virtual.PART_FOLDERS else {})}
+            for f in await files.all_folders(_db())]
+
+
+# ---------------------------------------------------------------- the read-only folders, and how much there is
+
+@router.get("/api/files/virtual")
+async def files_virtual_tree():
+    """Projects, Chat and Parts as read-only folders (backend/files_virtual.py):
+    {folders, files, links} - the Projects' files themselves, and which of
+    Files the Chat's and Parts' folders refer to."""
+    return await files_virtual.tree(_db())
+
+
+@router.get("/api/files/usage")
+async def files_usage(range: str = "auto"):  # noqa: A002 - the query's name, as Analytics' own
+    """How many files and how much data, per area, the largest, and what
+    was added in the range: 7d, 30d, 90d, all, or auto (the shortest that
+    holds what was added lately)."""
+    return await files_virtual.usage(_db(), range if range in ("7d", "30d", "90d", "all") else "auto")
+
+
+@router.get("/api/files/uses")
+async def files_uses(ids: str = ""):
+    """What uses each of these files - conversations, products, a model -
+    for the delete dialog (at most 500 ids, comma-separated)."""
+    want = [i for i in ids.split(",") if i and not files_virtual.is_virtual(i)][:500]
+    return await files_virtual.uses(_db(), want) if want else {}
+
+
+# ---------------------------------------------------------------- the trash
+
+def _trash_out(d: dict) -> dict:
+    out = file_out(d)
+    for k in ("deleted_at", "deleted_by", "purge_at", "folder_path"):
+        out[k] = d.get(k)
+    try:
+        left = datetime.fromisoformat(d["purge_at"]) - datetime.now(timezone.utc)
+        out["days_left"] = max(0, left.days + (1 if left.seconds else 0))
+    except (KeyError, TypeError, ValueError):
+        out["days_left"] = None
+    return out
+
+
+@router.get("/api/files/trash")
+async def files_trash():
+    """Files deleted from Files, kept TRASH_DAYS before they are deleted for good."""
+    return {"days": files.TRASH_DAYS, "files": [_trash_out(d) for d in await files.trash(_db())]}
+
+
+class TrashIn(BaseModel):
+    files: list[str] = Field(default_factory=list, max_length=5000)
+
+
+async def _trashed(ids: list[str]) -> list[dict]:
+    docs = [d async for d in _db()[files.TRASH].find({"_id": {"$in": ids}}, {"by": 1, "name": 1})]
+    if any(not _may_remove(d) for d in docs):
+        raise _refused()
+    return docs
+
+
+@router.post("/api/files/trash/restore")
+async def files_trash_restore(body: TrashIn):
+    """Files back from the trash, into their folders. Yours, or anyone's with the right to delete."""
+    back, refused = [], []
+    for d in await _trashed(body.files):
+        try:
+            back.append(file_out(await files.restore(_db(), d["_id"])))
+        except (KeyError, files.Clash) as exc:
+            refused.append({"id": d["_id"], "name": d.get("name"), "why": str(exc)})
+    if back:
+        await actors.audit(_db(), "restore", f"{len(back)} file(s): " + ", ".join(f["name"] for f in back)[:300],
+                           {"ids": [f["id"] for f in back]})
+    return {"restored": back, "refused": refused}
+
+
+@router.post("/api/files/trash/purge")
+async def files_trash_purge(body: TrashIn):
+    """Files in the trash, deleted for good now."""
+    docs = await _trashed(body.files)
+    for d in docs:
+        await files.purge(_db(), d["_id"])
+    if docs:
+        await actors.audit(_db(), "purge", f"{len(docs)} file(s) for good: " + ", ".join(d.get("name") or "" for d in docs)[:300],
+                           {"ids": [d["_id"] for d in docs]})
+    return {"purged": [d["_id"] for d in docs]}
 
 
 class FolderIn(BaseModel):
@@ -79,6 +186,8 @@ class FolderIn(BaseModel):
 
 @router.post("/api/files/folders")
 async def folders_make(body: FolderIn):
+    _read_only(body.parent)
+    await _not_parts(folders=[body.parent])
     try:
         if body.path:
             doc = await files.make_path(_db(), body.path, actors.current())
@@ -99,6 +208,8 @@ class FolderPatch(BaseModel):
 
 @router.patch("/api/files/folders/{fid}")
 async def folders_rename(fid: str, body: FolderPatch):
+    _read_only(fid)
+    await _not_parts(folders=[fid])
     try:
         doc = await files.rename_folder(_db(), fid, body.name)
     except files.Clash as exc:
@@ -114,6 +225,8 @@ async def folders_rename(fid: str, body: FolderPatch):
 async def folders_delete(fid: str, contents: bool = False):
     """An empty folder; one with something in it only with `contents=true`
     (the page asks first), and only if every file in it is yours to delete."""
+    _read_only(fid)
+    await _not_parts(folders=[fid])
     doc = await _db()[files.FOLDERS].find_one({"_id": fid}, {"name": 1, "path": 1})
     if not doc:
         raise HTTPException(404, fid)
@@ -135,6 +248,8 @@ class MoveIn(BaseModel):
 
 @router.post("/api/files/move")
 async def files_move(body: MoveIn):
+    _read_only(*body.files, *body.folders, body.to)
+    await _not_parts(body.files, [*body.folders, body.to])
     try:
         return await files.move(_db(), body.files, body.folders, body.to)
     except files.Clash as exc:
@@ -152,6 +267,8 @@ class BulkDelete(BaseModel):
 @router.post("/api/files/bulk-delete")
 async def files_bulk_delete(body: BulkDelete):
     """Several files at once. Any of them not yours to delete, and none is."""
+    _read_only(*body.files)
+    await _not_parts(body.files)
     docs = [d async for d in _db()[files.COLL].find({"_id": {"$in": body.files}}, {"by": 1, "name": 1})]
     if any(not _may_remove(d) for d in docs):
         raise _refused()
@@ -173,6 +290,16 @@ async def files_zip(request: Request, folders: str = ""):
     if ids:
         async for d in db[files.COLL].find({"_id": {"$in": ids}}):
             entries.append((d["name"], d))
+    for v in [x for x in ids if files_virtual.is_virtual(x)]:
+        try:
+            d = await files_virtual.doc(db, v)
+        except KeyError as exc:
+            raise HTTPException(404, f"no file {v!r}") from exc
+        entries.append((d["name"], d))
+    vfolders = [x for x in fids if files_virtual.is_virtual(x)]
+    fids = [x for x in fids if not files_virtual.is_virtual(x)]
+    if vfolders:
+        entries += await _virtual_entries(db, vfolders)
     by_id: dict = {}
     if fids:
         every = await files.all_folders(db)
@@ -193,7 +320,7 @@ async def files_zip(request: Request, folders: str = ""):
     await files.write_zip(db, entries, fh)
     size = fh.tell()
     fh.seek(0)
-    name = (by_id[fids[0]]["name"] if len(fids) == 1 and not ids else
+    name = (by_id[fids[0]]["name"] if len(fids) == 1 and not ids and not vfolders else
             f"files-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}") + ".zip"
 
     def body():
@@ -207,11 +334,43 @@ async def files_zip(request: Request, folders: str = ""):
                                       "Content-Length": str(size)})
 
 
+async def _virtual_entries(db, roots: list[str]) -> list[tuple[str, dict]]:
+    """A read-only folder's files for a ZIP, by their path under it: the
+    Projects' own (read where they are kept) and the uploads the Chat's and
+    Parts' folders refer to."""
+    t = await files_virtual.tree(db)
+    by_id = {d["id"]: d for d in t["folders"]}
+    kids: dict[str, list[str]] = {}
+    for d in t["folders"]:
+        kids.setdefault(d["parent"], []).append(d["id"])
+    out: list[tuple[str, dict]] = []
+    for root in roots:
+        if root not in by_id:
+            raise HTTPException(404, f"no folder {root!r}")
+        rel: dict[str, str] = {root: by_id[root]["name"]}
+        todo = [root]
+        while todo:
+            at = todo.pop()
+            for k in kids.get(at, []):
+                if k not in rel:
+                    rel[k] = f"{rel[at]}/{by_id[k]['name']}"
+                    todo.append(k)
+        for f in t["files"]:
+            if f["folder"] in rel:
+                out.append((f"{rel[f['folder']]}/{f['name']}", await files_virtual.doc(db, f["id"])))
+        linked = [x for x in t["links"] if x["folder"] in rel]
+        docs = {d["_id"]: d async for d in db[files.COLL].find({"_id": {"$in": [x["file"] for x in linked]}})}
+        out += [(f"{rel[x['folder']]}/{docs[x['file']]['name']}", docs[x["file"]]) for x in linked if x["file"] in docs]
+    return out
+
+
 # ---------------------------------------------------------------- the files
 
 @router.get("/api/files")
 async def files_list(q: str = "", kind: str = "", board: str = "", folder: str | None = None):
-    out = [file_out(d) for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
+    tops = await files_virtual.folder_tops(_db())
+    out = [{**file_out(d), **({"ro": True, "where": "parts"} if files_virtual.parts_owned(d, tops) else {})}
+           for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
     # Which 3D files have a picture already, so the grid asks only for those.
     want = {files.solid_key(f["sha256"]) for f in out if _solid(f) and f.get("sha256")}
     if want:
@@ -247,6 +406,8 @@ async def files_upload(upload: list[UploadFile] = File(...), context: str = Form
             folder = (await files.make_path(_db(), folder_path, actors.current()))["_id"]
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+    _read_only(folder)
+    await _not_parts(folders=[folder])
     if folder and not await _db()[files.FOLDERS].find_one({"_id": folder}, {"_id": 1}):
         raise HTTPException(404, f"no folder {folder!r}")
     out = []
@@ -272,6 +433,11 @@ async def files_upload(upload: list[UploadFile] = File(...), context: str = Form
 
 
 async def _doc(fid: str) -> dict:
+    if files_virtual.is_virtual(fid):
+        try:
+            return await files_virtual.doc(_db(), fid)
+        except KeyError as exc:
+            raise HTTPException(404, fid) from exc
     doc = await _db()[files.COLL].find_one({"_id": fid}, {"thumb": 0})
     if not doc:
         raise HTTPException(404, fid)
@@ -311,6 +477,15 @@ async def files_info(fid: str):
     """One file's details without its bytes, with its folder's path - what
     the Chat's file viewer shows above a file it opens (rooms/file-modal.ts)."""
     out = file_out(await _doc(fid))
+    if files_virtual.is_virtual(fid):
+        dirs, _ = await files_virtual.projects(_db())
+        by_id = {d["id"]: d for d in dirs}
+        names, at = [], by_id.get(out["folder"])
+        while at and len(names) < 40:
+            names.insert(0, at["name"])
+            at = by_id.get(at["parent"])
+        out["folder_path"] = "/".join(["Projects", *names])
+        return out
     folder = await _db()[files.FOLDERS].find_one({"_id": out["folder"]}) if out["folder"] else None
     out["folder_path"] = (folder or {}).get("path") or ""
     return out
@@ -320,10 +495,7 @@ async def files_info(fid: str):
 async def files_thumb(fid: str, request: Request):
     """A small picture of an image, for the grid; made once and kept. A 3D
     file's is the one a page drew and sent (PUT below), if one has."""
-    raw = await _db()[files.COLL].find_one({"_id": fid}, {"thumb": 1, "kind": 1, "name": 1, "bytes": 1,
-                                                          "sha256": 1, "content_type": 1})
-    if not raw:
-        raise HTTPException(404, fid)
+    raw = await _row(fid, {"thumb": 1, "kind": 1, "name": 1, "bytes": 1, "sha256": 1, "content_type": 1})
     if _solid({"preview": files.preview_of(raw.get("name", ""), raw.get("kind", ""), raw.get("content_type", ""))}):
         key = files.solid_key(raw.get("sha256") or fid)
         tag = f"\"{key}\""
@@ -335,6 +507,8 @@ async def files_thumb(fid: str, request: Request):
             raise HTTPException(404, "no picture of this model yet")
         return Response(bytes(pic["data"]), media_type="image/webp", headers=cache)
     thumb = raw.get("thumb")
+    if not thumb and files_virtual.is_virtual(fid):
+        raise HTTPException(404, "no picture for this file")
     if not thumb:
         if raw.get("kind") != "image" or raw["name"].lower().endswith(".svg") or raw.get("bytes", 0) > 60 * 2 ** 20:
             raise HTTPException(404, "no picture for this file")
@@ -348,14 +522,25 @@ async def files_thumb(fid: str, request: Request):
                     headers={"Cache-Control": "private, max-age=86400"})
 
 
+async def _row(fid: str, fields: dict) -> dict:
+    """A file's record without its bytes - an upload's, or a read-only folders' file's."""
+    if files_virtual.is_virtual(fid):
+        try:
+            return await files_virtual.doc(_db(), fid, data=False)
+        except KeyError as exc:
+            raise HTTPException(404, fid) from exc
+    raw = await _db()[files.COLL].find_one({"_id": fid}, fields)
+    if not raw:
+        raise HTTPException(404, fid)
+    return raw
+
+
 @router.put("/api/files/{fid}/thumb")
 async def files_thumb_put(fid: str, request: Request):
     """A 3D file's picture, drawn by the page that first showed it (the
     server has no GPU to draw one) and kept for everyone after that. The
     first one sent stays: another is answered with the one kept."""
-    raw = await _db()[files.COLL].find_one({"_id": fid}, {"name": 1, "kind": 1, "sha256": 1, "content_type": 1})
-    if not raw:
-        raise HTTPException(404, fid)
+    raw = await _row(fid, {"name": 1, "kind": 1, "sha256": 1, "content_type": 1})
     if not _solid({"preview": files.preview_of(raw.get("name", ""), raw.get("kind", ""), raw.get("content_type", ""))}):
         raise HTTPException(415, "only a STEP or a 3D mesh has its picture sent")
     if request.headers.get("content-type", "").split(";")[0].strip() not in ("image/png", "image/webp"):
@@ -494,6 +679,8 @@ class FilePatch(BaseModel):
 
 @router.patch("/api/files/{fid}")
 async def files_update(fid: str, body: FilePatch):
+    _read_only(fid)
+    await _not_parts([fid])
     try:
         doc = await files.update(_db(), fid, body.note, body.board, body.name)
     except ValueError as exc:
@@ -505,6 +692,8 @@ async def files_update(fid: str, body: FilePatch):
 
 @router.delete("/api/files/{fid}")
 async def files_delete(fid: str):
+    _read_only(fid)
+    await _not_parts([fid])
     doc = await _db()[files.COLL].find_one({"_id": fid}, {"by": 1, "name": 1})
     if not doc:
         raise HTTPException(404, fid)

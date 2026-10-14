@@ -24,6 +24,7 @@ import contextvars
 import csv
 import hashlib
 import io
+import logging
 import mimetypes
 import os
 import re
@@ -31,7 +32,7 @@ import secrets
 import tarfile
 import zipfile
 from xml.etree import ElementTree
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 
 COLL = "files"
@@ -164,6 +165,14 @@ async def listing(db, q: str = "", kind: str = "", board: str = "", limit: int =
 
 
 async def get(db, fid: str) -> tuple[dict, bytes]:
+    if fid.startswith("v:"):
+        # One of the read-only folders' files: a room's own (backend/files_virtual.py).
+        from . import files_virtual
+        doc = await files_virtual.doc(db, fid)
+        if "_grid" in doc:
+            stream = await open_stream(db, doc)
+            return doc, await stream.read()
+        return doc, doc["_data"]
     doc = await db[COLL].find_one({"_id": fid})
     if not doc:
         raise KeyError(fid)
@@ -192,24 +201,116 @@ async def update(db, fid: str, note: str | None = None, board: str | None = None
     return await db[COLL].find_one({"_id": fid}, {"gridfs_id": 0, "thumb": 0})
 
 
-async def remove(db, fid: str) -> bool:
-    doc = await db[COLL].find_one({"_id": fid}, {"gridfs_id": 1, "sha256": 1})
+async def remove(db, fid: str, *, forever: bool = False) -> bool:
+    """A file out of Files: into the trash (TRASH_DAYS, then gone for good),
+    or `forever`. Where it was used - a Chat line, a Parts product - says it
+    is gone; restore() takes that back."""
+    doc = await db[COLL].find_one({"_id": fid}, {"thumb": 0})
     if not doc:
         return False
     held = HOLD.get()
     if held is not None:
         held.append(doc["gridfs_id"])         # the Chat's undo keeps the bytes for its window (chat_undo.py)
+    elif forever:
+        await _drop_bytes(db, doc)
     else:
-        try:
-            await _bucket(db).delete(doc["gridfs_id"])
-        except Exception:
-            pass                              # the bytes are gone already; drop the record anyway
+        await _to_trash(db, doc)
     await db[COLL].delete_one({"_id": fid})
-    # A 3D file's picture is kept by content: it goes with the last copy.
-    sha = doc.get("sha256")
-    if sha and not await db[COLL].count_documents({"sha256": sha}, limit=1):
-        await db[SOLID_THUMBS].delete_many({"sha256": sha})
+    if held is not None or forever:
+        await _drop_thumb(db, doc.get("sha256"))
+    from . import actors, files_virtual
+    try:
+        await files_virtual.mark_gone(db, {**doc, "name": doc.get("name") or fid}, actors.current())
+    except Exception as exc:                          # noqa: BLE001 - the file is gone either way
+        logging.getLogger(__name__).warning("marking %s gone failed: %s", fid, exc)
+    if held is None and not forever:
+        await sweep(db)
     return True
+
+
+# ---------------------------------------------------------------- the trash
+
+# A file deleted from Files keeps its bytes this long, then a sweep deletes it
+# for good - as long as the Chat's undo keeps what a tool deleted (chat_undo.py).
+TRASH = "file_trash"
+TRASH_DAYS = max(1, int(os.environ.get("REDLINE_FILES_TRASH_DAYS")
+                        or os.environ.get("REDLINE_CC_UNDO_DAYS") or 30))
+
+
+async def _drop_bytes(db, doc: dict) -> None:
+    try:
+        await _bucket(db).delete(doc["gridfs_id"])
+    except Exception:
+        pass                                  # the bytes are gone already; drop the record anyway
+
+
+async def _drop_thumb(db, sha: str | None) -> None:
+    """A 3D file's picture is kept by content: it goes with the last copy (the trash's count)."""
+    if sha and not await db[COLL].count_documents({"sha256": sha}, limit=1) \
+            and not await db[TRASH].count_documents({"sha256": sha}, limit=1):
+        await db[SOLID_THUMBS].delete_many({"sha256": sha})
+
+
+async def _to_trash(db, doc: dict) -> None:
+    from . import actors
+    by = actors.current() or {}
+    now = datetime.now(timezone.utc)
+    folder = await db[FOLDERS].find_one({"_id": doc.get("folder")}, {"path": 1}) if doc.get("folder") else None
+    await db[TRASH].replace_one({"_id": doc["_id"]}, {
+        **{k: v for k, v in doc.items() if k != "workspace_id"},
+        "deleted_at": now.isoformat(), "deleted_by": {k: by[k] for k in ("id", "name", "type") if by.get(k)},
+        "purge_at": (now + timedelta(days=TRASH_DAYS)).isoformat(), "folder_path": (folder or {}).get("path") or ""},
+        upsert=True)
+
+
+async def trash(db) -> list[dict]:
+    """What is in the trash, the latest deleted first (expired ones swept first)."""
+    await sweep(db)
+    return [d async for d in db[TRASH].find({}, {"gridfs_id": 0}).sort("deleted_at", -1)]
+
+
+async def restore(db, fid: str) -> dict:
+    """A file back from the trash, into its folder (made again from its path
+    if it went), and the places that used it no longer say it is gone.
+    KeyError: not in the trash; Clash: a file with its id is back already."""
+    t = await db[TRASH].find_one({"_id": fid})
+    if not t:
+        raise KeyError(fid)
+    if await db[COLL].find_one({"_id": fid}, {"_id": 1}):
+        raise Clash("it is in Files already")
+    folder = t.get("folder") or ""
+    if folder and not await db[FOLDERS].find_one({"_id": folder}, {"_id": 1}):
+        folder = (await make_path(db, t["folder_path"], t.get("by") or {}))["_id"] if t.get("folder_path") else ""
+    doc = {k: v for k, v in t.items() if k not in ("deleted_at", "deleted_by", "purge_at", "folder_path", "workspace_id")}
+    doc["folder"] = folder
+    await db[COLL].insert_one(doc)
+    await db[TRASH].delete_one({"_id": fid})
+    from . import files_virtual
+    try:
+        await files_virtual.mark_back(db, fid)
+    except Exception as exc:                          # noqa: BLE001 - the file is back either way
+        logging.getLogger(__name__).warning("unmarking %s failed: %s", fid, exc)
+    return doc
+
+
+async def purge(db, fid: str) -> bool:
+    """A file in the trash, deleted for good: its bytes, and its picture with the last copy."""
+    t = await db[TRASH].find_one({"_id": fid}, {"gridfs_id": 1, "sha256": 1})
+    if not t:
+        return False
+    await _drop_bytes(db, t)
+    await db[TRASH].delete_one({"_id": fid})
+    await _drop_thumb(db, t.get("sha256"))
+    return True
+
+
+async def sweep(db) -> int:
+    """The trash's files past their days, deleted for good."""
+    now = datetime.now(timezone.utc).isoformat()
+    gone = [d["_id"] async for d in db[TRASH].find({"purge_at": {"$lt": now}}, {"_id": 1})]
+    for fid in gone:
+        await purge(db, fid)
+    return len(gone)
 
 
 def as_message(doc: dict) -> str:
@@ -508,7 +609,31 @@ def parse_range(header: str | None, size: int) -> tuple[int, int] | None:
 
 
 async def open_stream(db, doc: dict):
+    # A read-only folders' file (backend/files_virtual.py): its bytes in hand,
+    # or kept as they are in a bucket of its own (a release, a firmware build).
+    if "_data" in doc:
+        return _InMemory(doc["_data"])
+    if "_grid" in doc:
+        from .store import bucket
+        name, gid = doc["_grid"]
+        return await bucket(db, name).open_download_stream(gid)
     return await _bucket(db).open_download_stream(doc["gridfs_id"])
+
+
+class _InMemory:
+    """Bytes in hand, read like a stored file (seek, then read a piece at a time)."""
+
+    def __init__(self, data: bytes):
+        self._data, self._at = data, 0
+
+    def seek(self, at: int) -> None:
+        self._at = at
+
+    async def read(self, n: int = -1) -> bytes:
+        end = len(self._data) if n is None or n < 0 else self._at + n
+        piece = self._data[self._at:end]
+        self._at += len(piece)
+        return piece
 
 
 async def stream(grid_out, first: int, last: int, piece: int = 256 * 1024):

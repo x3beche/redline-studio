@@ -174,6 +174,8 @@ _RULES: list[tuple[str, str, str]] = [
     # its folders, moving and deleting several: the same right; deleting a
     # folder with someone else's file in it needs "delete" (files_api.py)
     ("POST", "/api/files/(folders|move|bulk-delete)", "draw"),
+    # the trash: putting back or deleting for good one's own, anyone's with "delete" (files_api.py)
+    ("POST", "/api/files/trash/(restore|purge)", "draw"),
     ("PATCH", "/api/files/folders/{}", "draw"),
     ("DELETE", "/api/files/folders/{}", "draw"),
     ("PATCH", "/api/files/{}", "draw"),
