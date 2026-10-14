@@ -265,6 +265,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // Caught before the room under it: the code editor would take the key.
+    addEventListener('keydown', this.foldKey, true);
     // The Clip tab's wheel-step control is built outside Angular; its words
     // follow the language by hand.
     effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); this.viewer?.modelTab?.relabel(); }); });
@@ -285,7 +287,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       untracked(() => {
         const tree = this.catalog();
         const done = () => { this.handled = w.n; this.picked.want.set(null); };
-        if (w.what === 'model' && w.arg && tree) {
+        if (w.what === 'fold-catalog') { this.toggleSidebar(); done(); }
+        else if (w.what === 'fold-queue') { this.toggleQueue(); done(); }
+        else if (w.what === 'model' && w.arg && tree) {
           const m = this.findModel(tree, w.arg);
           if (m) { this.pickModel(m); done(); }
         } else if (this.picked.room() !== 'cad') {
@@ -433,6 +437,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     clearInterval(this.viewTimer);
     clearInterval(this.clockTimer);
     removeEventListener('beforeunload', this.onLeave);
+    removeEventListener('keydown', this.foldKey, true);
   }
 
   private healthTimer: ReturnType<typeof setInterval> | undefined;
@@ -583,6 +588,28 @@ export class Editor implements AfterViewInit, OnDestroy {
     startFold();
     this.queueShut.update(v => !v);
     this.remember('queue', this.queueShut());
+  }
+
+  /** The fold keys are VS Code's: Ctrl+B the catalog, Ctrl+Alt+B the queue
+   *  (Cmd on a Mac). Not while typing in a field or a note, where Ctrl+B is
+   *  bold; in the code editor it is free, so it folds there too. By the
+   *  key's place, not its letter: with Alt held a Mac types another one. */
+  private foldKey = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.code !== 'KeyB' || e.repeat) return;
+    const el = e.target as HTMLElement;
+    if (!el.closest?.('.monaco-editor')
+        && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.altKey) this.toggleQueue(); else this.toggleSidebar();
+  };
+
+  /** A fold button's tooltip: what a click does, and the key for it. */
+  foldTip(side: 'l' | 'r'): string {
+    LANG();
+    return side === 'l'
+      ? `${t(this.collapsed() ? 'Show the catalog' : 'Hide the catalog')} (Ctrl+B)`
+      : `${t(this.queueShut() ? 'Show revisions' : 'Hide revisions')} (Ctrl+Alt+B)`;
   }
 
   /** A phone's width: there the two side columns are drawers over the

@@ -3988,6 +3988,12 @@ const TR: Record<string, string> = {
   'A stub: it says the API is not wired in yet': 'Taslak: API\'nin henüz bağlanmadığını söyler', 'Test connection': 'Bağlantıyı dene',
   'Forget the user name and passwords': 'Kullanıcı adını ve parolaları unut', 'Connected.': 'Bağlandı.',
   'Not implemented yet: the McMaster-Carr API is not wired in (access is pending).': 'Henüz uygulanmadı: McMaster-Carr API\'si bağlanmadı (erişim beklemede).',
+  // the side columns' fold buttons, keys and palette entries (editor.html)
+  'Show the catalog': 'Kataloğu göster', 'Hide the catalog': 'Kataloğu gizle',
+  'Show revisions': 'Revizyonları göster', 'Hide revisions': 'Revizyonları gizle',
+  'Toggle catalog': 'Kataloğu aç/kapat', 'Toggle revisions': 'Revizyonları aç/kapat',
+  'fold the left column': 'sol sütunu katla', 'fold the right column': 'sağ sütunu katla',
+  'Show or hide the catalog': 'Kataloğu göster ya da gizle', 'Show or hide the revisions column': 'Revizyon sütununu göster ya da gizle',
 };
 
 export function t(text: string): string {

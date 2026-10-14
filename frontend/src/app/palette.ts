@@ -176,6 +176,8 @@ export class Palette {
         run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-stock'), 50); } },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '▣', label: 'Add to My Items and stock', hint: 'a thing no site sells: one, or paste a list',
         run: () => { this.picked.room.set('mfr'); setTimeout(() => this.picked.ask('mfr-stock-add'), 50); } }] : []),
+      { group: 'Actions', icon: '◧', label: 'Toggle catalog', hint: 'fold the left column', keys: 'Ctrl+B', run: () => this.picked.ask('fold-catalog') },
+      { group: 'Actions', icon: '◨', label: 'Toggle revisions', hint: 'fold the right column', keys: 'Ctrl+Alt+B', run: () => this.picked.ask('fold-queue') },
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
       { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy, Jina', run: () => this.prefs.open.set('appearance') },
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },

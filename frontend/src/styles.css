@@ -2053,7 +2053,7 @@ html, body { height: 100%; overflow: hidden; }
 /* !important because the viewer injects its stylesheet at runtime, after
    ours: on order alone its rule wins every time. */
 body { user-select: text !important; }
-button, .tcv-chip, .tcv-btn, .tcv-edge, .tcv-switch,
+button, .tcv-chip, .tcv-btn, .tcv-switch,
 .tcv-label, .tcv_cad_toolbar, .tcv_cad_tabs, .tcv_cad_tree, canvas {
   user-select: none !important;
 }
@@ -2538,39 +2538,23 @@ body {
   overflow: hidden;
 }
 
-/* The fold handle: a short, thick grab on the column's inner edge, halfway
-   down. Run full height it read as a scrollbar, which is the one thing it
-   must not look like. */
-.tcv-edge {
-  position: absolute;
-  top: 50%;
-  width: 11px;
-  height: 56px;
-  margin-top: -28px;
-  border: 0;
-  padding: 0;
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--line);
-  transition: background .12s;
-  z-index: 30;
+/* The fold buttons: a panel glyph at the outer end of each column's head,
+   and at the top of its rail when folded (editor.html). Quiet until the
+   pointer is on them, like the rest of a head's tools. */
+.tcv-fold-ctl {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  color: var(--ink-dim); background: transparent; border: 0; border-radius: 5px; cursor: pointer;
 }
-.tcv-edge:hover { background: var(--accent); }
-.tcv-edge::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 1px;
-  height: 22px;
-  border-radius: 1px;
-  background: var(--surface);
-  opacity: .7;
+.tcv-fold-ctl:hover { color: var(--ink); background: var(--hover); }
+.tcv-fold-ctl:focus-visible, .tcv-rail-mark:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tcv-fold-ctl svg, .tcv-rail-glyph svg, .tcv-mnav svg {
+  width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round;
 }
-/* Positioned against the page, not the panel, and animated with it. */
-.tcv-edge { transition: left .15s cubic-bezier(.4, 0, .2, 1),
-                        right .15s cubic-bezier(.4, 0, .2, 1),
-                        background .12s; }
+/* A row with a fold at its end keeps the row's own height. */
+.tcv-fold-head { display: flex; align-items: center; gap: 6px; }
+.tcv-fold-head > .tcv-fold-ctl { margin: -6px -4px -6px 0; }
+.tcv-brand ~ .tcv-fold-ctl { margin-block: -3px; }
 
 /* Folding a side panel. Tailwind's arbitrary transition with two properties
    did not survive its parser, and width alone is not enough here: the box
@@ -2605,11 +2589,22 @@ body {
    from the sides (the rail is 42px inside its border: 8 + 26 + 8), on the
    panel's own ground - no box round it. A click opens the catalog again. */
 .tcv-rail-mark {
-  display: block; width: 26px; height: 26px; margin: 0 auto; padding: 0;
-  border: 0; border-radius: 0; background: transparent; cursor: pointer;
+  position: relative; display: block; width: 26px; height: 26px; margin: 0 auto; padding: 0;
+  border: 0; border-radius: 5px; background: transparent; cursor: pointer;
 }
-.tcv-rail-mark svg { display: block; width: 26px; height: 26px; }
-.tcv-rail-mark:hover { background: transparent; opacity: .8; }
+.tcv-rail-mark > svg { display: block; width: 26px; height: 26px; transition: opacity .12s; }
+/* Under the pointer the mark gives way to the panel glyph: it opens the
+   catalog, and that is what it says. */
+.tcv-rail-glyph {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--ink); opacity: 0; transition: opacity .12s;
+}
+.tcv-rail-mark:hover, .tcv-rail-mark:focus-visible { background: var(--hover); }
+.tcv-rail-mark:hover > svg, .tcv-rail-mark:focus-visible > svg { opacity: 0; }
+.tcv-rail-mark:hover .tcv-rail-glyph, .tcv-rail-mark:focus-visible .tcv-rail-glyph { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tcv-rail-mark > svg, .tcv-rail-glyph { transition: none; }
+}
 
 /* The collapsed catalog is a rail, not a squeezed panel. At 18px with a
    three-letter label and a number under every bar it read as a broken
@@ -3950,7 +3945,6 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-shell aside.tcv-fold:not(.tcv-fold-shut) { right: 0; }
   .tcv-fold-l:not(.tcv-fold-shut) > *, .tcv-fold:not(.tcv-fold-shut) > * { min-width: 0; }
   .tcv-scrim { display: block; position: fixed; inset: 0; z-index: 470; background: var(--shade); }
-  .tcv-edge { display: none; }
 
   .tcv-mtop { display: flex; align-items: flex-end; gap: 2px; min-width: 0; flex: none; }
   .tcv-mnav {
@@ -3958,8 +3952,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
     width: 40px; height: 40px; margin-bottom: 2px; padding: 0;
     color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
   }
-  .tcv-mnav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;
-    stroke-linecap: round; stroke-linejoin: round; }
+  .tcv-mnav svg { width: 20px; height: 20px; }
   .tcv-mnav[data-on] { color: var(--ink); border-color: var(--line); background: var(--surface-2); }
   .tcv-mnav-n { position: absolute; top: 3px; right: 2px; min-width: 15px; padding: 0 3px; border-radius: 8px;
     font: 700 9.5px/15px 'IBM Plex Mono', ui-monospace, monospace; text-align: center;
@@ -5528,7 +5521,6 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
    them in made the canvas whatever they left over. */
 html[data-shot] .tcv-shell aside.tcv-fold-l,
 html[data-shot] .tcv-shell aside.tcv-fold,
-html[data-shot] .tcv-shell > .tcv-edge,
 html[data-shot] .tcv-shell > .tcv-scrim,
 html[data-shot] .tcv-mtop,
 html[data-shot] .tcv-log { display: none !important; }

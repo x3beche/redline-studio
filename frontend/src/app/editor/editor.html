@@ -22,12 +22,15 @@
          [style.padding-inline]="collapsed() ? '0' : '8px'"
          [style.border-bottom]="collapsed() ? null : '1px solid var(--line)'">
       @if (collapsed()) {
+        <!-- The mark opens it: under the pointer it turns into the panel
+             glyph the open catalog's head has, so the click says what it does. -->
         <button (click)="toggleSidebar()" class="tcv-rail-mark"
-                title="show the catalog">
+                [title]="foldTip('l')" [attr.aria-label]="foldTip('l')" aria-expanded="false">
 <svg viewBox="8 8 48 48" class="shrink-0" aria-hidden="true" fill="var(--ink)">
             <!-- A section mark: a part cut open, the way a drawing shows it. -->
             <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
           </svg>
+          <span class="tcv-rail-glyph"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.5 2.5v11"/></svg></span>
         </button>
         @if (activeTitle(); as t) {
           <div class="tcv-rail-name" [title]="t">{{ t }}</div>
@@ -44,6 +47,9 @@
           </svg>
           <div class="brand-name min-w-0 truncate">Workbench</div>
         </a>
+        <!-- Folding is the head's last word, as in any app with a sidebar. -->
+        <button (click)="toggleSidebar()" class="tcv-fold-ctl ml-auto"
+                [title]="foldTip('l')" [attr.aria-label]="foldTip('l')" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.5 2.5v11"/></svg></button>
       }
     </div>
 
@@ -123,14 +129,11 @@
        screen the wrapper is display: contents and the buttons are not
        shown, so the tabs sit in the column exactly as before. -->
   <div class="tcv-mtop">
-    <button (click)="toggleSidebar()" class="tcv-mnav" aria-label="catalog"
-            [attr.data-on]="collapsed() ? null : 1" title="the catalog">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
+    <button (click)="toggleSidebar()" class="tcv-mnav" [attr.aria-label]="foldTip('l')"
+            [attr.data-on]="collapsed() ? null : 1" [attr.aria-expanded]="!collapsed()" [title]="foldTip('l')"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.5 2.5v11"/></svg></button>
     <ng-content select="[tabs]"></ng-content>
-    <button (click)="toggleQueue()" class="tcv-mnav tcv-mnav-q" aria-label="the queue"
-            [attr.data-on]="queueShut() ? null : 1" title="comment, revisions and the agent">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+    <button (click)="toggleQueue()" class="tcv-mnav tcv-mnav-q" [attr.aria-label]="foldTip('r')"
+            [attr.data-on]="queueShut() ? null : 1" [attr.aria-expanded]="!queueShut()" [title]="foldTip('r')"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg>
       @if (queueCount()) { <span class="tcv-mnav-n">{{ queueCount() }}</span> }
     </button>
   </div>
@@ -638,19 +641,28 @@
          [class.tcv-fold-shut]="queueShut()"
          style="border: 1px solid var(--line)">
 
-    <!-- Folded, the rail still says how many are waiting: that is the one
-         thing worth knowing without opening it. -->
-    @if (queueShut() && queueCount()) {
-      <div class="flex shrink-0 justify-center px-1 py-2">
-        <span class="mono rounded px-1 text-[10px] font-bold"
-              style="background: var(--accent); color: var(--ink-on-accent)">{{ queueCount() }}</span>
+    <!-- Folded, the rail opens it from its head, and still says how many
+         are waiting: that is the one thing worth knowing without opening it. -->
+    @if (queueShut()) {
+      <div class="flex shrink-0 flex-col items-center gap-2 py-2">
+        <button (click)="toggleQueue()" class="tcv-fold-ctl"
+                [title]="foldTip('r')" [attr.aria-label]="foldTip('r')" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg></button>
+        @if (queueCount()) {
+          <span class="mono rounded px-1 text-[10px] font-bold"
+                style="background: var(--accent); color: var(--ink-on-accent)">{{ queueCount() }}</span>
+        }
       </div>
     }
 
     @if (!queueShut()) {
 
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
-      <label class="tcv-label mb-1 block">{{ 'Part' | t }}</label>
+      <!-- The column's first row carries its fold, at the outer end. -->
+      <div class="tcv-fold-head mb-1">
+        <label class="tcv-label min-w-0 flex-1">{{ 'Part' | t }}</label>
+        <button (click)="toggleQueue()" class="tcv-fold-ctl"
+                [title]="foldTip('r')" [attr.aria-label]="foldTip('r')" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg></button>
+      </div>
       <!-- Whatever the room on screen is made of: a model's parts come
            from the viewer, a board's from its netlist. The question is
            the same one either way - which bit of this is this about? -->
@@ -756,19 +768,10 @@
   </aside>
   </div>
   </div>
-  <!-- The fold handles live out here, not in the panels: a panel has to clip
-       its overflow for the fold to take, and a handle sitting on the border
-       has to hang outside it. Their offsets follow the panel widths. -->
   <!-- A phone's drawers close on a tap beside them. Not shown wider. -->
   @if (!collapsed() || !queueShut()) {
     <div class="tcv-scrim" (click)="shutDrawers()" aria-hidden="true"></div>
   }
-  <button (click)="toggleSidebar()" class="tcv-edge"
-          [style.left.px]="(collapsed() ? 32 : 250) + 3"
-          [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
-  <button (click)="toggleQueue()" class="tcv-edge"
-          [style.right.px]="(queueShut() ? 18 : 300) + 3"
-          [title]="queueShut() ? 'show the queue' : 'hide the queue'"></button>
 
 </div>
 

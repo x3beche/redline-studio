@@ -412,6 +412,8 @@ export class RoomSettings {
       { keys: ['Ctrl', 'K'], what: 'Open the command palette: go anywhere, do anything, search everything' },
       { keys: ['Alt', 'N'], what: 'A quick note, from any room' },
       { keys: ['Alt', 'T'], what: 'The Taste tab, from any room' },
+      { keys: ['Ctrl', 'B'], what: 'Show or hide the catalog' },
+      { keys: ['Ctrl', 'Alt', 'B'], what: 'Show or hide the revisions column' },
       { keys: ['?'], what: 'This page of shortcuts' },
       { keys: ['Esc'], what: 'Close a dialog, the palette or the quick note' },
       { keys: ['↑', '↓', 'Enter'], what: 'Move in the palette, then open' },
