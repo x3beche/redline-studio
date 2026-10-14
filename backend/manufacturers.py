@@ -2718,13 +2718,23 @@ async def start_job(db, mid: str, route=None, by: dict | None = None,
         if d and d.get("status") in ACTIVE:
             return d, False
     own = maker_route(doc) if route is None else own_route(route)
+    # A process that never read the LLM or the proxy settings (a script of
+    # its own that skipped llm.load / netproxy.load) does not run on the
+    # default model or go out by the default order: the run is kept as
+    # failed, saying so, and nothing is fetched or asked.
+    unread = None
     if reuse:
         try:
             choice = run_plan(own)
         except ValueError:
             choice = ["local"]                          # read again: the site is not fetched
+        except llm.NotLoaded:
+            choice = ["local"]
     else:
-        choice = run_plan(own)
+        try:
+            choice = run_plan(own)
+        except llm.NotLoaded as exc:
+            choice, unread = list(own or []), str(exc)
     if route is not None or "proxy" in doc:
         await db[COLL].update_one({"_id": mid}, {"$set": {"route": own}, "$unset": {"proxy": ""}})
     kind = "page" if only else "site"
@@ -2734,17 +2744,24 @@ async def start_job(db, mid: str, route=None, by: dict | None = None,
     limits = {"pages": MAX_PAGES, "depth": MAX_DEPTH, "delay": DELAY}
     if kind == "page":
         limits = {"pages": len(only or []) + (FOLLOW_MAX if follow else 0), "depth": 1 if follow else 0, "delay": DELAY}
-    prov, model = llm.route(JOB)
+    try:
+        prov, model = llm.route(JOB)
+    except llm.NotLoaded as exc:
+        (prov, model), unread = (None, None), unread or str(exc)
     now = _now()
-    jd = {"_id": secrets.token_hex(6), "status": "queued", "kind": kind,
+    jd = {"_id": secrets.token_hex(6), "status": "failed" if unread else "queued", "kind": kind,
           **({"only": list(only or []), "follow": bool(follow)} if kind == "page" else {}),
           "manufacturer": {"id": mid, "name": doc.get("name") or "", "url": doc.get("url"), "domain": doc.get("domain")},
-          "by": by or actors.current(), "started_at": now, "finished_at": None, "beat": now, "worker": WORKER,
-          "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov),
+          "by": by or actors.current(), "started_at": now, "finished_at": now if unread else None, "beat": now, "worker": WORKER,
+          "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov) if prov else None,
           "route": choice, "route_default": own is None, "limits": limits,
-          "steps": [], "totals": {}, "pages": [], "error": None, "products_found": None, "reused": reuse}
+          "steps": [], "totals": {}, "pages": [], "error": unread, "products_found": None, "reused": reuse,
+          **({"seconds": 0} if unread else {})}
     await db[JOBS].insert_one(jd)
     await db[COLL].update_one({"_id": mid}, {"$set": {"last_job": jd["_id"]}})
+    if unread:
+        log.error("manufacturer run %s not started: %s", jd["_id"], unread)
+        return jd, True
     _TASKS[jd["_id"]] = asyncio.create_task(_work(db, jd["_id"], mid, choice, reuse))
     try:
         await _prune(db)

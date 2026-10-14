@@ -3065,10 +3065,12 @@ async def _start_sampler():
     """The machine, once a minute, for the Analytics room's energy figures."""
     import asyncio
     if MONGODB_URI:
-        # The keys and the model each job uses, and Jina's key: read before
-        # anything started here may ask (llm.route and jina.key refuse to answer until
-        # they are), a few times over if the database is slow to answer.
-        for mod in (llm, jina):
+        # The keys and the model each job uses, Jina's key, and the proxy
+        # with each lookup's order of routes: read before anything started
+        # here may ask (llm.route, jina.key, netproxy.url and netroutes.order
+        # refuse to answer until they are), a few times over if the database
+        # is slow to answer.
+        for mod in (llm, jina, netproxy):
             for attempt in range(5):
                 try:
                     await mod.load(db())
@@ -3136,7 +3138,6 @@ async def _start_sampler():
             from . import netmeter
             netmeter.bind(db)                          # every proxied byte, counted on the wire
             await netmeter.start()
-            await netproxy.load(db())                  # the EasyEDA proxy, if one is set
             netproxy.bind(db)                          # its log, for Settings > Proxy & Data
             jina.bind(db)                              # its calls' log, for the same page
             asyncio.create_task(netproxy.health_loop())

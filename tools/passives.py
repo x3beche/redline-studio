@@ -81,7 +81,22 @@ def _save(table: dict, missing: list) -> None:
          "not_found": sorted(set(missing))}, indent=1, ensure_ascii=False) + "\n")
 
 
+async def _read_proxy() -> None:
+    """The Drawer's route order and the proxy, as the server reads them
+    (backend/netproxy.py): a lookup refuses to go out before they are."""
+    import os
+    from dotenv import load_dotenv
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from backend import netproxy
+    load_dotenv(ROOT / ".env")
+    uri = os.getenv("MONGODB_URI", "").strip()
+    if not uri:
+        sys.exit("MONGODB_URI is not set (.env): the proxy settings and the route order are read from it")
+    await netproxy.load(AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "redline")])
+
+
 async def main() -> None:
+    await _read_proxy()
     # Resumes: LCSC turned the first run away after thirty-three rows and
     # it kept none of them. Now every row is saved as it is confirmed, and
     # a second run asks only about what is still missing.

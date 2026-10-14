@@ -12,6 +12,12 @@ are: the proxy is a second door, not a licence to ask more.
 
 Machine-wide (like the LLM keys), kept in `server_settings`; the password
 is never sent back to a page.
+
+Like the LLM settings (backend/llm.py), a process that never read them -
+or whose read failed - is told so when it asks (llm.NotLoaded), rather
+than taken for one where no proxy is set up: its lookups would go out
+directly while the proxy, and the order of routes (netroutes.py, read with
+them), said otherwise. A read that found nothing saved is "no proxy".
 """
 
 from __future__ import annotations
@@ -28,13 +34,41 @@ COLL = "server_settings"
 DOC_ID = "proxy"
 
 _conf: dict = {}
+_loaded = False
+_load_error: str | None = None
+
+
+def _ready(what: str) -> None:
+    """Raise llm.NotLoaded, naming `what`, unless the settings have been read."""
+    if _loaded:
+        return
+    from .llm import NotLoaded
+    why = f"reading them failed ({_load_error})" if _load_error else "they were never read in this process"
+    raise NotLoaded(f"Proxy settings not loaded: {what} is not known because {why} - "
+                    "the process must await netproxy.load(db) first; going out directly is not assumed")
+
+
+def loaded() -> bool:
+    """Whether this process has read the proxy settings."""
+    return _loaded
 
 
 async def load(db) -> dict:
-    global _conf
+    """Read the proxy settings, and the route orders with them (the server
+    does this at start and after every change; a job or script of its own
+    process must too). A failed read is kept and said by whatever asks
+    next; settings read before it stay as they were."""
+    global _conf, _loaded, _load_error
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
-    _conf = dict(await raw[COLL].find_one({"_id": DOC_ID}) or {})
+    try:
+        doc = await raw[COLL].find_one({"_id": DOC_ID})
+    except Exception as exc:
+        if not _loaded:
+            _load_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+        raise
+    _conf = dict(doc or {})
     _conf.pop("_id", None)
+    _loaded, _load_error = True, None
     from . import netmeter
     netmeter.set_upstream(_conf.get("host"), _conf.get("port"), (_conf.get("scheme") or "http") == "https")
     from . import netroutes
@@ -47,6 +81,7 @@ def new_session() -> str | None:
     lasts - so the address it went out from can be looked up afterwards.
     None when sticky sessions are off (the provider rotates on its own)."""
     import secrets
+    _ready("whether a lookup holds its exit address")
     return ("rl" + secrets.token_hex(5)) if _conf.get("sticky", True) else None
 
 
@@ -54,6 +89,8 @@ def username(conf: dict | None = None, session: str | None = None) -> str:
     """The provider's username with its options: a country (-region-xx) and
     a sticky session (-session-<id>), the way 2Captcha and most residential
     providers read them. Empty country: anywhere in the world."""
+    if conf is None:
+        _ready("the proxy's username")
     c = _conf if conf is None else conf
     u = c.get("username") or ""
     if not u:
@@ -67,6 +104,8 @@ def username(conf: dict | None = None, session: str | None = None) -> str:
 
 def url(conf: dict | None = None, session: str | None = None) -> str | None:
     """http://user:pass@host:port, or None when there is no proxy to use."""
+    if conf is None:
+        _ready("whether a proxy is set up")
     c = _conf if conf is None else conf
     if not c.get("host") or not c.get("port"):
         return None
@@ -214,7 +253,12 @@ async def health_loop() -> None:
     """Every `health_minutes`, one look through the proxy at where it comes
     out - so the page can say whether the proxy is up, and how fast."""
     import asyncio
+    import logging
     while True:
+        if not _loaded:                                # said once a minute until a load works
+            logging.getLogger(__name__).warning("proxy health check waits: the proxy settings were not read")
+            await asyncio.sleep(60)
+            continue
         minutes = int(_conf.get("health_minutes", 30) or 0)
         if active() and minutes > 0:
             t0 = time.monotonic()
@@ -229,6 +273,7 @@ async def health_loop() -> None:
 
 def public() -> dict:
     from . import netroutes
+    _ready("the proxy settings")
     c = _conf
     return {"scheme": c.get("scheme") or "http", "host": c.get("host") or "",
             "port": c.get("port") or None, "username": c.get("username") or "",
@@ -254,8 +299,17 @@ def _db():
     return db()
 
 
+async def _read() -> None:
+    """Read them now if this process has not yet: a start whose read failed
+    is said with its reason rather than shown as "no proxy"."""
+    from . import netroutes
+    if not _loaded or not netroutes.loaded():
+        await load(_db())
+
+
 @router.get("/settings")
 async def get_settings() -> dict:
+    await _read()
     return public()
 
 
@@ -298,6 +352,7 @@ async def put_settings(body: ProxyIn) -> dict:
 async def get_routes() -> dict:
     """Each lookup's order of routes, and which routes are set up."""
     from . import netroutes
+    await _read()
     return netroutes.public()
 
 
@@ -310,6 +365,7 @@ class RoutesIn(BaseModel):
 async def put_routes(body: RoutesIn) -> dict:
     """One lookup's default order: the routes that are on, first tried first."""
     from . import actors, netroutes
+    await _read()                                      # the other lookups' orders are kept as they are
     got = await netroutes.save(_db(), body.consumer, body.order)
     await actors.audit(_db(), "settings", "routes", {"consumer": body.consumer, "order": got})
     return netroutes.public()

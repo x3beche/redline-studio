@@ -19,7 +19,11 @@ and a later Jina - a page empty without its script, the next.
 A route that is on but not set up (no proxy host, no Jina key) is passed
 over when a request goes out; an order with nothing left is refused.
 
-Kept machine-wide in `server_settings` ("routes"), like the proxy itself.
+Kept machine-wide in `server_settings` ("routes"), like the proxy itself,
+and read with it (netproxy.load). A process that never read them - or
+whose read failed - is told so when it asks (llm.NotLoaded), rather than
+handed the default order: a lookup would go a way the saved order does
+not. A read that found nothing saved is the default order.
 Before this there were modes - Off / When refused / Always for the part
 lookups, and those plus Jina Reader / Jina when refused for the catalog -
 and they still load (`LEGACY`).
@@ -50,6 +54,8 @@ LEGACY: dict[str, list[str]] = {
 }
 
 _orders: dict[str, list[str]] = {}
+_loaded = False
+_load_error: str | None = None
 
 
 class NoRoute(Exception):
@@ -72,8 +78,23 @@ def clean(consumer: str, value) -> list[str] | None:
     return out or None
 
 
+def _ready() -> None:
+    if _loaded:
+        return
+    from .llm import NotLoaded
+    why = f"reading them failed ({_load_error})" if _load_error else "they were never read in this process"
+    raise NotLoaded(f"Route orders not loaded: which way a lookup goes out is not known because {why} - "
+                    "the process must await netproxy.load(db) first; the default order is not used in its place")
+
+
+def loaded() -> bool:
+    """Whether this process has read the route orders."""
+    return _loaded
+
+
 def order(consumer: str) -> list[str]:
     """The consumer's default order, as saved."""
+    _ready()
     return list(_orders.get(consumer) or DEFAULTS[consumer])
 
 
@@ -124,15 +145,24 @@ def _from_proxy(conf: dict) -> dict[str, list[str]]:
 
 
 async def load(db, proxy_conf: dict | None = None) -> dict[str, list[str]]:
-    global _orders
+    """Read the orders (netproxy.load does, with the proxy's settings). A
+    failed read is kept and said by whatever asks next; orders read before
+    it stay as they were."""
+    global _orders, _loaded, _load_error
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
-    doc = await raw[COLL].find_one({"_id": DOC_ID})
+    try:
+        doc = await raw[COLL].find_one({"_id": DOC_ID})
+    except Exception as exc:
+        if not _loaded:
+            _load_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+        raise
     if doc is None:
         # Kept at once, so a later change to the proxy does not move them.
         _orders = _from_proxy(proxy_conf or {})
         await raw[COLL].update_one({"_id": DOC_ID}, {"$setOnInsert": dict(_orders)}, upsert=True)
     else:
         _orders = {c: clean(c, doc.get(c)) or list(DEFAULTS[c]) for c in CONSUMERS}
+    _loaded, _load_error = True, None
     return _orders
 
 

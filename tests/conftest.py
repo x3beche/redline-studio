@@ -92,12 +92,13 @@ def _secret_key_of_its_own(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _settings_read_as_on_a_fresh_install(monkeypatch):
-    """Each test runs as the API does after its start: the LLM settings and
-    Jina's key have been read (backend/main.py), and nothing is saved - so
-    the defaults answer. Not "never read": that refuses to answer
+    """Each test runs as the API does after its start: the LLM settings,
+    Jina's key and the proxy with its route orders have been read
+    (backend/main.py), and nothing is saved - so the defaults answer (no
+    proxy, the default orders). Not "never read": that refuses to answer
     (llm.NotLoaded), and the tests that want it say so themselves. Set per
     test, so one test's saved choices never decide the next one's."""
-    from backend import jina, llm
+    from backend import jina, llm, netproxy, netroutes
 
     monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}})
     monkeypatch.setattr(llm, "_loaded", True)
@@ -105,3 +106,9 @@ def _settings_read_as_on_a_fresh_install(monkeypatch):
     monkeypatch.setattr(jina, "_conf", {})
     monkeypatch.setattr(jina, "_loaded", True)
     monkeypatch.setattr(jina, "_load_error", None)
+    monkeypatch.setattr(netproxy, "_conf", {})
+    monkeypatch.setattr(netproxy, "_loaded", True)
+    monkeypatch.setattr(netproxy, "_load_error", None)
+    monkeypatch.setattr(netroutes, "_orders", {})
+    monkeypatch.setattr(netroutes, "_loaded", True)
+    monkeypatch.setattr(netroutes, "_load_error", None)
