@@ -2,13 +2,16 @@
 
 - In the app: a row in the notification centre (backend/notifications.py)
   for the task's owner, written the way that module writes its own (one row
-  per event and person, its `row_id`), linking to /tasks/<id>. The centre
-  lists its kinds for its settings page; `task` is written whether or not it
-  is listed there - the task's own "In the app" box is the switch. Without
-  the module, the task's history is the in-app record.
+  per event and person, its `row_id`), linking to /tasks/<id>. Two switches
+  must both be on: the task's own "In the app" box, and the owner's kind
+  `task` in Settings > Notifications. Without the module, the task's
+  history is the in-app record.
 - Telegram: through the bot's send queue (backend/tgbot/outbox.py), to the
-  owner's own linked chat, only when a bot is set up and the chat is linked
-  and not blocked. The app has no quiet hours yet; `quiet()` is where they
+  owner's own linked chat, only when a bot is set up, the chat is linked
+  and not blocked, and the owner's `task` kind is on for Telegram.
+- The words around the report (its status, "Open the task", the file's
+  head) are in the owner's language (notifications.lang_of), like the
+  report itself (kinds.Ctx.lang). The app has no quiet hours yet; `quiet()` is where they
   would be honoured.
 - A file: Markdown or CSV, into Files > In the app > Agents > "Scheduled
   tasks" (read-only there; "Save to My files" copies it).
@@ -27,6 +30,8 @@ log = logging.getLogger("redline.sched")
 
 AGENT = {"type": "agent", "id": "scheduled-tasks", "name": "Scheduled tasks"}
 TG_MAX = 3900
+STATUS_TR = {"done": "tamamlandı", "failed": "başarısız", "missed": "kaçırıldı", "skipped": "atlandı",
+             "interrupted": "yarıda kaldı", "cancelled": "iptal edildi"}
 TITLES = {"done": "Task done", "failed": "Task failed", "missed": "Task missed", "skipped": "Task skipped",
           "interrupted": "Task interrupted"}
 
@@ -56,13 +61,26 @@ def tg_text(md: str) -> str:
     return "\n".join(out).strip()
 
 
-def message(task: dict, run: dict, base: str | None) -> str:
+def status_word(status: str, lang: str = "en") -> str:
+    return STATUS_TR.get(status, status) if lang == "tr" else status
+
+
+async def lang_of(raw, task: dict) -> str:
+    try:
+        from .. import notifications as nc
+    except ImportError:
+        return "en"
+    return await nc.lang_of(raw, task["owner"]["id"])
+
+
+def message(task: dict, run: dict, base: str | None, lang: str = "en") -> str:
     from ..tgbot import core
     status = run["status"]
-    head = f"<b>{core.esc(task['name'])}</b>" + ("" if status == "done" else f" - {core.esc(status)}")
+    head = f"<b>{core.esc(task['name'])}</b>" + ("" if status == "done" else f" - {core.esc(status_word(status, lang))}")
     body = tg_text(run.get("output") or run.get("error") or run.get("summary") or "")
     link = app_links.app_url(base, app_links.task(task["_id"]))
-    tail = f'\n\n<a href="{core.esc(link)}">Open the task</a>' if link else ""
+    open_ = "Görevi aç" if lang == "tr" else "Open the task"
+    tail = f'\n\n<a href="{core.esc(link)}">{open_}</a>' if link else ""
     room = TG_MAX - len(head) - len(tail) - 2
     if len(body) > room:
         body = body[: max(0, room - 2)].rsplit("\n", 1)[0] + "\n…"
@@ -76,9 +94,10 @@ async def telegram(raw, task: dict, run: dict) -> str | None:
     if not core.token_of(st):
         return None
     link = await links.of_user(raw, task["owner"]["id"])
-    if not link or link.get("blocked") or quiet(link):
+    if not link or link.get("blocked") or quiet(link) or not links.prefs_of(link).get("task"):
         return None
-    return await outbox.enqueue(raw, link["chat"], text=message(task, run, st.get("public_url")), kind="task",
+    text = message(task, run, st.get("public_url"), await lang_of(raw, task))
+    return await outbox.enqueue(raw, link["chat"], text=text, kind="task",
                                 user=task["owner"]["id"], ws=task["workspace"])
 
 
@@ -90,6 +109,8 @@ async def bell(raw, task: dict, run: dict) -> bool:
         return False
     from pymongo.errors import DuplicateKeyError
     user = task["owner"]["id"]
+    if not (await nc.prefs_of(raw, user))["inapp"].get("task", True):
+        return False
     event = f"task:{run['_id']}"
     doc = {"_id": nc.row_id(event, user), "user": user, "workspace": task["workspace"], "kind": "task",
            "title": TITLES.get(run["status"], "Task done"),
@@ -112,7 +133,8 @@ async def file(raw, task: dict, run: dict, csv_text: str | None) -> str | None:
     if fmt == "csv" and csv_text:
         data, ext, mime = csv_text.encode(), "csv", "text/csv"
     else:
-        md = f"# {task['name']}\n\n{stamp} UTC · {run['status']}\n\n{run.get('output') or run.get('error') or ''}\n"
+        status = status_word(run["status"], await lang_of(raw, task))
+        md = f"# {task['name']}\n\n{stamp} UTC · {status}\n\n{run.get('output') or run.get('error') or ''}\n"
         data, ext, mime = md.encode(), "md", "text/markdown"
     db = scope.ScopedDb(raw, task["workspace"])
     doc = await files.put(db, f"{task['name']} {stamp}.{ext}", data, mime,

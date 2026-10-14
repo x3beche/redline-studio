@@ -29,7 +29,7 @@ export interface NoticePage { items: Notice[]; unread: number; more: boolean; co
 
 /** The kinds' groups, in order, with their short name for the filters. */
 export const NC_GROUPS: { id: string; label: string; kinds: string[] }[] = [
-  { id: 'agents', label: 'Agents', kinds: ['question', 'reply', 'note', 'run'] },
+  { id: 'agents', label: 'Agents', kinds: ['question', 'reply', 'note', 'run', 'task'] },
   { id: 'builds', label: 'Builds', kinds: ['build', 'longbuild', 'route', 'firmware'] },
   { id: 'made', label: 'Outputs', kinds: ['drawing', 'release', 'bodies', 'library'] },
   { id: 'money', label: 'Prices', kinds: ['price', 'budget'] },
@@ -47,6 +47,7 @@ const ICONS: Record<string, { s: string; f: string }> = {
   reply: { s: 'M4 5h16v11h-9l-5 4v-4H4z M8 9.5h8 M8 12.5h5', f: '' },
   note: { s: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5', f: '' },
   run: glyph('play'),
+  task: { s: 'M4 5h16v15H4z M4 9.5h16 M8 3v4 M16 3v4 M8.5 14.5l2 2 4.5-4.5', f: '' },
   build: { s: 'M14.5 4.5a4 4 0 0 0-4.6 5.4L4 15.8 8.2 20l5.9-5.9a4 4 0 0 0 5.4-4.6l-2.6 2.6-2.8-.7-.7-2.8z', f: '' },
   longbuild: { s: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M12 7v5l3.5 2', f: '' },
   route: glyph('tracks'),

@@ -20,7 +20,9 @@ form from the same list. A type also says
 `run(ctx, params)` returns an Outcome: a one-line summary, the report in
 Markdown, a little data for the page, a CSV when it is a table, and what it
 cost. Each run is in the runner's process (backend/sched/runner.py), as the
-owner, in the owner's space.
+owner, in the owner's space - and in the owner's language (`ctx.lang`, from
+notifications.lang_of): every sentence of a report is written twice,
+`ctx.t(english, turkish)`; names, numbers and model output stay as they are.
 """
 
 from __future__ import annotations
@@ -145,6 +147,11 @@ class Ctx:
     now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     beat: Callable[[str], Awaitable[None]] | None = None
     spent: float = 0.0               # what the LLM work cost so far in this run
+    lang: str = "en"                 # the owner's: "en" or "tr"
+
+    def t(self, en: str, tr: str) -> str:
+        """The owner's language of a sentence written in both."""
+        return tr if self.lang == "tr" else en
 
     async def say(self, what: str) -> None:
         if self.beat:
@@ -207,6 +214,11 @@ def money(v: float | None, cur: str = "USD") -> str:
     return f"{v:,.2f} {cur}" if cur != "USD" else f"${v:,.2f}" if v >= 0.01 or v == 0 else f"${v:.4f}"
 
 
+def plural(n: int, en: str, lang: str = "en") -> str:
+    """"1 price change", "2 price changes" - Turkish keeps the singular."""
+    return en if n == 1 or lang == "tr" else en + "s"
+
+
 def qty(v: Any) -> str:
     try:
         f = float(v or 0)
@@ -215,15 +227,16 @@ def qty(v: Any) -> str:
     return str(int(f)) if f == int(f) else f"{f:g}"
 
 
-def ago(t: float | None, now: float | None = None) -> str:
+def ago(t: float | None, now: float | None = None, lang: str = "en") -> str:
+    tr = lang == "tr"
     if t is None:
-        return "never"
+        return "hiç" if tr else "never"
     s = max(0, (now or time.time()) - t)
     if s < 3600:
-        return f"{int(s // 60)} min ago"
+        return f"{int(s // 60)} dk önce" if tr else f"{int(s // 60)} min ago"
     if s < 86400 * 2:
-        return f"{s / 3600:.1f} h ago"
-    return f"{s / 86400:.1f} days ago"
+        return f"{s / 3600:.1f} sa önce" if tr else f"{s / 3600:.1f} h ago"
+    return f"{s / 86400:.1f} gün önce" if tr else f"{s / 86400:.1f} days ago"
 
 
 # ================================================================= stock report
@@ -235,7 +248,9 @@ async def stock_report(ctx: Ctx, p: dict) -> Outcome:
     low = [d for d in rows if inventory.is_low(d) or float(d.get("quantity") or 0) <= 0]
     show = low if p["scope"] == "low" else rows
     show = sorted(show, key=lambda d: (not inventory.is_low(d), float(d.get("quantity") or 0), inventory.fold(d.get("name"))))
-    head = ["Item", "MPN / LCSC", "On hand", "Minimum", "Reorder", "Place", "Unit price"]
+    t = ctx.t
+    head = [t("Item", "Ürün"), "MPN / LCSC", t("On hand", "Eldeki"), t("Minimum", "Asgari"), t("Reorder", "Sipariş"),
+            t("Place", "Yer"), t("Unit price", "Birim fiyat")]
     lines, buy_usd, unpriced = [], 0.0, 0
     for d in show[: p["limit"]]:
         q, lo = float(d.get("quantity") or 0), d.get("min_stock")
@@ -251,28 +266,32 @@ async def stock_report(ctx: Ctx, p: dict) -> Outcome:
                 buy_usd += usd
         elif need:
             unpriced += 1
-        unit = d.get("unit") or "pcs"
+        unit = d.get("unit") or t("pcs", "adet")
         lines.append([d.get("name") or "", d.get("mpn") or d.get("lcsc") or "", f"{qty(q)} {unit}",
                       "-" if lo is None else f"{qty(lo)} {unit}",
-                      ("set a minimum" if lo is None else "-") if need is None else (f"{qty(need)} {unit}" if need else "-"),
+                      (t("set a minimum", "asgari belirleyin") if lo is None else "-") if need is None else (f"{qty(need)} {unit}" if need else "-"),
                       d.get("location") or "", "" if price is None else money(float(price), d.get("currency") or "USD")])
     st = inventory.stats(rows)
-    md = [f"**{len(low)} of {len(rows)} stock lines are low or out** ({len(out_)} out of stock)."]
+    md = [t(f"**{len(low)} of {len(rows)} stock lines are low or out** ({len(out_)} out of stock).",
+            f"**{len(rows)} stok satırından {len(low)} tanesi azalmış ya da bitmiş** ({len(out_)} tanesi stokta yok).")]
     if lines:
         md += ["", table(head, lines)]
         if len(show) > p["limit"]:
-            md.append(f"\n... and {len(show) - p['limit']} more.")
+            md.append(t(f"\n... and {len(show) - p['limit']} more.", f"\n... ve {len(show) - p['limit']} tane daha."))
     elif p["scope"] == "low":
-        md.append("\nNothing is at or below its minimum.")
+        md.append(t("\nNothing is at or below its minimum.", "\nHiçbiri asgarisinde ya da altında değil."))
     if buy_usd or unpriced:
-        md.append(f"\nReordering up to {p['target']}x the minimum costs about **{money(buy_usd)}**"
-                  + (f" ({unpriced} without a price)" if unpriced else "") + ".")
+        md.append(t(f"\nReordering up to {p['target']}x the minimum costs about **{money(buy_usd)}**"
+                    + (f" ({unpriced} without a price)" if unpriced else "") + ".",
+                    f"\nAsgarinin {p['target']} katına kadar yeniden sipariş yaklaşık **{money(buy_usd)}** tutar"
+                    + (f" ({unpriced} tanesinin fiyatı yok)" if unpriced else "") + "."))
     if p["value"] and st["value"]:
         total = sum(v for v in (fx.to_usd(a, c) for c, a in st["value"].items()) if v is not None)
         per = ", ".join(money(a, c) for c, a in sorted(st["value"].items()))
-        md.append(f"\nStock value: **{money(total)}** ({per}).")
-    summary = (f"{len(low)} low or out of {len(rows)}" if rows else "no stock lines yet") \
-        + (f", reorder about {money(buy_usd)}" if buy_usd else "")
+        md.append(t(f"\nStock value: **{money(total)}** ({per}).", f"\nStok değeri: **{money(total)}** ({per})."))
+    summary = (t(f"{len(low)} low or out of {len(rows)}", f"{len(rows)} satırdan {len(low)} azalmış ya da bitmiş")
+               if rows else t("no stock lines yet", "henüz stok satırı yok")) \
+        + (t(f", reorder about {money(buy_usd)}", f", yeniden sipariş yaklaşık {money(buy_usd)}") if buy_usd else "")
     return Outcome(summary, "\n".join(md), {"items": len(rows), "low": len(low), "out": len(out_),
                                              "reorder_usd": round(buy_usd, 2), "value": st["value"]},
                    csv=to_csv(head, lines))
@@ -365,6 +384,7 @@ def _amount(pr: dict | None) -> tuple[float | None, str]:
 
 async def price_refresh(ctx: Ctx, p: dict) -> Outcome:
     from .. import bom_cost, inventory, lcsc
+    t = ctx.t
     md: list[str] = []
     changes: list[list] = []
     data: dict = {}
@@ -392,10 +412,14 @@ async def price_refresh(ctx: Ctx, p: dict) -> Outcome:
             changes.append([(r.get("maker") or {}).get("name") or "", r.get("name") or "",
                             "-" if a is None else f"{a:g} {ca}", "-" if b is None else f"{b:g} {cb}",
                             "" if pct is None else f"{pct:+.1f}%"])
-        md.append(f"**Makers' pages**: {c.get('read', 0)} of {c.get('pages', 0)} read, "
-                  f"{c.get('price', 0)} prices and {c.get('stock', 0)} stock figures changed, "
-                  f"{c.get('saved', 0)} saved, {c.get('failed', 0)} could not be read"
-                  + (f", {c['busy']} left to an exploration running" if c.get("busy") else "") + ".")
+        md.append(t(f"**Makers' pages**: {c.get('read', 0)} of {c.get('pages', 0)} read, "
+                    f"{c.get('price', 0)} prices and {c.get('stock', 0)} stock figures changed, "
+                    f"{c.get('saved', 0)} saved, {c.get('failed', 0)} could not be read"
+                    + (f", {c['busy']} left to an exploration running" if c.get("busy") else "") + ".",
+                    f"**Üreticilerin sayfaları**: {c.get('pages', 0)} sayfadan {c.get('read', 0)} tanesi okundu, "
+                    f"{c.get('price', 0)} fiyat ve {c.get('stock', 0)} stok bilgisi değişti, "
+                    f"{c.get('saved', 0)} kaydedildi, {c.get('failed', 0)} okunamadı"
+                    + (f", {c['busy']} tanesi süren bir keşfe bırakıldı" if c.get("busy") else "") + "."))
     boards = p["boards"]
     if boards:
         lcsc.PATIENT.set(True)
@@ -413,7 +437,7 @@ async def price_refresh(ctx: Ctx, p: dict) -> Outcome:
                 try:
                     new = await bom_cost.fetch_offer(part)
                 except lcsc.Refused as exc:
-                    failed.append(f"LCSC is cooling off: {exc}")
+                    failed.append(t(f"LCSC is cooling off: {exc}", f"LCSC soğumayı bekliyor: {exc}"))
                     break
                 except (OSError, ValueError, TimeoutError) as exc:
                     failed.append(f"{part}: {str(exc)[:80]}")
@@ -425,17 +449,22 @@ async def price_refresh(ctx: Ctx, p: dict) -> Outcome:
                     changes.append(["LCSC", part, f"${a:.4f}", f"${b:.4f}", f"{(b - a) / a * 100:+.1f}%"])
                 await ctx.say(f"LCSC {asked}")
         data["lcsc"] = {"asked": asked, "changed": moved, "failed": failed[:20]}
-        md.append(f"**LCSC offers** for {len(boards)} board{'s' if len(boards) != 1 else ''}: {asked} parts asked "
-                  f"(those older than a day), {moved} prices moved"
-                  + (f"; {len(failed)} problems: " + "; ".join(failed[:5]) if failed else "") + ".")
-    head = ["Seller", "Product", "Was", "Now", "Change"]
+        md.append(t(f"**LCSC offers** for {len(boards)} {plural(len(boards), 'board')}: {asked} parts asked "
+                    f"(those older than a day), {moved} prices moved"
+                    + (f"; {len(failed)} problems: " + "; ".join(failed[:5]) if failed else "") + ".",
+                    f"{len(boards)} kartın **LCSC teklifleri**: {asked} parça soruldu "
+                    f"(bir günden eski olanlar), {moved} fiyat değişti"
+                    + (f"; {len(failed)} sorun: " + "; ".join(failed[:5]) if failed else "") + "."))
+    head = [t("Seller", "Satıcı"), t("Product", "Ürün"), t("Was", "Önceki"), t("Now", "Şimdi"), t("Change", "Değişim")]
     if changes:
         md += ["", table(head, changes[:200])]
     else:
-        md.append("\nNo price changed" + (f" by {p['min_change_pct']:g}% or more" if p["min_change_pct"] else "") + ".")
+        md.append(t("\nNo price changed" + (f" by {p['min_change_pct']:g}% or more" if p["min_change_pct"] else "") + ".",
+                    "\n" + (f"%{p['min_change_pct']:g} ya da daha fazla değişen fiyat yok." if p["min_change_pct"]
+                             else "Hiçbir fiyat değişmedi.")))
     data["changes"] = len(changes)
-    return Outcome(f"{len(changes)} price change{'s' if len(changes) != 1 else ''}", "\n".join(md), data,
-                   csv=to_csv(head, changes))
+    return Outcome(t(f"{len(changes)} {plural(len(changes), 'price change')}", f"{len(changes)} fiyat değişimi"),
+                   "\n".join(md), data, csv=to_csv(head, changes))
 
 
 PRICES = Kind(
@@ -454,10 +483,11 @@ PRICES = Kind(
 
 async def build_refresh(ctx: Ctx, p: dict) -> Outcome:
     from .. import access, actors, buildjobs, release, store
+    t = ctx.t
     rows, bad = [], 0
     for mid in p["models"]:
         if not await ctx.db.models.find_one({"_id": mid}, {"_id": 1}):
-            rows.append([mid, "not found", "", ""])
+            rows.append([mid, t("not found", "bulunamadı"), "", ""])
             bad += 1
             continue
         await ctx.say(f"building {mid}")
@@ -481,15 +511,16 @@ async def build_refresh(ctx: Ctx, p: dict) -> Outcome:
             await ctx.say(f"drawing {mid}")
             try:
                 await release.model_drawing(ctx.db, mid, again=True)
-                drawing = "made"
+                drawing = t("made", "yapıldı")
             except Exception as exc:                          # noqa: BLE001 - said in the row
-                drawing = f"failed: {str(exc)[:80]}"
+                drawing = t("failed", "olmadı") + f": {str(exc)[:80]}"
                 bad += 1
-        rows.append([mid, "built" if ok else f"failed: {str((done or {}).get('detail') or '')[:100]}",
-                     f"{time.monotonic() - t0:.0f} s", drawing])
-    head = ["Model", "Build", "Took", "Drawing"]
+        rows.append([mid, t("built", "derlendi") if ok else t("failed", "olmadı") + f": {str((done or {}).get('detail') or '')[:100]}",
+                     f"{time.monotonic() - t0:.0f} " + t("s", "sn"), drawing])
+    head = ["Model", t("Build", "Derleme"), t("Took", "Süre"), t("Drawing", "Çizim")]
     n = len(p["models"])
-    return Outcome(f"{n - bad} of {n} built" if not p["drawings"] else f"{n} models, {bad} problems",
+    return Outcome(t(f"{n - bad} of {n} built", f"{n} modelden {n - bad} tanesi derlendi") if not p["drawings"]
+                   else t(f"{n} models, {bad} problems", f"{n} model, {bad} sorun"),
                    table(head, rows), {"models": n, "problems": bad}, csv=to_csv(head, rows), ok=bad == 0)
 
 
@@ -505,9 +536,11 @@ BUILDS = Kind(
 
 async def backup_check(ctx: Ctx, p: dict) -> Outcome:
     from .. import backups
+    t, lang = ctx.t, ctx.lang
     st = await backups.state()
     if st.get("error") and not st.get("archives"):
-        return Outcome("backups could not be read", f"The backup folder could not be read: {st['error']}.",
+        return Outcome(t("backups could not be read", "yedekler okunamadı"),
+                       t(f"The backup folder could not be read: {st['error']}.", f"Yedek klasörü okunamadı: {st['error']}."),
                        {"error": st["error"]}, ok=False)
     h = st.get("health") or {}
     now = st.get("now") or time.time()
@@ -516,20 +549,27 @@ async def backup_check(ctx: Ctx, p: dict) -> Outcome:
     check = (st.get("checks") or [None])[0]
     disk = st.get("disk") or {}
     ok = bool(h.get("dump_ok") and h.get("fresh") and h.get("check_ok") is not False)
-    lines = [f"**{'Backups are fine' if ok else 'Backups need a look'}.**", ""]
-    lines.append(f"- Newest nightly: {newest['name'] if newest else 'none'}"
-                 + (f", {ago(newest['mtime'], now)}, {newest['size'] / 1e6:.1f} MB" if newest else ""))
-    lines.append(f"- Last dump: {'ok' if dump and dump.get('ok') else 'FAILED' if dump else 'none in the log'}"
+    lines = [f"**{t('Backups are fine', 'Yedekler iyi') if ok else t('Backups need a look', 'Yedeklere bakılmalı')}.**", ""]
+    lines.append(t("- Newest nightly: ", "- En yeni gecelik: ") + (newest["name"] if newest else t("none", "yok"))
+                 + (f", {ago(newest['mtime'], now, lang)}, {newest['size'] / 1e6:.1f} MB" if newest else ""))
+    lines.append(t("- Last dump: ", "- Son döküm: ")
+                 + (t("ok", "tamam") if dump and dump.get("ok") else t("FAILED", "OLMADI") if dump else t("none in the log", "günlükte yok"))
                  + (f" ({dump.get('at')})" if dump else ""))
-    lines.append(f"- Restore check: {'passed' if check and check.get('ok') else 'FAILED' if check else 'never run'}"
+    lines.append(t("- Restore check: ", "- Geri yükleme denetimi: ")
+                 + (t("passed", "geçti") if check and check.get("ok") else t("FAILED", "OLMADI") if check else t("never run", "hiç çalışmadı"))
                  + (f" ({check.get('at')})" if check else ""))
     if h.get("plaintext"):
-        lines.append(f"- {h['plaintext']} archives hold the saved secrets in plaintext (written before the secret key)")
+        lines.append(t(f"- {h['plaintext']} archives hold the saved secrets in plaintext (written before the secret key)",
+                       f"- {h['plaintext']} arşiv kayıtlı gizli bilgileri düz metin olarak tutuyor (gizli anahtardan önce yazılmış)"))
     if disk.get("free") is not None:
-        lines.append(f"- Disk free: {disk['free'] / 1e9:.1f} GB of {(disk.get('size') or 0) / 1e9:.1f} GB")
+        lines.append(t(f"- Disk free: {disk['free'] / 1e9:.1f} GB of {(disk.get('size') or 0) / 1e9:.1f} GB",
+                       f"- Boş disk: {(disk.get('size') or 0) / 1e9:.1f} GB'ın {disk['free'] / 1e9:.1f} GB'ı"))
     if st.get("next_dump"):
-        lines.append(f"- Next dump: {datetime.fromtimestamp(st['next_dump'], timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC")
-    summary = ("fine" if ok else "needs a look") + (f", newest {ago(newest['mtime'], now)}" if newest else ", no nightly archive")
+        lines.append(t("- Next dump: ", "- Sonraki döküm: ")
+                     + f"{datetime.fromtimestamp(st['next_dump'], timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC")
+    summary = (t("fine", "iyi") if ok else t("needs a look", "bakılmalı")) \
+        + (t(f", newest {ago(newest['mtime'], now)}", f", en yenisi {ago(newest['mtime'], now, lang)}") if newest
+           else t(", no nightly archive", ", gecelik arşiv yok"))
     return Outcome(summary, "\n".join(lines), {"ok": ok, "health": h}, ok=True)
 
 
@@ -564,14 +604,18 @@ async def llm_usage(ctx: Ctx, p: dict) -> Outcome:
 
     def top(bucket):
         return [[k, money(v[0]), v[1], f"{v[2]:,}"] for k, v in sorted(bucket.items(), key=lambda kv: -kv[1][0])[: p["top"]]]
-    md = [f"**{money(total)}** over the last {p['days']} days: {calls:,} calls, {toks:,} tokens"
-          + (f" ({unpriced} calls without a price)" if unpriced else "") + "."]
+    md = [ctx.t(f"**{money(total)}** over the last {p['days']} days: {calls:,} calls, {toks:,} tokens"
+            + (f" ({unpriced} calls without a price)" if unpriced else "") + ".",
+            f"Son {p['days']} günde **{money(total)}**: {calls:,} çağrı, {toks:,} token"
+            + (f" ({unpriced} çağrının fiyatı yok)" if unpriced else "") + ".")]
+    cols = [ctx.t("Cost", "Maliyet"), ctx.t("Calls", "Çağrı"), "Token" if ctx.lang == "tr" else "Tokens"]
     if rows:
-        md += ["", "By job:", "", table(["Job", "Cost", "Calls", "Tokens"], top(by_kind)),
-               "", "By model:", "", table(["Model", "Cost", "Calls", "Tokens"], top(by_model))]
-    head = ["Model", "Cost USD", "Calls", "Tokens"]
+        md += ["", ctx.t("By job:", "İşe göre:"), "", table([ctx.t("Job", "İş"), *cols], top(by_kind)),
+               "", ctx.t("By model:", "Modele göre:"), "", table(["Model", *cols], top(by_model))]
+    head = ["Model", ctx.t("Cost USD", "Maliyet USD"), cols[1], cols[2]]
     flat = [[k, round(v[0], 6), v[1], v[2]] for k, v in sorted(by_model.items(), key=lambda kv: -kv[1][0])]
-    return Outcome(f"{money(total)} in {p['days']} days, {calls:,} calls", "\n".join(md),
+    return Outcome(ctx.t(f"{money(total)} in {p['days']} days, {calls:,} calls", f"{p['days']} günde {money(total)}, {calls:,} çağrı"),
+                   "\n".join(md),
                    {"usd": round(total, 6), "calls": calls, "tokens": toks}, csv=to_csv(head, flat))
 
 
@@ -585,12 +629,16 @@ USAGE = Kind("llm_usage", "LLM cost summary",
 
 async def cc_usage(ctx: Ctx, p: dict) -> Outcome:
     from .. import llm
+    t = ctx.t
     acct = await llm.cc_account(ctx.raw, force=True)
     if not acct.get("set"):
-        return Outcome("no Command Code key", "No Command Code key is saved (Settings > LLM settings).", {}, ok=False)
+        return Outcome(t("no Command Code key", "Command Code anahtarı yok"),
+                       t("No Command Code key is saved (Settings > LLM settings).",
+                         "Kayıtlı Command Code anahtarı yok (Ayarlar > LLM ayarları)."), {}, ok=False)
     w = acct.get("windows") or {}
     lines, worst = [], 0.0
-    for key, name in (("five_hour", "5-hour window"), ("weekly", "Weekly window"), ("monthly", "Month")):
+    for key, name in (("five_hour", t("5-hour window", "5 saatlik pencere")), ("weekly", t("Weekly window", "Haftalık pencere")),
+                      ("monthly", t("Month", "Ay"))):
         x = w.get(key) or None
         if not x:
             continue
@@ -600,14 +648,18 @@ async def cc_usage(ctx: Ctx, p: dict) -> Outcome:
         worst = max(worst, float(pct or 0))
         reset = x.get("reset_at")
         when = datetime.fromtimestamp(reset / 1000, timezone.utc).strftime("%a %d %b %H:%M UTC") if isinstance(reset, (int, float)) else ""
-        lines.append(f"- {name}: **{'-' if pct is None else f'{pct:g}%'}** used"
-                     + (f" ({x.get('used'):g} of {x.get('cap'):g})" if x.get("used") is not None and x.get("cap") else "")
-                     + (f", resets {when}" if when else "") + (" - EXCEEDED" if x.get("exceeded") else ""))
+        lines.append(f"- {name}: **{'-' if pct is None else f'{pct:g}%'}** " + t("used", "kullanıldı")
+                     + (t(f" ({x.get('used'):g} of {x.get('cap'):g})", f" ({x.get('cap'):g} içinden {x.get('used'):g})")
+                        if x.get("used") is not None and x.get("cap") else "")
+                     + (t(f", resets {when}", f", sıfırlanma {when}") if when else "")
+                     + (t(" - EXCEEDED", " - AŞILDI") if x.get("exceeded") else ""))
     if not lines:
-        return Outcome("Command Code did not say", "Command Code did not give its usage windows this time.", {}, ok=False)
+        return Outcome(t("Command Code did not say", "Command Code söylemedi"),
+                       t("Command Code did not give its usage windows this time.",
+                         "Command Code bu sefer kullanım pencerelerini vermedi."), {}, ok=False)
     plan = (acct.get("plan") or {}).get("name")
     md = ["**Command Code**" + (f" ({plan})" if plan else "") + ":", "", *lines]
-    return Outcome(f"highest window {worst:g}%", "\n".join(md), {"windows": w, "worst_pct": worst})
+    return Outcome(t(f"highest window {worst:g}%", f"en yüksek pencere %{worst:g}"), "\n".join(md), {"windows": w, "worst_pct": worst})
 
 
 CCUSAGE = Kind("cc_usage", "Command Code usage",
@@ -640,7 +692,8 @@ async def ask_chat(ctx: Ctx, p: dict) -> Outcome:
     tools = {n: mine[n] for n in p["tools"] if n in mine}
     missing = [n for n in p["tools"] if n not in mine]
     tctx = chat_tools.Ctx(db=ctx.db, vision=False, actor={**ctx.owner, "via": "schedule"}, chat="")
-    msgs = [{"role": "system", "content": ASK_SYSTEM + ("\n\n" + chat_tools.note(list(tools.values())) if tools else "")},
+    system = ASK_SYSTEM + (" Answer in Turkish." if ctx.lang == "tr" else "")
+    msgs = [{"role": "system", "content": system + ("\n\n" + chat_tools.note(list(tools.values())) if tools else "")},
             {"role": "user", "content": p["prompt"]}]
     text, used_all, steps = "", {}, []
     stopped = ""
@@ -669,7 +722,8 @@ async def ask_chat(ctx: Ctx, p: dict) -> Outcome:
         if not calls or not kw:
             break
         if ctx.spent >= p["max_usd"]:
-            stopped = f"stopped: the run's cost cap ({money(p['max_usd'])}) was reached"
+            stopped = ctx.t(f"stopped: the run's cost cap ({money(p['max_usd'])}) was reached",
+                            f"durduruldu: çalışmanın maliyet sınırına ({money(p['max_usd'])}) ulaşıldı")
             break
         msgs.append({"role": "assistant", "content": said, "tool_calls": [
             {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
@@ -691,13 +745,14 @@ async def ask_chat(ctx: Ctx, p: dict) -> Outcome:
                     content, err = f"Error: {str(exc)[:300] or type(exc).__name__}", True
             steps.append({"tool": c.get("name"), "error": err})
             msgs.append({"role": "tool", "tool_call_id": c["id"], "content": content, **({"is_error": True} if err else {})})
-    md = text.strip() or "(no answer)"
+    md = text.strip() or ctx.t("(no answer)", "(cevap yok)")
     if stopped:
         md += f"\n\n_{stopped}_"
     if missing:
-        md += f"\n\n_Tools not used (off for you, or not read-only): {', '.join(missing)}_"
+        md += ctx.t(f"\n\n_Tools not used (off for you, or not read-only): {', '.join(missing)}_",
+                    f"\n\n_Kullanılmayan araçlar (sizde kapalı ya da salt okunur değil): {', '.join(missing)}_")
     first = next((ln.strip("# ").strip() for ln in md.splitlines() if ln.strip()), "")
-    return Outcome(first[:140] or "answered", md, {"provider": provider, "model": model, "steps": steps,
+    return Outcome(first[:140] or ctx.t("answered", "cevaplandı"), md, {"provider": provider, "model": model, "steps": steps,
                                                    "tokens": used_all.get("prompt_tokens", 0) + used_all.get("completion_tokens", 0)},
                    cost_usd=round(ctx.spent, 6))
 
@@ -724,14 +779,16 @@ async def digest(ctx: Ctx, p: dict) -> Outcome:
     out_md, summary, data, ok = [], [], {}, True
     for k in p["parts"]:
         kind = KINDS[k]
+        label = ctx.t(kind.label, LABELS_TR.get(kind.id, kind.label))
         await ctx.say(kind.label)
         try:
             o = await kind.run(ctx, kind.check({}))
         except Exception as exc:                              # noqa: BLE001 - one part, said
-            o = Outcome("failed", f"_failed: {str(exc)[:200]}_", ok=False)
+            failed = ctx.t("failed", "olmadı")
+            o = Outcome(failed, f"_{failed}: {str(exc)[:200]}_", ok=False)
         ok = ok and o.ok
-        out_md += [f"## {kind.label}", "", o.markdown, ""]
-        summary.append(f"{kind.label}: {o.summary}")
+        out_md += [f"## {label}", "", o.markdown, ""]
+        summary.append(f"{label}: {o.summary}")
         data[k] = o.data
     return Outcome("; ".join(summary)[:300], "\n".join(out_md).strip(), data, ok=ok)
 
@@ -741,6 +798,11 @@ DIGEST = Kind("digest", "Digest",
               [Param("parts", "list", "Reports", list(DIGEST_PARTS[:2]), choices=DIGEST_PARTS, required=True, max_items=4)],
               digest, right="draw", timeout_s=300)
 
+
+# The types' names in Turkish, for a report's headings (the page has its own, i18n.ts).
+LABELS_TR = {"stock_report": "Stok raporu", "price_refresh": "Fiyat yenileme", "build_refresh": "Derleme yenileme",
+             "backup_check": "Yedek kontrolü", "llm_usage": "LLM maliyet özeti", "cc_usage": "Command Code kullanımı",
+             "ask_chat": "Sohbete sor", "digest": "Özet"}
 
 KINDS: dict[str, Kind] = {k.id: k for k in (STOCK, PRICES, BUILDS, BACKUPS, USAGE, CCUSAGE, ASK, DIGEST)}
 RIGHT_ORDER = ("view", "draw", "run", "edit", "settings")

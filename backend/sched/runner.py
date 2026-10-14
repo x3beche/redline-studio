@@ -134,7 +134,8 @@ async def execute(raw, rid: str, *, load=None) -> dict | None:
             await runs.update_one({"_id": rid, "status": "running"},
                                   {"$set": {"beat": core.now(), **({"doing": state["say"]} if state["say"] else {})}})
 
-    ctx = kinds.Ctx(db=db, raw=raw, owner=task["owner"], role=role, task=task, run=run, beat=beat)
+    ctx = kinds.Ctx(db=db, raw=raw, owner=task["owner"], role=role, task=task, run=run, beat=beat,
+                    lang=await deliver.lang_of(raw, task))
     pulse = asyncio.create_task(beating())
     outcome, error, retry = None, None, False
     try:

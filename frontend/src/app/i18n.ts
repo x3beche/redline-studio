@@ -4802,6 +4802,9 @@ const TR: Record<string, string> = {
   'Could not run {task}': '{task} çalıştırılamadı',
   'Ran {name} now': '{name} şimdi çalıştırıldı',
   'a run goes on its own - see it in the Tasks tab': 'çalışma kendi başına sürer - Görevler sekmesinde gör',
+  // Scheduled-task notifications (notifications.ts, telegram-settings.ts)
+  'A scheduled task reports': 'Zamanlanmış bir görev rapor veriyor',
+  "a task's result, when the task itself sends it to Telegram": 'görev sonucunu Telegram\'a kendisi gönderdiğinde, sonucu',
 };
 
 export function t(text: string): string {

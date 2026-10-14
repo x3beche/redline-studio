@@ -3,7 +3,7 @@ import { navHref, navParams } from './nav';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
-import { T, t } from './i18n';
+import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
 import { Avatar } from './avatar';
 import { Confirm } from './confirm';
@@ -76,6 +76,24 @@ export class Auth {
   /** Someone was signed in on this page: whoever signs in next gets a fresh
    *  page, not the one the last account's rooms were loaded into. */
   private hadUser = false;
+
+  /** The language this page speaks, told to the server once per account and
+   *  change (PUT /api/notifications/settings {lang}): what is written for
+   *  this person alone - a scheduled task's report - is written in it. Not
+   *  by a page session (it changes nothing). */
+  private tellLang = effect(() => {
+    const l = LANG(), s = this.state();
+    const u = s?.user as (Me & { page?: boolean }) | null | undefined;
+    if (!s || (s.mode === 'on' && (!u || u.page || s.must_change_password))) return;
+    const key = `${u?.id ?? 'local'}:${l}`;
+    let told = '';
+    try { told = localStorage.getItem('redline.lang.told') ?? ''; } catch { /* private window */ }
+    if (key === told) return;
+    untracked(() => this.http.put('/api/notifications/settings', { lang: l }).subscribe({
+      next: () => { try { localStorage.setItem('redline.lang.told', key); } catch { /* private window */ } },
+      error: () => { /* the next load tries again */ },
+    }));
+  });
 
   load() {
     this.http.get<AuthState>('/api/auth/state').subscribe({

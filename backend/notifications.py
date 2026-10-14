@@ -15,8 +15,11 @@ change the server's settings, in their own space.
                          thing it is about (`ctx`), a longer `body`, the
                          in-app link (backend/app_links.py), created_at,
                          read_at. Kept KEEP_DAYS (TTL).
-    notification_prefs   per person: which kinds come into the app, and
-                         whether a new one shows a toast. What comes on
+    notification_prefs   per person: which kinds come into the app,
+                         whether a new one shows a toast, and the language
+                         the app speaks to them (`lang`, sent by the page:
+                         what is written for them alone - a scheduled
+                         task's report - is written in it). What comes on
                          Telegram stays in telegram_links.prefs (one place
                          for it); the settings route reads and writes both.
     drawing_events       a technical drawing finished or failed
@@ -32,7 +35,7 @@ Routes (anyone signed in, about themselves only - backend/access.py):
     POST /api/notifications/read       {ids} or {all: true}
     POST /api/notifications/remove     {ids}, or {all: true} (with {read: true}: only the read ones)
     GET  /api/notifications/settings   each kind: in the app, on Telegram; toasts
-    PUT  /api/notifications/settings   {inapp: {kind: bool}, telegram: {kind: bool}, toast: bool}
+    PUT  /api/notifications/settings   {inapp: {kind: bool}, telegram: {kind: bool}, toast: bool, lang: en|tr}
 
 Marking and removing are POSTs on purpose: a DELETE is a line in the audit
 trail (actors.audited), and clearing one's own bell is not worth one.
@@ -62,6 +65,7 @@ KINDS = [
     {"id": "reply", "group": "agents", "label": "An agent replies", "inapp": True},
     {"id": "note", "group": "agents", "label": "A note is applied or fails", "inapp": True},
     {"id": "run", "group": "agents", "label": "A run starts", "inapp": False},
+    {"id": "task", "group": "agents", "label": "A scheduled task reports", "inapp": True},
     {"id": "build", "group": "builds", "label": "A build fails", "inapp": True},
     {"id": "longbuild", "group": "builds", "label": "A long build is done", "inapp": True},
     {"id": "route", "group": "builds", "label": "A board is routed", "inapp": True},
@@ -139,6 +143,23 @@ async def prefs_of(raw, user: str) -> dict:
     return {"inapp": {**INAPP_DEFAULT, **{k: bool(v) for k, v in (doc.get("inapp") or {}).items()
                                           if k in INAPP_DEFAULT}},
             "toast": doc.get("toast", True) is not False}
+
+
+LANGS = ("en", "tr")
+
+
+async def lang_of(raw, user: str) -> str:
+    """The language a person reads the app in: the one their page last said
+    (`lang` here), else their Telegram chat's, else English."""
+    doc = await raw[PREFS].find_one({"_id": user}, {"lang": 1}) or {}
+    if doc.get("lang") in LANGS:
+        return doc["lang"]
+    try:
+        from .tgbot import fmt, links as tg_links
+        link = await tg_links.of_user(raw, user)
+    except Exception:                                            # noqa: BLE001 - no bot, no link: English
+        link = None
+    return fmt.ui_lang(link) if link else "en"
 
 
 def row_id(event: str, user: str) -> str:
@@ -490,6 +511,7 @@ class SettingsIn(BaseModel):
     inapp: dict[str, bool] | None = None
     telegram: dict[str, bool] | None = None
     toast: bool | None = None
+    lang: str | None = None
 
 
 @router.put("/settings")
@@ -503,6 +525,10 @@ async def put_settings(body: SettingsIn):
         patch[f"inapp.{k}"] = bool(v)
     if body.toast is not None:
         patch["toast"] = bool(body.toast)
+    if body.lang is not None:
+        if body.lang not in LANGS:
+            raise HTTPException(400, "lang: en or tr")
+        patch["lang"] = body.lang
     if body.telegram:
         # The Telegram side is the link's own preferences (tgbot/links.py) -
         # only with a linked chat.

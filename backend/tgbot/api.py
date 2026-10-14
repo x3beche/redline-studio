@@ -61,6 +61,8 @@ PREF_INFO = [
     {"id": "note", "group": "agents", "label": "A note is applied or fails",
      "about": "with its after picture when there is one"},
     {"id": "run", "group": "agents", "label": "A run starts", "about": "an agent picks up a note"},
+    {"id": "task", "group": "agents", "label": "A scheduled task reports",
+     "about": "a task's result, when the task itself sends it to Telegram"},
     {"id": "build", "group": "builds", "label": "A build fails", "about": "a model build, a board layout or convert"},
     {"id": "longbuild", "group": "builds", "label": "A long build is done",
      "about": "a build, layout or convert that took over a minute - walk away meanwhile"},

@@ -61,12 +61,15 @@ const STUB: TgState = {
     { id: 'reply', group: 'agents', label: 'An agent replies', about: "a room's agent or a Command Code chat answered - or its answer failed" },
     { id: 'note', group: 'agents', label: 'A note is applied or fails', about: 'with its after picture when there is one' },
     { id: 'run', group: 'agents', label: 'A run starts', about: 'an agent picks up a note' },
+    { id: 'task', group: 'agents', label: 'A scheduled task reports', about: "a task's result, when the task itself sends it to Telegram" },
     { id: 'build', group: 'builds', label: 'A build fails', about: 'a model build, a board layout or convert' },
     { id: 'longbuild', group: 'builds', label: 'A long build is done', about: 'a build, layout or convert that took over a minute - walk away meanwhile' },
     { id: 'route', group: 'builds', label: 'A board is routed', about: 'all connected or how many are not, vias, DRC and ERC, how long' },
     { id: 'firmware', group: 'builds', label: 'A firmware build ends', about: 'flash and RAM used, or the first error' },
     { id: 'release', group: 'made', label: 'A release is ready', about: 'its size, what could not be made, a download link - or why it failed' },
+    { id: 'drawing', group: 'made', label: 'A technical drawing is made', about: 'a drawing you asked for is ready, or any drawing failed - with why' },
     { id: 'bodies', group: 'made', label: 'Part bodies', about: "the PCB room asks the 3D room for a part's body, and when one is bound" },
+    { id: 'price', group: 'made', label: 'A price drops', about: 'a Parts product read 5% or more cheaper than its last price, same currency' },
     { id: 'library', group: 'made', label: 'A part joins the drawer', about: 'fetched from LCSC: footprint, symbol and 3D model' },
     { id: 'digest', group: 'digest', label: 'Digest', about: '09:00 Istanbul, every day or on Mondays: notes, builds, routes, releases, replies' },
     { id: 'budget', group: 'digest', label: 'Budget warnings', about: 'a monthly budget crosses its warning or 100%' },
@@ -80,8 +83,8 @@ const STUB: TgState = {
   can_edit: true, log: [], profile: null,
 };
 const DEFAULT_PREFS: Record<string, boolean> = {
-  question: true, reply: true, note: true, run: false, build: false, longbuild: true, route: true, firmware: true,
-  release: true, bodies: true, library: false, budget: false, digest: false, ccusage: true, health: true,
+  question: true, reply: true, note: true, run: false, task: true, build: false, longbuild: true, route: true, firmware: true,
+  release: true, drawing: true, bodies: true, price: true, library: false, budget: false, digest: false, ccusage: true, health: true,
 };
 /** The sections of "Notify me when", in order. The server's is there only
  *  for those who may change its settings (the server sends its tiles only

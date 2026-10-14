@@ -27,6 +27,7 @@ PREFS = {
     "reply": True,        # a room's agent or a Command Code chat answered, or its answer failed
     "note": True,         # a note was applied or failed
     "run": False,         # a run started
+    "task": True,         # a scheduled task reported (backend/sched/deliver.py; the task's own Telegram box too)
     "build": False,       # a build failed
     "longbuild": True,    # a build, layout or convert that took over a minute is done
     "route": True,        # a board was routed: connected or not, vias, DRC
