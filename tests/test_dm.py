@@ -333,16 +333,21 @@ def test_add_makes_a_new_thing_in_the_readers_space(db):
          "exception": "inside the base", "example": "case R4", "layer": "specific"}],
         "priority": "Looks first on visible faces."})
     put(db, space("u-ayse"), "notes", {"_id": "n1", "title": "Tolerances", "text": "# Tolerances\n0.2 mm"})
-    put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "M3 screw", "quantity": 40, "unit": "pcs"})
+    put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "Hinge 40", "quantity": 40, "unit": "pcs",
+                                          "location": "Shelf A", "catalog": {"manufacturer": "m1", "product": "p1"}})
     put(db, space("u-ayse"), "manufacturers", {"_id": "m1", "name": "Acme", "domain": "acme.com", "url": "https://acme.com/",
                                               "products": [{"id": "p1", "name": "Hinge 40", "url": "https://acme.com/h40"}]})
     put(db, space("u-bora"), "taste_palettes", {"_id": "mine", "name": "Quiet", "items": []})
     a, b = client(db, "u-ayse"), client(db, "u-bora")
     cid = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()["id"]
+    # Stock is not sent on its own any more: it goes with its product.
+    assert a.post(f"/api/dm/chats/{cid}/messages", json={"items": [{"kind": "inventory", "id": "i1"}]}).status_code == 400
     a.post(f"/api/dm/chats/{cid}/messages", json={"items": [
-        {"kind": "taste", "id": "tp1"}, {"kind": "note", "id": "n1"}, {"kind": "inventory", "id": "i1"},
-        {"kind": "product", "id": "m1:p1"}]})
-    snaps = [i["snap"] for i in b.get(f"/api/dm/chats/{cid}").json()["messages"][0]["items"]]
+        {"kind": "taste", "id": "tp1"}, {"kind": "note", "id": "n1"}, {"kind": "product", "id": "m1:p1"}]})
+    cards = b.get(f"/api/dm/chats/{cid}").json()["messages"][0]["items"]
+    snaps = [i["snap"] for i in cards]
+    assert "on hand: 40 pcs (Shelf A)" in cards[2]["facts"]
+    assert b.get(f"/api/dm/items/{snaps[2]}").json()["data"]["stock"]["quantity"] == 40
     bdb = scope.ScopedDb(db, space("u-bora"))
     r = b.post(f"/api/dm/items/{snaps[0]}/add")
     assert r.status_code == 200, r.text
@@ -356,12 +361,11 @@ def test_add_makes_a_new_thing_in_the_readers_space(db):
     assert tp["by"]["id"] == "u-bora" and tp["workspace_id"] == space("u-bora")
     note = run(bdb["notes"].find_one({"_id": b.post(f"/api/dm/items/{snaps[1]}/add").json()["id"]}))
     assert "0.2 mm" in note["text"]
-    item = run(bdb["inventory"].find_one({"_id": b.post(f"/api/dm/items/{snaps[2]}/add").json()["id"]}))
-    assert item["name"] == "M3 screw" and item["quantity"] == 0      # what it is, not the sender's stock
-    got = b.post(f"/api/dm/items/{snaps[3]}/add").json()
+    got = b.post(f"/api/dm/items/{snaps[2]}/add").json()
     maker = run(bdb["manufacturers"].find_one({"_id": got["maker"]}))
     assert maker["domain"] == "acme.com" and [p["name"] for p in maker["products"]] == ["Hinge 40"]
-    assert b.post(f"/api/dm/items/{snaps[3]}/add").json()["already"] is True
+    assert b.post(f"/api/dm/items/{snaps[2]}/add").json()["already"] is True
+    assert run(bdb["inventory"].count_documents({})) == 0         # the product, not the sender's stock
     # The sender's own things are untouched.
     assert run(scope.ScopedDb(db, space("u-ayse"))["inventory"].find_one({"_id": "i1"}))["quantity"] == 40
 
@@ -431,9 +435,12 @@ def test_only_what_the_sender_can_see_can_be_sent(db):
     assert a.get("/api/dm/item", params={"kind": "model", "id": "bora/secret"}).status_code == 404
     assert a.get(f"/api/dm/chats/{cid}").json()["messages"] == []
     # What can be sent is one's own.
-    put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "M3 screw", "quantity": 40, "unit": "pcs"})
+    put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "M3 screw", "quantity": 40, "unit": "pcs",
+                                          "catalog": {"manufacturer": "own", "product": "o1"}})
+    put(db, space("u-ayse"), "own_items", {"_id": "o1", "name": "M3 screw", "category": "Fasteners"})
     got = a.get("/api/dm/shareables", params={"q": "screw"}).json()
-    assert [(x["kind"], x["id"]) for x in got] == [("inventory", "i1")]
+    # Its product - here an Own item - is what is offered; the stock line is not.
+    assert [(x["kind"], x["id"]) for x in got] == [("product", "own:o1")]
     assert a.get("/api/dm/shareables", params={"q": "secret"}).json() == []
 
 
@@ -546,3 +553,18 @@ def test_the_list_selects_dms_with_the_chats_and_never_deletes_them():
     view = (app / "rooms/dm-view.ts").read_text()
     assert 'data-act="dm-pin"' in view and 'data-act="dm-archive"' in view
     assert '(pin)="pinOpenDm(did)" (archive)="archiveOpenDm(did)"' in cc
+
+
+def test_an_own_item_sent_is_added_as_an_own_item_of_the_reader(db):
+    put(db, space("u-ayse"), "own_items", {"_id": "o1", "name": "PETG black", "category": "Filament", "sku": "PETG-BK"})
+    put(db, space("u-ayse"), "inventory", {"_id": "i1", "name": "PETG black", "quantity": 3, "unit": "roll",
+                                          "catalog": {"manufacturer": "own", "product": "o1"}})
+    a, b = client(db, "u-ayse"), client(db, "u-bora")
+    cid = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()["id"]
+    assert a.post(f"/api/dm/chats/{cid}/messages", json={"items": [{"kind": "product", "id": "own:o1"}]}).status_code == 200
+    card = b.get(f"/api/dm/chats/{cid}").json()["messages"][0]["items"][0]
+    assert card["label"] == "PETG black" and "on hand: 3 roll" in card["facts"]
+    got = b.post(f"/api/dm/items/{card['snap']}/add").json()
+    assert got["maker"] == "own" and got["label"] == "PETG black"
+    mine = run(scope.ScopedDb(db, space("u-bora"))["own_items"].find_one({"sku": "PETG-BK"}))
+    assert mine and mine["category"] == "Filament"

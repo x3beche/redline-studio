@@ -110,8 +110,8 @@ PACKAGES = (
     Package("firmware", "Firmware", "The Firmware room's builds."),
     Package("notes", "Notes", "The notes jotted down in Notes: #tags, @boards, to-dos."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
-    Package("mfr", "Product Catalog", "The makers' catalogs saved in Product Catalog."),
-    Package("inventory", "Inventory", "What is on hand: items, quantities and where they are."),
+    Package("mfr", "Parts", "Parts: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and own items - "
+                            "and how many of each are on hand."),
     Package("commandcode", "Chat", "The Chat's conversations and what it can do on its own: the clock, the web, PDFs."),
     Package("files", "Files", "The Files room."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
@@ -203,14 +203,16 @@ SYSTEM_NOTE = (
     "anywhere else, and link the product pages it gives. When the person gives a product or shop page, or asks to add "
     "something to the catalog, add it with catalog_read_page (it reads the page into the catalog of the maker kept for its "
     "site, or makes that maker; when the run is still going, give the person its link) - or with catalog_add_product "
-    "when they give the product's details themselves; then inventory_add can stock it. Edit or remove catalog products "
+    "when they give the product's details themselves; then inventory_add can count it in stock. Edit or remove catalog products "
     "(catalog_edit_product, catalog_remove_product) or add a maker by its site (catalog_add_maker; exploring its whole "
-    "site reads up to 100 pages and costs tokens) only when asked. What the person has on hand - items, how many and where they are kept "
-    "(the Inventory tab) - is found with inventory_search and read with inventory_read; when they say they got, used or "
-    "moved something, add it (inventory_add: several at once, the same thing already kept is topped up, not doubled; "
-    "link a Product Catalog product - manufacturer_search gives its ids and what is in stock of it - or an LCSC part "
-    "when it came from there) or change its quantity with a reason "
-    "(inventory_adjust); edit or remove items (inventory_edit, inventory_remove) only when asked. Leave a note in a room's queue (room_note) only when asked to. "
+    "site reads up to 100 pages and costs tokens) only when asked. What the person has on hand is stock on the Parts page: every stock line counts one Parts product "
+    "(a site's, the LCSC drawer's, McMaster-Carr's, GrabCAD's or an Own item), how many and where it is kept - "
+    "found with inventory_search and read with inventory_read; when they say they got, used or moved something, add "
+    "it (inventory_add: several at once, the same product already counted is topped up, not doubled; name its Parts "
+    "product - manufacturer_search gives its ids and what is in stock of it - or an LCSC part; a thing no site sells "
+    "becomes an Own items product from its name) or change its quantity with a reason "
+    "(inventory_adjust); edit a stock line's place, unit or minimum (inventory_edit) or remove it (inventory_remove) "
+    "only when asked - what a thing is (name, code, price) is its product's (catalog_edit_product). Leave a note in a room's queue (room_note) only when asked to. "
     "The person's own notes (the Notes tab) are found with notes_search and read with note_read; write, tick or edit "
     "one (note_write, note_todo, note_edit) only when asked; a note you write reads as a page - a title line, its #tags "
     "under it, a short summary first, '## ' sections, '- [ ] ' to-dos, tables with units where they fit, no filler. What the rooms' agents have queued or are working on - "

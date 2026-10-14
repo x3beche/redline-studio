@@ -34,10 +34,13 @@ does not mute; the AI conversations stay archived when written in, but only
 their owner writes there.
 
 A line can carry things of the sender's space (`items`): a 3D model, a
-board, a project (a catalog folder), a taste palette, a Product Catalog
-product, an inventory item, a note, a file, a firmware. What the card shows
-- the name and a line of facts - is read when it is sent, through the
-sender's space, so only what the sender can see can be sent.
+board, a project (a catalog folder), a taste palette, a product of the
+Parts page (a site's, the LCSC drawer's, a saved McMaster-Carr or GrabCAD
+item, an Own item - with how many the sender has on hand), a note, a file,
+a firmware. What the card shows - the name and a line of facts - is read
+when it is sent, through the sender's space, so only what the sender can
+see can be sent. A stock line is not sent on its own any more: it goes as
+its product's card; the "inventory" cards sent before still open.
 
 A thing sent is data, not a pointer into the sender's space: its snapshot
 (see "what was sent" below) is what it was at that moment, owned by its
@@ -67,6 +70,8 @@ MAX_TEXT = 20_000          # characters of one line
 MAX_ITEMS = 8              # things sent with one line
 PAGE = 200                 # lines read at once
 KINDS = ("model", "board", "project", "taste", "product", "inventory", "note", "file", "firmware")
+# What can be sent now: a stock line goes as its product ("inventory" stays a kind for the cards sent before).
+SENDABLE = tuple(k for k in KINDS if k != "inventory")
 # What a reader can add to their own space from what was sent.
 ADDABLE = ("model", "taste", "product", "inventory", "note", "file")
 ITEMS = "dm_items"         # what was sent: each thing's data as it was, owned by its line
@@ -581,6 +586,8 @@ async def describe(kind: str, ref: str, db=None) -> dict:
     """One thing of the asker's space, as its card: {kind, id, label,
     facts, space, open}. A 404 when it is not there - or not this space's,
     which is the same thing to the person asking."""
+    if kind == "inventory":
+        raise HTTPException(400, "stock is sent with its product: send the product from the Parts page")
     if kind not in KINDS:
         raise HTTPException(400, f"cannot send a {kind!r}")
     db = db or _space_db(scope.current())
@@ -633,15 +640,44 @@ async def _taste(db, ref):
     return (d.get("name") or ref, [f"{len(d.get('items') or [])} statements", _clip(d.get("description"), 70)], None)
 
 
-async def _product(db, ref):
+async def _found(db, ref):
+    """A Parts product by "maker:product" - a site's or a built-in source's."""
+    from . import catalog_builtin
     mid, _, pid = ref.partition(":")
-    d = await db["manufacturers"].find_one({"_id": mid}) if pid else None
-    p = next((x for x in (d or {}).get("products") or [] if str(x.get("id")) == pid), None)
-    if not p:
+    return await catalog_builtin.find_product(db, mid, pid) if pid else None
+
+
+async def _on_hand(db, mid: str, pid: str) -> dict | None:
+    """How many of a product the sender has on hand, and where (backend/inventory.py)."""
+    from . import inventory as inv
+    rows = [d for d in await inv.everything(db) if inv.linked_to(d) == (mid, pid)]
+    if not rows:
         return None
+    unit = rows[0].get("unit") or "pcs"
+    return {"quantity": round(sum(float(d.get("quantity") or 0) for d in rows if (d.get("unit") or "pcs") == unit), 6),
+            "unit": unit, "low": any(inv.is_low(d) for d in rows),
+            "min_stock": next((d["min_stock"] for d in rows if d.get("min_stock") is not None), None),
+            "locations": [d["location"] for d in rows if d.get("location")][:6]}
+
+
+def stock_line(s: dict | None) -> str:
+    """"on hand: 12 pcs (Shelf A)" - the stock a product's card says."""
+    if not s:
+        return ""
+    from . import inventory as inv
+    return (f"on hand: {inv.qty(s['quantity'])} {s['unit']}" + (" - low" if s.get("low") else "")
+            + (f" ({', '.join(s['locations'][:2])})" if s.get("locations") else ""))
+
+
+async def _product(db, ref):
+    got = await _found(db, ref)
+    if not got:
+        return None
+    d, p = got
+    mid, pid = d["_id"], str(p["id"])
     from .chat_tools import _catalog
-    return (p.get("name") or pid, [d.get("name") or mid, p.get("sku") or "", _catalog.price(p).split(": ", 1)[-1],
-                                    _catalog.stock(p), p.get("category") or ""],
+    return (p.get("name") or pid, [d.get("name") or mid, stock_line(await _on_hand(db, mid, pid)), p.get("sku") or "",
+                                    _catalog.price(p).split(": ", 1)[-1], _catalog.stock(p), p.get("category") or ""],
             {"maker": mid, "name": p.get("name") or ""})
 
 
@@ -688,7 +724,7 @@ async def shareables(q: str = "", kind: str = "", limit: int = 40) -> list[dict]
     me()
     db = _space_db(scope.current())
     words = [w for w in q.lower().split() if w]
-    kinds = [kind] if kind in KINDS else list(KINDS)
+    kinds = [kind] if kind in SENDABLE else list(SENDABLE)
     per = limit if (words or len(kinds) == 1) else max(3, limit // len(kinds))
     out: list[dict] = []
 
@@ -716,8 +752,19 @@ async def shareables(q: str = "", kind: str = "", limit: int = 40) -> list[dict]
         take("taste", [{"id": d["_id"], "label": d.get("name") or d["_id"], "sub": f"{len(d.get('items') or [])} statements"}
                        async for d in db["taste_palettes"].find({}, {"name": 1, "items": 1})])
     if "product" in kinds:
+        from . import catalog_builtin
         rows = []
-        async for d in db["manufacturers"].find({}, {"name": 1, "products": 1}):
+        try:
+            built = [d for d in await catalog_builtin.makers(db) if d.get("products")]
+        except Exception:                               # noqa: BLE001 - a source that cannot be read offers nothing
+            built = []
+
+        async def every():
+            for d in built:
+                yield d
+            async for d in db["manufacturers"].find({}, {"name": 1, "products": 1}):
+                yield d
+        async for d in every():
             for p in d.get("products") or []:
                 if p.get("id") is not None:
                     rows.append({"id": f"{d['_id']}:{p['id']}", "label": p.get("name") or str(p["id"]),
@@ -725,10 +772,6 @@ async def shareables(q: str = "", kind: str = "", limit: int = 40) -> list[dict]
                 if len(rows) > 3000:
                     break
         take("product", rows)
-    if "inventory" in kinds:
-        take("inventory", [{"id": d["_id"], "label": d.get("name") or d["_id"],
-                            "sub": " · ".join(x for x in (d.get("location"), d.get("category")) if x)}
-                           async for d in db["inventory"].find({}, {"name": 1, "location": 1, "category": 1}).limit(3000)])
     if "note" in kinds:
         take("note", [{"id": d["_id"], "label": d.get("title") or _clip(d.get("text"), 60) or d["_id"], "sub": ""}
                       async for d in db["notes"].find({}, {"title": 1, "text": 1}).sort("updated_at", -1).limit(500)])
@@ -838,14 +881,16 @@ async def _snap_note(db, ref):
 
 
 async def _snap_product(db, ref):
-    mid, _, pid = ref.partition(":")
-    d = await db["manufacturers"].find_one({"_id": mid}) if pid else None
-    p = next((x for x in (d or {}).get("products") or [] if str(x.get("id")) == pid), None)
-    if not p:
+    got = await _found(db, ref)
+    if not got:
         return None
+    d, p = got
     from .chat_tools import _catalog
+    # The sender's stock of it goes along to be read, not added: "Add to my catalog" takes the product alone.
+    stock = await _on_hand(db, d["_id"], str(p["id"]))
     return ({"product": p, "price_label": _catalog.price(p).split(": ", 1)[-1],
-             "maker": _plain(d, ("name", "domain", "url"))}, {}, "")
+             "maker": _plain(d, ("name", "domain", "url")) | ({"builtin": d["_id"]} if d.get("builtin") else {}),
+             **({"stock": stock} if stock else {})}, {}, "")
 
 
 INV_FIELDS = ("name", "quantity", "unit", "location", "category", "mpn", "lcsc", "manufacturer", "board", "notes",
@@ -1269,6 +1314,17 @@ async def _add_product(dst, d, by, from_who):
     from . import manufacturers as mf
     data = d.get("data") or {}
     p, maker = dict(data.get("product") or {}), data.get("maker") or {}
+    if maker.get("builtin") or not maker.get("domain"):
+        # A built-in source's (the drawer's part, an Own item...): an Own item of mine - its words, not its files.
+        from . import catalog_own
+        keep = {k: p.get(k) for k in ("name", "category", "sku", "description", "url", "image", "specs") if p.get(k)}
+        if (p.get("price") or {}).get("amount") is not None:
+            keep.update(price=p["price"]["amount"], currency=p["price"].get("currency") or "", vat=p["price"].get("vat"))
+        try:
+            got = await catalog_own.ensure(dst, keep, by)
+        except (ValueError, mf.Clash) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"id": f"{catalog_own.MID}:{got['id']}", "label": got.get("name"), "maker": catalog_own.MID}
     # Into my maker of the same site, or a new one for it (not explored).
     have = await dst[mf.COLL].find_one({"domain": maker.get("domain")}) if maker.get("domain") else None
     if not have:

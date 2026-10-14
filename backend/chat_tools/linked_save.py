@@ -1,5 +1,5 @@
 """mcmaster_save, grabcad_save: found parts or models saved to their
-built-in source in the Product Catalog, as its Save does (POST
+built-in source in Parts, as its Save does (POST
 /api/linked/<source>/parts, backend/linked.py `save`): one or several by
 their key, with what the find tool said of them. One saved already is
 given back, its empty fields filled."""
@@ -67,7 +67,7 @@ TOOLS = [
         label="Save McMaster-Carr parts",
         about="Saves McMaster-Carr parts to the catalog's McMaster-Carr source.",
         description="Save McMaster-Carr parts (by part number, as mcmaster_find gave them) to this workspace's "
-                    "Product Catalog > McMaster-Carr, with a title, notes, tags and how many are needed. One saved "
+                    "Parts > McMaster-Carr, with a title, notes, tags and how many are needed. One saved "
                     "already is kept and its empty fields filled. Only when the person asks to save or keep them.",
         schema=_schema("mcmaster", "The part number (91290A115) or its McMaster link", {}),
         running="Saving McMaster-Carr parts", failed="Could not save the McMaster-Carr parts",
@@ -77,7 +77,7 @@ TOOLS = [
         label="Save GrabCAD models",
         about="Saves GrabCAD models to the catalog's GrabCAD source.",
         description="Save GrabCAD library models (by their page or slug, as grabcad_find gave them) to this "
-                    "workspace's Product Catalog > GrabCAD, with a title, uploader, notes, tags and licence. One "
+                    "workspace's Parts > GrabCAD, with a title, uploader, notes, tags and licence. One "
                     "saved already is kept and its empty fields filled. Only when the person asks to save them.",
         schema=_schema("grabcad", "The model's page (https://grabcad.com/library/<slug>) or its slug", {
             "author": {"type": "string", "description": "Who uploaded it, as grabcad_find said"},

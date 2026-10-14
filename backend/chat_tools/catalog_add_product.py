@@ -1,5 +1,5 @@
 """catalog_add_product: products added to a maker's catalog by hand, as the
-Product Catalog's "Add a product" does (POST /api/manufacturers/{mid}/products,
+Parts page's "Add a product" does (POST /api/manufacturers/{mid}/products,
 backend/manufacturers.py `add_product`): one or several, `source: "manual"`,
 kept through a full exploration; one with the same code (or, without one,
 the same name) as a product already there is refused, as the page refuses
@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from .. import manufacturers as mf
 from . import Ctx, Result, Tool, ToolError, clip
-from ._catalog import checked, for_site, line, link, looks_like_url, made_for, maker, need
+from ._catalog import add_product, checked, for_site, line, link, looks_like_url, made_for, maker, need
 
 MOST = 50
 
@@ -98,7 +98,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
     for x in items:
         label = str((x or {}).get("name") or "?") if isinstance(x, dict) else "?"
         try:
-            p = await mf.add_product(ctx.db, mid, fields(x), ctx.actor or None)
+            p = await add_product(ctx.db, mid, fields(x), ctx.actor or None)
         except mf.Clash as exc:
             lines.append(f"- NOT added \"{label}\": {exc} - edit that one (catalog_edit_product) instead")
             continue
@@ -112,7 +112,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         raise ToolError(madeline + "nothing was added:\n" + "\n".join(lines))
     text = (f"{madeline}The catalog of \"{name}\" ({mid}): {len(added)} product(s) added by hand"
             + (f", {len(items) - len(added)} not" if len(added) < len(items) else "")
-            + f". The [id]s are how inventory_add links them. Open it: {link(mid)}\n" + "\n".join(lines))
+            + f". The [id]s are how inventory_add counts them in stock. Open it: {link(mid)}\n" + "\n".join(lines))
     if len(items) == 1:
         say, v = "Added {product} to the catalog of {name}", {"product": added[0]["name"]}
     else:
@@ -125,7 +125,7 @@ TOOL = Tool(
     name="catalog_add_product", package="mfr", level="change", order=71, default=True,
     label="Add a product to the catalog",
     about="Adds products to a maker's catalog by hand: name, code, category, specs, page, picture.",
-    description="Add one or several products to a maker's catalog in the Product Catalog by hand, from details "
+    description="Add one or several products to a maker's catalog in Parts by hand, from details "
                 "the person gives (or that you read). `manufacturer`: the maker's id or words of its name "
                 "(manufacturer_search lists them); or `site`: the maker's website - the maker kept for that site "
                 "is used, or a new one is made for it (named `maker_name`, else from the host). Each product needs "

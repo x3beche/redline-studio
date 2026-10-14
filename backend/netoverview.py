@@ -1,6 +1,6 @@
 """Settings > Proxy & Data, at the foot of the page: the data traffic of
 every outside lookup together - the Drawer's LCSC / EasyEDA part lookups,
-the Product Catalog's crawler and the Chat's web tools - by the route each
+the Parts page's crawler and the Chat's web tools - by the route each
 request took (Local = directly, Proxy, Jina), in one set of buckets.
 
 It merges what is already written down, without asking anybody anything:

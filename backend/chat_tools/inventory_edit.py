@@ -1,7 +1,9 @@
-"""inventory_edit: an inventory item's other fields changed - its name,
-place, category, part numbers, links, minimum, price, notes, tags - as the
-item page's fields are (PATCH /api/inventory/{id}, backend/inventory.py
-`patch`). The quantity is inventory_adjust's: it keeps a reason."""
+"""inventory_edit: a stock line's counting fields changed - its unit,
+place, minimum, type, notes, tags, what it is for, or the Parts product it
+counts - as the stock section of a product on the Parts page does (PATCH
+/api/inventory/{id}, backend/inventory.py `patch`). The quantity is
+inventory_adjust's: it keeps a reason. What the thing is - its name, part
+numbers, maker, category, price - is its product's: catalog_edit_product."""
 
 from __future__ import annotations
 
@@ -9,7 +11,9 @@ from .. import inventory as inv
 from . import Ctx, Result, Tool, ToolError
 from ._inventory import ITEM_PROPS, need, one
 
-EDITABLE = [k for k in ITEM_PROPS if k != "quantity"]
+# What a stock line keeps of its own; the rest is its product's.
+EDITABLE = ["unit", "location", "min_stock", "type", "subtype", "board", "notes", "tags", "catalog"]
+PRODUCTS = ("name", "mpn", "lcsc", "manufacturer", "category", "price", "currency")
 
 
 async def run(ctx: Ctx, args: dict) -> Result:
@@ -20,6 +24,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
         raise ToolError("give `set`: the fields to change and their new values")
     if "quantity" in change:
         raise ToolError("the quantity is changed with inventory_adjust, with a reason")
+    theirs = [k for k in change if k in PRODUCTS]
+    if theirs:
+        raise ToolError(f"{', '.join(theirs)} belong to the Parts product this line counts "
+                        f"({(d.get('catalog') or {}).get('manufacturer')}:{(d.get('catalog') or {}).get('product')}) - "
+                        "change them with catalog_edit_product")
     unknown = [k for k in change if k not in EDITABLE]
     if unknown:
         raise ToolError(f"no field {unknown[0]!r}; the fields are {', '.join(EDITABLE)}")
@@ -35,18 +44,20 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="inventory_edit", package="inventory", level="change", order=24, default=False,
-    label="Edit an inventory item",
-    about="Changes an item's name, place, type, category, part numbers, links, minimum, price, notes or tags.",
-    description="Change fields of an inventory item: `set` holds the fields and their new values (name, unit, "
-                "location, category, type, subtype, mpn, lcsc, manufacturer, board, catalog, min_stock, price, currency, "
-                "notes, tags; an empty value clears one - an empty type goes back to the one worked out). Not the "
-                "quantity - that is inventory_adjust, with a reason. "
-                "`item`: its id (inventory_search) or name. Use it only when asked to change an item.",
+    name="inventory_edit", package="mfr", level="change", order=84, default=False,
+    label="Edit a stock line",
+    about="Changes the unit, place, minimum, type, notes or tags of a stock line, or the Parts product it counts.",
+    description="Change the counting fields of a stock line on the Parts page: `set` holds the fields and their new "
+                "values (unit, location, min_stock, type, subtype, board, notes, tags; an empty value clears one - an "
+                "empty type goes back to the one worked out; `catalog` {manufacturer, product} moves the line to "
+                "another Parts product). Not the quantity - that is inventory_adjust, with a reason - and not what "
+                "the thing is (its name, part numbers, maker, category, price): those are its product's, changed "
+                "with catalog_edit_product. `item`: its id (inventory_search) or its product's name. Use it only "
+                "when asked to change a stock line.",
     schema={"type": "object", "properties": {
-        "item": {"type": "string", "description": "The item's id or name"},
+        "item": {"type": "string", "description": "The stock line's id or its product's name"},
         "set": {"type": "object", "description": "The fields to change", "properties":
-                {k: v for k, v in ITEM_PROPS.items() if k != "quantity"}}},
+                {k: v for k, v in ITEM_PROPS.items() if k in EDITABLE}}},
         "required": ["item", "set"]},
-    running="Editing an inventory item", failed="Could not edit the inventory item",
+    running="Editing a stock line", failed="Could not edit the stock line",
     run=run)

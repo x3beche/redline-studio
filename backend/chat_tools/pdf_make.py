@@ -25,7 +25,7 @@ SKILL = (
     "Workbench's white theme (the Workbench mark at the top of every page; the author, date and time, purpose and "
     "page N of M at the bottom) and kept in the Files room. Use it when the person asks for a PDF, a report or a "
     "document to keep or share; not for a short answer. Gather the facts first with the other tools (drawer, "
-    "datasheets, LCSC, boards, BOM cost, inventory...) and only then write it: every value in it comes from them, "
+    "datasheets, LCSC, boards, BOM cost, stock...) and only then write it: every value in it comes from them, "
     "not from memory. How to write it: `title` a few words; `purpose` one line saying what the document is for "
     "(it goes under the title and in every page's footer); `body` Markdown that opens with a short summary - the "
     "answer or the recommendation in two or three sentences - then sections under '## ' headings ('### ' under "

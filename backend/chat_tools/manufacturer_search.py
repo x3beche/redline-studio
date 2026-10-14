@@ -33,7 +33,7 @@ def _line(d: dict) -> str:
 
 async def _builtins(ctx: Ctx) -> list[dict]:
     """The built-in sources (LCSC's drawer, the McMaster-Carr parts and GrabCAD
-    models saved here) as makers with products - only those holding some."""
+    models saved here, Own items) as makers with products - only those holding some."""
     try:
         return [d for d in await builtin.makers(ctx.db) if d.get("products")]
     except Exception:                                   # noqa: BLE001 - a source that cannot be read is left out
@@ -54,8 +54,8 @@ def _pick(docs: list[dict], ref: str) -> dict | None:
 async def _listing(ctx: Ctx) -> Result:
     found = await _all(ctx)
     if not found:
-        return Result(text="There are no manufacturers in this workspace. The person adds one by its website in "
-                           "the Manufacturers tab.", say="No manufacturers here", summary="none")
+        return Result(text="There are no manufacturers in this workspace. The person adds one by its website on "
+                           "the Parts page.", say="No manufacturers here", summary="none")
     text = (f"{len(found)} manufacturer(s) in this workspace. Read one's catalog with `manufacturer`, or search "
             "products with `query` (and `category`):\n" + "\n".join(_line(d) for d in found))
     return Result(text=clip(text), say="Listed {n} manufacturers", vars={"n": len(found)},
@@ -76,13 +76,13 @@ async def run(ctx: Ctx, args: dict) -> Result:
     stock = await inv.stock_of(ctx.db)
     if one and not q and not cat:
         text = mf.block(one, 22_000, stock.get(one["_id"], {}))
-        text += ("\nEach product's [id] is how inventory_add links it; [in stock: ...] is what the inventory holds "
+        text += ("\nEach product's [id] is how inventory_add counts it in stock; [in stock: ...] is what is on hand "
                  "of it.")
         return Result(text=clip(text), say="Read the catalog of {name}", vars={"name": one.get("name") or one["_id"]},
                       summary=f"{len(one.get('products') or [])} products · {', '.join((one.get('categories') or [])[:6])}")
     docs = [one] if one else await _all(ctx)
     if not docs:
-        raise ToolError("there are no manufacturers in this workspace - the person adds one in the Manufacturers tab")
+        raise ToolError("there are no manufacturers in this workspace - the person adds one on the Parts page")
     try:
         limit = max(1, min(int(args.get("limit") or SHOW), 100))
     except (TypeError, ValueError):
@@ -102,7 +102,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         lines.append(f"- {d.get('name')} ({d['_id']}): " + mf.product_line(p, 10, stock.get(d["_id"], {}))
                      + (f" [image {p['image']}]" if p.get("image") else ""))
     text = (f"{len(hits)} product(s) of {where} for {what}, best matches first. The manufacturer's (id) and the "
-            "product's [id] are how inventory_add links one; [in stock: ...] is what the inventory holds of it:\n"
+            "product's [id] are how inventory_add counts one in stock; [in stock: ...] is what is on hand of it:\n"
             + "\n".join(lines))
     return Result(text=clip(text), say="Found {n} products for {q}", vars={"n": len(hits), "q": q or cat},
                   summary="\n".join(f"{d.get('name')} · {p['name']}" for d, p, _ in hits[:15]))
@@ -112,9 +112,9 @@ TOOL = Tool(
     name="manufacturer_search", package="mfr", level="read", order=69,
     label="Search the manufacturers",
     about="Lists the saved manufacturers, reads one's catalog, or searches their products by words and category.",
-    description="The manufacturers this workspace keeps (the Product Catalog): makers whose websites were explored, "
+    description="The manufacturers this workspace keeps (Parts): makers whose websites were explored, "
                 "and the built-in sources' parts saved here - LCSC (the parts drawer), McMaster-Carr parts and GrabCAD "
-                "models - searched with them; "
+                "models, and Own items (things no site sells, typed in by hand, id own) - searched with them; "
                 "each with a summary, the person's notes on when to use them, categories and a product catalog "
                 "(name, category, description, specs such as dimensions and materials, code, product page, and - when "
                 "its page showed them - its price with currency and VAT, the seller's stock and the site it is sold on, "

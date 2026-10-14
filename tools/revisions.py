@@ -49,7 +49,7 @@ datasheet (backend/files.py); through the server, like `board`:
     python tools/revisions.py files mkdir <a/b>                    a folder (and its parents)
     python tools/revisions.py files mv <id|folder> <folder|/>      move a file or a folder
 
-Bought and downloaded parts - saved in the Product Catalog's McMaster-Carr
+Bought and downloaded parts - saved in the Parts page's McMaster-Carr
 and GrabCAD sources with the STEP the person downloaded (backend/linked.py);
 through the server, like `files`:
 
@@ -2731,7 +2731,7 @@ def main() -> None:
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
     s = sub.add_parser("linked", help="bought and downloaded parts: McMaster-Carr and GrabCAD, saved in the "
-                                      "Product Catalog with their STEP (backend/linked.py)")
+                                      "Parts page with their STEP (backend/linked.py)")
     s.add_argument("what", nargs="?", default="list", choices=["list", "to-model"],
                    help="list (the default): the saved ones with a CAD file; "
                         "to-model <source>:<key> --folder F [--title T]: one as a model in a project")

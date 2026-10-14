@@ -1,5 +1,5 @@
 """catalog_edit_product: one product of a maker's catalog changed, as the
-Product Catalog's product editor does (PATCH /api/manufacturers/{mid}/products/{pid},
+Parts page's product editor does (PATCH /api/manufacturers/{mid}/products/{pid},
 backend/manufacturers.py `edit_product`): only the fields given; a changed
 product is kept through the next full exploration."""
 
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from .. import manufacturers as mf
 from . import Ctx, Result, Tool, ToolError
-from ._catalog import line, link, maker, need, product
+from ._catalog import edit_product, line, link, maker, need, product
 from .catalog_add_product import PRODUCT_PROPS, fields
 
 
@@ -23,7 +23,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         f = fields(sets, patch=True)
         if "specs" in f and isinstance(f["specs"], dict) and not args.get("replace_specs"):
             f["specs"] = {**(p.get("specs") or {}), **f["specs"]}
-        got = await mf.edit_product(ctx.db, doc["_id"], p["id"], f, ctx.actor or None)
+        got = await edit_product(ctx.db, doc["_id"], p["id"], f, ctx.actor or None)
     except (mf.Clash, ValueError, LookupError) as exc:
         raise ToolError(str(exc).strip("'\"")) from exc
     changed = ", ".join(k for k in f) or "nothing"
@@ -38,7 +38,7 @@ TOOL = Tool(
     name="catalog_edit_product", package="mfr", level="change", order=72, default=False,
     label="Edit a catalog product",
     about="Changes a product in a maker's catalog: its name, code, category, description, specs, price, stock, page or picture.",
-    description="Change one product in the Product Catalog. `manufacturer`: the maker's id or name; `product`: the "
+    description="Change one product in Parts. `manufacturer`: the maker's id or name; `product`: the "
                 "product's id (manufacturer_search gives them) or its name or code; `set`: only the fields to "
                 "change (name, category, sku, description, specs, url, image, price, currency, vat, list_price, "
                 "stock, stock_qty - a new price is remembered in the product's price history; price \"\" takes it "

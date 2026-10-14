@@ -10,7 +10,7 @@ A route is one way out:
              page, so a consumer of those does not offer it at all.
 
 A consumer is one kind of lookup, and it says which routes it can take:
-the Product Catalog's crawler (manufacturers.py) takes all three, the
+the Parts page's crawler (manufacturers.py) takes all three, the
 Drawer's LCSC / EasyEDA part lookups (lcsc.py) local and the proxy. Each
 keeps an ordered list of the routes that are on: a request tries the first,
 and on a refusal (403 / 429 / 503), a network failure or - for a web page
@@ -35,7 +35,7 @@ DOC_ID = "routes"
 ROUTES = ("local", "proxy", "jina")
 # Which routes each consumer can take, in the order the page shows them.
 CONSUMERS: dict[str, tuple[str, ...]] = {
-    "catalog": ("local", "proxy", "jina"),     # the Product Catalog's crawler: web pages
+    "catalog": ("local", "proxy", "jina"),     # the Parts page's crawler: web pages
     "parts": ("local", "proxy"),               # the Drawer's LCSC / EasyEDA lookups: JSON APIs, no Jina
 }
 DEFAULTS: dict[str, list[str]] = {"catalog": ["local", "proxy"], "parts": ["local", "proxy"]}

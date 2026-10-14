@@ -5,7 +5,7 @@ Reader (https://r.jina.ai/<url>) reads a web page on Jina's side - a real
 browser, the page's script run there, not here - and answers with the page
 as Markdown: its title, its text, its links and pictures. So a page that
 needs JavaScript, or that turns a plain fetch away, can still be read. The
-Product Catalog's crawler uses it where its order of routes has the `jina`
+Parts page's crawler uses it where its order of routes has the `jina`
 route (backend/netroutes.py, backend/manufacturers.py: first, or after a
 site refuses or a page comes back empty without its script), and the
 Chat's `web_read` tool reads one page with it.

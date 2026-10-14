@@ -1,4 +1,4 @@
-"""catalog_add_maker: a manufacturer added to the Product Catalog by its
+"""catalog_add_maker: a manufacturer added to Parts by its
 site, as its "Add a manufacturer" does (POST /api/manufacturers,
 backend/manufacturers.py `create`), and - only when asked - its whole site
 explored (`start_job`): up to MAX_PAGES pages read and handed to the
@@ -23,18 +23,18 @@ async def run(ctx: Ctx, args: dict) -> Result:
                            f"catalog_read_page, or say `again` to add a second maker for the same site. {link(have['_id'])}",
                       say="{name} is already in the catalog", vars={"name": name, "m": have["_id"], "link": link(have["_id"])},
                       summary="already kept")
-    try:                                               # the Product Catalog's default order of routes
+    try:                                               # the Parts page's default order of routes
         doc = await mf.create(ctx.db, url, str(args.get("name") or ""), str(args.get("notes") or ""), None,
                               ctx.actor or None)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     mid, name = doc["_id"], doc.get("name") or doc["_id"]
-    text = f"Added the manufacturer {mid} \"{name}\" for {doc['url']} to the Product Catalog."
+    text = f"Added the manufacturer {mid} \"{name}\" for {doc['url']} to Parts."
     vars_ = {"name": name, "m": mid, "link": link(mid)}
     if not args.get("explore"):
         return Result(text=text + f" Its catalog is empty: read product pages into it with catalog_read_page, or "
                                   f"explore its whole site when the person asks. {link(mid)}",
-                      say="Added {name} to the Product Catalog", vars=vars_, summary=doc["url"])
+                      say="Added {name} to Parts", vars=vars_, summary=doc["url"])
     need("POST", f"/api/manufacturers/{mid}/explore")
     try:
         jd, _ = await mf.start_job(ctx.db, mid, None, ctx.actor or None)
@@ -51,8 +51,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
 TOOL = Tool(
     name="catalog_add_maker", package="mfr", level="change", order=74, default=False,
     label="Add a manufacturer",
-    about="Adds a manufacturer to the Product Catalog by its website, and explores the site if asked.",
-    description="Add a manufacturer (a maker or a shop) to the Product Catalog by its website `url`, with an "
+    about="Adds a manufacturer to Parts by its website, and explores the site if asked.",
+    description="Add a manufacturer (a maker or a shop) to Parts by its website `url`, with an "
                 "optional `name` and `notes` (when to use them). A site already kept is not added twice unless "
                 "`again`. `explore`: also explore the whole site now - it reads up to 100 pages in the background "
                 "for several minutes and the model reading them costs LLM tokens, so do it only when the person "

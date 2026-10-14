@@ -9,7 +9,7 @@ site, how an item's key is read out of an address or a pasted number, the
 web searches that find its items (Jina Search, backend/jina.py: the same
 calls, log and cost as the Chat's web_search) and how their results are read,
 what the person does on the item's page to download it - registered once.
-Registering one also lists it as a built-in source of the Product Catalog
+Registering one also lists it as a built-in source of Parts
 (backend/catalog_builtin.py), and the Chat gets its `<id>_find` and
 `<id>_save` tools (backend/chat_tools/linked_find.py, linked_save.py).
 

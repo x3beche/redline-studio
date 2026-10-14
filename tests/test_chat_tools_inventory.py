@@ -50,16 +50,15 @@ def call(db, name, args, actor=ME):
 
 def test_the_tools_are_in_their_package_at_their_levels():
     got = {n: (t.package, t.level, t.default) for n, t in chat_tools.tools().items() if n in NAMES}
-    assert got == {"inventory_search": ("inventory", "read", True), "inventory_read": ("inventory", "read", True),
-                   "inventory_add": ("inventory", "change", True), "inventory_adjust": ("inventory", "change", True),
-                   "inventory_edit": ("inventory", "change", False), "inventory_remove": ("inventory", "delete", True)}
-    pk = chat_tools.PACKAGE["inventory"]
-    assert (pk.label, pk.about) == ("Inventory", "What is on hand: items, quantities and where they are.")
-    names = [p.name for p in chat_tools.PACKAGES]
-    assert names[names.index("mfr") + 1] == "inventory"
-    # The Tools panel draws a card per tab: the package is named by the tab's id.
+    assert got == {"inventory_search": ("mfr", "read", True), "inventory_read": ("mfr", "read", True),
+                   "inventory_add": ("mfr", "change", True), "inventory_adjust": ("mfr", "change", True),
+                   "inventory_edit": ("mfr", "change", False), "inventory_remove": ("mfr", "delete", True)}
+    # Stock is a part of the Parts page, not a tab of its own: its tools are the Parts package's, after the catalog's.
+    assert "inventory" not in chat_tools.PACKAGE and chat_tools.PACKAGE["mfr"].label == "Parts"
+    order = list(chat_tools.tools())
+    assert order.index("catalog_read_page") < order.index("inventory_search") < order.index("inventory_remove")
     tabs = open("frontend/src/app/workspaces.ts", encoding="utf-8").read()
-    assert "id: 'inventory'" in tabs and tabs.index("id: 'mfr'") < tabs.index("id: 'inventory'") < tabs.index("id: 'commandcode'")
+    assert "id: 'mfr'" in tabs and "id: 'inventory'" not in tabs
     for n in NAMES:
         assert n in chat_tools.SYSTEM_NOTE
 
@@ -72,11 +71,11 @@ def test_their_sentences_are_in_turkish_too():
         for s in (t.label, t.about, t.running, t.failed):
             assert f"'{s}':" in tr or f'"{s}":' in tr, (n, s)
         assert f"{n}:" in icons, n
-    for s in ("Inventory", "What is on hand: items, quantities and where they are.", "Found {n} items on hand",
-              "Nothing on hand matches {q}", "The inventory is empty", "Read {name} from the inventory",
-              "Topped up {name} in the inventory", "Added {name} to the inventory",
-              "Added {n} items to the inventory ({m} merged)", "{name}: {change}, now {now}",
-              "Changed {fields} of {name}", "Removed {names} from the inventory"):
+    for s in ("Parts", "Found {n} items on hand",
+              "Nothing on hand matches {q}", "Nothing is in stock yet", "Read the stock of {name}",
+              "Topped up {name} in stock", "Added {name} to stock",
+              "Added {n} lines to stock ({m} merged)", "{name}: {change}, now {now}",
+              "Changed {fields} of {name}", "Removed {names} from stock"):
         assert f"'{s}':" in tr, s
 
 
@@ -86,15 +85,15 @@ def test_add_tops_up_what_is_kept_and_says_which(ws):
     got = call(db, "inventory_add", {"items": [{"name": "m3 nut", "quantity": 50},
                                                {"name": "M3 washer", "quantity": 80, "location": "A2"},
                                                {"name": "", "quantity": 3}], "reason": "order 1043 arrived"})
-    assert got.say == "Added {n} items to the inventory ({m} merged)" and got.vars["n"] == 2 and got.vars["m"] == 1
-    assert "1 added, 1 merged into items already kept, 1 not added" in got.text
-    assert "merged into the item already kept" in got.text and "+50, now 150 pcs at A1" in got.text
-    assert "added new item" in got.text and "NOT added" in got.text
+    assert got.say == "Added {n} lines to stock ({m} merged)" and got.vars["n"] == 2 and got.vars["m"] == 1
+    assert "1 added, 1 merged into lines already kept, 1 not added" in got.text
+    assert "merged into the stock line already kept" in got.text and "+50, now 150 pcs at A1" in got.text
+    assert "added new stock line" in got.text and "NOT added" in got.text
     rows = {d["name"]: d for d in run(inv.everything(db))}
     assert rows["M3 nut"]["quantity"] == 150 and rows["M3 nut"]["log"][-1]["reason"] == "order 1043 arrived"
     assert rows["M3 washer"]["by"]["id"] == ME["id"]
     one = call(db, "inventory_add", {"items": [{"name": "M3 washer", "quantity": 1}]})
-    assert one.say == "Topped up {name} in the inventory" and one.vars["name"] == "M3 washer"
+    assert one.say == "Topped up {name} in stock" and one.vars["name"] == "M3 washer"
     with pytest.raises(ToolError, match="nothing was added"):
         call(db, "inventory_add", {"items": [{"name": "x", "quantity": -1}]})
     with pytest.raises(ToolError, match="give `items`"):
@@ -111,26 +110,53 @@ def test_add_links_a_catalog_product_or_an_lcsc_part(ws, monkeypatch):
     async def holds(db_, c, ws=None):
         return {"_id": c, "name": "IRL540N TO-220"} if c == "C111607" else None
     monkeypatch.setattr(lcsc, "holds", holds)
+
+    async def known(db_):
+        return [{"lcsc": "C111607", "name": "IRL540N TO-220", "mpn": "IRL540N", "group": "Discretes", "branch": "MOSFETs"}]
+    monkeypatch.setattr(lcsc, "known", known)
     got = call(db, "inventory_add", {"items": [{"quantity": 4, "catalog": {"manufacturer": "dogus", "product": "p1"},
                                                 "location": "Shelf A"},
                                                {"quantity": 10, "lcsc": "c111607"}]})
     assert got.vars["n"] == 2
+    # Each line names the Parts product it counts: the site's, and the drawer's part the LCSC number names.
+    assert "counts the Parts product Doğuş / Menteşe 20 [dogus:p1]" in got.text
+    assert "[lcsc:C111607]" in got.text and "made in Own items" not in got.text
     rows = {d["name"]: d for d in run(inv.everything(db))}
     hinge, fet = rows["Menteşe 20"], rows["IRL540N TO-220"]
     assert hinge["catalog"]["product_name"] == "Menteşe 20" and hinge["mpn"] == "MN-20" and hinge["manufacturer"] == "Doğuş"
-    assert fet["lcsc"] == "C111607"
+    assert fet["lcsc"] == "C111607" and fet["catalog"]["manufacturer"] == "lcsc"
     read = call(db, "inventory_read", {"item": "mentese"})
-    assert "Product Catalog: Doğuş / Menteşe 20  https://dogus.example/mn20" in read.text
+    assert "Parts product: Doğuş / Menteşe 20  https://dogus.example/mn20  (id dogus:p1)" in read.text
     assert "https://www.lcsc.com/product-detail/C111607.html" in call(db, "inventory_read", {"item": fet["_id"]}).text
     with pytest.raises(ToolError, match="no product"):
         call(db, "inventory_add", {"items": [{"name": "x", "quantity": 1, "catalog": {"manufacturer": "dogus",
                                                                                       "product": "nope"}}]})
 
 
+def test_a_thing_no_site_sells_becomes_an_own_item(ws):
+    db, _, _ = ws
+    got = call(db, "inventory_add", {"items": [{"name": "PETG black 1 kg", "quantity": 2, "unit": "roll",
+                                                "category": "Filament", "location": "Cabinet"}]})
+    assert "made in Own items" in got.text and "[own:" in got.text
+    line = run(inv.everything(db))[0]
+    assert line["catalog"]["manufacturer"] == "own" and line["catalog"]["product_name"] == "PETG black 1 kg"
+    # Again, by its name: the same Own item, topped up - no second product, no second line.
+    again = call(db, "inventory_add", {"items": [{"name": "petg black 1 KG", "quantity": 1, "unit": "roll"}]})
+    assert again.vars["name"] == "PETG black 1 kg" and "merged" in again.text
+    assert len(run(inv.everything(db))) == 1
+    # What it is belongs to the product: inventory_edit says where to change it.
+    with pytest.raises(ToolError, match="catalog_edit_product"):
+        call(db, "inventory_edit", {"item": line["_id"], "set": {"name": "PETG"}})
+    # The catalog tools reach Own items by its name.
+    edited = call(db, "catalog_edit_product", {"manufacturer": "Own items", "product": "petg",
+                                               "set": {"sku": "PETG-BK-1"}})
+    assert "PETG-BK-1" in edited.text
+
+
 def test_search_and_read(ws):
     db, _, _ = ws
     empty = call(db, "inventory_search", {})
-    assert empty.say == "The inventory is empty"
+    assert empty.say == "Nothing is in stock yet"
     for raw in ({"name": "ESP32-C3 module", "quantity": 2, "min_stock": 5, "location": "Shelf B", "category": "Modules"},
                 {"name": "PLA filament", "quantity": 3, "unit": "roll", "location": "Cabinet", "category": "Filament"}):
         run(inv.add(db, raw, ME))
@@ -143,8 +169,8 @@ def test_search_and_read(ws):
     assert none.say == "Nothing on hand matches {q}" and "Categories: Filament, Modules" in none.text
     run(inv.adjust(db, run(inv.everything(db))[0]["_id"], -1, "a prototype", ME))
     read = call(db, "inventory_read", {"item": "esp32"})
-    assert read.say == "Read {name} from the inventory" and "adjusted -1 -> 1 by Me: a prototype" in read.text
-    with pytest.raises(ToolError, match="no inventory item"):
+    assert read.say == "Read the stock of {name}" and "adjusted -1 -> 1 by Me: a prototype" in read.text
+    with pytest.raises(ToolError, match="no stock line"):
         call(db, "inventory_read", {"item": "nothing like it"})
 
 
@@ -171,7 +197,7 @@ def test_edit_changes_fields_but_not_the_quantity(ws):
         call(db, "inventory_edit", {"item": d["_id"], "set": {"quantity": 1}})
     with pytest.raises(ToolError, match="no field"):
         call(db, "inventory_edit", {"item": d["_id"], "set": {"colour": "red"}})
-    with pytest.raises(ToolError, match="needs a name"):
+    with pytest.raises(ToolError, match="belong to the Parts product"):
         call(db, "inventory_edit", {"item": d["_id"], "set": {"name": ""}})
 
 
@@ -197,7 +223,7 @@ def test_remove_keeps_someone_elses_item_to_those_who_may_delete(ws):
         call(db, "inventory_remove", {"items": [mine["_id"], theirs["_id"]]})
     assert len(run(inv.everything(db))) == 2                  # nothing went, not even one's own
     got = call(db, "inventory_remove", {"items": ["my meter"]})
-    assert got.say == "Removed {names} from the inventory" and got.vars["names"] == "My meter"
+    assert got.say == "Removed {names} from stock" and got.vars["names"] == "My meter"
     state["role"] = "editor"
     call(db, "inventory_remove", {"items": [theirs["_id"]]})
     assert run(inv.everything(db)) == []
@@ -252,7 +278,7 @@ def test_removing_waits_for_a_yes(env, writes, monkeypatch, allow):
     assert "inventory_edit" not in sent                             # off until the person turns it on
     if allow:
         assert step["status"] == "done" and "i1" not in raw["inventory"].rows
-        assert step["say"] == "Removed {names} from the inventory"
+        assert step["say"] == "Removed {names} from stock"
     else:
         assert step["status"] != "done" and copy.deepcopy(raw["inventory"].rows["i1"])["quantity"] == 3
 
@@ -273,12 +299,12 @@ def test_add_takes_a_catalog_product_by_words_and_the_catalog_shows_the_stock(ws
     got = call(db, "inventory_add", {"items": [{"quantity": 20, "location": "shelf B",
                                                 "catalog": {"manufacturer": "dogus", "product": "menteşe 20"}},
                                                {"quantity": 1, "catalog": {"manufacturer": "dogus", "product": "menteşe"}}]})
-    assert "added new item" in got.text and "(linked to Doğuş Kalıp / Menteşe 20 mm)" in got.text
+    assert "added new stock line" in got.text and "counts the Parts product Doğuş Kalıp / Menteşe 20 mm" in got.text
     assert "NOT added" in got.text and "p1 Menteşe 20 mm" in got.text      # several fit: the ids, to ask again with
     (item,) = run(inv.everything(db))
     assert (item["name"], item["mpn"], item["category"], item["location"]) == ("Menteşe 20 mm", "MN-20", "Bağlantı", "shelf B")
     again = call(db, "inventory_add", {"items": [{"quantity": 5, "catalog": {"manufacturer": "dogus", "product": "p1"}}]})
-    assert again.say == "Topped up {name} in the inventory" and "now 25 pcs" in again.text
+    assert again.say == "Topped up {name} in stock" and "now 25 pcs" in again.text
     # The catalog, as the model reads it: each product's id and what is on hand of it.
     found = call(db, "manufacturer_search", {"query": "menteşe"})
     assert "- Doğuş Kalıp (dogus): [p1] Menteşe 20 mm" in found.text and "[in stock: 25 pcs]" in found.text

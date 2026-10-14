@@ -1,10 +1,10 @@
-"""What the Product Catalog's writing tools share (catalog_read_page,
+"""What the Parts page's writing tools share (catalog_read_page,
 catalog_add_product, catalog_edit_product, catalog_remove_product,
 catalog_add_maker): the makers and their products (backend/manufacturers.py)
 named the way a person says them, a maker found or made for a site, the
 page's link to a run, and the products as the model reads them back.
 Read and written through the asker's workspace (ctx.db), with the rights
-the Product Catalog's API routes need (backend/access.py "draw")."""
+the Parts page's API routes need (backend/access.py "draw")."""
 
 from __future__ import annotations
 
@@ -54,6 +54,10 @@ async def maker(db, ref: str) -> dict:
     got = await mf.get(db, ref)
     if got:
         return got
+    # Own items (backend/catalog_own.py): the one built-in source a product is added to by hand.
+    from .. import catalog_builtin, catalog_own
+    if mf.fold(ref) in (catalog_own.MID, mf.fold(catalog_own.NAME), "own item", "own"):
+        return await catalog_builtin.maker(db, catalog_own.MID)
     every = await mf.listing(db)
     if looks_like_url(ref):
         one = await for_site(db, as_url(ref))
@@ -91,7 +95,7 @@ async def made_for(db, page: str, name: str = "", by: dict | None = None) -> dic
     """A new manufacturer for the site `page` is on, as the Product
     Catalog's "Only this page" add makes one (POST /api/manufacturers with
     `only`): its site's root, named from the host unless `name` says, the
-    Product Catalog's default order of routes (Settings > Proxy & Data)."""
+    Parts page's default order of routes (Settings > Proxy & Data)."""
     try:
         return await mf.create(db, mf._root_of(page), name, "", None, by)
     except ValueError as exc:
@@ -123,7 +127,7 @@ def product(doc: dict, ref: str) -> dict:
 
 
 def link(mid: str, rid: str | None = None) -> str:
-    """The Product Catalog open at this maker (and run), as the page's own URL keeps it."""
+    """Parts open at this maker (and run), as the page's own URL keeps it."""
     q = {"ws": "catalog", "m": mid, **({"run": rid} if rid else {})}
     return "/?" + urllib.parse.urlencode(q)
 
@@ -180,3 +184,23 @@ def short(p: dict) -> str:
     if price(p):
         bits.append(price(p).split(": ", 1)[-1])
     return " · ".join(b for b in bits if b)
+
+
+# ---- writing a product: a site's, or Own items' (a built-in source that takes writes)
+
+async def add_product(db, mid: str, f: dict, by: dict | None = None) -> dict:
+    from .. import catalog_builtin
+    src = catalog_builtin.writable(mid)
+    return await (src.add(db, f, by) if src else mf.add_product(db, mid, f, by))
+
+
+async def edit_product(db, mid: str, pid: str, f: dict, by: dict | None = None) -> dict:
+    from .. import catalog_builtin
+    src = catalog_builtin.writable(mid)
+    return await (src.edit(db, pid, f, by) if src else mf.edit_product(db, mid, pid, f, by))
+
+
+async def delete_products(db, mid: str, ids: list[str]) -> int:
+    from .. import catalog_builtin
+    src = catalog_builtin.writable(mid)
+    return await (src.delete(db, ids) if src else mf.delete_products(db, mid, ids))

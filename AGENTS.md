@@ -1139,8 +1139,8 @@ See `.claude/skills/asset-revisions/SKILL.md` for details.
 CAD files and builds it - the model stays whole if the file is later deleted
 from Files. Use that model like any other component (`import oled_0_91_128x32`).
 
-**A bought or downloaded part - McMaster-Carr, GrabCAD - is in the Product
-Catalog with its STEP.** `revisions.py linked` lists the saved ones that have
+**A bought or downloaded part - McMaster-Carr, GrabCAD - is on the Parts
+page with its STEP.** `revisions.py linked` lists the saved ones that have
 a CAD file, by part number (`mcmaster:91290A115`) or GrabCAD slug;
 `revisions.py linked to-model mcmaster:91290A115 --folder lamp/purchased`
 makes one a model (`import mcmaster_91290a115`), as `files to-model` does.

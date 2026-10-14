@@ -1,4 +1,4 @@
-"""The Chat's tools that write to the Product Catalog (backend/chat_tools:
+"""The Chat's tools that write to Parts (backend/chat_tools:
 catalog_read_page, catalog_add_product, catalog_edit_product,
 catalog_remove_product, catalog_add_maker).
 
@@ -119,7 +119,7 @@ def test_the_tools_are_in_the_catalog_package_at_their_levels():
     note = chat_tools.SYSTEM_NOTE
     for n in NAMES:
         assert n in note
-    assert "product or shop page" in note and "then inventory_add can stock it" in note
+    assert "product or shop page" in note and "then inventory_add can count it in stock" in note
 
 
 def test_their_sentences_are_in_turkish_too():
@@ -136,7 +136,7 @@ def test_their_sentences_are_in_turkish_too():
     for s in ("A run of {name} is already going", "Reading the page into {name}",
               "Added {product} to the catalog of {name}", "Added {n} products to the catalog of {name}",
               "Changed {fields} of {product} in the catalog", "Removed {products} from the catalog of {name}",
-              "{name} is already in the catalog", "Added {name} to the Product Catalog",
+              "{name} is already in the catalog", "Added {name} to Parts",
               "Added {name} and started exploring its site"):
         assert has(s), s
 
@@ -324,7 +324,7 @@ def test_a_maker_by_its_site_and_its_exploration_only_when_asked(ws, monkeypatch
     got = call(db, "catalog_add_maker", {"url": "www.dogus.com.tr", "name": "Doğuş Kalıp", "notes": "molds"})
     (m,) = makers(db)
     assert m["name"] == "Doğuş Kalıp" and m["notes"] == "molds" and m["url"] == "https://www.dogus.com.tr/"
-    assert got.say == "Added {name} to the Product Catalog" and not started and not run(mf.jobs(db, 5))
+    assert got.say == "Added {name} to Parts" and not started and not run(mf.jobs(db, 5))
     same = call(db, "catalog_add_maker", {"url": "https://dogus.com.tr/x", "explore": True})
     assert same.say == "{name} is already in the catalog" and len(makers(db)) == 1 and not started
     got = call(db, "catalog_add_maker", {"url": "https://www.robo90.com/", "explore": True})
@@ -352,7 +352,7 @@ def test_a_viewer_changes_nothing(ws):
             call(db, name, args)
     assert [d["_id"] for d in makers(db)] == [mid] and run(mf.get(db, mid))["products"][0]["name"] == "Siyah PLA"
     assert not run(mf.jobs(db, 5)) and web["seen"] == []
-    # the rights are the Product Catalog API's: "draw"
+    # the rights are Parts API's: "draw"
     for m, p in (("POST", "/api/manufacturers"), ("POST", f"/api/manufacturers/{mid}/read-page"),
                  ("POST", f"/api/manufacturers/{mid}/products"), ("DELETE", f"/api/manufacturers/{mid}/products/o1")):
         assert access.action(m, p) == "draw"

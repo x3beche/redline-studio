@@ -1,4 +1,4 @@
-"""LCSC as a seller in the Product Catalog: the parts drawer, shown as a maker.
+"""LCSC as a seller in Parts: the parts drawer, shown as a maker.
 
 A built-in source (backend/catalog_builtin.py). The drawer (backend/lcsc.py,
 `/api/parts`) stays the one place the parts are kept. The catalog lists them as the products of a maker that is not in

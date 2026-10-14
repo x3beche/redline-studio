@@ -1,4 +1,4 @@
-"""catalog_read_page: product pages read into the Product Catalog, as its
+"""catalog_read_page: product pages read into Parts, as its
 "Add from a page" does (POST /api/manufacturers/{mid}/read-page, and for a
 site no maker is kept for, POST /api/manufacturers with `only`): a page-run
 (backend/manufacturers.py `start_job` with `only`, kind "page") reads just
@@ -111,7 +111,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
     rows = [f"- added {line(p)}" for p in new] + [f"- already in the catalog, filled in: {line(p)}" for p in filled]
     text = (f"{madeline}Read {what} into the catalog of \"{name}\" ({mid}), run {jid}: {found} product(s) found, "
             f"{len(new)} added, {len(filled)} already there; the catalog holds {len(prods)} now. The [id]s are how "
-            f"inventory_add links them. Run: {url}\n" + "\n".join(rows))
+            f"inventory_add counts them in stock. Run: {url}\n" + "\n".join(rows))
     if len(new) == 1:
         say, v = "Added {product} to the catalog of {name}", {"product": new[0].get("name")}
     else:
@@ -124,7 +124,7 @@ TOOL = Tool(
     name="catalog_read_page", package="mfr", level="change", order=70, default=True,
     label="Read a page into the catalog",
     about="Reads a product or shop page and adds the products on it to a maker's catalog.",
-    description="Add the products on one or more web pages to the Product Catalog - a product page on a maker's "
+    description="Add the products on one or more web pages to Parts - a product page on a maker's "
                 "or a shop's site, or a list or category page (every product on it). `urls`: 1-10 public http(s) "
                 "addresses. `follow`: also read the product pages they link to (same site, one link deep, up to "
                 "30) - for a list page. `manufacturer`: the maker's id or words of its name; leave it out and the "
@@ -135,7 +135,7 @@ TOOL = Tool(
                 "(their ids, names, codes, prices if the page gave them); otherwise, or when it takes longer, it "
                 "returns the run's id and a link the person can watch it on - give them that link. Use it when the "
                 "person gives a product or shop page, or asks to add something from a site to the catalog; then "
-                "inventory_add can stock what it added.",
+                "inventory_add can count what it added in stock.",
     schema={"type": "object", "properties": {
         "urls": {"type": "array", "items": {"type": "string"}, "description": "The pages' addresses (1-10)"},
         "follow": {"type": "boolean", "description": "Also read the product pages they link to (for a list page)"},
