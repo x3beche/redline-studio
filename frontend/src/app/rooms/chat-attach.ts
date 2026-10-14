@@ -239,8 +239,9 @@ export class AttachChips {
   host: { style: 'display: contents' },
 })
 export class MentionPics {
-  mentions = input<{ kind: string; id: string; label: string; image?: boolean; sub?: string }[] | undefined>([]);
-  pics = computed(() => (this.mentions() ?? []).filter(isPicture));
+  mentions = input<{ kind: string; id: string; label: string; image?: boolean; sub?: string; gone?: unknown }[] | undefined>([]);
+  /** A picture deleted from Files since is a chip that says so (commandcode.ts), not a broken picture. */
+  pics = computed(() => (this.mentions() ?? []).filter(m => isPicture(m) && !m.gone));
   full = inlineUrl;
   small = thumbUrl;
   /** No small picture (an SVG, or one too large to make one of): the picture itself. */

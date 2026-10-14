@@ -20,12 +20,55 @@ export interface StoredFile {
   /** A 3D file whose picture is kept on the server (mesh-thumb.ts): a tag
    *  of its content and the way it was drawn, for the picture's address. */
   has_thumb?: string;
+  /** One of the read-only folders' files (backend/files_virtual.py): a
+   *  room's own, read where it is kept; `where` is the area that changes it,
+   *  `open` what to open there, `stored` what the database keeps of it. */
+  ro?: boolean; where?: string; open?: VirtualOpen; stored?: number;
+  /** A room's build output (the 3D view's mesh, a board's layers): its kind is "build" wherever kinds are counted. */
+  build?: boolean;
 }
+
+/** What a read-only entry opens in its own room. */
+export interface VirtualOpen { room?: string; model?: string; board?: string; firmware?: string }
 
 export interface FileFolder {
   id: string; name: string; parent: string; path: string;
   by: { name?: string; id?: string }; created_at: string;
+  /** A read-only folder (Projects, Chat, Parts and what is in them): `root`
+   *  for those three, `where` the area that changes what it holds. */
+  ro?: boolean; root?: boolean; where?: string; open?: VirtualOpen; chat?: string; build?: boolean;
 }
+
+/** GET /api/files/virtual: the read-only folders, the Projects' own files,
+ *  and which uploads the Chat's and Parts' folders refer to. */
+export interface VirtualTree { folders: FileFolder[]; files: StoredFile[]; links: { folder: string; file: string }[] }
+
+export type Area = 'projects' | 'chat' | 'parts' | 'own';
+export interface AreaUse { files: number; bytes: number; stored: number; shared?: { files: number; bytes: number } }
+export interface UsageRow { id: string; name: string; bytes: number; area: Area; folder: string; kind: string; at?: string }
+/** GET /api/files/usage: how much there is, per area, counted once; `chart`
+ *  is what the range added per area, as the Analytics charts read it. */
+export interface FilesUsage {
+  range: string; first: string;
+  areas: Record<Area, AreaUse>; total: AreaUse;
+  largest: UsageRow[];
+  /** The largest 300, for the overview's table. */
+  files: UsageRow[];
+  chart: { t0: number; step: number; n: number; series: { name: string; values: number[] }[] };
+  added: { files: number; bytes: number };
+  /** Files' trash: how many, how much, and how many days a file is kept there. */
+  trash: { files: number; bytes: number; days: number };
+  kinds: Record<string, { files: number; bytes: number }>;
+  /** The last seven days: uploads, their bytes, and files deleted from Files. */
+  week: { day: string; added: number; added_bytes: number; deleted: number }[];
+}
+/** A file in Files' trash (GET /api/files/trash): where it was, who deleted it, and when it goes for good. */
+export interface TrashFile extends StoredFile {
+  deleted_at: string; deleted_by?: { id?: string; name?: string }; purge_at: string; folder_path: string; days_left: number | null;
+}
+
+/** GET /api/files/uses: what uses each file - for the delete dialog. */
+export type FileUses = Record<string, { chats: string[]; products: string[]; model: string | null }>;
 
 export interface TableData { sheets: string[]; sheet: number; rows: string[][]; total: number; truncated: boolean }
 export interface ArchiveData {
@@ -41,6 +84,14 @@ export class FilesApi {
   bump() { this.changed.update(v => v + 1); }
 
   list() { return this.http.get<StoredFile[]>('/api/files'); }
+  virtual() { return this.http.get<VirtualTree>('/api/files/virtual'); }
+  usage(range = 'auto') { return this.http.get<FilesUsage>('/api/files/usage', { params: { range } }); }
+  trash() { return this.http.get<{ days: number; files: TrashFile[] }>('/api/files/trash'); }
+  restore(ids: string[]) {
+    return this.http.post<{ restored: StoredFile[]; refused: { id: string; name: string; why: string }[] }>('/api/files/trash/restore', { files: ids });
+  }
+  purge(ids: string[]) { return this.http.post<{ purged: string[] }>('/api/files/trash/purge', { files: ids }); }
+  uses(ids: string[]) { return this.http.get<FileUses>('/api/files/uses', { params: { ids: ids.join(',') } }); }
   folders() { return this.http.get<FileFolder[]>('/api/files/folders'); }
   boards() { return this.http.get<{ _id: string; title?: string }[]>('/api/boards'); }
   /** `folderPath` names the folder by its path instead, made if missing (the Chat composer's "Chat"). */
@@ -99,7 +150,7 @@ export const zipUrl = (files: string[], folders: string[]) =>
 export const KIND_LABEL: Record<string, string> = {
   bom: 'BOM', 'pick-place': 'Pick & place', gerber: 'Gerber', drill: 'Drill', step: 'STEP', mesh: '3D mesh',
   image: 'Image', video: 'Video', audio: 'Audio', pdf: 'PDF', table: 'Table', archive: 'Archive', text: 'Text',
-  other: 'Other',
+  other: 'Other', build: 'Build outputs',
 };
 
 /** The icon a kind of file is drawn with (ICONS below). */
@@ -186,6 +237,8 @@ export const ICONS: Record<string, string> = {
   pages: '<rect x="4" y="3.5" width="7" height="9" rx="1"/><rect x="13" y="3.5" width="7" height="9" rx="1"/><rect x="4" y="14.5" width="7" height="6" rx="1"/><rect x="13" y="14.5" width="7" height="6" rx="1"/>',
   chat: '<path d="M4.5 5.5h15v10h-8l-4 3.5v-3.5h-3z"/>',
   open: '<path d="M14 4.5h5.5V10M19.5 4.5 11 13M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+  disk: '<ellipse cx="12" cy="6.5" rx="7.5" ry="2.8"/><path d="M4.5 6.5v11c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-11M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
 };
 
 /** `<svg>` for an icon name, for [innerHTML] - the markup is ours, from ICONS. */

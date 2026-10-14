@@ -10,9 +10,12 @@ import { AGENT_ROOMS } from './notes';
 import { Catalog, FolderNode } from '../api';
 import { FileView, decodeText } from './file-view';
 import {
-  FileFolder, FilesApi, Icon, KIND_LABEL, Seen, StoredFile, downloadUrl, extOf, iconOf, inlineUrl, size, splitName,
-  thumbUrl, zipUrl,
+  Area, FileFolder, FilesApi, FilesUsage, TrashFile, UsageRow, Icon, KIND_LABEL, Seen, StoredFile, VirtualOpen, downloadUrl, extOf, iconOf,
+  inlineUrl, size, splitName, thumbUrl, zipUrl,
 } from './files-model';
+import { BarList, Donut, MiniStack, Row, StackCol, TimeChart, TimeData, color, fmt as cfmt } from './charts';
+import { Skeleton } from '../skeleton';
+import { csvText, saveFile } from './dash';
 import { pdfFirstPage } from './pdf-reader';
 import { MeshThumbs } from './mesh-thumb';
 import { ContextMenu, MenuEntry } from '../context-menu';
@@ -34,7 +37,7 @@ export type { StoredFile } from './files-model';
  *  room's thread with what the file is and the command that fetches it.
  */
 
-type Item = { key: string; folder?: FileFolder; file?: StoredFile };
+type Item = { key: string; folder?: FileFolder; file?: StoredFile; ro?: boolean };
 type SortKey = 'name' | 'date' | 'size' | 'kind';
 type MenuItem = MenuEntry;
 type Dialog =
@@ -44,6 +47,20 @@ type Dialog =
   | { type: 'confirm'; title: string; body: string; ok: string; run: () => void };
 
 const ROOM_LABEL: Record<string, string> = { cad: '3D Drawing', pcb: 'PCB Design' };
+/** The read-only folders: where what they hold is changed (backend/files_virtual.py WHERE). */
+const WHERE_LABEL: Record<string, string> = {
+  cad: 'Change it in the 3D Drawing room', pcb: 'Change it in the PCB Design room', firmware: 'Change it in the Firmware room',
+  releases: 'Releases are made and deleted in the 3D Drawing room', projects: 'The project tree, as the 3D and PCB rooms keep it',
+  chat: 'Kept in My files; the conversation used it', parts: 'Change it on the Parts page',
+};
+/** The areas, in the order the storage bar draws them; their colours are the charts' first four. */
+const AREAS: { id: Area; label: string; root: string }[] = [
+  { id: 'projects', label: 'Projects', root: 'v:projects' }, { id: 'chat', label: 'Chat', root: 'v:chat' },
+  { id: 'parts', label: 'Parts', root: 'v:parts' }, { id: 'own', label: 'My files', root: '' },
+];
+/** The main pane's storage overview and the trash, in place of a folder. */
+const STORAGE = '~storage';
+const TRASH = '~trash';
 const DRAG = 'application/x-redline-files';
 const PREFS = 'redline.files';
 
@@ -53,7 +70,8 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
 @Component({
   selector: 'app-room-files',
-  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect, Marquee],
+  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect, Marquee, MiniStack, TimeChart, Donut, BarList, Skeleton],
+  styleUrl: './files.css',
   host: { '(document:keydown)': 'globalKey($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
@@ -66,10 +84,27 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
     </filter>
   </svg>
   <!-- LEFT: the folders, and what to show -->
-  <aside class="tcv-notes-side tcv-fm-side" [attr.aria-label]="'Folders' | t">
-    <nav class="tcv-fm-tree" role="tree" [attr.aria-label]="'Folders' | t">
-      <ng-container *ngTemplateOutlet="node; context: { $implicit: null, depth: 0 }" />
-    </nav>
+  <aside class="tcv-notes-side tcv-fm-side fm-side" [attr.aria-label]="'Folders' | t">
+    <!-- Two sides, as the Chat's list has its tabs: one's own files (always first), and
+         what the rest of the app keeps, read-only (backend/files_virtual.py) -->
+    <div class="fm-tabrow">
+      <div class="tcv-cc-tabs" role="tablist">
+        <button role="tab" [class.on]="side() === 'mine'" [attr.aria-selected]="side() === 'mine'" (click)="showSide('mine')">{{ 'My files' | t }}</button>
+        <button role="tab" [class.on]="side() === 'app'" [attr.aria-selected]="side() === 'app'" (click)="showSide('app')">{{ 'In the app' | t }}</button>
+      </div>
+    </div>
+    <div class="fm-side-scroll">
+    @if (side() === 'mine') {
+      <nav class="tcv-fm-tree" role="tree" [attr.aria-label]="'Folders' | t">
+        <ng-container *ngTemplateOutlet="node; context: { $implicit: null, depth: 0 }" />
+      </nav>
+    } @else {
+      <nav class="tcv-fm-tree" role="tree" [attr.aria-label]="'Read-only folders' | t">
+        @for (r of vroots(); track r.id) {
+          <ng-container *ngTemplateOutlet="node; context: { $implicit: r, depth: 0 }" />
+        }
+      </nav>
+    }
     <ng-template #node let-f let-depth="depth">
       @let id = f ? f.id : '';
       @let kids = childrenOf(id);
@@ -77,6 +112,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
            [attr.aria-selected]="here() === id && !filtering()" [attr.aria-expanded]="kids.length ? isOpen(id) : null"
            [attr.data-on]="here() === id && !filtering() ? 1 : null" [attr.data-drop]="dropAt() === 'tree:' + id ? 1 : null"
            [style.padding-left.px]="6 + depth * 14"
+           [title]="f?.ro ? whereText(f) : ''" [attr.data-ro]="f?.ro ? 1 : null"
            (click)="go(id)" (keydown.enter)="go(id)"
            (dragover)="over($event, 'tree:' + id)" (dragleave)="leave($event, 'tree:' + id)" (drop)="dropOn($event, id)"
            (contextmenu)="f ? openMenu($event, 'd:' + f.id) : $event.preventDefault()">
@@ -84,8 +120,12 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                 (click)="toggleOpen(id); $event.stopPropagation()" [attr.aria-label]="(isOpen(id) ? 'Collapse' : 'Expand') | t">
           <i [fmIcon]="isOpen(id) ? 'down' : 'right'"></i></button>
         <i class="tcv-fm-tree-ico" [fmIcon]="'folder'"></i>
-        <span class="tcv-fm-tree-name">{{ f ? f.name : ('My files' | t) }}</span>
-        @if (!f) { <em class="tcv-fm-count">{{ all().length }}</em> }
+        <span class="tcv-fm-tree-name">{{ f ? (f.root || f.build ? (f.name | t) : f.name) : ('My files' | t) }}</span>
+        @if (!f) { <em class="tcv-fm-count">{{ mine().length }}</em> }
+        @else if (f.root) {
+          <em class="tcv-fm-count">{{ stats(f.id).files }}</em>
+          <i class="fm-lock" [fmIcon]="'lock'"></i>
+        }
       </div>
       @if (isOpen(id)) {
         @for (k of kids; track k.id) {
@@ -94,15 +134,6 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       }
     </ng-template>
 
-    <!-- Filters at the foot of the side panel, under the folders -->
-    <div class="tcv-notes-group tcv-fm-foot">{{ 'Kind' | t }}</div>
-    <div class="tcv-notes-filters">
-      @for (k of kinds(); track k.kind) {
-        <button class="tcv-notes-chip" [attr.data-on]="kind() === k.kind ? 1 : null" [attr.aria-pressed]="kind() === k.kind"
-                (click)="kind.set(kind() === k.kind ? '' : k.kind)">
-          {{ kindLabel(k.kind) | t }} <em>{{ k.n }}</em></button>
-      } @empty { <span class="tcv-fm-quiet">{{ 'Nothing uploaded yet' | t }}</span> }
-    </div>
     @if (boardsUsed().length) {
       <div class="tcv-notes-group">{{ 'Boards' | t }}</div>
       <div class="tcv-notes-filters">
@@ -112,6 +143,33 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         }
       </div>
     }
+    </div>
+    <!-- Pinned at the foot, as the Chat's cards are under its list: two squares in one frame -
+         how much there is, and what came and went this week. Both open the overview. -->
+    <div class="fm-stats"><div class="fm-card">
+      <button class="fm-sq" type="button" (click)="go(STORAGE)" [title]="storageTip()">
+        <span class="fm-sq-head"><i [fmIcon]="'disk'"></i><b>{{ 'Storage' | t }}</b>
+          <em>{{ usage() ? usage()!.total.files + ' ' + ('files' | t) : '' }}</em></span>
+        @if (usage(); as u) {
+          <span class="fm-sq-fig"><b>{{ fmt(u.total.bytes) }}</b></span>
+          <app-mini-stack class="fm-sq-chart" [data]="areaCols()" [height]="34" [f]="bytesFmt" />
+        } @else { <span class="fm-sq-sub">{{ usageErr() ? ('The figures did not load' | t) : ('Counting…' | t) }}</span> }
+      </button>
+      <button class="fm-sq" type="button" (click)="go(STORAGE)" [title]="activityTip()">
+        <span class="fm-sq-head"><i [fmIcon]="'upload'"></i><b>{{ 'Activity' | t }}</b><em>{{ 'this week' | t }}</em></span>
+        @if (usage(); as u) {
+          <span class="fm-sq-fig"><b>{{ weekSum().added }}</b><span>{{ 'added' | t }}</span>
+            <em><b>{{ weekSum().deleted }}</b> {{ 'deleted' | t }}</em></span>
+          <app-mini-stack class="fm-sq-chart" [data]="weekCols()" [height]="34" />
+        } @else { <span class="fm-sq-sub">{{ 'Counting…' | t }}</span> }
+      </button>
+    </div>
+      <!-- Joined under the cards: the trash, kept usage().trash.days days -->
+      <button class="fm-trash-btn" type="button" (click)="go(TRASH)" [title]="('Deleted files are kept' | t) + ' ' + (usage()?.trash?.days ?? 30) + ' ' + ('days' | t)">
+        <i [fmIcon]="'trash'"></i><span>{{ 'Deleted files' | t }}</span>
+        <em>{{ usage()?.trash?.files ?? 0 }}{{ usage()?.trash?.bytes ? ' · ' + fmt(usage()!.trash.bytes) : '' }}</em>
+        <i [fmIcon]="'right'"></i></button>
+    </div>
   </aside>
 
   <!-- RIGHT: where you are, and what is in it -->
@@ -128,15 +186,23 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
             @if (!last) {
               <button class="tcv-fm-crumb" [attr.data-drop]="dropAt() === 'crumb:' + c.id ? 1 : null" (click)="go(c.id)"
                       (dragover)="over($event, 'crumb:' + c.id)" (dragleave)="leave($event, 'crumb:' + c.id)"
-                      (drop)="dropOn($event, c.id)">{{ c.id ? c.name : ('My files' | t) }}</button>
+                      (drop)="dropOn($event, c.id)">{{ crumbName(c) | t }}</button>
               <i class="tcv-fm-crumb-sep" [fmIcon]="'right'"></i>
             } @else {
-              <span class="tcv-fm-crumb tcv-fm-crumb-here" aria-current="location">{{ c.id ? c.name : ('My files' | t) }}</span>
+              <span class="tcv-fm-crumb tcv-fm-crumb-here" aria-current="location">{{ crumbName(c) | t }}</span>
             }
           }
         }
       </nav>
-      @if (auth.can('draw')) {
+      @if (hereFolder()?.ro) {
+        <!-- A read-only folder: what it is, and the way to where it is changed -->
+        <span class="fm-ro-note" [title]="whereText(hereFolder()!)"><i [fmIcon]="'lock'"></i>{{ 'Read-only' | t }}
+          <em>{{ whereText(hereFolder()!) | t }}</em></span>
+        @if (openable(hereFolder()!.open, hereFolder()!.chat); as label) {
+          <button class="tcv-btn tcv-fm-btn" (click)="openThere(hereFolder()!.open, hereFolder()!.chat)">
+            <i [fmIcon]="'open'"></i><span>{{ label | t }}</span></button>
+        }
+      } @else if (auth.can('draw') && here() !== STORAGE && here() !== TRASH) {
         <button class="tcv-btn tcv-fm-btn" (click)="newFolder()"><i [fmIcon]="'newfolder'"></i><span>{{ 'New folder' | t }}</span></button>
         <label class="tcv-btn tcv-btn-accent tcv-fm-btn" tabindex="0" (keydown.enter)="$any($event.target).querySelector('input')?.click()">
           <input type="file" multiple hidden (change)="pick($event)">
@@ -144,13 +210,14 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       }
     </header>
 
+    @if (here() !== STORAGE && here() !== TRASH) {
     <div class="tcv-fm-tools">
       @if (selected().size) {
         <button class="tcv-fm-icon-btn" (click)="clearSel()" [title]="'Clear the selection' | t" [attr.aria-label]="'Clear the selection' | t"><i [fmIcon]="'close'"></i></button>
         <span class="tcv-fm-selcount">{{ selected().size }} {{ 'selected' | t }}</span>
         <span class="tcv-fm-tools-sep"></span>
         <a class="tcv-fm-icon-btn" [href]="selZip()" [title]="'Download' | t" [attr.aria-label]="'Download' | t"><i [fmIcon]="'download'"></i></a>
-        @if (auth.can('draw')) {
+        @if (auth.can('draw') && !selRo()) {
           <button class="tcv-fm-icon-btn" (click)="moveDialog(selKeys())" [title]="'Move to…' | t" [attr.aria-label]="'Move to…' | t"><i [fmIcon]="'move'"></i></button>
           <button class="tcv-fm-icon-btn" (click)="askDelete(selKeys())" [title]="'Delete' | t" [attr.aria-label]="'Delete' | t"><i [fmIcon]="'trash'"></i></button>
         }
@@ -180,19 +247,13 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       <button class="tcv-fm-icon-btn tcv-fm-hide-phone" [attr.data-on]="details() ? 1 : null" [attr.aria-pressed]="details()"
               (click)="details.set(!details()); save()" [title]="'Details' | t" [attr.aria-label]="'Details' | t"><i [fmIcon]="'info'"></i></button>
     </div>
-
-    @if (progress() !== null) {
-      <div class="tcv-fm-upload" role="status">
-        <span>{{ 'Uploading' | t }} {{ uploading() }}</span>
-        <span class="tcv-fm-bar"><i [style.width.%]="progress()"></i></span>
-        <b>{{ progress() }}%</b>
-      </div>
-    }
-    @if (error(); as e) {
-      <div class="tcv-fm-note tcv-fm-note-err" role="alert"><span>{{ e }}</span>
-        <button class="tcv-fm-icon-btn" (click)="error.set(null)" [attr.aria-label]="'Close' | t"><i [fmIcon]="'close'"></i></button></div>
     }
 
+    @if (here() === STORAGE) {
+      <ng-container *ngTemplateOutlet="storageView" />
+    } @else if (here() === TRASH) {
+      <ng-container *ngTemplateOutlet="trashView" />
+    } @else {
     <div class="tcv-fm-body">
       <div class="tcv-fm-items" tabindex="0" role="grid" [attr.aria-label]="'Files' | t" [attr.aria-multiselectable]="true"
            [attr.data-view]="view()" (keydown)="itemsKey($event)" (click)="backgroundClick($event)"
@@ -232,11 +293,12 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                 <div class="tcv-fm-tile tcv-fm-dir" role="gridcell" tabindex="-1" [attr.data-key]="it.key"
                      [attr.aria-selected]="isSel(it.key)" [attr.data-on]="isSel(it.key) ? 1 : null"
                      [attr.data-focus]="focusKey() === it.key ? 1 : null" [attr.data-drop]="dropAt() === it.key ? 1 : null"
-                     draggable="true" (dragstart)="dragStart($event, it.key)"
+                     [attr.draggable]="it.ro ? null : 'true'" (dragstart)="dragStart($event, it.key)"
                      (dragover)="over($event, it.key)" (dragleave)="leave($event, it.key)" (drop)="dropOn($event, it.folder!.id)"
                      (click)="clickItem($event, it.key)" (dblclick)="activate(it)" (contextmenu)="openMenu($event, it.key)">
                   <i class="tcv-fm-dir-ico" [fmIcon]="'folder'"></i>
                   <ng-container *ngTemplateOutlet="nameOf; context: { $implicit: it }" />
+                  @if (it.ro) { <i class="fm-tile-lock" [fmIcon]="'lock'" [title]="whereText(it.folder!) | t"></i> }
                 </div>
               }
             </div>
@@ -249,7 +311,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                 <div class="tcv-fm-tile" role="gridcell" tabindex="-1" [attr.data-key]="it.key"
                      [attr.aria-selected]="isSel(it.key)" [attr.data-on]="isSel(it.key) ? 1 : null"
                      [attr.data-focus]="focusKey() === it.key ? 1 : null"
-                     draggable="true" (dragstart)="dragStart($event, it.key)"
+                     [attr.draggable]="it.ro ? null : 'true'" (dragstart)="dragStart($event, it.key)"
                      (click)="clickItem($event, it.key)" (dblclick)="activate(it)" (contextmenu)="openMenu($event, it.key)">
                   <div class="tcv-fm-thumb" (fmSeen)="seen(f)" [attr.data-kind]="f.kind">
                     @switch (thumbOf(f)) {
@@ -271,6 +333,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                     @if (filtering()) { <span>{{ pathOf(f.folder) }}</span> }
                     @else { <span>{{ fmt(f.bytes) }}</span><span>{{ when(f.created_at) }}</span> }
                   </div>
+                  @if (it.ro) { <i class="fm-tile-lock" [fmIcon]="'lock'" [title]="whereText(f) | t"></i> }
                 </div>
               }
             </div>
@@ -289,7 +352,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
               <div class="tcv-fm-row" role="row" tabindex="-1" [attr.data-key]="it.key"
                    [attr.aria-selected]="isSel(it.key)" [attr.data-on]="isSel(it.key) ? 1 : null"
                    [attr.data-focus]="focusKey() === it.key ? 1 : null" [attr.data-drop]="dropAt() === it.key ? 1 : null"
-                   draggable="true" (dragstart)="dragStart($event, it.key)"
+                   [attr.draggable]="it.ro ? null : 'true'" (dragstart)="dragStart($event, it.key)"
                    (dragover)="it.folder && over($event, it.key)" (dragleave)="it.folder && leave($event, it.key)"
                    (drop)="it.folder && dropOn($event, it.folder.id)"
                    (click)="clickItem($event, it.key)" (dblclick)="activate(it)" (contextmenu)="openMenu($event, it.key)">
@@ -298,6 +361,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                   @else { <i class="tcv-fm-kind-ico" [attr.data-ico]="iconOf(it.file!)" [fmIcon]="iconOf(it.file!)"></i> }
                   <ng-container *ngTemplateOutlet="nameOf; context: { $implicit: it }" />
                   @if (filtering() && it.file) { <em class="tcv-fm-where">{{ pathOf(it.file.folder) }}</em> }
+                  @if (it.ro) { <i class="fm-row-lock" [fmIcon]="'lock'" [title]="whereText(it.file || it.folder!) | t"></i> }
                 </span>
                 <span class="tcv-fm-col-kind" role="gridcell">{{ it.folder ? ('Folder' | t) : (kindLabel(it.file!.kind) | t) }}</span>
                 <span class="tcv-fm-col-size" role="gridcell">{{ it.file ? fmt(it.file.bytes) : '' }}</span>
@@ -316,6 +380,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         </aside>
       }
     </div>
+    }
 
     @if (dropAt() === 'main' && dragFiles()) {
       <div class="tcv-fm-dropzone"><i [fmIcon]="'upload'"></i>{{ 'Drop to upload to' | t }} {{ hereName() }}</div>
@@ -330,7 +395,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
              (keydown)="$event.stopPropagation()" (blur)="commitRename()" (click)="$event.stopPropagation()"
              (dblclick)="$event.stopPropagation()" [attr.aria-label]="'New name' | t">
     } @else {
-      <span class="tcv-fm-name" [title]="(it.file || it.folder).name">{{ (it.file || it.folder).name }}</span>
+      <span class="tcv-fm-name" [title]="(it.file || it.folder).name">{{ it.folder?.root || it.folder?.build ? (it.folder.name | t) : (it.file || it.folder).name }}</span>
     }
   </ng-template>
 
@@ -350,13 +415,22 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         <dt>{{ 'Added' | t }}</dt><dd>{{ long(f.created_at) }}</dd>
         <dt>{{ 'By' | t }}</dt><dd>{{ f.by.name || ('someone' | t) }}</dd>
         @if (f.model) { <dt>{{ 'Model' | t }}</dt><dd><button class="tcv-fm-link" (click)="openModel(f.model)">{{ f.model }}</button></dd> }
-        <dt>{{ 'Board' | t }}</dt>
-        <dd>
-          @if (auth.can('draw')) {
-            <wb-select class="tcv-fm-wsel tcv-fm-d-board" label="Board" [options]="boardOpts()" [value]="f.context.board || ''" (pick)="setBoard(f, $event)" />
-          } @else { {{ f.context.board || '-' }} }
-        </dd>
+        @if (f.ro && f.stored != null && f.stored !== f.bytes) { <dt>{{ 'Kept as' | t }}</dt><dd>{{ fmt(f.stored) }} {{ 'in the database' | t }}</dd> }
+        @if (!f.ro) {
+          <dt>{{ 'Board' | t }}</dt>
+          <dd>
+            @if (auth.can('draw')) {
+              <wb-select class="tcv-fm-wsel tcv-fm-d-board" label="Board" [options]="boardOpts()" [value]="f.context.board || ''" (pick)="setBoard(f, $event)" />
+            } @else { {{ f.context.board || '-' }} }
+          </dd>
+        }
       </dl>
+      @if (f.ro) {
+        <p class="fm-d-ro"><i [fmIcon]="'lock'"></i><span>{{ 'Read-only here.' | t }} {{ whereText(f) | t }}</span></p>
+        @if (openable(f.open); as label) {
+          <button class="tcv-btn tcv-fm-btn fm-d-open" (click)="openThere(f.open)"><i [fmIcon]="'open'"></i><span>{{ label | t }}</span></button>
+        }
+      } @else {
       <label class="tcv-fm-d-label" [for]="'fm-note-' + f.id">{{ 'Note' | t }}</label>
       @if (auth.can('draw')) {
         <textarea class="tcv-fm-d-note" [id]="'fm-note-' + f.id" rows="3" [value]="f.note" [placeholder]="'A line about it - the agent reads it too' | t"
@@ -370,6 +444,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
           }
         </ul>
       } @else { <p class="tcv-fm-d-text tcv-fm-quiet">{{ 'Not yet. Send to agent puts a line in a room\\'s thread with the command that fetches it.' | t }}</p> }
+      }
     } @else if (dir) {
       <div class="tcv-fm-d-head"><i class="tcv-fm-kind-ico tcv-fm-dir-ico" [fmIcon]="'folder'"></i><b>{{ dir.id ? dir.name : ('My files' | t) }}</b></div>
       <dl class="tcv-fm-d-props">
@@ -437,6 +512,130 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
     </div>
   }
 
+  <!-- How much there is, laid out as Analytics lays out its own (rooms/analyze.ts, admin-overview.ts):
+       a range at the top, the areas, what the range added, the files themselves, and by kind. -->
+  <ng-template #storageView>
+    <div class="fm-sv">
+      <header class="tcv-dash-bar">
+        <div class="tcv-dash-seg" role="group" [attr.aria-label]="'Range' | t">
+          @for (r of svRanges; track r.id) {
+            <button type="button" (click)="setRange(r.id)" [attr.data-on]="usage()?.range === r.id ? 1 : null"
+                    [attr.aria-pressed]="usage()?.range === r.id">{{ r.label | t }}</button>
+          }
+        </div>
+        @if (usage(); as u) {
+          <span class="tcv-dash-meta">{{ fmt(u.total.bytes) }} · {{ u.total.files }} {{ 'files' | t }}
+            · {{ 'kept as' | t }} {{ fmt(u.total.stored) }} {{ 'in the database' | t }} · {{ 'since' | t }} {{ dayLabel(u.first, true) }}</span>
+        }
+        <span class="flex-1"></span>
+        <button type="button" class="tcv-btn px-2 py-0.5" (click)="exportCsv()" [disabled]="!usage()" [title]="'the files below, as CSV' | t">CSV</button>
+        <button type="button" class="tcv-btn px-2 py-0.5" (click)="loadUsage()" [title]="'read it again' | t">↻</button>
+      </header>
+      @if (usage(); as u) {
+        <div class="tcv-dash-grid fm-sv-grid">
+          @for (a of areaRows(); track a.id) {
+            <button type="button" class="tcv-stat c3 fm-sv-area" (click)="go(a.root)" [title]="a.hint | t">
+              <span><i [style.background]="a.color"></i>{{ a.label | t }}</span>
+              <b>{{ fmt(a.bytes) }}</b>
+              <em>{{ a.files }} {{ 'files' | t }} · {{ pct(a.bytes, u.total.bytes) }}{{ a.stored !== a.bytes ? ' · ' + ('kept as' | t) + ' ' + fmt(a.stored) : '' }}</em>
+              @if (a.shared?.files) { <em>{{ 'also uses' | t }} {{ a.shared!.files }} {{ 'files counted elsewhere' | t }} ({{ fmt(a.shared!.bytes) }})</em> }
+            </button>
+          }
+          <section class="tcv-panel-d c8"><h3>{{ 'Added' | t }} <span class="tcv-dash-dim">{{ 'per' | t }} {{ (u.chart.step > 86400 ? 'week' : 'day') | t }}
+              · {{ fmt(u.added.bytes) }}, {{ u.added.files }} {{ 'files' | t }}</span></h3>
+            <app-time-chart [data]="chartData()" kind="bar" [f]="fmtBytes" [height]="180" /></section>
+          <section class="tcv-panel-d c4"><h3>{{ 'By area' | t }}</h3>
+            <app-donut [rows]="areaDonut()" [f]="fmtBytes" /></section>
+          <section class="tcv-panel-d c8 fm-sv-files"><h3>{{ 'Files' | t }} <span class="tcv-dash-dim">{{ tableRows().length }} {{ 'of' | t }} {{ u.total.files }}, {{ 'largest first' | t }}</span>
+              <span class="flex-1"></span>
+              <span class="tcv-dash-seg fm-sv-filter" role="group" [attr.aria-label]="'Area' | t">
+                <button type="button" (click)="tableArea.set('')" [attr.data-on]="!tableArea() ? 1 : null">{{ 'All' | t }}</button>
+                @for (a of areaRows(); track a.id) {
+                  <button type="button" (click)="tableArea.set(a.id)" [attr.data-on]="tableArea() === a.id ? 1 : null">{{ a.label | t }}</button>
+                }
+              </span></h3>
+            <div class="fm-sv-scroll">
+              <table class="tcv-dash-table fm-sv-table">
+                <thead><tr>
+                  @for (c of svCols; track c.id) {
+                    <th [class.r]="c.r"><button type="button" (click)="sortBy(c.id)">{{ c.label | t }}{{ tableSort() === c.id ? (tableDir() < 0 ? ' ↓' : ' ↑') : '' }}</button></th>
+                  }
+                </tr></thead>
+                <tbody>
+                  @for (r of tableRows(); track r.id) {
+                    <tr (click)="openLargest(r)" [title]="pathOf(r.folder) + '/' + r.name">
+                      <td><i class="tcv-fm-kind-ico" [fmIcon]="r.kind === 'build' ? 'cube' : iconOf({ kind: r.kind, name: r.name })"></i>{{ r.name }}</td>
+                      <td><i class="fm-sv-dot" [style.background]="areaColor(r.area)"></i>{{ areaLabel(r.area) | t }}</td>
+                      <td>{{ kindLabel(r.kind) | t }}</td>
+                      <td class="r mono">{{ fmt(r.bytes) }}</td>
+                      <td class="r mono" [title]="r.at ? long(r.at) : ''">{{ r.at ? shortDay(r.at) : '–' }}</td>
+                    </tr>
+                  } @empty { <tr><td colspan="5" class="tcv-dash-dim">{{ 'Nothing here.' | t }}</td></tr> }
+                </tbody>
+              </table>
+            </div></section>
+          <section class="tcv-panel-d c4"><h3>{{ 'By kind' | t }} <i [title]="'Build outputs are what the rooms\\' builds keep for themselves - the 3D view\\'s mesh, a board\\'s layers' | t">?</i></h3>
+            <app-bar-list [rows]="kindBars()" [f]="fmtBytes" /></section>
+        </div>
+      } @else if (usageErr()) {
+        <p class="tcv-dash-note">{{ 'The figures did not load' | t }}</p>
+      } @else {
+        <div class="tcv-dash-grid fm-sv-grid">
+          <wb-skel class="c12" kind="tiles" [count]="4" [min]="200" [h]="72" />
+          <section class="tcv-panel-d c8"><wb-skel kind="chart" [h]="180" /></section>
+          <section class="tcv-panel-d c4"><wb-skel kind="rows" [count]="5" [h]="20" /></section>
+        </div>
+      }
+    </div>
+  </ng-template>
+
+  <!-- The trash: what was deleted from Files, where it was, by whom, and how long it is kept -->
+  <ng-template #trashView>
+    <div class="fm-sv">
+      <header class="tcv-dash-bar">
+        <span class="tcv-dash-meta">{{ trashRows().length }} {{ 'files' | t }} · {{ fmt(trashBytes()) }} ·
+          {{ 'kept for' | t }} {{ trashDays() }} {{ 'days, then deleted for good' | t }}</span>
+        <span class="flex-1"></span>
+        @if (auth.can('draw') && trashRows().length) {
+          <button type="button" class="tcv-btn px-2 py-0.5" (click)="restore(trashRows())">{{ 'Restore all' | t }}</button>
+          <button type="button" class="tcv-btn px-2 py-0.5 tcv-fm-danger" (click)="askPurge(trashRows())">{{ 'Empty trash' | t }}</button>
+        }
+        <button type="button" class="tcv-btn px-2 py-0.5" (click)="loadTrash()" [title]="'read it again' | t">↻</button>
+      </header>
+      <div class="tcv-dash-grid fm-tv-grid">
+        <section class="tcv-panel-d c12 fm-sv-files">
+          <div class="fm-sv-scroll">
+            <table class="tcv-dash-table fm-tv-table">
+              <thead><tr><th>{{ 'Name' | t }}</th><th>{{ 'Was in' | t }}</th><th>{{ 'Deleted by' | t }}</th><th class="r">{{ 'Deleted' | t }}</th>
+                <th class="r">{{ 'Size' | t }}</th><th class="r">{{ 'Days left' | t }}</th><th></th></tr></thead>
+              <tbody>
+                @for (f of trashRows(); track f.id) {
+                  <tr>
+                    <td [title]="f.name"><i class="tcv-fm-kind-ico" [fmIcon]="iconOf(f)"></i>{{ f.name }}</td>
+                    <td [title]="f.folder_path || ('My files' | t)">{{ f.folder_path || ('My files' | t) }}</td>
+                    <td>{{ f.deleted_by?.name || ('someone' | t) }}</td>
+                    <td class="r mono" [title]="long(f.deleted_at)">{{ when(f.deleted_at) }}</td>
+                    <td class="r mono">{{ fmt(f.bytes) }}</td>
+                    <td class="r mono" [attr.data-soon]="(f.days_left ?? 99) <= 3 ? 1 : null">{{ f.days_left ?? '–' }}</td>
+                    <td class="r fm-tv-acts">
+                      @if (auth.can('draw')) {
+                        <button type="button" class="tcv-btn px-2 py-0.5" (click)="restore([f])">{{ 'Restore' | t }}</button>
+                        <button type="button" class="tcv-fm-icon-btn" (click)="askPurge([f])" [title]="'Delete for good' | t"
+                                [attr.aria-label]="'Delete for good' | t"><i [fmIcon]="'trash'"></i></button>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="7" class="tcv-dash-dim">{{ trashLoaded() ? ('The trash is empty.' | t) : ('Counting…' | t) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </ng-template>
+
   <!-- the preview -->
   @if (previewFile(); as f) {
     <div class="tcv-fm-preview" animate.leave="tcv-leave" role="dialog" aria-modal="true" [attr.aria-label]="f.name">
@@ -456,7 +655,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         }
         <span class="tcv-fm-grow"></span>
         <a class="tcv-fm-icon-btn" [href]="dl(f.id)" [attr.download]="f.name" [title]="'Download' | t" [attr.aria-label]="'Download' | t"><i [fmIcon]="'download'"></i></a>
-        @if (auth.can('draw')) {
+        @if (auth.can('draw') && !f.ro) {
           <button class="tcv-fm-icon-btn" (click)="sendMenu($event, f)" [title]="'Send to agent…' | t" [attr.aria-label]="'Send to agent…' | t"><i [fmIcon]="'send'"></i></button>
         }
         <button class="tcv-fm-icon-btn" [attr.data-on]="details() ? 1 : null" (click)="details.set(!details()); save()"
@@ -465,7 +664,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       </header>
       <div class="tcv-fm-pv-body">
         <div class="tcv-fm-pv-stage">
-          <app-file-view [file]="f" [canEdit]="auth.can('edit')" (act)="$event === 'add' ? startAdd(f) : openModel(f.model!)" />
+          <app-file-view [file]="f" [canEdit]="auth.can('edit') && !f.ro" (act)="$event === 'add' ? startAdd(f) : openModel(f.model!)" />
           @if (sideNav(f) && previewAt() > 0) {
             <button class="tcv-fm-pv-nav tcv-fm-pv-prev" (click)="step(-1)" [title]="'Previous' | t" [attr.aria-label]="'Previous' | t"><i [fmIcon]="'left'"></i></button>
           }
@@ -497,11 +696,29 @@ export class RoomFiles implements OnDestroy {
   inline = inlineUrl;
   thumb = thumbUrl;
   dl = downloadUrl;
+  readonly STORAGE = STORAGE;
+  readonly TRASH = TRASH;
+  /** Which side the column shows: one's own files (always first), or what the app keeps. Not remembered. */
+  side = signal<'mine' | 'app'>('mine');
+  trashRows = signal<TrashFile[]>([]);
+  trashLoaded = signal(false);
+  trashDays = signal(30);
+  trashBytes = computed(() => this.trashRows().reduce((n, f) => n + f.bytes, 0));
 
   // ---- what there is
   all = signal<StoredFile[]>([]);
   folders = signal<FileFolder[]>([]);
   loading = signal(true);
+  /** The read-only folders (backend/files_virtual.py): Projects, Chat, Parts,
+   *  what is in them, the Projects' own files, and which uploads the Chat's
+   *  and Parts' folders refer to. */
+  vfolders = signal<FileFolder[]>([]);
+  vfiles = signal<StoredFile[]>([]);
+  private vlinks = signal<{ folder: string; file: string }[]>([]);
+  private vLoaded = signal(false);
+  usage = signal<FilesUsage | null>(null);
+  usageErr = signal(false);
+
   boards = signal<{ _id: string; title?: string }[]>([]);
 
   // ---- where, how
@@ -542,23 +759,38 @@ export class RoomFiles implements OnDestroy {
   private tick = setInterval(() => this.now.set(Date.now()), 60_000);
 
   // ---- derived
-  private byId = computed(() => new Map(this.folders().map(f => [f.id, f])));
+  private byId = computed(() => new Map([...this.folders(), ...this.vfolders()].map(f => [f.id, f])));
+  /** One's own uploads: the Parts page's are under In the app > Parts, read-only (backend/files_virtual.py parts_owned). */
+  mine = computed(() => this.all().filter(f => f.where !== 'parts'));
   private kids = computed(() => {
     const m = new Map<string, FileFolder[]>();
-    for (const f of this.folders()) {
+    for (const f of this.folders().filter(x => !x.ro)) {
       const p = this.byId().has(f.parent) ? f.parent : '';
       m.set(p, [...(m.get(p) ?? []), f]);
     }
     for (const v of m.values()) v.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    // The read-only roots stand apart from My files; under them, the server's order
+    // for the conversations (the latest first), names for the rest.
+    for (const f of this.vfolders()) if (!f.root) m.set(f.parent, [...(m.get(f.parent) ?? []), f]);
+    for (const [p, v] of m) {
+      if (isV(p) && p !== 'v:chat') v.sort((a, b) => Number(!!a.build) - Number(!!b.build) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
     return m;
   });
+  vroots = computed(() => this.vfolders().filter(f => f.root));
+  hereFolder = computed(() => this.byId().get(this.here()) ?? null);
   /** A file whose folder is gone, or from before folders, is at the top. */
   private placeOf = (f: StoredFile) => this.byId().has(f.folder) ? f.folder : '';
   filtering = computed(() => !!(this.q().trim() || this.kind() || this.board()));
+  /** Every file's kind, the Projects' too, as the storage overview counts them (build outputs apart). */
   kinds = computed(() => {
-    const n = new Map<string, number>();
-    for (const f of this.all()) n.set(f.kind, (n.get(f.kind) ?? 0) + 1);
-    return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([kind, c]) => ({ kind, n: c }));
+    const n = new Map<string, { n: number; bytes: number }>();
+    for (const f of [...this.all(), ...this.vfiles()]) {
+      const k = n.get(kindOf(f)) ?? { n: 0, bytes: 0 };
+      n.set(kindOf(f), { n: k.n + 1, bytes: k.bytes + f.bytes });
+    }
+    const top = Math.max(1, ...[...n.values()].map(v => v.bytes));
+    return [...n.entries()].sort((a, b) => b[1].bytes - a[1].bytes).map(([kind, v]) => ({ kind, ...v, share: 100 * v.bytes / top }));
   });
   readonly plain = plainOptions;
   kindOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All kinds') },
@@ -571,15 +803,22 @@ export class RoomFiles implements OnDestroy {
 
   items = computed<Item[]>(() => {
     let dirs: FileFolder[], files: StoredFile[];
+    const inV = isV(this.here()) && !this.filtering();
     if (this.filtering()) {
       const q = this.q().trim().toLowerCase(), k = this.kind(), b = this.board();
-      files = this.all().filter(f => (!k || f.kind === k) && (!b || f.context.board === b)
+      // The Projects' own files are searched too; a board filter is about uploads.
+      files = [...this.all(), ...(b ? [] : this.vfiles())].filter(f => (!k || kindOf(f) === k) && (!b || f.context.board === b)
         && (!q || f.name.toLowerCase().includes(q) || (f.note || '').toLowerCase().includes(q)));
       dirs = q && !k && !b ? this.folders().filter(f => f.name.toLowerCase().includes(q)) : [];
+    } else if (inV) {
+      const here = this.here(), real = new Map(this.all().map(f => [f.id, f]));
+      dirs = this.kids().get(here) ?? [];
+      files = [...this.vfiles().filter(f => f.folder === here),
+               ...this.vlinks().filter(l => l.folder === here).map(l => real.get(l.file)).filter((f): f is StoredFile => !!f)];
     } else {
       const here = this.here();
       dirs = this.kids().get(here) ?? [];
-      files = this.all().filter(f => this.placeOf(f) === here);
+      files = this.mine().filter(f => this.placeOf(f) === here);
     }
     const dir = this.sortDir(), key = this.sortKey();
     const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
@@ -590,20 +829,71 @@ export class RoomFiles implements OnDestroy {
         : byName(a, b)) * dir;
     const dirCmp = (a: FileFolder, b: FileFolder) =>
       (key === 'date' ? (a.created_at ?? '').localeCompare(b.created_at ?? '') : byName(a, b)) * (key === 'name' || key === 'date' ? dir : 1);
-    return [...[...dirs].sort(dirCmp).map(f => ({ key: 'd:' + f.id, folder: f })),
-            ...[...files].sort(fileCmp).map(f => ({ key: 'f:' + f.id, file: f }))];
+    return [...(inV && this.here() === 'v:chat' ? dirs : [...dirs].sort(dirCmp)).map(f => ({ key: 'd:' + f.id, folder: f, ro: !!f.ro })),
+            ...[...files].sort(fileCmp).map(f => ({ key: 'f:' + f.id, file: f, ro: inV || !!f.ro }))];
   });
   folderItems = computed(() => this.items().filter(i => i.folder));
   fileItems = computed(() => this.items().filter(i => i.file));
   crumbs = computed(() => {
+    if (this.here() === STORAGE) return [{ id: STORAGE, name: 'Storage' }];
+    if (this.here() === TRASH) return [{ id: TRASH, name: 'Deleted files' }];
     const out: { id: string; name: string }[] = [];
     let at = this.byId().get(this.here());
     const seen = new Set<string>();
     while (at && !seen.has(at.id)) { seen.add(at.id); out.unshift({ id: at.id, name: at.name }); at = this.byId().get(at.parent); }
-    return [{ id: '', name: '' }, ...out];
+    // A read-only folder's way starts at its root (Projects, Chat, Parts), not at My files.
+    return isV(this.here()) ? out : [{ id: '', name: '' }, ...out];
   });
   hereName = computed(() => this.byId().get(this.here())?.name ?? t('My files'));
   selKeys = computed(() => [...this.selected()]);
+  /** Something picked is read-only: no moving, renaming or deleting it from here. */
+  selRo = computed(() => {
+    const ro = new Set(this.items().filter(i => i.ro).map(i => i.key));
+    return this.selKeys().some(k => ro.has(k) || isV(k.slice(2)));
+  });
+  /** The areas on the storage bar, with their figures and colours. */
+  areaRows = computed(() => {
+    const u = this.usage();
+    return AREAS.map((a, i) => ({ ...a, color: color(i), bytes: u?.areas[a.id]?.bytes ?? 0, files: u?.areas[a.id]?.files ?? 0,
+                                  stored: u?.areas[a.id]?.stored ?? 0, shared: u?.areas[a.id]?.shared,
+                                  hint: a.id === 'own' ? 'What people uploaded, in their own folders' : WHERE_LABEL[a.id === 'projects' ? 'projects' : a.id] }));
+  });
+  readonly svRanges = [{ id: '7d', label: '7d' }, { id: '30d', label: '30d' }, { id: '90d', label: '90d' }, { id: 'all', label: 'All' }];
+  readonly svCols = [{ id: 'name', label: 'Name', r: false }, { id: 'area', label: 'Area', r: false }, { id: 'kind', label: 'Kind', r: false },
+                     { id: 'bytes', label: 'Size', r: true }, { id: 'at', label: 'Added', r: true }] as const;
+  readonly fmtBytes = cfmt.bytes;
+  tableArea = signal<Area | ''>('');
+  tableSort = signal<'name' | 'area' | 'kind' | 'bytes' | 'at'>('bytes');
+  tableDir = signal<1 | -1>(-1);
+  /** What the range added, each area a series in its colour - the Analytics chart. */
+  chartData = computed<TimeData>(() => {
+    const c = this.usage()?.chart;
+    return c ? { ...c, series: c.series.map(s => ({ name: t(this.areaLabel(s.name as Area)), values: s.values })) }
+             : { t0: 0, step: 86400, n: 0, series: [] };
+  });
+  areaDonut = computed<Row[]>(() => this.areaRows().map(a => ({ name: t(a.label), value: a.bytes, sub: `${a.files} ${t('files')}`, color: a.color })));
+  kindBars = computed<Row[]>(() => Object.entries(this.usage()?.kinds ?? {}).slice(0, 10)
+    .map(([k, v]) => ({ name: t(this.kindLabel(k)), value: v.bytes, sub: `${v.files} ${t('files')}` })));
+  tableRows = computed<UsageRow[]>(() => {
+    const a = this.tableArea(), k = this.tableSort(), d = this.tableDir();
+    const rows = (this.usage()?.files ?? []).filter(r => !a || r.area === a);
+    const by = (r: UsageRow) => k === 'bytes' ? r.bytes : k === 'at' ? (r.at ?? '') : k === 'area' ? r.area : k === 'kind' ? r.kind : r.name.toLowerCase();
+    return [...rows].sort((x, y) => { const p = by(x), q = by(y); return (p < q ? -1 : p > q ? 1 : 0) * d; });
+  });
+  readonly bytesFmt = (v: number) => size(v);
+  /** A small bar per area, for the Storage card. */
+  areaCols = computed<StackCol[]>(() => this.areaRows().map(a => ({ label: t(a.label), parts: [{ name: t(a.label), n: a.bytes, color: a.color }] })));
+  /** Each day of the week: uploads, and files deleted - for the Activity card. */
+  weekCols = computed<StackCol[]>(() => (this.usage()?.week ?? []).map(d => ({
+    label: this.dayLabel(d.day),
+    parts: [{ name: t('uploaded'), n: d.added, color: color(0) }, { name: t('deleted'), n: d.deleted, color: color(3) }],
+  })));
+  weekSum = computed(() => (this.usage()?.week ?? []).reduce((s, d) => ({ added: s.added + d.added, bytes: s.bytes + d.added_bytes,
+                                                                        deleted: s.deleted + d.deleted }), { added: 0, bytes: 0, deleted: 0 }));
+  storageTip = computed(() => [
+    ...this.areaRows().map(a => `${t(a.label)}: ${size(a.bytes)}, ${a.files} ${t('files')}`)].join('\n'));
+  activityTip = computed(() => `${t('This week')}: ${this.weekSum().added} ${t('uploaded')} (${size(this.weekSum().bytes)}), `
+    + `${this.weekSum().deleted} ${t('deleted')}`);
   singleFile = computed(() => {
     const k = this.selKeys();
     return k.length === 1 && k[0].startsWith('f:') ? this.fileById(k[0].slice(2)) : null;
@@ -632,7 +922,7 @@ export class RoomFiles implements OnDestroy {
   previewAt = computed(() => this.previewList().findIndex(f => f.id === this.preview()));
   previewFile = computed(() => {
     const id = this.preview();
-    return id ? this.all().find(f => f.id === id) ?? null : null;
+    return id ? this.fileById(id) : null;
   });
   moveRows = computed(() => {
     const d = this.dialog();
@@ -655,10 +945,12 @@ export class RoomFiles implements OnDestroy {
       untracked(() => this.load());
     });
     this.api.boards().subscribe({ next: b => this.boards.set(b), error: () => {} });
+
     // One file picked is the one the command palette offers to ask Chat about.
     effect(() => {
       const f = this.previewFile() ?? this.singleFile();
-      untracked(() => this.picked.file.set(f ? { id: f.id, label: f.name } : null));
+      // A Projects file is not an upload the Chat can be given.
+      untracked(() => this.picked.file.set(f && !f.ro ? { id: f.id, label: f.name } : null));
     });
     // A file asked for from elsewhere (the Chat's viewer: "Open in Files"):
     // its folder, with it open - once the list has come.
@@ -680,7 +972,9 @@ export class RoomFiles implements OnDestroy {
     });
     // A folder that went away takes you to the top.
     effect(() => {
-      if (!this.loading() && this.here() && !this.byId().has(this.here())) untracked(() => this.here.set(''));
+      const here = this.here();
+      if (here === STORAGE || here === TRASH || (isV(here) && !this.vLoaded())) return;
+      if (!this.loading() && here && !this.byId().has(here)) untracked(() => this.here.set(''));
     });
   }
 
@@ -691,6 +985,51 @@ export class RoomFiles implements OnDestroy {
     const done = () => { if (--left === 0) this.loading.set(false); };
     this.api.list().subscribe({ next: rows => { this.all.set(rows); done(); }, error: () => { done(); this.error.set(t('The files did not load.')); } });
     this.api.folders().subscribe({ next: rows => { this.folders.set(rows); done(); }, error: () => done() });
+    this.api.virtual().subscribe({
+      next: v => { this.vfolders.set(v.folders); this.vfiles.set(v.files); this.vlinks.set(v.links); this.vLoaded.set(true); },
+      error: () => this.vLoaded.set(true),
+    });
+    this.loadUsage();
+  }
+  /** The figures, for the range picked (the server picks one at first: the shortest that holds what came lately). */
+  loadUsage(range = this.usage()?.range ?? 'auto') {
+    this.api.usage(range).subscribe({ next: u => { this.usage.set(u); this.usageErr.set(false); }, error: () => this.usageErr.set(true) });
+  }
+  setRange(r: string) { this.loadUsage(r); }
+  showSide(s: 'mine' | 'app') {
+    this.side.set(s);
+    if (s === 'app' && !isV(this.here())) this.go('v:projects');
+    else if (s === 'mine' && (isV(this.here()) || this.here() === STORAGE || this.here() === TRASH)) this.go('');
+  }
+  loadTrash() {
+    this.api.trash().subscribe({
+      next: r => { this.trashRows.set(r.files); this.trashDays.set(r.days); this.trashLoaded.set(true); },
+      error: err => { this.trashLoaded.set(true); this.fail(err, 'The trash did not load.'); },
+    });
+  }
+  restore(rows: TrashFile[]) {
+    this.api.restore(rows.map(f => f.id)).subscribe({
+      next: r => {
+        if (r.restored.length) this.say(`${t('Restored')}: ${r.restored.map(f => f.name).join(', ')}`);
+        for (const x of r.refused) this.say(`${x.name}: ${x.why}`, 'warn');
+        this.loadTrash(); this.api.bump();
+      },
+      error: err => this.fail(err, 'Could not restore it.'),
+    });
+  }
+  askPurge(rows: TrashFile[]) {
+    const what = rows.length === 1 ? `“${rows[0].name}”` : `${rows.length} ${t('files')}`;
+    this.dialog.set({ type: 'confirm', title: `${t('Delete for good')} ${what}?`, body: t('This cannot be undone.'), ok: t('Delete for good'),
+                      run: () => this.api.purge(rows.map(f => f.id)).subscribe({
+                        next: () => { this.loadTrash(); this.loadUsage(); }, error: err => this.fail(err, 'Could not delete it.') }) });
+  }
+  sortBy(k: 'name' | 'area' | 'kind' | 'bytes' | 'at') {
+    if (this.tableSort() === k) this.tableDir.set(this.tableDir() === 1 ? -1 : 1);
+    else { this.tableSort.set(k); this.tableDir.set(k === 'bytes' || k === 'at' ? -1 : 1); }
+  }
+  exportCsv() {
+    const rows = this.tableRows().map(r => ({ name: r.name, area: r.area, kind: r.kind, bytes: r.bytes, added: r.at ?? '', where: this.pathOf(r.folder) }));
+    saveFile('files-storage.csv', csvText(rows), 'text/csv');
   }
 
   save() {
@@ -701,7 +1040,7 @@ export class RoomFiles implements OnDestroy {
   }
 
   // ---- small helpers for the template
-  fileById(id: string) { return this.all().find(f => f.id === id) ?? null; }
+  fileById(id: string) { return this.all().find(f => f.id === id) ?? this.vfiles().find(f => f.id === id) ?? null; }
   childrenOf(id: string) { return this.kids().get(id) ?? []; }
   isOpen(id: string) { return this.opened().has(id); }
   toggleOpen(id: string) {
@@ -711,7 +1050,47 @@ export class RoomFiles implements OnDestroy {
   isSel(key: string) { return this.selected().has(key); }
   kindLabel(k: string) { return KIND_LABEL[k] ?? k; }
   roomLabel(r: string) { return ROOM_LABEL[r] ?? r; }
-  pathOf(folder: string) { return this.byId().get(folder)?.path ?? t('My files'); }
+  pathOf(folder: string) {
+    if (!isV(folder)) return this.byId().get(folder)?.path ?? t('My files');
+    const names: string[] = [];
+    for (let at = this.byId().get(folder), n = 0; at && n < 40; at = this.byId().get(at.parent), n++) names.unshift(at.root ? t(at.name) : at.name);
+    return names.join('/');
+  }
+  crumbName(c: { id: string; name: string }) { return !c.id ? 'My files' : c.name; }
+  /** Where a read-only entry is changed, as the lock's tooltip says it. */
+  whereText(x: { where?: string } | null | undefined) { return WHERE_LABEL[x?.where ?? ''] ?? 'Read-only'; }
+  /** The button that opens a read-only entry where it is changed, if there is one. */
+  openable(o?: VirtualOpen, chat?: string): string | null {
+    if (chat) return 'Open the conversation';
+    if (o?.model) return 'Open in the 3D Drawing room';
+    if (o?.board) return 'Open in the PCB Design room';
+    if (o?.firmware) return 'Open in the Firmware room';
+    return null;
+  }
+  openThere(o?: VirtualOpen, chat?: string) {
+    if (chat) this.picked.askCc({ action: 'open', chat });
+    else if (o?.model) this.openModel(o.model);
+    else if (o?.board) this.picked.openBoard(o.board);
+    else if (o?.firmware) this.picked.openFirmware(o.firmware);
+  }
+  areaLabel(a: Area | string) { return AREAS.find(x => x.id === a)?.label ?? a; }
+  areaColor(a: Area | string) { return color(Math.max(0, AREAS.findIndex(x => x.id === a))); }
+  pct(n: number, of: number) { const p = of ? 100 * n / of : 0; return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`; }
+  /** A date as short as it can be: the year only when it is not this one. */
+  shortDay(iso: string) {
+    const d = new Date(iso), y = d.getFullYear() !== new Date().getFullYear();
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(y ? { year: '2-digit' } : {}) });
+  }
+  dayLabel(day?: string, year = false) {
+    return day ? new Date(day + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}) }) : '';
+  }
+  /** One of the largest files, opened where it is. */
+  openLargest(r: { id: string; folder: string }) {
+    const f = this.fileById(r.id);
+    if (!f) return;
+    this.go(isV(r.id) ? f.folder : this.placeOf(f));
+    this.open(f);
+  }
   sentOf(f: StoredFile) { return [...(f.sent_log ?? (f.sent ? [f.sent] : []))].reverse(); }
   /** Big arrows at the sides only where they cover nothing to read. */
   sideNav(f: StoredFile) { return ['image', 'video', 'audio', 'step', 'none'].includes(f.preview); }
@@ -723,8 +1102,15 @@ export class RoomFiles implements OnDestroy {
     return out;
   }
   stats(id: string) {
+    if (isV(id)) {
+      const under = this.subtree(id);
+      const real = new Map(this.all().map(f => [f.id, f]));
+      const refs = new Set(this.vlinks().filter(l => under.has(l.folder)).map(l => l.file));
+      const files = [...this.vfiles().filter(f => under.has(f.folder)), ...[...refs].map(i => real.get(i)).filter((f): f is StoredFile => !!f)];
+      return { files: files.length, folders: under.size - 1, bytes: files.reduce((n, f) => n + f.bytes, 0) };
+    }
     const under = id ? this.subtree(id) : null;
-    const files = this.all().filter(f => under ? under.has(f.folder) : true);
+    const files = this.mine().filter(f => under ? under.has(f.folder) : true);
     return { files: files.length, folders: under ? under.size - 1 : this.folders().length,
              bytes: files.reduce((n, f) => n + f.bytes, 0) };
   }
@@ -790,6 +1176,9 @@ export class RoomFiles implements OnDestroy {
     this.here.set(id);
     this.selected.set(new Set());
     this.focusKey.set(null);
+    if (id === TRASH) this.loadTrash();
+    if (id === STORAGE || id === TRASH) return;
+    this.side.set(isV(id) ? 'app' : 'mine');
     // the way there is open in the tree
     let at = this.byId().get(id);
     const open = new Set(this.opened());
@@ -881,11 +1270,12 @@ export class RoomFiles implements OnDestroy {
         if (at >= 0) { e.preventDefault(); this.clickItem(new MouseEvent('click', { ctrlKey: true }), keys[at]); }
         return;
       }
-      case 'Delete':
-        if (this.selected().size && this.auth.can('draw')) { e.preventDefault(); this.askDelete(this.selKeys()); }
-        return;
-      case 'F2':
-        if (this.selected().size === 1 && this.auth.can('draw')) { e.preventDefault(); this.startRename(this.selKeys()[0]); }
+      case 'Delete': case 'F2':
+        if (!this.selected().size || !this.auth.can('draw')) return;
+        e.preventDefault();
+        if (this.selRo()) this.say(t(this.whereText(this.hereFolder()) === 'Read-only' ? 'Read-only here' : this.whereText(this.hereFolder())), 'warn');
+        else if (e.key === 'Delete') this.askDelete(this.selKeys());
+        else if (this.selected().size === 1) this.startRename(this.selKeys()[0]);
         return;
       case 'Backspace':
         if (this.here() && !this.filtering()) { e.preventDefault(); this.go(this.byId().get(this.here())?.parent ?? ''); }
@@ -955,7 +1345,7 @@ export class RoomFiles implements OnDestroy {
     this.clearSel();
     const all: MenuItem = { label: 'Select all', icon: 'grid', kbd: 'Ctrl+A',
                             run: () => this.selected.set(new Set(this.items().map(i => i.key))) };
-    if (!this.auth.can('draw') || this.filtering()) { if (this.items().length) ContextMenu.open(e, [all]); return; }
+    if (!this.auth.can('draw') || this.filtering() || isV(this.here())) { if (this.items().length) ContextMenu.open(e, [all]); return; }
     ContextMenu.open(e, [
       { label: 'New folder', icon: 'newfolder', run: () => this.newFolder() },
       { label: 'Upload files', icon: 'upload', run: () => (document.querySelector('.tcv-fm-head input[type=file]') as HTMLInputElement)?.click() },
@@ -972,6 +1362,7 @@ export class RoomFiles implements OnDestroy {
     const files = keys.filter(k => k.startsWith('f:')).map(k => this.fileById(k.slice(2))).filter((f): f is StoredFile => !!f);
     const dirs = keys.filter(k => k.startsWith('d:')).map(k => this.byId().get(k.slice(2))).filter((f): f is FileFolder => !!f);
     const out: MenuItem[] = [];
+    if (this.selRo() || dirs.some(d => d.ro) || files.some(f => f.ro)) return this.roMenu(keys, files, dirs);
     if (keys.length === 1 && files.length === 1) {
       const f = files[0];
       if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.open(f) });
@@ -1008,6 +1399,34 @@ export class RoomFiles implements OnDestroy {
         out.push({ label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) },
                  { sep: true }, { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.askDelete(keys) });
       }
+    }
+    return out;
+  }
+  /** A read-only entry's menu: open it, take it away, see where it is kept - nothing that changes it. */
+  private roMenu(keys: string[], files: StoredFile[], dirs: FileFolder[]): MenuItem[] {
+    const out: MenuItem[] = [];
+    if (keys.length === 1 && files.length === 1) {
+      const f = files[0];
+      if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.open(f) });
+      out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) });
+      const there = this.openable(f.open);
+      if (there) out.push({ label: there, icon: 'open', run: () => this.openThere(f.open) });
+      if (!f.ro) {
+        // An upload the Chat or a product used: it is kept in My files.
+        out.push({ label: 'Show in My files', icon: 'folder', run: () => { this.go(this.placeOf(f)); this.selected.set(new Set(['f:' + f.id])); } });
+        if (this.auth.can('draw')) out.push({ label: 'Ask Chat about this file', icon: 'chat',
+          run: () => this.picked.askCc({ action: 'new', mention: { kind: 'file', id: f.id, label: f.name } }) });
+      }
+      out.push({ sep: true }, { label: 'Details', icon: 'info', run: () => { this.details.set(true); this.save(); } });
+    } else if (keys.length === 1 && dirs.length === 1) {
+      const d = dirs[0];
+      out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.go(d.id) },
+               { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), (d.root ? t(d.name) : d.name) + '.zip') });
+      const there = this.openable(d.open, d.chat);
+      if (there) out.push({ label: there, icon: 'open', run: () => this.openThere(d.open, d.chat) });
+    } else {
+      out.push({ label: 'Download as ZIP', icon: 'download',
+                 run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') });
     }
     return out;
   }
@@ -1090,11 +1509,23 @@ export class RoomFiles implements OnDestroy {
     const one = keys.length === 1 ? (files.length ? this.fileById(files[0])?.name : this.byId().get(dirs[0])?.name) : null;
     const items = (n: number) => `${n} ${t(n === 1 ? 'item' : 'items')}`;
     const what = one ? `“${one}”` : items(keys.length);
-    const body = inside
-      ? `${t('Everything in it goes too:')} ${items(inside)}. ${t('This cannot be undone.')}`
-      : t('This cannot be undone.');
-    this.dialog.set({ type: 'confirm', title: `${t('Delete')} ${what}?`, body, ok: t('Delete'),
-                      run: () => this.remove(files, dirs) });
+    const kept = `${t('Deleted files are kept')} ${this.usage()?.trash?.days ?? 30} ${t('days')} - ${t('restore them from Deleted.')}`;
+    const body = inside ? `${t('Everything in it goes too:')} ${items(inside)}. ${kept}` : kept;
+    const ask = (more = '') => this.dialog.set({ type: 'confirm', title: `${t('Delete')} ${what}?`, body: more + body, ok: t('Delete'),
+                                                 run: () => this.remove(files, dirs) });
+    if (!files.length) { ask(); return; }
+    // What used them says they are gone afterwards (backend/files_virtual.py mark_gone): said first.
+    this.api.uses(files).subscribe({
+      next: u => {
+        const chats = new Set<string>(), products = new Set<string>();
+        for (const x of Object.values(u)) { x.chats.forEach(c => chats.add(c)); x.products.forEach(p => products.add(p)); }
+        const said: string[] = [];
+        if (chats.size) said.push(`${chats.size} ${t(chats.size === 1 ? 'conversation' : 'conversations')} (${[...chats].slice(0, 3).join(', ')})`);
+        if (products.size) said.push(`${products.size} ${t(products.size === 1 ? 'product' : 'products')} (${[...products].slice(0, 3).join(', ')})`);
+        ask(said.length ? `${t('Used in')} ${said.join(` ${t('and')} `)} - ${t('they will say it was deleted.')} ` : '');
+      },
+      error: () => ask(),
+    });
   }
   private remove(files: string[], dirs: string[]) {
     let left = (files.length ? 1 : 0) + dirs.length;
@@ -1129,6 +1560,9 @@ export class RoomFiles implements OnDestroy {
     if (!ours && !theirs) return;
     if (!this.auth.can('draw')) return;
     if (ours && at === 'main') return;                    // dropping where it is: nothing to do
+    // Nothing goes into a read-only folder, nor comes out of one.
+    const into = at === 'main' ? this.here() : at.replace(/^(tree|crumb|d):/, '');
+    if (isV(into) || into === STORAGE || (ours && isV(this.here()))) return;
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) e.dataTransfer.dropEffect = ours ? 'move' : 'copy';
@@ -1147,7 +1581,7 @@ export class RoomFiles implements OnDestroy {
     e.preventDefault();
     e.stopPropagation();
     this.dropAt.set(null);
-    if (!this.auth.can('draw')) return;
+    if (!this.auth.can('draw') || isV(folder) || folder === STORAGE) return;
     if (raw) {
       const got = JSON.parse(raw) as { files: string[]; folders: string[] };
       const folders = got.folders.filter(id => !this.subtree(id).has(folder));
@@ -1243,6 +1677,12 @@ export class RoomFiles implements OnDestroy {
   /** Done, or could not: a word in the app's toast stack (toast.ts). */
   private say(m: string, tone: ToastTone = 'ok') { Toast.show(m, { tone }); }
 }
+
+/** A file's kind as the filters and the overview count it: a build output is "build". */
+function kindOf(f: StoredFile): string { return f.build ? 'build' : f.kind; }
+
+/** A read-only folders' entry (backend/files_virtual.py), by its id. */
+function isV(id: string | null | undefined): boolean { return !!id && id.startsWith('v:'); }
 
 function detail(err: unknown, fallback: string): string {
   const d = (err as { error?: { detail?: unknown } })?.error?.detail;

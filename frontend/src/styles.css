@@ -4531,6 +4531,11 @@ button.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hove
 .tcv-cc-mchip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tcv-cc-mchip .tcv-cc-ico { width: 13px; height: 13px; color: var(--accent); }
 .tcv-cc-mcut { flex: none; font-size: 10px; color: var(--warn); }
+/* A file deleted from Files since the line was sent: its name struck through, and saying so */
+button.tcv-cc-mchip[data-gone] { cursor: default; border-style: dashed; color: var(--ink-dim); background: none; max-width: min(380px, 100%); }
+.tcv-cc-mchip[data-gone] > span:not(.tcv-cc-mgone) { text-decoration: line-through; }
+.tcv-cc-mchip[data-gone] .tcv-cc-ico { color: var(--ink-dim); }
+.tcv-cc-mgone { flex: none; font-size: 10.5px; color: var(--ink-dim); }
 .tcv-cc-mx { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-right: -4px;
   padding: 0; color: var(--ink-dim); background: none; border: 0; border-radius: 50%; cursor: pointer; }
 .tcv-cc-mx:hover { color: var(--ink); background: var(--hover); }

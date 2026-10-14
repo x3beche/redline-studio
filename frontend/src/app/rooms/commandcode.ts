@@ -65,6 +65,8 @@ export interface CcMention {
   open?: { model?: string | null; board?: string | null; room?: string | null };
   /** A taste palette not mentioned but attached to `via` (a mentioned model or board): it came along. */
   auto?: boolean; via?: string;
+  /** A file deleted from Files since (backend/files_virtual.py mark_gone): who, and when. */
+  gone?: { by?: { id?: string; name?: string }; at?: string };
 }
 /** A tool the model used while it answered (backend/chat_tools): kept on
  *  the answer. `say` is an English sentence with {name} holes, filled from
@@ -842,9 +844,11 @@ type Ask = { text: string; label: string; go: () => void };
                   <rl-mention-pics [mentions]="m.mentions" />
                   <div class="tcv-cc-mentions">
                     @for (mm of chipsOf(m.mentions); track mm.kind + mm.id) {
-                      <button class="tcv-cc-mchip" [attr.data-kind]="mm.kind" (click)="openMention(mm)" [title]="mentionTip(mm)">
+                      <button class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [attr.data-gone]="mm.gone ? 1 : null" [disabled]="!!mm.gone"
+                              (click)="openMention(mm)" [title]="mm.gone ? goneTip(mm) : mentionTip(mm)">
                         <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
                         <span>{{ mm.label }}</span>
+                        @if (mm.gone) { <span class="tcv-cc-mgone">{{ 'this file was deleted' | t }}</span> }
                         @if (mm.truncated) { <span class="tcv-cc-mcut">{{ 'cut' | t }}</span> }
                       </button>
                     }
@@ -1408,7 +1412,7 @@ export class RoomCommandCode implements OnDestroy {
    *  mentions go with one line (backend/cc_context.py MAX_MENTIONS). */
   att = new ChatAttach(inject(FilesApi), () => 'chat', () => 8 - this.picked().length);
   /** A line's mentions that are not pictures - those are drawn as pictures. */
-  chipsOf(l: CcMention[] | undefined) { return (l ?? []).filter(m => !isPicture(m)); }
+  chipsOf(l: CcMention[] | undefined) { return (l ?? []).filter(m => !isPicture(m) || m.gone); }
 
   /** Tokens and money the conversation's answers have used, from each answer's own usage. */
   totals = computed(() => {
@@ -2974,6 +2978,11 @@ export class RoomCommandCode implements OnDestroy {
     if (m.images) bits.push(`${m.images} ${t('images')}`);
     if (m.auto) bits.push(`${t('attached to')} ${m.via ?? ''}`);
     return bits.join(' · ');
+  }
+  /** A deleted file's chip: who deleted it from Files, and when. */
+  goneTip(m: CcMention) {
+    const at = m.gone?.at ? new Date(m.gone.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    return `${t('Deleted from Files')}${m.gone?.by?.name ? ` ${t('by')} ${m.gone.by.name}` : ''}${at ? ` · ${at}` : ''}`;
   }
 
   /** A note room_note queued: its room, at what it is about. */
