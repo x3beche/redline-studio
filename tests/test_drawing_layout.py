@@ -237,7 +237,7 @@ def test_techdraw_draws_the_layout(tmp_path):
                           "-v", f"{release.ROOT / 'tools'}:/tools:ro", "--entrypoint", "python",
                           "redline-draw", "-c", script], capture_output=True, text=True, timeout=240)
     assert run.returncode == 0, run.stdout + run.stderr
-    assert "projecting the left view" in run.stdout and "projecting the bottom view" in run.stdout
+    assert "projected the left view" in run.stdout and "projected the bottom view" in run.stdout
     info = json.loads((tmp_path / "d.json").read_text())
     assert info["sheet"] == "A4 portrait" and info["layout"] == "custom"
     assert info["views"] == ["Front", "Left", "Bottom", "Isometric"]

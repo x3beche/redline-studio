@@ -41,6 +41,15 @@ TAG = re.compile(r"^[\w][\w.\-]{0,31}$")
 ROOT = Path(__file__).resolve().parent.parent
 DRAW_IMAGE = os.environ.get("REDLINE_DRAW_IMAGE", "redline-draw")
 DRAW_TIMEOUT = 300
+# A large assembly takes longer to read and project: this much more per MB
+# of STEP (a 108 MB one is given about 12 minutes), up to DRAW_TIMEOUT_MAX.
+DRAW_TIMEOUT_PER_MB = 4
+DRAW_TIMEOUT_MAX = 1800
+
+
+def draw_timeout(step_bytes: int) -> int:
+    """The seconds a drawing of a STEP this size may take."""
+    return min(DRAW_TIMEOUT_MAX, DRAW_TIMEOUT + round(DRAW_TIMEOUT_PER_MB * step_bytes / 2**20))
 DRAWINGS = ROOT / ".cache" / "drawings"
 # Bumped when tools/techdraw.py draws differently, so kept drawings are made again.
 # 4: each kept drawing has a small PNG of its sheet beside it (the 3D room's
@@ -77,9 +86,13 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
     try:
         os.chmod(work, 0o777)
         (work / "model.step").write_bytes(step)
+        limit = draw_timeout(len(step))
         if spec:
             (work / "spec.json").write_text(json.dumps(spec))
-        argv = ["docker", "run", "--rm", *limits.box(), "--network", "none",
+        # Named, so a drawing that runs over its time is stopped: killing the
+        # docker client alone leaves the container projecting on.
+        name = f"redline-draw-{secrets.token_hex(6)}"
+        argv = ["docker", "run", "--rm", "--name", name, *limits.box(), "--network", "none",
                 "--user", f"{os.getuid()}:{os.getgid()}",
                 "-v", f"{work}:/work", "-v", f"{ROOT / 'tools'}:/tools:ro", DRAW_IMAGE,
                 "/work/model.step", "/work/drawing.pdf", "--title", title, "--project", project,
@@ -100,10 +113,13 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
                     on_progress(int(step_[1]), step_[2])
             await proc.wait()
         try:
-            await asyncio.wait_for(follow(), DRAW_TIMEOUT)
+            await asyncio.wait_for(follow(), limit)
         except asyncio.TimeoutError:
             proc.kill()
-            return f"the drawing took longer than {DRAW_TIMEOUT} s"
+            stop = await asyncio.create_subprocess_exec("docker", "rm", "-f", name, stdout=asyncio.subprocess.DEVNULL,
+                                                        stderr=asyncio.subprocess.DEVNULL)
+            await stop.wait()
+            return f"the drawing took longer than {limit} s"
         pdf = work / "drawing.pdf"
         if proc.returncode != 0 or not pdf.exists():
             if any("Unable to find image" in t or "pull access denied" in t for t in text):

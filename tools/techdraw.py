@@ -53,6 +53,9 @@ FIT_SLACK = 0.5
 # docker/draw); Helvetica where it is not installed.
 DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans{}.ttf"
 PREVIEW_W = 480                                   # px, the preview's width
+# Views projected at once at most (project_all): each worker holds its own
+# working copy of the model's edges.
+MAX_WORKERS = 4
 SCALES = [(10, 1), (5, 1), (2, 1), (1, 1), (1, 2), (1, 5), (1, 10), (1, 20), (1, 50), (1, 100)]
 
 
@@ -102,6 +105,74 @@ def project(shape, direction, up, around=None):
                 continue
         return out
     return lines(visible), lines(hidden)
+
+
+# What project_all's workers draw from: set before they are forked, so each
+# has the model as read, not a copy sent to it.
+_FORKED: tuple = (None, None)
+
+
+def _cpus() -> int:
+    """The CPUs this container may use: its --cpus quota, else the machine's."""
+    import os
+    try:
+        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()
+        if quota != "max":
+            return max(1, int(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    return max(1, len(os.sched_getaffinity(0)))
+
+
+def _one_view(key: str):
+    """A worker's view, of the model it was forked with."""
+    return _one_view_of(*_FORKED, key)
+
+
+def project_all(shape, lit, keys: list[str]):
+    """Each view's visible and hidden lines (and the highlighted parts'),
+    by view. Hidden-line removal runs on one core, and a large assembly's
+    six views took over four minutes one after another: the views are
+    projected side by side, one process each, as many at once as the
+    container has CPUs (at most MAX_WORKERS, as each holds its own working
+    copy). One at a time if processes cannot be had."""
+    global _FORKED
+    views, lit_views = {}, {}
+
+    def took(key, v, lv, done):
+        views[key] = v
+        if lv is not None:
+            lit_views[key] = lv
+        name = "isometric" if key == "iso" else key
+        progress(10 + round(78 * done / len(keys)), f"projected the {name} view ({done} of {len(keys)})")
+
+    n = min(len(keys), _cpus(), MAX_WORKERS)
+    progress(10, f"projecting {len(keys)} view{'s' if len(keys) != 1 else ''}")
+    if n > 1:
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        from concurrent.futures.process import BrokenProcessPool
+        _FORKED = (shape, lit)
+        try:
+            with ProcessPoolExecutor(n, mp_context=mp.get_context("fork")) as pool:
+                for done, fut in enumerate(as_completed([pool.submit(_one_view, k) for k in keys]), 1):
+                    took(*fut.result(), done)
+            return views, lit_views
+        except (BrokenProcessPool, OSError):
+            # A worker killed (out of memory) or none to be had: the rest one by one.
+            pass
+        finally:
+            _FORKED = (None, None)
+    for key in keys:
+        if key not in views:
+            took(*_one_view_of(shape, lit, key), len(views) + 1)
+    return views, lit_views
+
+
+def _one_view_of(shape, lit, key: str):
+    direction, up = VIEWS[key]
+    return (key, project(shape, direction, up),
+            project(lit, direction, up, around=shape) if lit is not None else None)
 
 
 def bounds(polys):
@@ -291,16 +362,9 @@ def draw(step: str, out: str, title: str, project_name: str, tag: str, ident: st
         wanted = list(dict.fromkeys(b["view"] for b in spec["views"] if b.get("view") in VIEWS))
         if not wanted:
             raise ValueError("the layout has no view to draw")
-        steps = [(v, 10 + round(75 * i / len(wanted))) for i, v in enumerate(wanted)]
     else:
-        steps = [("front", 10), ("top", 30), ("right", 48), ("iso", 64)]
-    views, lit_views = {}, {}
-    for key, at in steps:
-        progress(at, f"projecting the {'isometric' if key == 'iso' else key} view")
-        direction, up = VIEWS[key]
-        views[key] = project(shape, direction, up)
-        if lit is not None:
-            lit_views[key] = project(lit, direction, up, around=shape)
+        wanted = ["front", "top", "right", "iso"]
+    views, lit_views = project_all(shape, lit, wanted)
     progress(90, "laying out the sheet")
     ext = {k: bounds(v[0] + v[1]) for k, v in views.items()}
     size = {k: (b[2] - b[0], b[3] - b[1]) for k, b in ext.items()}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shutil
 import subprocess
 
@@ -196,7 +197,7 @@ def test_the_sheet_preview_and_info(tmp_path):
                           "-v", f"{release.ROOT / 'tools'}:/tools:ro", "--entrypoint", "python",
                           "redline-draw", "-c", script], capture_output=True, text=True, timeout=240)
     assert run.returncode == 0, run.stdout + run.stderr
-    assert "@progress 64 projecting the isometric view" in run.stdout
+    assert re.search(r"@progress \d+ projected the isometric view \(\d of 4\)", run.stdout)
     png = (tmp_path / "d.png").read_bytes()
     assert png.startswith(b"\x89PNG") and len(png) < 100_000
     assert int.from_bytes(png[16:20], "big") == 480                      # its width
@@ -221,3 +222,11 @@ def test_a_crash_is_tried_once_more(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "drawing", flaky)
     monkeypatch.setattr(release.store, "get_artifact", step)
     assert asyncio.run(release.model_drawing(DB, "p/lid")) == b"%PDF" and len(tries) == 2
+
+
+def test_a_large_step_is_given_longer_to_draw():
+    """A 108 MB assembly's six views did not fit in 300 s: the time grows
+    with the STEP, within a ceiling."""
+    assert release.draw_timeout(0) == release.DRAW_TIMEOUT
+    assert 700 < release.draw_timeout(108 * 2**20) < 800
+    assert release.draw_timeout(10 * 2**30) == release.DRAW_TIMEOUT_MAX
