@@ -4,9 +4,10 @@
 Talks to MongoDB directly, so it works with the server stopped; MONGODB_URI
 and MONGODB_DB are read from .env.
 
+    python tools/revisions.py resume                at start-up: what was left unfinished
     python tools/revisions.py queue                 queued revisions
     python tools/revisions.py show <id> [-o DIR]    write the marked image to disk
-    python tools/revisions.py done <id>             mark as applied
+    python tools/revisions.py done <id> [--force]   mark as applied (past the Taste check)
     python tools/revisions.py models                list models
     python tools/revisions.py source <model>        print source code
     python tools/revisions.py save <model> <file>   update source code
@@ -141,9 +142,10 @@ def connect():
 
 
 async def cmd_queue(args):
-    from backend import compute
+    from backend import asks, compute
 
     db = connect()
+    await _sweep(db)
     rows = [d async for d in db.revisions.find({"status": "queued"})]
     # One room's queue, for the agent that works that room.
     if getattr(args, "room", None):
@@ -152,7 +154,14 @@ async def cmd_queue(args):
     if not rows:
         print("nothing queued")
         return
+    # A note whose agent went away is queued again; say so, because some of
+    # the work may already be in the sources.
+    gone = {r["_id"]: asks.last_interruption(r) async for r in db.runs.find(
+        {"_id": {"$in": [d["_id"] for d in rows]}, "status": asks.INTERRUPTED})}
     for i, d in enumerate(rows, 1):
+        g = gone.get(d["_id"])
+        tag = (f"   [INTERRUPTED, requeued {str(g.get('at'))[:16].replace('T', ' ')}: {g.get('reason')}"
+               " - part of it may be done already: start it again, read the sources first]") if g else ""
         cam = d.get("camera") or {}
         # A board note is not a model revision: there is no drawing to show
         # and `build` does not take a board. Say so on the first line, so
@@ -160,13 +169,13 @@ async def cmd_queue(args):
         board = d.get("kind") == "pcb"
         if d.get("kind") == "firmware":
             from backend import fwnotes
-            print(f"\n#{i}  {d['_id']}   [FIRMWARE]")
+            print(f"\n#{i}  {d['_id']}   [FIRMWARE]{tag}")
             print(f"   note  : {d['comment']}")
             print(f"   fw    : {d.get('model') or '-'}    at: {fwnotes.anchor_text(d.get('anchor'))}")
             print(f"   time  : {d['created_at'][:19].replace('T', ' ')}")
             print(f"   in full: python tools/revisions.py show {d['_id']}")
             continue
-        print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else ""))
+        print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else "") + tag)
         print(f"   note  : {d['comment']}")
         print(f"   {'board' if board else 'model'} : {d.get('model') or '-'}"
               f"    part: {d.get('part') or '-'}")
@@ -178,6 +187,59 @@ async def cmd_queue(args):
         if cam.get("position"):
             print(f"   camera: pos {cam['position']} target {cam.get('target')}")
         print(f"   image : python tools/revisions.py show {d['_id']}")
+
+
+async def _beat(db) -> None:
+    """This Claude Code session is alive (backend/asks.py). Best effort."""
+    from backend import actors, asks, runs
+    try:
+        name = actors.agent()["name"]
+        await asks.beat(db, runs.session_from_env(), name, seat=asks.seat_from_env(name))
+    except Exception:                           # noqa: BLE001 - never block a command
+        pass
+
+
+async def _sweep(db) -> list[dict]:
+    """Give back the notes whose session went away. Best effort."""
+    from backend import asks
+    try:
+        return await asks.sweep(db)
+    except Exception as exc:                    # noqa: BLE001
+        print(f"(stale runs not checked: {type(exc).__name__}: {exc})")
+        return []
+
+
+async def cmd_resume(args):
+    """At start-up: this session takes over from the agent's earlier ones,
+    and is shown what they left unfinished. Nothing is redone by itself -
+    it is a list to pick up from, then the queue as `queue` prints it."""
+    from backend import actors, asks, chat, runs
+
+    db = connect()
+    me = actors.agent()["name"]
+    old = await asks.register(db, runs.session_from_env(), me, asks.seat_from_env(me))
+    given = await _sweep(db)
+    got = await asks.unfinished(db, runs.session_from_env())
+    print(f"session: {runs.session_from_env() or '(no session id)'}  agent: {me}  seat: {asks.seat_from_env(me)}"
+          + (f"  - takes over from {len(old)} earlier session(s)" if old else ""))
+    for g in given:
+        print(f"interrupted, requeued now: {g['revision']}  {g.get('title') or ''}  ({g['reason']})")
+    if got["interrupted"] or got["review"] or got["unanswered"]:
+        print("\nUnfinished asks from before the restart:")
+    for d in got["interrupted"]:
+        print(f"  note {d['revision']} [{d['kind']}]  interrupted {str(d.get('at'))[:16].replace('T', ' ')}"
+              f" ({d.get('reason')})\n     {' '.join(d['comment'].split())[:100]}\n"
+              f"     queued again: hand it to its room's agent; it starts it again and checks the sources first")
+    for d in got["review"]:
+        print(f"  note {d['revision']}  run {d['status']}, waiting for your review: {d.get('title') or ''}\n"
+              f"     {' '.join(d['comment'].split())[:100]}")
+    for d in got["unanswered"]:
+        print(f"  said {d['at'][:16].replace('T', ' ')} [{chat.room_of(d)}], read but not answered:"
+              f" {chat.agent_text(d)[:100]}")
+    if got["unread"]:
+        print(f"\n{got['unread']} unread line(s) in the thread: revisions.py chat")
+    print("\nQueue:")
+    await cmd_queue(argparse.Namespace(room=getattr(args, "room", None)))
 
 
 async def cmd_wait(args):
@@ -198,6 +260,12 @@ async def cmd_wait(args):
     seen = set(args.ignore or [])
     waited = 0
     while True:
+        # Waiting is this session's heartbeat; and a note whose agent went
+        # away is given back here, so it wakes this loop as work again.
+        await _beat(db)
+        given = await _sweep(db)
+        for g in given:
+            print(f"interrupted, requeued: {g['revision']}  {g.get('title') or ''}  ({g['reason']})")
         # Either kind of work wakes it: a queued revision, or something the
         # person typed into the thread. Both are them asking for something.
         said = await chat.unread(db, getattr(args, "room", None))
@@ -279,7 +347,8 @@ async def cmd_chat(args):
     fresh = [d["_id"] for d in rows
              if d["role"] == chat.USER and not d.get("seen_at")]
     if fresh and not args.keep_unread:
-        await chat.mark_seen(db, fresh)
+        from backend import runs
+        await chat.mark_seen(db, fresh, runs.session_from_env())
         print(f"\n{len(fresh)} new, now marked as read. Answer in the room it was "
               f"said in: revisions.py say --room <room> \"...\"")
 
@@ -1631,6 +1700,7 @@ async def cmd_next(args):
     from backend import compute
 
     db = connect()
+    await _sweep(db)                    # a note whose agent went away is next again
     rows = [d async for d in db.revisions.find({"status": "queued"})]
     rows = [d for d in rows if not d.get("archived")]
     if args.room:
@@ -1689,6 +1759,13 @@ async def cmd_start(args):
     except runs.Busy as exc:
         sys.exit(str(exc))
     me = actors.agent()["name"]
+    if what == "restarted":
+        g = (doc.get("interrupted") or [{}])[-1]
+        await db.activity.insert_one(_line(f"picked up again after an interruption: {args.title}", "work", room))
+        print(f"run started again: {args.title}\n"
+              f"it was interrupted ({g.get('reason')}, {str(g.get('at'))[:16].replace('T', ' ')}); "
+              "what was done before is in the sources - read them before redoing anything")
+        return
     if what == "resumed":
         print(f"run already yours, carrying on: {doc.get('title')}")
         return
@@ -1714,6 +1791,7 @@ async def cmd_start(args):
 async def cmd_log(args):
     db = connect()
     await db.activity.insert_one(_line(args.text, args.level, args.room))
+    await _beat(db)
     # The agent logs at every step, so this is where an interrupt catches it
     # between one thing and the next.
     await _shout_interrupts(db)
@@ -2389,6 +2467,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("resume", help="at start-up: what the earlier session left unfinished, then the queue")
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"])
+    s.set_defaults(fn=cmd_resume)
     s = sub.add_parser("queue")
     s.add_argument("--room", choices=["cad", "pcb", "firmware"],
                    help="only this room's notes")
@@ -2700,7 +2781,18 @@ def main() -> None:
     if getattr(args, "sync", False):
         args.fn(args)
         return
-    asyncio.run(args.fn(args))
+    asyncio.run(_beating(args.fn, args))
+
+
+async def _beating(fn, args):
+    # Any command an agent session runs says that session is alive, so a
+    # note it holds is not given back while it works (backend/asks.py).
+    if os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID"):
+        try:
+            await _beat(connect())
+        except BaseException:                   # noqa: BLE001 - connect() may sys.exit
+            pass
+    return await fn(args)
 
 
 if __name__ == "__main__":

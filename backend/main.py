@@ -1166,19 +1166,43 @@ async def list_revisions(status: str | None = None, archived: bool = False):
     """Archived revisions are kept but hidden; pass archived=true to see them."""
     query: dict = {} if status is None else {"status": status}
     query["archived"] = True if archived else {"$ne": True}
+    await _sweep_leases()
     rows = [d async for d in db().revisions.find(query)]
     rows.sort(key=_sort_key)
     runs = await _runs_of([d["_id"] for d in rows if d.get("status") == "queued"])
     return [_out(d, runs.get(d["_id"])) for d in rows]
 
 
+_SWEPT: dict[str, float] = {}
+
+
+async def _sweep_leases() -> None:
+    """Give back the notes whose agent session went away (backend/asks.py),
+    at most once a minute per space: with no agent running at all, the page
+    is what notices, and the card says "interrupted, requeued"."""
+    import time
+    from . import asks
+    ws = scope.current()
+    if time.monotonic() - _SWEPT.get(ws, -1e9) < 60:
+        return
+    _SWEPT[ws] = time.monotonic()
+    try:
+        await asks.sweep(db())
+    except Exception as exc:                           # noqa: BLE001 - the list still loads
+        LOG.warning("stale runs not checked: %s", exc)
+
+
 async def _runs_of(ids: list[str]) -> dict:
     """How the last run of each queued note ended: a note whose run is done
-    but that nobody marked applied waits for review, it is not in the queue."""
+    but that nobody marked applied waits for review, it is not in the queue;
+    one whose agent went away is back in the queue, and says when and why."""
     if not ids:
         return {}
-    return {r["_id"]: {"status": r.get("status"), "finished_at": r.get("finished_at")}
-            async for r in db().runs.find({"_id": {"$in": ids}}, {"status": 1, "finished_at": 1})}
+    from . import asks
+    return {r["_id"]: {"status": r.get("status"), "finished_at": r.get("finished_at"),
+                       "interrupted": asks.last_interruption(r)}
+            async for r in db().runs.find({"_id": {"$in": ids}},
+                                          {"status": 1, "finished_at": 1, "interrupted": 1})}
 
 
 @app.get("/api/queue")

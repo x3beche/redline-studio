@@ -25,7 +25,10 @@ export interface Revision {
   kind: RevisionKind;
   /** A queued note's last run, when it has one: done or failed means it
    *  waits for someone to mark it applied, not for an agent. */
-  run?: { status: string; finished_at?: string | null } | null;
+  run?: { status: string; finished_at?: string | null;
+         /** Its agent's session went away (backend/asks.py): the run was
+          *  closed and the note put back in the queue - when, and why. */
+         interrupted?: { at: string; reason: string } | null } | null;
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;

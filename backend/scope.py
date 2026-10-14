@@ -50,6 +50,8 @@ SCOPED = frozenset({
     "inventory",
     # parts and models saved from McMaster-Carr and GrabCAD, with their CAD files (backend/linked.py)
     "linked_parts",
+    # the agent sessions' heartbeats: who holds a note, and whether it is still there (backend/asks.py)
+    "agent_sessions",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

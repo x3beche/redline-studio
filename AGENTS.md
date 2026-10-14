@@ -10,8 +10,21 @@ artifacts live in the database — do not go looking for a `models/` folder.
 ## First thing to do
 
 ```bash
-.venv/bin/python tools/revisions.py queue
+.venv/bin/python tools/revisions.py resume
 ```
+
+`resume` says this session is the agent now, and shows what the session
+before it left unfinished - notes it had started that were put back in the
+queue ("interrupted, requeued"), notes finished and waiting for your
+review, lines in the thread it read and never answered - then the queue.
+Pick those up first. Nothing in that list has been redone by itself: an
+interrupted note may be half done, so the room agent that starts it again
+reads the sources before changing anything.
+
+A note whose agent's session goes away - restarted, or not heard from for
+45 minutes (`REDLINE_LEASE_MINUTES`) - is put back in the queue this way on
+its own. Every `revisions.py` command a session runs, and `wait` while it
+waits, is what says the session is still there.
 
 If something is queued, write the drawing to disk with `show` and **open that
 file with the Read tool**. The comment alone is not enough: when the user says
@@ -787,7 +800,7 @@ leaves out - tables, pinout diagrams, a mechanical drawing's dimensions:
 | Status | Meaning |
 |---|---|
 | `draft` | the user is still writing — **leave it alone** |
-| `queued` | **this is your work** |
+| `queued` | **this is your work** (also when it says *interrupted, requeued*) |
 | `applied` / `rejected` | closed |
 
 Nothing counts as work until the user presses *queue*.
@@ -795,6 +808,7 @@ Nothing counts as work until the user presses *queue*.
 ## Commands
 
 ```bash
+.venv/bin/python tools/revisions.py resume               # at start-up: what was left unfinished, then the queue
 .venv/bin/python tools/revisions.py queue [--room R]     # what is queued, all or one room
 .venv/bin/python tools/revisions.py next [--room R]      # the next one nobody started, in full
 .venv/bin/python tools/revisions.py kind <id>            # which room a note is from

@@ -157,11 +157,15 @@ async def unread(db, room: str | None = None) -> list[dict]:
     return rows
 
 
-async def mark_seen(db, ids: list[str]) -> int:
+async def mark_seen(db, ids: list[str], session: str | None = None) -> int:
+    """Picked up - by which agent session, when it says: a line read by a
+    session that then went away is offered again to the next one
+    (backend/asks.py)."""
     if not ids:
         return 0
     res = await db[CHAT].update_many(
-        {"_id": {"$in": ids}, "seen_at": None}, {"$set": {"seen_at": _now()}})
+        {"_id": {"$in": ids}, "seen_at": None},
+        {"$set": {"seen_at": _now(), **({"seen_session": session} if session else {})}})
     return res.modified_count
 
 

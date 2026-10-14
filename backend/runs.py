@@ -82,8 +82,8 @@ async def start(db, rid: str, title: str, room: str, by: dict, *,
     """Open (or hand over) the run of one note.
 
     Returns the run and what happened: "started", "resumed" (the same agent
-    ran start again on its own running note - nothing is reset) or
-    "taken-over". Raises Busy when the room runs another note (unless
+    ran start again on its own running note - nothing is reset),
+    "restarted" (an interrupted note picked up again) or "taken-over". Raises Busy when the room runs another note (unless
     `force`) or this note runs under another agent (unless `take_over`).
     """
     from . import compute
@@ -134,12 +134,18 @@ async def start(db, rid: str, title: str, room: str, by: dict, *,
 
     if not (title or "").strip():
         raise Busy("say what you are doing: start <id> \"title\"")
+    # Picked up again after its session went away (backend/asks.py): the
+    # stretches before and the interruptions stay, so the cost and the
+    # card's "what changed" still cover the whole of it.
+    again = mine.get("status") == "interrupted"
     doc = {"title": title, "revision": rid, "model": model, "percent": 0.0,
-           "status": "running", "room": room, "started_at": at,
+           "status": "running", "room": room,
+           "started_at": mine.get("started_at") if again else at,
            "finished_at": None, "by": by, "session": session,
-           "holders": [me], **(extra or {})}
+           "holders": (holders_of(mine) if again else []) + [me], **(extra or {}),
+           **({"interrupted": mine.get("interrupted") or []} if again else {})}
     await _write(db, key, rid, doc)
-    return {**doc, "_id": rid}, "started"
+    return {**doc, "_id": rid}, "restarted" if again else "started"
 
 
 async def _write(db, key: str, rid: str, doc: dict) -> None:

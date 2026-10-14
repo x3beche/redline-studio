@@ -2439,13 +2439,28 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
   inQueue(r: Revision): boolean { return r.status === 'queued' && !this.review(r); }
 
+  /** Queued again because the session working on it went away: it is in
+   *  the queue like any other, and the badge says what happened. */
+  interrupted(r: Revision): { at: string; reason: string } | null {
+    return r.status === 'queued' && r.run?.status === 'interrupted' ? r.run.interrupted ?? null : null;
+  }
+
   badgeOf(r: Revision): string {
     const rv = this.review(r);
-    return rv === 'done' ? 'var(--ok)' : rv === 'failed' ? 'var(--danger)' : this.badge(r.status);
+    return rv === 'done' ? 'var(--ok)' : rv === 'failed' ? 'var(--danger)'
+      : this.interrupted(r) ? 'var(--warn)' : this.badge(r.status);
   }
   labelOf(r: Revision): string {
     const rv = this.review(r);
-    return rv === 'done' ? 'review' : rv === 'failed' ? 'failed' : this.label(r.status);
+    return rv === 'done' ? 'review' : rv === 'failed' ? 'failed'
+      : this.interrupted(r) ? 'interrupted, requeued' : this.label(r.status);
+  }
+  badgeTitle(r: Revision): string {
+    const rv = this.review(r), gone = this.interrupted(r);
+    return rv === 'done' ? 'the agent finished - look at it, then mark it applied'
+      : rv === 'failed' ? 'the run failed - see the log'
+      : gone ? `interrupted ${gone.at.slice(0, 16).replace('T', ' ')}: ${gone.reason}. It is back in the queue; the next agent starts it again.`
+      : '';
   }
 
   badge(s: RevisionStatus): string {
