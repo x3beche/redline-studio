@@ -23,3 +23,6 @@ frontend/.angular/
 
 # --- local artifact cache ---
 .cache/
+
+# Agents' local handover notes, kept on the machine only.
+/agents-knowledge/
