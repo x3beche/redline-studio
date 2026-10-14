@@ -628,7 +628,7 @@ async def run(gid: str, db=None) -> dict | None:
 
 
 async def _main(gid: str) -> int:
-    from . import access, actors, llm, main, scope
+    from . import access, actors, jina, llm, main, scope
 
     raw = main.db().raw
     gen = await raw[GENS].find_one({"_id": gid})
@@ -638,10 +638,14 @@ async def _main(gid: str) -> int:
     scope.WORKSPACE.set(gen.get("workspace") or scope.DEFAULT)
     actors.CURRENT.set(gen.get("actor"))
     access.ROLE.set(gen.get("role"))
-    try:
-        await llm.load(main.db())                                # the keys, and the summary model
-    except Exception as exc:                                     # noqa: BLE001 - .env keys still work
-        print(f"cc {gid}: settings not read: {exc}", file=sys.stderr)
+    # The keys, the summary model, and Jina's key for the web tools. One
+    # that cannot be read is not taken for the defaults: whatever asks for
+    # it later fails, saying so.
+    for what, read in (("LLM", llm.load), ("Jina", jina.load)):
+        try:
+            await read(main.db())
+        except Exception as exc:                                 # noqa: BLE001 - said when asked for
+            print(f"cc {gid}: {what} settings not read: {exc}", file=sys.stderr)
     print(f"cc {gid}: {gen['model']} (pid {os.getpid()})", flush=True)
     done = await run(gid, main.db())
     print(f"cc {gid}: {(done or {}).get('status')}", flush=True)

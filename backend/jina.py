@@ -65,12 +65,35 @@ _account: dict = {}                           # {"at": monotonic, "out": {...}}
 
 # ---------------------------------------------------------------- the key
 
+# Like the LLM settings (backend/llm.py): a process that never read the
+# key - or whose read failed - is told so when it asks, rather than taken
+# for one where no key is saved.
+_loaded = False
+_load_error: str | None = None
+
+
 async def load(db) -> dict:
-    global _conf
-    raw = db.raw if getattr(type(db), "SCOPED", False) else db
-    _conf = dict(await raw[COLL].find_one({"_id": DOC_ID}) or {})
+    global _conf, _loaded, _load_error
+    try:
+        raw = db.raw if getattr(type(db), "SCOPED", False) else db
+        doc = await raw[COLL].find_one({"_id": DOC_ID})
+    except Exception as exc:
+        if not _loaded:
+            _load_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+        raise
+    _conf = dict(doc or {})
     _conf.pop("_id", None)
+    _loaded, _load_error = True, None
     return _conf
+
+
+def _ready() -> None:
+    if _loaded:
+        return
+    from .llm import NotLoaded
+    why = f"reading it failed ({_load_error})" if _load_error else "it was never read in this process"
+    raise NotLoaded(f"Jina settings not loaded: whether a Jina API key is saved is not known because {why} - "
+                    "the process must await jina.load(db) first")
 
 
 def bind(db_getter) -> None:
@@ -80,6 +103,7 @@ def bind(db_getter) -> None:
 
 
 def key() -> str:
+    _ready()
     return (secretbox.reveal(_conf.get("key"), "the Jina API key") or "").strip()
 
 

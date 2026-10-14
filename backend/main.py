@@ -3062,6 +3062,17 @@ async def _start_sampler():
     """The machine, once a minute, for the Analytics room's energy figures."""
     import asyncio
     if MONGODB_URI:
+        # The keys and the model each job uses, and Jina's key: read before
+        # anything started here may ask (llm.route and jina.key refuse to answer until
+        # they are), a few times over if the database is slow to answer.
+        for mod in (llm, jina):
+            for attempt in range(5):
+                try:
+                    await mod.load(db())
+                    break
+                except Exception as exc:               # noqa: BLE001 - said, and tried again
+                    LOG.warning("%s settings not read (attempt %d): %s", mod.__name__, attempt + 1, exc)
+                    await asyncio.sleep(2)
         asyncio.create_task(insights.sampler(db))
         # Changes travelling to what uses them (backend/links.py).
         # Builds a reload did not stop are seen through (backend/buildjobs.py);
@@ -3119,13 +3130,11 @@ async def _start_sampler():
         except Exception as exc:                       # noqa: BLE001 - they still work, only slower
             LOG.warning("Direct message indexes not made: %s", exc)
         try:
-            await llm.load(db())                       # the keys and the model each job uses
             from . import netmeter
             netmeter.bind(db)                          # every proxied byte, counted on the wire
             await netmeter.start()
             await netproxy.load(db())                  # the EasyEDA proxy, if one is set
             netproxy.bind(db)                          # its log, for Settings > Proxy & Data
-            await jina.load(db())                      # Jina's key, if one is saved
             jina.bind(db)                              # its calls' log, for the same page
             asyncio.create_task(netproxy.health_loop())
             await fx.load(db())                        # the last exchange rates kept
@@ -3137,8 +3146,8 @@ async def _start_sampler():
             asyncio.create_task(llm.cc_loop(lambda: db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
-        except Exception as exc:                       # noqa: BLE001 - .env keys still work
-            LOG.warning("LLM / proxy settings not read: %s", exc)
+        except Exception as exc:                       # noqa: BLE001 - the rest of the server still starts
+            LOG.warning("proxy settings or the loops not started: %s", exc)
 
         async def _tidy_releases():
             try:

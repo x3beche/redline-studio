@@ -2108,9 +2108,10 @@ async def cmd_summaries(args):
 
     Hand-written summaries are left alone unless --force says otherwise.
     """
-    from backend import store, summarise
+    from backend import llm, store, summarise
 
     db = connect()
+    await llm.load(db)              # the summary job's model and key, as chosen in Settings
     query = {} if args.all else {"$or": [{"summary": None},
                                          {"summary": {"$exists": False}}]}
     rows = [d async for d in db.revisions.find(query)]

@@ -144,19 +144,51 @@ TIMEOUT = 60.0
 
 # The settings, read once from the database and kept here: the callers
 # (summarise, the tool pages) have no database of their own to hand.
+# A process that never read them - a job or script of its own that skipped
+# load(), or whose read failed - must not answer with the defaults: a Taste
+# extraction once ran on the cheap model instead of the one chosen because
+# its process never read the settings. So until a load() has worked, asking
+# for a job's model or a key raises NotLoaded; the defaults are only what
+# a load() that found nothing saved (a fresh install) answers.
 _conf: dict = {"keys": {}, "jobs": {}}
 _loaded = False
+_load_error: str | None = None
+
+
+class NotLoaded(RuntimeError):
+    """A setting was asked for in a process whose settings were never read."""
+
+
+def _ready(what: str) -> None:
+    """Raise NotLoaded, naming `what`, unless the settings have been read."""
+    if _loaded:
+        return
+    why = f"reading them failed ({_load_error})" if _load_error else "they were never read in this process"
+    raise NotLoaded(f"LLM settings not loaded: {what} is not known because {why} - "
+                    "the process must await llm.load(db) first; the default is not used in its place")
 
 
 async def load(db) -> dict:
     """Read the settings document into memory (the server does this at start
-    and after every change)."""
-    global _conf, _loaded
-    raw = db.raw if getattr(type(db), "SCOPED", False) else db
-    doc = await raw[COLL].find_one({"_id": DOC_ID}) or {}
+    and after every change; a job or script of its own process must too).
+    A failed read is kept and said by whatever asks next; settings read
+    before it stay as they were."""
+    global _conf, _loaded, _load_error
+    try:
+        raw = db.raw if getattr(type(db), "SCOPED", False) else db
+        doc = await raw[COLL].find_one({"_id": DOC_ID}) or {}
+    except Exception as exc:
+        if not _loaded:
+            _load_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+        raise
     _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {})}
-    _loaded = True
+    _loaded, _load_error = True, None
     return _conf
+
+
+def loaded() -> bool:
+    """Whether this process has read the settings."""
+    return _loaded
 
 
 def key(provider: str) -> str | None:
@@ -164,6 +196,7 @@ def key(provider: str) -> str | None:
     place a key comes from."""
     if provider not in PROVIDERS:
         return None
+    _ready(f"the {PROVIDERS[provider]['name']} API key")
     k = secretbox.reveal(_conf["keys"].get(provider), f"the {PROVIDERS[provider]['name']} API key")
     return (k or "").strip() or None
 
@@ -184,7 +217,9 @@ def no_key(provider: str, job: str | None = None) -> str:
 
 
 def route(job: str) -> tuple[str, str]:
-    """(provider, model) for a job: what was chosen, else its default."""
+    """(provider, model) for a job: what was chosen, else its default (only
+    when the settings were read and nothing is saved for it)."""
+    _ready(f"the model of the {JOBS[job]['label'] if job in JOBS else job!r} job ({job})")
     got = _conf["jobs"].get(job) or {}
     prov, model = JOBS[job]["default"]
     return got.get("provider") or prov, got.get("model") or model
@@ -192,6 +227,7 @@ def route(job: str) -> tuple[str, str]:
 
 def job_switch(job: str) -> dict:
     """A switched job's on/off and delay: what was saved, else off and its default delay."""
+    _ready(f"whether the {JOBS[job]['label'] if job in JOBS else job!r} job ({job}) is on")
     got = _conf["jobs"].get(job) or {}
     delay = got.get("delay")
     if not isinstance(delay, int) or not DELAY_MIN <= delay <= DELAY_MAX:
@@ -202,6 +238,7 @@ def job_switch(job: str) -> dict:
 def job_ideas(job: str) -> dict:
     """The example questions' settings: what was saved, each field checked,
     else its default."""
+    _ready(f"the settings of the {JOBS[job]['label'] if job in JOBS else job!r} job ({job})")
     got = _conf["jobs"].get(job) or {}
     out = dict(IDEAS_DEFAULT)
     if isinstance(got.get("on"), bool):

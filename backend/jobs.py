@@ -213,7 +213,7 @@ async def execute(db, job: dict, step) -> dict:
 
 
 async def _main(job_id: str) -> int:
-    from . import access, actors, lcsc, llm, main, netproxy, scope
+    from . import access, actors, jina, lcsc, llm, main, netproxy, scope
 
     raw = main.db().raw                 # the jobs are the machine's, not a workspace's
     job = await raw[JOBS].find_one({"_id": job_id})
@@ -226,14 +226,16 @@ async def _main(job_id: str) -> int:
     access.ROLE.set(job.get("role"))
     if job.get("who"):
         lcsc.WHO.set(job["who"])
-    # What the server reads at startup and the work leans on: the LLM keys,
-    # and the EasyEDA proxy a conversion's lookups go through.
-    try:
-        await llm.load(main.db())
-        await netproxy.load(main.db())
-        netproxy.bind(main.db)
-    except Exception as exc:                                     # noqa: BLE001
-        print(f"job {job_id}: settings not read: {exc}", file=sys.stderr)
+    # What the server reads at startup and the work leans on: the LLM keys
+    # and models, Jina's key, and the EasyEDA proxy a conversion's lookups
+    # go through. One that cannot be read is not taken for the defaults:
+    # whatever asks for it later fails, saying so, and the job with it.
+    for what, read in (("LLM", llm.load), ("Jina", jina.load), ("proxy", netproxy.load)):
+        try:
+            await read(main.db())
+        except Exception as exc:                                 # noqa: BLE001 - said when asked for
+            print(f"job {job_id}: {what} settings not read: {exc}", file=sys.stderr)
+    netproxy.bind(main.db)
     print(f"job {job_id}: {job['kind']} {job['board']} (pid {os.getpid()})", flush=True)
     done = await execute(raw, job, main.job_step)
     print(f"job {job_id}: {done['status']} in {done.get('seconds')} s", flush=True)

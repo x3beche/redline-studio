@@ -629,7 +629,8 @@ def block(doc: dict, limit: int = BLOCK_CHARS, product: str | None = None, note:
 CHECK = ("Before you finish: the Taste check. Render the result from the same views as the reference renders "
          "(`revisions.py taste-check <palette> <model>` takes them and puts each reference beside it), compare them "
          "item by item - the form language first - fix what does not match, and end your report with a section "
-         "\"Taste check\": every item that applies, pass or fail, and the before/after renders.")
+         "\"Taste check\": every item that applies, pass or fail, and the before/after renders. Marking the note "
+         "applied (`revisions.py done`) checks it again and is refused while an item fails.")
 
 
 def agent_text(palettes: list[dict], limit: int = BLOCK_CHARS * 3, product: str | None = None, note: str = "",
@@ -1626,13 +1627,25 @@ async def start_job(db, kind: str, ref: str, by: dict | None = None) -> tuple[di
         if d and d.get("status") in ACTIVE and (d.get("project") or {}).get("id") == ref \
                 and (d.get("project") or {}).get("kind") == kind:
             return d, False
-    prov, model = llm.route(JOB)
+    # A process that never read the LLM settings (a script of its own that
+    # skipped llm.load) does not run on the default model: the run is kept
+    # as failed, saying so, and nothing is asked.
+    try:
+        (prov, model), unread = llm.route(JOB), None
+    except llm.NotLoaded as exc:
+        (prov, model), unread = (None, None), str(exc)
     now = _now()
-    doc = {"_id": secrets.token_hex(6), "status": "queued", "project": {"kind": kind, "id": ref, "label": label},
-           "by": by or actors.current(), "started_at": now, "finished_at": None, "beat": now, "worker": WORKER,
-           "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov),
-           "steps": [], "totals": {}, "proposals": [], "error": None, "saved_to": None}
+    doc = {"_id": secrets.token_hex(6), "status": "failed" if unread else "queued",
+           "project": {"kind": kind, "id": ref, "label": label},
+           "by": by or actors.current(), "started_at": now, "finished_at": now if unread else None, "beat": now,
+           "worker": WORKER, "provider": prov, "model": model,
+           "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov) if prov else None,
+           "steps": [], "totals": {}, "proposals": [], "error": unread, "saved_to": None,
+           **({"seconds": 0} if unread else {})}
     await db[JOBS].insert_one(doc)
+    if unread:
+        log.error("taste extraction %s not started: %s", doc["_id"], unread)
+        return doc, True
     _TASKS[doc["_id"]] = asyncio.create_task(_work(db, doc["_id"], kind, ref))
     try:
         await _prune(db)
