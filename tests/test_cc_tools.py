@@ -23,7 +23,9 @@ def picked(text, *, convo=(), tools=None, **extra):
 
 
 def test_words_in_either_language_pick_their_packages():
-    assert picked("IRL540N datasheet RDS(on)?").groups == ["pcb"]
+    assert picked("IRL540N datasheet RDS(on)?").groups == ["pcb", "datasheets"]
+    assert picked("bu entegrenin maksimum akımı ne?").groups == ["pcb", "datasheets"]
+    assert picked("what is the absolute maximum rating of this?").groups == ["datasheets"]
     assert picked("notlarımı listele").groups == ["notes"]
     assert picked("Show my notes about the fan").groups == ["notes"]
     assert set(picked("Kaç tane M3 vida kaldı stokta?").groups) == {"parts", "stock"}
@@ -92,7 +94,7 @@ def test_the_model_takes_more_tools_mid_answer_and_the_answer_says_what_it_had(e
     assert "call tools_more" in r[0]["messages"][0]["content"]
     assert "notes_search" in {t["name"] for t in r[1]["tools"]}
     (last,) = answers(raw)
-    assert last["packages"] == ["pcb"] and last["packages_added"] == ["notes"]
+    assert last["packages"] == ["pcb", "datasheets"] and last["packages_added"] == ["notes"]
     assert last["steps"][0]["tool"] == "tools_more" and last["steps"][0]["status"] == "done"
     assert last["steps"][0]["vars"]["packages"] == "Notes"
     # the next line starts with what this one ended with

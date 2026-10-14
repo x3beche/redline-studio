@@ -17,11 +17,12 @@ import json
 
 import pytest
 
-from backend import cc_chat, cc_tools, ccgen, chat_tools, lcsc, llm
+from backend import cc_chat, cc_tools, ccgen, chat_tools, datasheets, lcsc, llm, scope
 from backend.chat_tools import Ctx, Result, Tool, ToolError
 from tests.test_cc_generation import answers, gen_doc, until
 from tests.test_cc_mentions_live_search import env, events, seed_chat  # noqa: F401 - env is a fixture
 from tests.test_pdftext import make_pdf
+from tests.test_telegram import Coll as LibColl, FakeDb
 
 
 def run(coro):
@@ -60,9 +61,16 @@ def tool_model(monkeypatch, state, rounds):
     monkeypatch.setattr(llm, "stream", stream)
 
 
+def library(raw):
+    """The datasheet library's collections in a fake database that has every call they make."""
+    raw.colls[datasheets.COLL] = LibColl()
+    raw.colls[datasheets.PAGES] = LibColl()
+
+
 def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     raw, state = env
     seed_chat(raw)
+    library(raw)
     keep_datasheet()
     tool_model(monkeypatch, state, [
         ("Let me check the datasheet.", [("datasheet_get", {"lcsc": "C29780637"})]),
@@ -74,8 +82,8 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     assert last["content"] == "Let me check the datasheet.\n\nRDS(on) is 0.044 Ω (datasheet p. 2)."
     steps = last["steps"]
     assert [s["tool"] for s in steps] == ["datasheet_get", "datasheet_read"]
-    assert all(s["status"] == "done" for s in steps)
-    assert steps[0]["say"] == "Datasheet: from the drawer · {pages} pages" and steps[0]["vars"]["pages"] == 3
+    assert all(s["status"] == "done" for s in steps), steps
+    assert steps[0]["say"] == "Datasheet of {part} added to the library · {pages} pages" and steps[0]["vars"]["pages"] == 3
     assert steps[1]["say"] == "Searched the datasheet for “{query}” · pages {pages}" and steps[1]["vars"]["pages"] == "2"
     # Where each step goes in the answer: after the first round's words.
     assert steps[0]["pos"] == steps[1]["pos"] == len("Let me check the datasheet.\n\n")
@@ -84,7 +92,7 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     # Of them, the packages the line points to (a part's values: PCB), the core ones and the way to more.
     assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items()
                                                   if t.default and (t.package == "pcb" or n in cc_tools.CORE)} | {"tools_more"}
-    assert "drawer_search" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
+    assert "drawer_search" in r[0]["messages"][0]["content"] and "cite the datasheet page" in r[0]["messages"][0]["content"]
     assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "datasheet_get"
     assert r[1]["messages"][-1]["role"] == "tool" and "3 pages" in r[1]["messages"][-1]["content"]
     assert "0.044" in r[2]["messages"][-1]["content"] and "page 2 of 3" in r[2]["messages"][-1]["content"]
@@ -102,7 +110,7 @@ def test_a_failing_tool_is_said_to_the_model_and_shown_as_an_error(env, monkeypa
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     (step,) = answers(raw)[-1]["steps"]
     assert step["status"] == "error" and "not an LCSC part number" in step["error"]
-    assert step["say"] == "Could not read the datasheet of {lcsc}"
+    assert step["say"] == "Could not read the datasheet"
     assert state["rounds"][1]["messages"][-1]["content"].startswith("Error:")
     assert state["rounds"][1]["messages"][-1]["is_error"] is True
 
@@ -163,7 +171,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert len(calcs) > 100 and not any(t["on"] for t in calcs)
     on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
-                  "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True, "drawing_layout": False,
+                  "datasheet_get": True, "datasheet_read": True, "datasheet_search": True, "board_read": True, "model_read": True, "drawing_layout": False,
                   "firmware_build": True, "file_read": False, "file_save_to_my_files": True, "taste_read": False, "manufacturer_search": True,
                   "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
                   "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
@@ -191,8 +199,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search", "drawer_add",
-                                                                "datasheet_get", "datasheet_read", "board_read", "model_read",
-                                                                "firmware_build", "manufacturer_search", "rename_chat",
+                                                                "datasheet_get", "datasheet_read", "datasheet_search",
+                                                                "board_read", "model_read", "firmware_build", "manufacturer_search", "rename_chat",
                                                                 "catalog_read_page", "catalog_add_product",
                                                                 "catalog_remove_product", "mcmaster_save", "grabcad_save",
                                                                 "product_find", "product_files_read", "product_file_attach",
@@ -349,33 +357,38 @@ def test_drawer_add_takes_the_pages_path_and_leaves_a_kept_part_alone(monkeypatc
     assert not calls and kept.say == "{lcsc} is already in the drawer"
 
 
-def test_datasheet_get_says_kept_or_fetched(monkeypatch):
+def test_datasheet_get_puts_it_in_the_library_once(monkeypatch):
     keep_datasheet()
     tool = chat_tools.tools()["datasheet_get"]
-    got = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637"}))
-    assert got.say == "Datasheet: from the drawer · {pages} pages" and got.vars["pages"] == 3
+    db = scope.ScopedDb(FakeDb(), "default")
+    got = run(tool.run(Ctx(db=db), {"lcsc": "C29780637"}))
+    assert got.say == "Datasheet of {part} added to the library · {pages} pages" and got.vars["pages"] == 3
+    again = run(tool.run(Ctx(db=db), {"lcsc": "C29780637"}))
+    assert again.say == "Datasheet of {part}: in the library · {pages} pages"
+    assert "Electrical Characteristics" in again.text                  # its headings, with their pages
 
     async def fetched(c, fresh=False):
         return {"pdf": DATASHEET, "url": "u", "mpn": "IRL540N", "cached": False}
     monkeypatch.setattr(lcsc, "datasheet", fetched)
-    got = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637"}))
-    assert got.say == "Fetched datasheet from LCSC · {size}" and got.vars["size"].endswith("KB")
+    got = run(tool.run(Ctx(db=scope.ScopedDb(FakeDb(), "default")), {"lcsc": "C29780637"}))
+    assert got.say == "Fetched the datasheet of {part} · {pages} pages · {size}" and got.vars["size"].endswith("KB")
 
 
 def test_datasheet_read_by_page_by_query_and_as_a_picture():
     keep_datasheet()
     tool = chat_tools.tools()["datasheet_read"]
-    got = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637"}))
+    db = scope.ScopedDb(FakeDb(), "default")
+    got = run(tool.run(Ctx(db=db), {"lcsc": "C29780637"}))
     assert got.vars["pages"] == "1–3" and got.say == "Read datasheet pages {pages}"
-    one = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637", "pages": "2"}))
+    one = run(tool.run(Ctx(db=db), {"lcsc": "C29780637", "pages": "2"}))
     assert one.say == "Read datasheet page {pages}" and "0.044" in one.text and "page 1 of" not in one.text
-    q = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637", "query": "RDS(on)"}))
+    q = run(tool.run(Ctx(db=db), {"lcsc": "C29780637", "query": "RDS(on)"}))
     assert q.vars["pages"] == "2"
-    miss = run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637", "query": "gate charge"}))
+    miss = run(tool.run(Ctx(db=db), {"lcsc": "C29780637", "query": "gate charge"}))
     assert "not found" in miss.say
     with pytest.raises(ToolError, match="does not read images"):
-        run(tool.run(Ctx(db=Db()), {"lcsc": "C29780637", "image_page": 1}))
-    pic = run(tool.run(Ctx(db=Db(), vision=True), {"lcsc": "C29780637", "image_page": 1}))
+        run(tool.run(Ctx(db=db), {"lcsc": "C29780637", "image_page": 1}))
+    pic = run(tool.run(Ctx(db=db, vision=True), {"lcsc": "C29780637", "image_page": 1}))
     assert pic.image[:4] == b"\x89PNG"
 
 

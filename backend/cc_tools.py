@@ -49,6 +49,7 @@ GROUP = {
     "inventory_search": "stock", "inventory_read": "stock", "inventory_add": "stock", "inventory_adjust": "stock",
     "inventory_edit": "stock", "inventory_remove": "stock", "build_count": "stock", "shopping_list": "stock",
     "stock_consume": "stock",
+    "datasheet_get": "datasheets", "datasheet_read": "datasheets", "datasheet_search": "datasheets",
     "stock_low": "stock", "dm_read": "dm", "dm_send": "dm", "settings_read": "settings",
 }
 # panel package -> package here
@@ -56,7 +57,7 @@ PANEL = {"mfr": "parts", "commandcode": "chats", "general": "queue"}
 
 # The packages, as the steps line and tools_more name them (English keys of i18n.ts).
 LABELS = {
-    "parts": "Parts", "stock": "Stock", "pcb": "PCB", "cad": "3D", "firmware": "Firmware", "notes": "Notes",
+    "parts": "Parts", "stock": "Stock", "pcb": "PCB", "datasheets": "Datasheets", "cad": "3D", "firmware": "Firmware", "notes": "Notes",
     "taste": "Taste", "files": "Files", "web": "Web", "chats": "Chats", "pdf": "PDF", "analytics": "Analytics",
     "queue": "Queues", "tools": "Calculators", "dm": "Messages", "settings": "Settings", "wiki": "Wiki",
 }
@@ -64,7 +65,8 @@ ABOUT = {
     "parts": "Parts products: makers' catalogs, product pages, McMaster/GrabCAD saves, a product's files "
              "(attach a STEP, PDF or picture to a product, its 3D model)",
     "stock": "what is on hand: stock lines, adding and using up, how many builds the stock makes, shopping lists",
-    "pcb": "boards, the LCSC parts drawer, LCSC search, datasheets",
+    "pcb": "boards, the LCSC parts drawer, LCSC search",
+    "datasheets": "the datasheet library: search datasheets by question with page numbers, read pages, fetch one",
     "cad": "3D models: reading, rendering, drawings",
     "firmware": "firmware builds, their errors and sizes",
     "notes": "the person's notes: search, read, write, to-dos",
@@ -98,6 +100,11 @@ WORDS: dict[str, tuple[str, ...]] = {
             "rp2040", "pinout", "rds", "volt", "current", "ohm", "ic$", "chip", "net$", "nets$", "kart",
             "devre", "şema", "çekmece", "direnç", "kondansatör", "kapasitör", "diyot", "transistör",
             "regülatör", "bacak", "voltaj", "gerilim", "akım", "entegre", "lehim", "veri sayfa"),
+    # A question a datasheet answers: its limits, pins, figures (the drawer's tools come with "pcb" words).
+    "datasheets": ("datasheet", "data sheet", "maximum", "max ", "minimum", "absolute", "rating", "pinout", "pin out",
+                   "pins", "electrical", "current", "volt", "power dissipation", "thermal", "junction", "rds",
+                   "leakage", "quiescent", "spec", "veri sayfa", "maksimum", "azami", "minimum", "akım", "gerilim",
+                   "voltaj", "bacak", "sınır", "dayan", "güç", "sıcaklı", "entegre", "teknik özellik"),
     "cad": ("3d", "cad", "model", "assembl", "drawing", "sketch", "extrud", "fillet", "chamfer", "enclosure",
             "case$", "lid", "bracket", "mount", "render", "stl", "mesh", "print", "çizim", "montaj", "kutu",
             "kapak", "muhafaza", "braket", "baskı", "yazıcı", "tasarım"),
@@ -128,7 +135,7 @@ WORDS: dict[str, tuple[str, ...]] = {
 # A mention's kind -> packages (cc_context.KINDS). An attached file can be a
 # product's new file: Parts too.
 MENTIONS = {"model": ("cad",), "board": ("pcb",), "file": ("files", "parts"), "note": ("notes",),
-            "revision": ("queue", "cad"), "part": ("pcb", "parts"), "taste": ("taste",),
+            "revision": ("queue", "cad"), "part": ("pcb", "parts", "datasheets"), "taste": ("taste",),
             "manufacturer": ("parts",)}
 LINK = re.compile(r"https?://|www\.", re.I)
 

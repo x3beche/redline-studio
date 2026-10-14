@@ -54,8 +54,20 @@ through the workspace, and the list of them when the name fits nothing).
 
 ## The tools
 
-- Parts: `drawer_search`, `drawer_list`, `lcsc_search`, `drawer_add`,
-  `datasheet_get`, `datasheet_read`.
+- Parts: `drawer_search`, `drawer_list`, `lcsc_search`, `drawer_add`.
+- Datasheets (panel package `pcb`, picked as the `datasheets` package of
+  backend/cc_tools.py; the library is backend/datasheets.py, the helper
+  `_datasheets.py`): `datasheet_search` (the passages of the datasheet
+  library that answer a question - part, page, section, snippet - across
+  the library or one part; a limits question ranks Absolute Maximum Ratings,
+  Recommended Operating Conditions and Electrical Characteristics first),
+  `datasheet_read` (pages, one section, the pages a query finds, or a page
+  as a picture; tables as rows) and `datasheet_get` (change, not undoable: a
+  part's datasheet put in the library - from LCSC, the product's attached
+  PDF or a link - with its headings). A part is an LCSC number, an MPN or a
+  Parts product. There is no answering tool: the model answers from the
+  passages and cites (datasheet p. N); the steps carry `ref0..ref5` page
+  links the Chat opens at that page.
 - Files on Parts products (package `mfr`; backend/product_files.py, the
   helper `_product.py`): `product_find` (a product of any source by words,
   with its `maker:product` ids), `product_files_read` (its files and what
