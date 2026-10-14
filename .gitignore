@@ -1,5 +1,6 @@
 # --- secrets ---
 .env
+.secrets/
 
 # --- generated data (start.sh makes it again) ---
 assets/

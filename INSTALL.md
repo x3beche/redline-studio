@@ -106,6 +106,31 @@ Workbench's own settings are all named `REDLINE_*`.
 | `REDLINE_WEB_HOST` | `127.0.0.1` | `0.0.0.0` opens the page (`./start.sh`) to the local network; the API stays on the machine |
 | `REDLINE_BOX_CPUS` / `REDLINE_BOX_MEMORY` / `REDLINE_BOX_PIDS` | half the cores / 40 % of RAM up to 12g / 4096 | how much of the machine one build container may take |
 | `REDLINE_DRAW_IMAGE` | `redline-draw` | the image technical drawings are made in |
+| `REDLINE_SECRET_KEY` | a key made once in `.secrets/secret.key` | encrypts the secrets typed in Settings, in the database; see below |
+| `REDLINE_SECRET_KEY_FILE` | `.secrets/secret.key` | where that key is kept when `REDLINE_SECRET_KEY` is unset |
+
+### The secret key
+
+The secrets typed in Settings - the LLM providers' API keys, Jina's key, the
+proxy's password, the McMaster-Carr password, certificate and certificate
+password, the Telegram bot's token and webhook secret - are kept in the
+database encrypted (Fernet, `backend/secretbox.py`). The key is never in the
+database: it is `REDLINE_SECRET_KEY` (a Fernet key, or any long passphrase),
+or, unset, the file `.secrets/secret.key` in the checkout, made with mode
+0600 the first time a secret is saved (the log says only that it was made).
+
+**Keep the key with your backups, apart from the database.** Lose it (or
+change it) and those secrets cannot be read: the log says so, the settings
+read as not set, and each one has to be typed in Settings again. Nothing else
+is lost. To move to an explicit key, set `REDLINE_SECRET_KEY` to the contents
+of `.secrets/secret.key`.
+
+Values saved before encryption came in are still read as they are. To
+encrypt them in place, once (running it again changes nothing):
+
+```bash
+.venv/bin/python -m backend.secretbox migrate     # prints counts only
+```
 
 ## The board room
 

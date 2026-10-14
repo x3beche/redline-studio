@@ -26,6 +26,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from .. import secretbox
+
 log = logging.getLogger("redline.telegram")
 
 # Machine-wide collections: the bot is the server's, people link across it.
@@ -146,13 +148,23 @@ async def ensure_indexes(db) -> None:
 
 # ---------------- the settings ----------------
 
+# Kept encrypted (backend/secretbox.py): sealed on the way in, opened on the
+# way out - one that will not decrypt reads as not set.
+SECRET_FIELDS = ("token", "secret")
+
+
 async def settings(db=None) -> dict:
     db = raw_of(db) if db is not None else raw()
-    return await db[SETTINGS].find_one({"_id": DOC_ID}) or {"_id": DOC_ID}
+    doc = await db[SETTINGS].find_one({"_id": DOC_ID}) or {"_id": DOC_ID}
+    for k in SECRET_FIELDS:
+        if doc.get(k):
+            doc[k] = secretbox.reveal(doc[k], f"the Telegram bot's {k}")
+    return doc
 
 
 async def patch_settings(db, fields: dict, unset: list[str] | None = None) -> None:
     db = raw_of(db)
+    fields = {k: secretbox.seal(v) if k in SECRET_FIELDS else v for k, v in (fields or {}).items()}
     upd: dict = {"$set": fields} if fields else {}
     if unset:
         upd["$unset"] = {k: "" for k in unset}

@@ -38,6 +38,8 @@ import re
 import time
 from typing import AsyncIterator
 
+from . import secretbox
+
 log = logging.getLogger("redline.llm")
 
 COLL = "llm_settings"          # machine-wide, like the keys: not per workspace
@@ -162,7 +164,8 @@ def key(provider: str) -> str | None:
     place a key comes from."""
     if provider not in PROVIDERS:
         return None
-    return (_conf["keys"].get(provider) or "").strip() or None
+    k = secretbox.reveal(_conf["keys"].get(provider), f"the {PROVIDERS[provider]['name']} API key")
+    return (k or "").strip() or None
 
 
 def key_source(provider: str) -> str | None:
@@ -174,6 +177,9 @@ def no_key(provider: str, job: str | None = None) -> str:
     """What a call without a key says: which key, and where to add it."""
     name = PROVIDERS[provider]["name"] if provider in PROVIDERS else provider
     what = f" for {JOBS[job]['label'].lower()}" if job in JOBS else ""
+    if secretbox.unreadable(_conf["keys"].get(provider)):
+        return (f"the saved {name} API key{what} does not decrypt with this server's secret key "
+                f"({secretbox.KEY_ENV}) - enter it again in Settings > LLM settings")
     return f"no {name} API key is saved{what} - add one in Settings > LLM settings"
 
 
@@ -270,7 +276,7 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
         if v:
             if len(v) > 400 or any(c.isspace() for c in v.strip()):
                 raise ValueError(f"{PROVIDERS[p]['name']}: that does not look like an API key")
-            sets[f"keys.{p}"] = v.strip()
+            sets[f"keys.{p}"] = secretbox.seal(v.strip())      # encrypted at rest (backend/secretbox.py)
         else:
             unsets[f"keys.{p}"] = ""
     if keys:

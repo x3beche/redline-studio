@@ -1,7 +1,7 @@
 """Which model does which job, the keys, and the Command Code room's history."""
 import pytest
 
-from backend import access, cc_chat, llm
+from backend import access, cc_chat, llm, secretbox
 
 
 @pytest.fixture(autouse=True)
@@ -120,7 +120,9 @@ def test_save_replace_and_remove_a_key_in_the_database(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-from-env-1234")
     db = FakeDb()
     shown = asyncio.run(llm.save(db, keys={"openrouter": "sk-or-saved-1111"}))
-    assert db[llm.COLL].doc["keys"] == {"openrouter": "sk-or-saved-1111"}
+    kept = db[llm.COLL].doc["keys"]                    # kept encrypted (backend/secretbox.py)
+    assert list(kept) == ["openrouter"] and "sk-or-saved-1111" not in kept["openrouter"]
+    assert secretbox.unseal(kept["openrouter"]) == "sk-or-saved-1111"
     assert shown["providers"]["openrouter"]["source"] == "settings"
     asyncio.run(llm.save(db, keys={"openrouter": "sk-or-new-5555"}))   # replace
     assert llm.key("openrouter") == "sk-or-new-5555"

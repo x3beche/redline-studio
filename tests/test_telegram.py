@@ -23,7 +23,7 @@ from datetime import timedelta
 import pytest
 from pymongo.errors import DuplicateKeyError
 
-from backend import actors, auth, scope
+from backend import actors, auth, scope, secretbox
 from backend.tgbot import api, core, fmt, inbound, links, notify, outbox
 
 TOKEN = "123456789:AAH" + "x" * 32
@@ -476,7 +476,8 @@ def kb(kw):
 def test_the_token_is_checked_kept_and_never_shown(env):
     got = run(api.put_token(api.TokenIn(token=TOKEN)))
     doc = env.db[core.SETTINGS].docs[core.DOC_ID]
-    assert doc["token"] == TOKEN                                # kept in the database, only there
+    assert secretbox.unseal(doc["token"]) == TOKEN              # kept in the database, only there,
+    assert TOKEN not in doc["token"]                            # and encrypted (backend/secretbox.py)
     assert got["bot"]["set"] and got["bot"]["hint"] == "…" + TOKEN[-4:]
     assert got["bot"]["username"] == "redline_test_bot"
     assert TOKEN not in json.dumps(got, default=str)            # the page never sees it
@@ -539,7 +540,8 @@ def test_a_webhook_needs_https_and_gets_a_fresh_secret(env):
     call = [kw for n, kw in env.bot.calls if n == "set_webhook"][-1]
     doc = env.db[core.SETTINGS].docs[core.DOC_ID]
     assert call["url"] == "https://redline.example.com/api/telegram/webhook"
-    assert call["secret_token"] == doc["secret"] and len(doc["secret"]) > 30
+    assert call["secret_token"] == secretbox.unseal(doc["secret"]) and len(call["secret_token"]) > 30
+    assert call["secret_token"] not in doc["secret"]
     assert doc["mode"] == "webhook"
 
 

@@ -17,6 +17,8 @@ pypdfium2==5.14.0
 # the Chat's PDFs (backend/pdfdoc.py): Markdown to HTML, raw HTML off (MIT); printed by headless
 # Chromium in the zenika/alpine-chrome image, started through the Docker socket - nothing to install here
 markdown-it-py==4.2.0
+# the secrets kept in the database, encrypted at rest (backend/secretbox.py): Fernet (Apache-2.0 / BSD)
+cryptography>=43
 # tests
 pytest>=8
 pytest-asyncio>=0.23

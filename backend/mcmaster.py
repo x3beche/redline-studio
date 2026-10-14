@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from . import actors, linked
+from . import actors, linked, secretbox
 
 MID = "mcmaster"
 SITE = "https://www.mcmaster.com"
@@ -302,8 +302,16 @@ class Api:
 
 
 async def conf(db) -> dict:
+    """The settings, the secrets decrypted (they are kept encrypted:
+    backend/secretbox.py; one that will not decrypt reads as not set)."""
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
-    return dict(await raw[SETTINGS].find_one({"_id": SETTINGS_ID}) or {})
+    c = dict(await raw[SETTINGS].find_one({"_id": SETTINGS_ID}) or {})
+    for k in ("password", "cert_password"):
+        if c.get(k):
+            c[k] = secretbox.reveal(c[k], f"the McMaster-Carr {k.replace('_', ' ')}")
+    if isinstance(c.get("cert"), dict) and c["cert"].get("data"):
+        c["cert"] = {**c["cert"], "data": secretbox.reveal(c["cert"]["data"], "the McMaster-Carr certificate")}
+    return c
 
 
 def filled(c: dict) -> bool:
@@ -415,7 +423,7 @@ async def put_settings(body: SettingsIn) -> dict:
             continue
         v = v.strip()
         if v:
-            sets[k] = v
+            sets[k] = v if k == "username" else secretbox.seal(v)
         else:
             unset.append(k)
         changed.append(f"{k} {'set' if v else 'cleared'}")
@@ -432,7 +440,7 @@ async def put_cert(upload: UploadFile = File(...)) -> dict:
     if not data or len(data) > 64 * 1024:
         raise HTTPException(400, "a client certificate file of at most 64 KB")
     name = re.sub(r"[^\w .()-]+", "_", upload.filename or "certificate")[:120]
-    cert = {"name": name, "bytes": len(data), "data": base64.b64encode(data).decode(), "at": _now()}
+    cert = {"name": name, "bytes": len(data), "data": secretbox.seal(base64.b64encode(data).decode()), "at": _now()}
     return await _set({"cert": cert}, [], ["certificate set"])
 
 

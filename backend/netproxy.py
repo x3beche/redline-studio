@@ -22,6 +22,8 @@ import urllib.parse
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from . import secretbox
+
 COLL = "server_settings"
 DOC_ID = "proxy"
 
@@ -70,7 +72,8 @@ def url(conf: dict | None = None, session: str | None = None) -> str | None:
         return None
     auth = ""
     if c.get("username"):
-        auth = urllib.parse.quote(username(c, session), safe="") + ":" + urllib.parse.quote(c.get("password") or "", safe="") + "@"
+        pw = secretbox.reveal(c.get("password"), "the proxy password") or ""
+        auth = urllib.parse.quote(username(c, session), safe="") + ":" + urllib.parse.quote(pw, safe="") + "@"
     return f"{c.get('scheme') or 'http'}://{auth}{c['host']}:{int(c['port'])}"
 
 
@@ -279,6 +282,8 @@ async def put_settings(body: ProxyIn) -> dict:
         if h and ("/" in h or " " in h or "@" in h):
             raise HTTPException(400, "the host is a name or an address only - no scheme, path or user")
         patch["host"] = h
+    if patch.get("password"):
+        patch["password"] = secretbox.seal(patch["password"])      # encrypted at rest (backend/secretbox.py)
     raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
     if patch:
         await raw[COLL].update_one({"_id": DOC_ID}, {"$set": patch}, upsert=True)

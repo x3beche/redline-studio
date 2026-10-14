@@ -40,6 +40,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from . import secretbox
+
 COLL = "server_settings"
 DOC_ID = "jina"
 LOG = "jina_log"
@@ -78,7 +80,7 @@ def bind(db_getter) -> None:
 
 
 def key() -> str:
-    return (_conf.get("key") or "").strip()
+    return (secretbox.reveal(_conf.get("key"), "the Jina API key") or "").strip()
 
 
 def configured() -> bool:
@@ -100,8 +102,8 @@ async def save_key(db, value: str | None) -> dict:
     if v:
         if len(v) > 400 or any(c.isspace() for c in v):
             raise ValueError("that does not look like a Jina API key")
-        await raw[COLL].update_one({"_id": DOC_ID}, {"$set": {"key": v, "set_at": _now()}, "$unset": {"check": ""}},
-                                   upsert=True)
+        await raw[COLL].update_one({"_id": DOC_ID}, {"$set": {"key": secretbox.seal(v), "set_at": _now()},
+                                                     "$unset": {"check": ""}}, upsert=True)
     else:
         await raw[COLL].update_one({"_id": DOC_ID}, {"$unset": {"key": "", "set_at": "", "check": ""}}, upsert=True)
     _account.clear()

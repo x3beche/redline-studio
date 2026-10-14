@@ -57,6 +57,12 @@ and findings that need shell access to the machine already.
 - **Server keys** (OpenRouter, Command Code, the proxy, MongoDB) live in
   `.env` or the database and never reach a browser: the page sees only
   whether a key is set and its last four characters.
+- **Secrets in the database** (the model providers' keys, Jina's key, the
+  proxy and McMaster-Carr passwords and certificate, the Telegram token)
+  are encrypted at rest with Fernet (`backend/secretbox.py`). The key lives
+  outside the database: `REDLINE_SECRET_KEY`, or `.secrets/secret.key`
+  (0600, git-ignored). Losing the key means typing those secrets in again;
+  a database copy without the key holds none of them.
 - **Untrusted code** (builds, tools, releases) runs in throwaway Docker
   containers with no network and a memory cap.
 
@@ -64,6 +70,8 @@ and findings that need shell access to the machine already.
 
 - Keep `.env` out of git (it is in `.gitignore`); `.env.example` holds
   placeholders only.
+- Back up `.secrets/secret.key` (or `REDLINE_SECRET_KEY`) apart from the
+  database dumps, and never next to them.
 - Set `REDLINE_REQUIRE_SIGNIN=true` on anything reachable from another machine, and serve
   it over HTTPS.
 - Do not expose MongoDB to the internet; bind it to the host or a private

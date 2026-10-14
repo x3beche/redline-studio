@@ -75,3 +75,16 @@ def _cc_answers_in_process(monkeypatch):
     cc_chat.HUB.live.clear()
     cc_chat.HUB.poked.clear()
 
+
+@pytest.fixture(autouse=True)
+def _secret_key_of_its_own(tmp_path, monkeypatch):
+    """The secrets saved by a test are sealed with a key of the test's own
+    (backend/secretbox.py) - never with the checkout's .secrets/secret.key,
+    and never by making one there."""
+    from backend import secretbox
+
+    monkeypatch.delenv(secretbox.KEY_ENV, raising=False)
+    monkeypatch.setenv(secretbox.KEY_FILE_ENV, str(tmp_path / "secret.key"))
+    secretbox.reset()
+    yield
+    secretbox.reset()
