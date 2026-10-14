@@ -1,0 +1,15 @@
+# The images built with the checkout as context (docker/kicad.Dockerfile,
+# docker/tracemaker.Dockerfile) copy at most a file or two from it: keep the
+# environments, caches and secrets out of what is sent to the builder.
+.git
+.env
+.secrets
+.venv
+.venv-ato
+venv
+.cache
+**/__pycache__
+.pytest_cache
+frontend/node_modules
+frontend/dist
+frontend/.angular

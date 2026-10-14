@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# API container entrypoint: install Python packages when requirements.txt
-# changed since the last start, then serve with live reload.
+# API container entrypoint: install Python packages when requirements.txt or
+# requirements-dev.txt changed since the last start, then serve with live
+# reload. The dev file brings the app's packages and the tests' (pytest).
 set -euo pipefail
 cd "$APP"
 
@@ -8,10 +9,10 @@ if [ ! -x /venv/bin/python ]; then
   python -m venv /venv
   /venv/bin/python -m pip install --quiet --upgrade pip
 fi
-want="$(sha256sum requirements.txt | cut -d' ' -f1)"
+want="$(cat requirements.txt requirements-dev.txt | sha256sum | cut -d' ' -f1)"
 if [ "$(cat /venv/.requirements 2>/dev/null)" != "$want" ]; then
   echo "> installing python packages (build123d included, the first time takes minutes)"
-  /venv/bin/python -m pip install --quiet -r requirements.txt
+  /venv/bin/python -m pip install --quiet -r requirements-dev.txt
   echo "$want" > /venv/.requirements
 fi
 

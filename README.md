@@ -110,7 +110,7 @@ An agent can write a part. What it needs around it to do a whole product is the 
 
 ## Running it
 
-Workbench is in private beta at [redline.medipol.dev](https://redline.medipol.dev). To run it yourself you need Python 3.10 or newer, Node 20.19 or newer, and a MongoDB connection (Atlas or a local server).
+Workbench is in private beta at [redline.medipol.dev](https://redline.medipol.dev). To run it yourself you need Python 3.12 or newer, Node 20.19 or newer, and a MongoDB connection (Atlas or a local server).
 
 ```bash
 git clone https://github.com/x3beche/redline-studio.git

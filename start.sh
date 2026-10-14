@@ -4,7 +4,9 @@
 #   ./start.sh          Angular + FastAPI, both with live reload
 #   ./start.sh --build  Compile the UI and serve it from a single port (8000)
 #
-# On first run it creates the Python virtual environment and installs npm deps.
+# On first run it creates the Python virtual environment and installs npm deps;
+# after a pull it installs again whatever requirements*.txt or
+# frontend/package-lock.json added.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE"
@@ -23,21 +25,39 @@ say() { printf '\033[1;36m> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 
 command -v node >/dev/null || die "node not found (>=20.19 required)"
-command -v python3 >/dev/null || die "python3 not found (>=3.10 required)"
+command -v python3 >/dev/null || die "python3 not found (>=3.12 required)"
+# Angular 20 wants Node ^20.19, ^22.12 or >=24 (frontend/package.json "engines").
+node -e 'const [a,b]=process.versions.node.split(".").map(Number);
+  process.exit(a>=24||(a===22&&b>=12)||(a===20&&b>=19)?0:1)' \
+  || die "node $(node -v) is too old (20.19+, 22.12+ or 24+ required)"
+[ -f .env ] || [ -n "${MONGODB_URI:-}" ] || die "no .env - cp .env.example .env and fill in MONGODB_URI"
 
 # --- Python environment ---
 if [ ! -x "$PY" ]; then
+  python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' \
+    || die "python3 is $(python3 -V 2>&1 | cut -d' ' -f2); 3.12 or newer is required"
   say "creating virtual environment"
-  python3 -m venv "$VENV"
+  python3 -m venv "$VENV" || die "python3 -m venv failed (on Debian/Ubuntu: apt install python3-venv)"
   "$PY" -m pip install --quiet --upgrade pip
 fi
-if ! "$PY" -c "import fastapi, motor, build123d" >/dev/null 2>&1; then
-  say "installing python dependencies (build123d included, may take minutes)"
-  "$PY" -m pip install --quiet -r requirements.txt
+# Installed again whenever a requirements file changed, so a pull that adds a
+# package does not end in an ImportError. The dev file includes requirements.txt.
+want="$(cat requirements.txt requirements-dev.txt | sha256sum | cut -d' ' -f1)"
+if [ "$(cat "$VENV/.requirements" 2>/dev/null)" != "$want" ]; then
+  say "installing python dependencies (build123d included, the first time takes minutes)"
+  "$PY" -m pip --version >/dev/null 2>&1 || "$PY" -m ensurepip --upgrade >/dev/null
+  "$PY" -m pip install --quiet -r requirements-dev.txt
+  echo "$want" > "$VENV/.requirements"
 fi
 
 # --- Node environment ---
-[ -d frontend/node_modules ] || { say "installing npm dependencies"; (cd frontend && npm install); }
+# npm ci installs exactly package-lock.json; again whenever it changes.
+want="$(sha256sum frontend/package-lock.json | cut -d' ' -f1)"
+if [ "$(cat frontend/node_modules/.lock-hash 2>/dev/null)" != "$want" ]; then
+  say "installing npm dependencies"
+  (cd frontend && npm ci --no-audit --no-fund --loglevel=error)
+  echo "$want" > frontend/node_modules/.lock-hash
+fi
 
 # Model data comes from the database; nothing is written to disk.
 

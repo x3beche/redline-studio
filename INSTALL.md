@@ -2,8 +2,18 @@
 
 [← back to the README](README.md) · [Usage](USAGE.md)
 
-Requirements: **Python ≥ 3.10**, **Node ≥ 20.19**, and a MongoDB connection —
-Atlas or a local server, either works.
+Requirements: **Python ≥ 3.12**, **Node 20.19+, 22.12+ or 24+** (what Angular 20
+accepts; `frontend/.nvmrc` says 22, the version the container uses), and a
+MongoDB connection — Atlas or a local server, either works. **Docker** is
+optional: the board, firmware, drawing and PDF work runs in images (below),
+and without it those parts say they cannot.
+
+On Linux, OpenCascade (build123d) needs a few GL and X libraries even with no
+display. On Debian / Ubuntu:
+
+```bash
+sudo apt install -y python3-venv libgl1 libglib2.0-0 libxrender1 libxext6 libsm6 libx11-6 libfontconfig1
+```
 
 ```bash
 git clone https://github.com/x3beche/redline-studio.git
@@ -12,8 +22,11 @@ cp .env.example .env          # fill in MONGODB_URI
 ./start.sh
 ```
 
-On first run `start.sh` creates the virtual environment, installs the npm
-dependencies and starts both servers with live reload:
+On first run `start.sh` creates the virtual environment, installs
+`requirements-dev.txt` (the app's packages from `requirements.txt` plus the
+tests') and the npm packages (`npm ci`, exactly as `package-lock.json` has
+them), and starts both servers with live reload. After a pull it installs
+again whatever a changed requirements file or lockfile brings:
 
 - UI <http://127.0.0.1:4200>
 - API <http://127.0.0.1:8000>
@@ -66,7 +79,7 @@ vmIdleTimeout=-1
 `compose.dev.yml` runs the same two servers as `start.sh`, with no Python or
 Node on the machine. The checkout is mounted, not copied: an edit reloads
 the API or the page at once, and packages are reinstalled only when
-`requirements.txt` or `package-lock.json` changes. `--build` is needed only
+`requirements.txt`, `requirements-dev.txt` or `package-lock.json` changes. `--build` is needed only
 when a file in `docker/dev/` does.
 
 ```bash
@@ -89,7 +102,9 @@ are kept in the database and typed in **Settings > LLM settings**, where each jo
 also picks its provider and model. Without a key there, the jobs that need it
 (card summaries, the English translation, tool pages, the Chat room)
 stop with a message that points there.
-Workbench's own settings are all named `REDLINE_*`.
+Workbench's own settings are all named `REDLINE_*`. The table has the ones
+you are likely to set; `.env.example` lists every variable the server reads,
+with its default.
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -208,11 +223,25 @@ docker build -t redline-draw -f docker/draw/Dockerfile docker/draw
 
 | image | size | what is in it |
 |---|---|---|
-| `redline-draw` | 1.3 GB | Python 3.12, build123d (hidden-line projection), fpdf2 |
+| `redline-draw` | 1.9 GB | Python 3.12, build123d (hidden-line projection), fpdf2, PyMuPDF (the preview), DejaVu fonts |
 
 Without it a release still goes out, and says the drawings could not be
 made. Release zips are kept in the database and, for speed, in
 `.cache/releases`.
+
+## The other images
+
+`zenika/alpine-chrome:with-puppeteer` (headless Chromium, for the Chat's
+PDFs and page renders; `REDLINE_CHROME_IMAGE` / `REDLINE_PDF_IMAGE`) is pulled
+by Docker the first time it is run. `node:20-alpine` runs the Tools tab's kit
+tools when `redline-tools` is not built, but only if it is already there
+(`REDLINE_KIT_IMAGE`). One more is built by hand, only to route boards with
+TraceMaker instead of Freerouting:
+
+```bash
+docker pull node:20-alpine
+docker build -f docker/tracemaker.Dockerfile -t redline-tracemaker .
+```
 
 ## Telegram
 
@@ -316,8 +345,12 @@ count as work — a draft is invisible to `GET /api/queue` on purpose.
 ## Tests
 
 ```bash
+.venv/bin/python -m pip install -r requirements-dev.txt    # start.sh already did
 .venv/bin/python -m pytest tests -q
 ```
+
+The tests that need an image (`redline-kicad`, `redline-draw`, Chromium) or
+the Docker socket are skipped when it is not there.
 
 No network is used: the OpenRouter calls and the transcript reads are both
 faked. They cover the token accounting, the machine accounting, the card

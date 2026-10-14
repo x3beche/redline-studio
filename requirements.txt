@@ -6,6 +6,12 @@ python-dotenv>=1.0
 ocp_vscode>=4.1
 httpx>=0.27
 pillow>=10
+# used directly, not only through build123d / fastapi: machine figures (backend/compute.py,
+# insights.py, sysinfo.py), mesh arrays (backend/objglb.py, board3d.py), the render tool's
+# DevTools socket (tools/render.py)
+psutil>=5.9
+numpy>=1.26
+websockets>=13
 # board import: Gerber/Excellon parsing (Apache-2.0)
 gerbonara>=1.6
 # Settings > Telegram: the Bot API client (LGPL-3.0), and the link's QR code (BSD)
@@ -19,6 +25,4 @@ pypdfium2==5.14.0
 markdown-it-py==4.2.0
 # the secrets kept in the database, encrypted at rest (backend/secretbox.py): Fernet (Apache-2.0 / BSD)
 cryptography>=43
-# tests
-pytest>=8
-pytest-asyncio>=0.23
+# the tests and pyflakes are in requirements-dev.txt
