@@ -145,4 +145,4 @@ TOOL = Tool(
         "wait": {"type": "boolean", "description": "Wait (up to 90 s) and report the products added (default true)"}},
         "required": ["urls"]},
     running="Reading the page into the catalog", failed="Could not read the page into the catalog",
-    run=run)
+    run=run, undo="a reading of a page runs on its own - remove its products on the Parts page")

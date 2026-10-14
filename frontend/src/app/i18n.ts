@@ -4031,6 +4031,22 @@ const TR: Record<string, string> = {
   'Toggle catalog': 'Kataloğu aç/kapat', 'Toggle revisions': 'Revizyonları aç/kapat',
   'fold the left column': 'sol sütunu katla', 'fold the right column': 'sağ sütunu katla',
   'Show or hide the catalog': 'Kataloğu göster ya da gizle', 'Show or hide the revisions column': 'Revizyon sütununu göster ya da gizle',
+  // What the Chat's tools changed, and undo (rooms/cc-changes.ts, backend/chat_undo.py)
+  'Undone': 'Geri alındı', 'Undone: {n} changes': 'Geri alındı: {n} değişiklik', 'Undone by': 'Geri alan:',
+  'Not yours to undo': 'Geri almak için yetkin yok', 'Undoing it needs the rights it needed': 'Geri almak, yapılırken gereken yetkiyi ister',
+  'Not undone': 'Geri alınmadı', 'Dismiss': 'Kapat', 'thing': 'şey', 'things': 'şey', 'undone': 'geri alındı',
+  'Undo all from this answer': 'Bu yanıttakilerin hepsini geri al', 'change': 'değişiklik',
+  'The tools have changed nothing in this conversation yet.': 'Araçlar bu sohbette henüz hiçbir şeyi değiştirmedi.',
+  'An answer no longer in the conversation': 'Artık sohbette olmayan bir yanıt', 'taken out': 'çıkarıldı',
+  'stock line': 'stok satırı', 'catalog': 'katalog', 'My Items product': 'Eşyalarım ürünü', 'product files': 'ürün dosyaları',
+  'saved part': 'kayıtlı parça', 'chat': 'sohbet', 'queued note': 'kuyruktaki not', 'drawer': 'çekmece',
+  'deleted since': 'sonradan silindi', 'made again since': 'sonradan yeniden yapıldı', 'undone already': 'zaten geri alındı',
+  'it changed more than can be kept': 'saklanabilecekten fazlasını değiştirdi', 'too big to keep for undo': 'geri almak için saklanamayacak kadar büyük',
+  'older than 30 days': '30 günden eski',
+  'a reading of a page runs on its own - remove its products on the Parts page': 'bir sayfanın okunması kendi başına çalışır - ürünlerini Parçalar sayfasında kaldırın',
+  'a maker\'s exploration runs on its own - remove the maker on the Parts page': 'bir üreticinin taranması kendi başına çalışır - üreticiyi Parçalar sayfasında kaldırın',
+  'a model put in a project is built - remove it in the 3D room': 'projeye konan model derlenir - 3D odasında kaldırın',
+  'a tool\'s own undo is not redone - ask the Chat again': 'aracın kendi geri alması yinelenmez - Sohbet\'e yeniden sorun',
 };
 
 export function t(text: string): string {

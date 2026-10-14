@@ -42,4 +42,4 @@ TOOL = Tool(
         "lcsc": {"type": "string", "description": "The LCSC part number, like C111607"}},
         "required": ["lcsc"]},
     running="Getting the datasheet of {lcsc}", failed="Could not get the datasheet of {lcsc}",
-    run=run)
+    run=run, undo=False)                         # a datasheet kept on disk: a cache, nothing to undo

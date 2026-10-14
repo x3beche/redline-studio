@@ -38,6 +38,21 @@ async def run(ctx: Ctx, args: dict) -> Result:
                   summary=f"{name} · {group} › {branch}" + (" · 3D" if has_3d else ""))
 
 
+async def undo(ctx: Ctx, change: dict, apply: bool) -> None:
+    """Undone: the part out of this space's drawer again, as the drawer's
+    own remove does (DELETE /api/parts/{lcsc}); the cache stays while
+    another space holds it."""
+    from .. import access
+    from ..chat_undo import Conflict
+    c = str((change.get("vars") or {}).get("lcsc") or "")
+    if not c or not await in_drawer(ctx.db, c):
+        raise Conflict(f"{c or 'the part'} is not in the drawer any more")
+    if not access.allowed(access.current(), access.action("DELETE", f"/api/parts/{c}")):
+        raise PermissionError(access.refusal(access.current() or "nobody", "delete"))
+    if apply:
+        await lcsc.let_go(ctx.db, c)
+
+
 TOOL = Tool(
     name="drawer_add", package="pcb", level="change", order=30,
     about="Adds an LCSC part to the drawer, footprint and 3D model included.",
@@ -49,4 +64,4 @@ TOOL = Tool(
         "lcsc": {"type": "string", "description": "The LCSC part number, like C111607"}},
         "required": ["lcsc"]},
     running="Adding {lcsc} to the drawer", failed="Could not add {lcsc} to the drawer",
-    run=run)
+    run=run, undo=undo)
