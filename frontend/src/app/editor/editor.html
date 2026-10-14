@@ -257,16 +257,9 @@
         <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-3">
           <ng-container *ngTemplateOutlet="revCard; context: { $implicit: live, docked: true, popup: true }" />
           @if (runningRevision()?.id === live.id && log().length) {
-            <div class="mt-2 rounded" style="border: 1px solid var(--line)">
-              <div class="px-2 py-1 text-[10px] uppercase tracking-wide" style="color: var(--ink-dim); border-bottom: 1px solid var(--line)">log</div>
-              <div class="mono max-h-56 overflow-y-auto px-2 py-1 text-[11px]">
-                @for (l of log().slice(-60); track l._id) {
-                  <div class="flex gap-2 leading-snug">
-                    <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-                    <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-                  </div>
-                }
-              </div>
+            <!-- The same log band as under the view, in the card's width. -->
+            <div class="tcv-log tcv-log-pop rounded">
+              <app-log-panel [lines]="log()" [open]="taskLogOpen()" (toggle)="taskLogOpen.set(!taskLogOpen())" />
             </div>
           }
         </div>

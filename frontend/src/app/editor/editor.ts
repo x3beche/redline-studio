@@ -567,13 +567,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** A run is live from the moment work starts until it reports finished. */
   runActive(): boolean { return this.run()?.status === 'running'; }
 
-  levelColor(l: LogLine['level']): string {
-    return l === 'error' ? 'var(--danger)'
-      : l === 'warn' ? 'var(--warn)'
-      : l === 'done' ? 'var(--ok)'
-      : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
-  }
-
   toggleSidebar() {
     startFold();
     this.collapsed.update(v => !v);
@@ -1769,6 +1762,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The card being worked on, opened large from under the tree. */
   taskPopup = signal<Revision | null>(null);
   openTask(r: Revision) { this.taskPopup.set(r); }
+  /** The popup's own log band folds apart from the one under the view. */
+  taskLogOpen = signal(true);
   closeTask() { this.taskPopup.set(null); }
 
   openShot(r: Revision, which: 'before' | 'after' = 'before') {

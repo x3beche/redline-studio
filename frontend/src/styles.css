@@ -3061,6 +3061,12 @@ a.tcv-ico { text-decoration: none; }
   .tcv-logp-seg button { height: 30px; }
 }
 .tcv-log-side:has(> .contents:empty) { display: none; }
+/* The same band in a note's popup (editor.html): inside the card, taller
+   than under the view, and its head kept to one row in the card's width -
+   the kinds keep their dots and counts, the filter box narrows. */
+.tcv-log.tcv-log-pop { margin: 8px 0 0; }
+.tcv-log.tcv-log-pop .tcv-log-body { height: 224px; }
+.tcv-log-pop .tcv-logp-search { flex-basis: 150px; min-width: 90px; }
 
 /* THE RULES FORM (rooms/rules-form.ts): a card per class, pair and pour,
    its fields two to a row with the label over the box. */
