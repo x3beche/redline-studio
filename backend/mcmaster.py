@@ -17,7 +17,8 @@ certificate McMaster issues, with its password) are kept in
 never sent back to a page, never in a log line or the audit trail - and
 `Api` is the adapter its calls will go through: the CAD download behind
 "Download STEP" (GET /api/mcmaster/parts/{part}/cad), and a saved part's
-STEP fetched by itself when `auto_step` is on. Nothing in it calls McMaster
+STEP fetched by itself when `auto_step` is on - measured as a dropped one is
+(backend/linked_measure.py). Nothing in it calls McMaster
 yet; each call says so (`NotWired`), and so does "Test connection".
 """
 
@@ -30,7 +31,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from . import actors, linked, secretbox
+from . import actors, linked, linked_measure, secretbox
 
 MID = "mcmaster"
 SITE = "https://www.mcmaster.com"
@@ -342,9 +343,13 @@ async def auto_step(db, doc: dict) -> None:
         return
     try:
         name, data = await Api(c).download_step(doc["key"])
-        await linked.put_files(db, KIND, doc["_id"], name, data, prefix=f"{MID}_")
+        got = await linked.put_files(db, KIND, doc["_id"], name, data, prefix=f"{MID}_")
     except (NotWired, ValueError) as exc:
         await db[linked.COLL].update_one({"_id": doc["_id"]}, {"$set": {"fetch": {"error": str(exc), "at": _now()}}})
+        return
+    # Measured as a dropped STEP is, without holding up the save's answer.
+    if got and linked_measure.stale(got):
+        linked_measure.start(db, got["_id"])
 
 
 def _now() -> str:

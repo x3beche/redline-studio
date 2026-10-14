@@ -3121,6 +3121,14 @@ async def _start_sampler():
         except Exception as exc:                       # noqa: BLE001 - the API still starts
             LOG.warning("Command Code answers not recovered: %s", exc)
         try:
+            # Saved parts' STEPs whose measuring a reload cut off, measured
+            # again one after another (backend/linked_measure.py).
+            from . import linked_measure
+            if n := await linked_measure.recover(db().raw):
+                LOG.warning("STEP measurements resumed: %s", n)
+        except Exception as exc:                       # noqa: BLE001 - the API still starts
+            LOG.warning("STEP measurements not resumed: %s", exc)
+        try:
             # The trash of the Command Code room empties itself after 30 days.
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace
         except Exception as exc:                       # noqa: BLE001 - the trash still works, only fuller

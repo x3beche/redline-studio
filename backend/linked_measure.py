@@ -16,8 +16,13 @@ The item's own specs stay as they were said. What is shown beside them
 figure the words give that the STEP does not bear out - a title's 30 mm
 against 25 mm under the head, an M3 against a 4 mm shank.
 
-The drop measures it after the answer has gone (linked.py api_files);
-items that had a STEP before this are measured by
+The drop measures it after the answer has gone (linked.py api_files), and
+so does a STEP the McMaster-Carr API fetched by itself (mcmaster.auto_step).
+A measurement the API's reload cut off is not left "measuring" for ever:
+the API measures every item still waiting at its start (`recover`), and an
+item read while it waits, with nothing measuring it here and its last start
+older than the time limit, is measured again (`resume`). Items that had a
+STEP before this are measured by
 
     .venv/bin/python tools/linked_measure.py [--apply] [--again]
 """
@@ -36,6 +41,9 @@ from pathlib import Path
 # Bumped when the measuring changes, so the backfill measures again.
 VERSION = 1
 TIMEOUT = float(os.getenv("REDLINE_STEP_MEASURE_TIMEOUT", "180"))
+# A start kept on the item (`measuring`) older than this, with nothing in this
+# process measuring it, was cut off: the item is measured again when read.
+STALE_AFTER = TIMEOUT + 60
 ROOT = Path(__file__).resolve().parent.parent
 
 # Whose shape is read as a screw's: its name says so. A standoff or a nut
@@ -86,36 +94,138 @@ async def measure(db, key: str) -> dict | None:
     cad = (have or {}).get("cad") or {}
     if cad.get("kind") != "step":
         return None
+    # Kept on the item while it is measured: a start a reload cut off is seen (cut_off).
+    await db[COLL].update_one({"_id": have["_id"]}, {"$set": {"measuring": {"file": cad["file"], "at": _now()}}})
     try:
         _, data = await files.get(db, cad["file"])
     except KeyError:
+        data = None
+    if data is None:
         got = {"error": "its STEP is no longer in Files"}
+    elif b"CARTESIAN_POINT" not in data:
+        got = {"error": "the STEP has no geometry in it"}
     else:
-        if b"CARTESIAN_POINT" not in data:
-            got = {"error": "the STEP has no geometry in it"}
-        else:
-            with tempfile.TemporaryDirectory(prefix="redline-measure-") as work:
-                src = Path(work) / "in.step"
-                await asyncio.to_thread(src.write_bytes, data)
-                got = await run(src)
+        with tempfile.TemporaryDirectory(prefix="redline-measure-") as work:
+            src = Path(work) / "in.step"
+            await asyncio.to_thread(src.write_bytes, data)
+            got = await run(src)
     m = {"v": VERSION, "file": cad["file"], "sha256": cad.get("sha256"), "at": _now()}
     if got.get("error"):
         m["error"] = str(got["error"])[:300]
     else:
         m.update({"size": got.get("size"), "axis": got.get("axis"), "screw": got.get("screw"),
                   "seconds": got.get("seconds")})
-    await db[COLL].update_one({"_id": have["_id"], "cad.file": cad["file"]}, {"$set": {"measured": m}})
+    await db[COLL].update_one({"_id": have["_id"], "cad.file": cad["file"]},
+                              {"$set": {"measured": m}, "$unset": {"measuring": ""}})
     return m
 
 
-async def measure_quietly(db, key: str) -> None:
+# The items this process is measuring now, (workspace, id), and the tasks it
+# started for them (held, so none is collected half-way).
+_running: set[tuple[str, str]] = set()
+_tasks: set[asyncio.Task] = set()
+
+
+def _id(db, key: str) -> tuple[str, str]:
+    return (getattr(db, "workspace", None) or "default", key)
+
+
+def running(db, key: str) -> bool:
+    return _id(db, key) in _running
+
+
+def hold(db, key: str) -> bool:
+    """Marked as measured here, before measure_quietly(held=True) runs: a read
+    meanwhile starts no second one. False when it is being measured already."""
+    if running(db, key):
+        return False
+    _running.add(_id(db, key))
+    return True
+
+
+async def measure_quietly(db, key: str, held: bool = False) -> None:
     """measure() after a drop's answer has gone: a failure is kept on the
-    item, never raised to anyone."""
+    item, never raised to anyone. Once at a time for an item; a STEP dropped
+    while the one before it was measured is measured next. `held`: the
+    caller marked it running already (`hold`)."""
+    import logging
+    from .linked import COLL
+    me = _id(db, key)
+    if me in _running and not held:
+        return
+    _running.add(me)
     try:
-        await measure(db, key)
+        for _ in range(3):
+            await measure(db, key)
+            if not stale(await db[COLL].find_one({"_id": key}) or {}):
+                break
     except Exception as exc:                            # noqa: BLE001 - the drop itself is done
-        import logging
         logging.getLogger(__name__).warning("measuring %s failed: %s", key, exc)
+    finally:
+        _running.discard(me)
+
+
+def start(db, key: str) -> bool:
+    """measure_quietly() in a task of its own; False when it is being measured here already."""
+    if not hold(db, key):
+        return False
+    t = asyncio.get_running_loop().create_task(measure_quietly(db, key, held=True))
+    _tasks.add(t)
+    t.add_done_callback(_tasks.discard)
+    return True
+
+
+def cut_off(item: dict, now: datetime | None = None) -> bool:
+    """A STEP waiting to be measured whose measuring was cut off (or never
+    started): no start kept on it, or one older than STALE_AFTER."""
+    if not stale(item):
+        return False
+    at = (item.get("measuring") or {}).get("at")
+    if not at:
+        return True
+    try:
+        began = datetime.fromisoformat(at)
+    except (TypeError, ValueError):
+        return True
+    return ((now or datetime.now(timezone.utc)) - began).total_seconds() > STALE_AFTER
+
+
+def resume(db, item: dict) -> bool:
+    """An item read while its STEP waits: measured again when nothing here
+    measures it and its last start was cut off. Whether it was started."""
+    if item.get("_id") and not running(db, item["_id"]) and cut_off(item):
+        return start(db, item["_id"])
+    return False
+
+
+async def recover(raw) -> int:
+    """At the API's start: every item, in every workspace, whose STEP is not
+    measured - a reload cut its measuring off, or it never began - is
+    measured, one after another in a task of its own. How many."""
+    from . import scope
+    from .linked import COLL
+    todo = []
+    async for d in raw[COLL].find({"cad.kind": "step"}, {"cad": 1, "measured": 1, "workspace_id": 1}):
+        if stale(d):
+            db = scope.ScopedDb(raw, d.get("workspace_id") or scope.DEFAULT)
+            key = scope.Ids(db.workspace).out(d["_id"])
+            if hold(db, key):
+                todo.append((db, key))
+    if not todo:
+        return 0
+
+    async def one_by_one():
+        for db, key in todo:
+            token = scope.WORKSPACE.set(db.workspace)
+            try:
+                await measure_quietly(db, key, held=True)
+            finally:
+                scope.WORKSPACE.reset(token)
+
+    t = asyncio.get_running_loop().create_task(one_by_one())
+    _tasks.add(t)
+    t.add_done_callback(_tasks.discard)
+    return len(todo)
 
 
 # ---------------------------------------------------------------- read beside the specs

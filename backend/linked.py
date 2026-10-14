@@ -22,9 +22,10 @@ other, a ZIP unpacked and only its STEP and mesh files kept. The first STEP
 (else the first mesh) is the item's `cad`: the Files tab draws its picture,
 and `revisions.py linked to-model <source>:<key> --folder F` makes it a
 model a CAD design imports (POST .../to-model, as Files' "Add to project").
-A STEP that becomes the `cad` is measured once the drop has been answered
-(backend/linked_measure.py): its box and, for a screw, its length under
-the head, shown beside the specs with a mismatch where the words differ.
+A STEP that becomes the `cad` - dropped, or fetched through the McMaster-Carr
+API - is measured once the drop has been answered (backend/linked_measure.py):
+its box and, for a screw, its length under the head, shown beside the specs
+with a mismatch where the words differ.
 """
 
 from __future__ import annotations
@@ -419,6 +420,7 @@ async def out(db, docs: list[dict]) -> list[dict]:
                         if files.solid_key(c.get("sha256") or "") in have else None}
         k = KINDS.get(d.get("source") or "")
         o["measured"] = linked_measure.view(d, k.specs_of if k else None)
+        linked_measure.resume(db, d)                 # one a reload cut off is measured again
         res.append(o)
     return res
 
@@ -578,8 +580,8 @@ async def api_files(src: str, key: str, background: BackgroundTasks, upload: Upl
     if not doc:
         _404(k, key)
     await actors.audit(_db(), "linked-files", f"{k.id}:{doc['key']}", {"files": [f["file"] for f in doc["files"][:5]]})
-    if linked_measure.stale(doc):
-        background.add_task(linked_measure.measure_quietly, _db(), doc["_id"])
+    if linked_measure.stale(doc) and linked_measure.hold(_db(), doc["_id"]):
+        background.add_task(linked_measure.measure_quietly, _db(), doc["_id"], held=True)
     return (await out(_db(), [doc]))[0]
 
 
