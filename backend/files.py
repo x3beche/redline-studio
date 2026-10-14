@@ -304,6 +304,20 @@ async def purge(db, fid: str) -> bool:
     return True
 
 
+async def trash_loop(raw, every: float = 3600.0) -> None:
+    """Every hour: every workspace's trash past its days, deleted for good
+    (also swept on a delete and when the trash is read)."""
+    import asyncio
+    while True:
+        try:
+            await sweep(raw)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:                          # noqa: BLE001 - tried again next hour
+            logging.getLogger(__name__).warning("sweeping Files' trash failed: %s", exc)
+        await asyncio.sleep(every)
+
+
 async def sweep(db) -> int:
     """The trash's files past their days, deleted for good."""
     now = datetime.now(timezone.utc).isoformat()

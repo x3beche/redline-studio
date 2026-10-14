@@ -260,6 +260,15 @@ async def chats(db, live: dict[str, dict]) -> tuple[list[dict], list[dict]]:
         dirs.append(_folder(here, title if n == 1 else f"{title} ({n})", CHAT, "chat", chat=c["_id"],
                             at=c.get("updated_at") or ""))
         links += [{"folder": here, "file": i} for i in ids]
+    # The Chat's own uploads no conversation holds now (attached and never
+    # sent, or sent in a room's agent thread): in a folder of their own.
+    tops = await folder_tops(db)
+    linked = {x["file"] for x in links}
+    rest = [fid for fid, d in live.items() if fid not in linked and chat_owned(d, tops)]
+    if rest:
+        here = vid("cc", "")
+        dirs.append(_folder(here, "Not in a conversation", CHAT, "chat", tr=True))
+        links += [{"folder": here, "file": i} for i in rest]
     return dirs, links
 
 
@@ -376,6 +385,57 @@ async def doc(db, v: str, data: bool = True) -> dict:
 # ---------------------------------------------------------------- the Parts page's own uploads
 
 PARTS_REFUSAL = "read-only: it belongs to the Parts page - change it on the Parts page (or through the Chat's product tools)"
+
+
+CHAT_REFUSAL = "read-only: it belongs to the Chat - it goes with its line or its conversation, deleted in the Chat"
+
+
+def chat_owned(doc: dict, tops: dict[str, str]) -> bool:
+    """An upload the Chat made or was given (a picture pasted in a line, a PDF
+    or a render its tools made, kept in the Chat folder): the Chat's, shown
+    under In the app > Chat, read-only in Files, and moved to Files' trash
+    when no conversation holds it any more (release_chat_files). A file of
+    one's own a conversation only mentions stays one's own."""
+    ctx = doc.get("context") or {}
+    return bool(ctx.get("chat")) or ctx.get("room") in ("chat", "commandcode") \
+        or tops.get(doc.get("folder") or "", "") in CHAT_FOLDERS
+
+
+def mentioned(msgs: list[dict]) -> set[str]:
+    """The Files ids a conversation's lines carry."""
+    return {x.get("id") for m in msgs or [] for x in m.get("mentions") or [] if x.get("kind") == "file" and x.get("id")}
+
+
+async def release_chat_files(db, ids: set[str], chats: list[str] = ()) -> list[str]:
+    """After lines or conversations were deleted (cc_chat.py): the Chat's own
+    uploads among `ids` - and those its tools made for `chats` - that no
+    conversation holds any more go to Files' trash, where they can still be
+    restored. The rights were the Chat's delete's own. Never raises: the
+    Chat's delete is done either way."""
+    try:
+        return await _release(db, set(ids), list(chats))
+    except Exception as exc:                          # noqa: BLE001 - logged, the delete stands
+        import logging
+        logging.getLogger(__name__).warning("releasing the Chat's files failed: %s", exc)
+        return []
+
+
+async def _release(db, ids: set[str], chats: list[str]) -> list[str]:
+    from . import files as f_
+    if chats:
+        ids |= {d["_id"] async for d in db[f_.COLL].find({"context.chat": {"$in": list(chats)}}, {"_id": 1})}
+    if not ids:
+        return []
+    held = await _chat_refs(db)
+    alive = {c["_id"] async for c in db["cc_chats"].find({}, {"_id": 1})}
+    tops = await folder_tops(db)
+    out = []
+    async for d in db[f_.COLL].find({"_id": {"$in": list(ids)}}, {"context": 1, "folder": 1}):
+        if d["_id"] in held or (d.get("context") or {}).get("chat") in alive or not chat_owned(d, tops):
+            continue
+        if await f_.remove(db, d["_id"]):
+            out.append(d["_id"])
+    return out
 
 
 def parts_owned(doc: dict, tops: dict[str, str]) -> bool:

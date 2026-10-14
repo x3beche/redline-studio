@@ -26,7 +26,9 @@ import { LinkedMeasured, kb, measuredBox, measuredRows, mismatchTip } from './li
  *    GrabCAD item keeps its own card (linked.ts); this is everyone else's. */
 
 export interface ProductFile { file: string; name: string; kind: string; role: 'model' | 'datasheet' | 'drawing' | 'image';
-  bytes: number; sha256?: string; by?: { id?: string; name?: string }; at?: string; has_thumb?: string | null }
+  bytes: number; sha256?: string; by?: { id?: string; name?: string }; at?: string; has_thumb?: string | null;
+  /** Deleted from Files since (backend/files_virtual.py mark_gone): who, and when - restored from Files' Deleted files. */
+  gone?: { by?: { name?: string }; at?: string } }
 export interface ProductFiles {
   maker: string; maker_name: string; product: string; name: string; files: ProductFile[]; cad: ProductFile | null;
   measured: (LinkedMeasured & { rows?: [string, string][]; kind?: string; unit?: string; solids?: number | null }) | null;
@@ -133,7 +135,8 @@ export class ProductFilesState {
         @for (f of x.files; track f.file) {
           <tr [attr.data-main]="f.file === x.cad?.file || f.file === x.picture?.file ? 1 : null">
             <td class="give"><a class="mf-link" [href]="'/api/files/' + f.file + '?inline=1'" target="_blank" rel="noopener"
-                                [title]="f.name + (f.by?.name ? ' · ' + f.by?.name : '') + (f.at ? ' · ' + when(f.at) : '')">{{ f.name }}</a></td>
+                                [title]="f.name + (f.by?.name ? ' · ' + f.by?.name : '') + (f.at ? ' · ' + when(f.at) : '')">{{ f.name }}</a>
+              @if (f.gone) { <span class="st-tag" data-tone="warn" [title]="(f.gone.by?.name ? f.gone.by?.name + ' · ' : '') + (f.gone.at ? when(f.gone.at) : '')">{{ 'file deleted · restore it from Files\\' Deleted files' | t }}</span> }</td>
             <td><span class="st-tag" [attr.data-tone]="f.file === x.cad?.file || f.file === x.picture?.file ? 'ok' : null">{{ role(f, x) | t }}</span></td>
             <td class="dim mono">{{ f.kind.toUpperCase() }}</td>
             <td class="r mono dim">{{ kb(f.bytes) }}</td>

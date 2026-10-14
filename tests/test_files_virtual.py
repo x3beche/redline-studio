@@ -66,12 +66,15 @@ def match(doc, q) -> bool:
                     return False
                 if op == "$in" and not any(g in a for g in got):
                     return False
-                if op == "$ne" and v in got:
+                if op == "$ne" and (a in got or (a is None and not got)):
                     return False
                 if op == "$lt" and not any(g is not None and g < a for g in got):
                     return False
                 if op == "$gte" and not any(g is not None and g >= a for g in got):
                     return False
+        elif v is None:
+            if got and None not in got:
+                return False
         elif v not in got:
             return False
     return True
@@ -100,6 +103,8 @@ class ArrColl(Coll):
             return Res(0)
         for k, v in (update.get("$set") or {}).items():
             put(row, k, v)
+        for k, cond in (update.get("$pull") or {}).items():
+            row[k] = [x for x in row.get(k) or [] if not (isinstance(x, dict) and match(x, cond))]
         for k in (update.get("$unset") or {}):
             *head, last = k.split(".")
             at = row
@@ -387,8 +392,8 @@ def test_usage_counts_every_file_once_per_area(env):
 
 def test_a_file_two_areas_use_is_counted_once_and_shown_shared(env):
     web, db = env["web"], env["db"]
-    chat = web.post("/api/files/folders", headers=H, json={"name": "Chat"}).json()
-    f = up(web, "UB0228.STEP", b"s" * 300, folder=chat["id"])
+    # sent in the Chat: the Chat's own upload (its composer keeps it in the Chat folder)
+    f = {"id": asyncio.run(files.put(env["sdb"], "UB0228.STEP", b"s" * 300, None, {"room": "chat"}, {"id": "u1"}))["_id"]}
     db["product_files"].rows.append({"_id": "p1", "mid": "m9", "pid": "77", "name": "Adapter",
                                      "files": [{"file": f["id"], "name": "UB0228.STEP"}]})
     ar = web.get("/api/files/usage").json()["areas"]
@@ -486,3 +491,78 @@ def test_files_writes_follow_the_role_and_a_page_session_only_looks(env, monkeyp
         assert (r.status_code == 200) == ok, (role, page, r.status_code, r.text)
     # reading is everyone's
     assert web.get("/api/files/virtual").status_code == 200 and web.get("/api/files/trash").status_code == 200
+
+
+# ---------------------------------------------------------------- the Chat's own uploads
+
+def chat_upload(env, name, data=b"png", **ctx):
+    return asyncio.run(files.put(env["sdb"], name, data, None, {"room": "chat", **ctx}, {"id": "u1", "name": "One"}))["_id"]
+
+
+def test_the_chats_uploads_are_the_chats_and_read_only_in_files(env):
+    web, db = env["web"], env["db"]
+    pic = chat_upload(env, "pasted.png")
+    mine = up(web, "bom.csv")["id"]                 # one's own, later mentioned in a chat
+    chat_with(db, mine, "bom.csv")
+    db["cc_chats"].rows[0]["messages"][0]["mentions"].append({"kind": "file", "id": pic, "label": "pasted.png"})
+    listed = {x["id"]: x for x in web.get("/api/files").json()}
+    assert listed[pic]["ro"] is True and listed[pic]["where"] == "chat" and "ro" not in listed[mine]
+    for r in (web.patch(f"/api/files/{pic}", headers=H, json={"name": "x.png"}), web.delete(f"/api/files/{pic}", headers=H),
+              web.post("/api/files/bulk-delete", headers=H, json={"files": [pic]})):
+        assert r.status_code == 403 and "Chat" in r.json()["detail"]
+    assert web.patch(f"/api/files/{mine}", headers=H, json={"note": "n"}).status_code == 200
+    t = web.get("/api/files/virtual").json()
+    conv = by_name(t["folders"], "BOM check")
+    assert {"folder": conv["id"], "file": pic} in t["links"] and {"folder": conv["id"], "file": mine} in t["links"]
+    # one no conversation holds is in a folder of its own
+    loose = chat_upload(env, "never-sent.png")
+    t = web.get("/api/files/virtual").json()
+    assert {"folder": by_name(t["folders"], "Not in a conversation")["id"], "file": loose} in t["links"]
+
+
+def test_a_chat_line_or_conversation_deleted_takes_its_own_uploads_to_the_trash(env):
+    web, db = env["web"], env["db"]
+    pic = chat_upload(env, "pasted.png")
+    pdf = chat_upload(env, "made.pdf", chat="c1")
+    mine = up(web, "bom.csv")["id"]
+    chat_with(db, mine, "bom.csv")
+    db["cc_chats"].rows[0]["messages"][0]["mentions"].append({"kind": "file", "id": pic, "label": "pasted.png"})
+    db["cc_chats"].rows.append({"_id": "c2", "title": "Other", "messages": [
+        {"id": "x1", "role": "user", "content": "again", "mentions": [{"kind": "file", "id": pic, "label": "pasted.png"}]}]})
+    # the line goes; the picture is still another conversation's, one's own file stays one's own
+    assert web.delete("/api/cc/chats/c1/messages/m1", headers=H).status_code == 200
+    assert web.get(f"/api/files/{pic}").status_code == 200 and web.get(f"/api/files/{mine}").status_code == 200
+    # the other conversation deleted for good: the picture goes to Files' trash; the PDF made for c1 too once c1 goes
+    assert web.delete("/api/cc/chats/c2?forever=1", headers=H).status_code == 200
+    assert web.get(f"/api/files/{pic}").status_code == 404
+    assert web.delete("/api/cc/chats/c1?forever=1", headers=H).status_code == 200
+    gone = {x["id"] for x in web.get("/api/files/trash").json()["files"]}
+    assert gone == {pic, pdf} and web.get(f"/api/files/{mine}").status_code == 200
+
+
+def test_the_chat_undo_putting_a_file_back_clears_its_deleted_mark(env):
+    from backend import chat_undo
+    web, db, sdb = env["web"], env["db"], env["sdb"]
+    f = up(web, "bom.csv")
+    chat_with(db, f["id"], "bom.csv")
+    doc = copy.deepcopy(next(r for r in db["files"].rows if r["_id"] == f["id"]))
+    asyncio.run(files.remove(sdb, f["id"], forever=True))
+    assert db["cc_chats"].rows[0]["messages"][0]["mentions"][1].get("gone")
+    db["files"].rows.append(doc)                      # what the undo's own inverse does (chat_undo._apply_doc)
+    asyncio.run(chat_undo.AFTER["files"](sdb, {"op": "delete", "coll": "files", "id": f["id"]}))
+    m = db["cc_chats"].rows[0]["messages"][0]
+    assert "gone" not in m["mentions"][1] and "was deleted" not in m["context"]
+
+
+def test_the_trash_is_swept_on_a_timer_too(env):
+    db = env["db"]
+    a = up(env["web"], "a.txt")
+    env["web"].delete(f"/api/files/{a['id']}", headers=H)
+    db["file_trash"].rows[0]["purge_at"] = "2000-01-01T00:00:00+00:00"
+
+    async def once():
+        task = asyncio.create_task(files.trash_loop(db, every=3600))
+        await asyncio.sleep(0.05)
+        task.cancel()
+    asyncio.run(once())
+    assert db["file_trash"].rows == []

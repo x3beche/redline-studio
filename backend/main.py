@@ -3171,6 +3171,8 @@ async def _start_sampler():
             asyncio.create_task(llm.cc_loop(lambda: db().raw))
             # The Chat's conversations at rest ten minutes, named again by all of them.
             asyncio.create_task(cc_chat.retitle_loop(db().raw))
+            # Files' trash: what is past its days, deleted for good, every hour (backend/files.py).
+            asyncio.create_task(files.trash_loop(db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
         except Exception as exc:                       # noqa: BLE001 - the rest of the server still starts

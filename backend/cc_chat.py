@@ -71,7 +71,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, cc_context, cc_memory, ccgen, llm, scope
+from . import access, actors, cc_context, cc_memory, ccgen, files_virtual, llm, scope
 
 router = APIRouter(prefix="/api/cc")
 # The workspace's pinned memory, read and edited from the Chat (/api/cc/memory).
@@ -784,7 +784,9 @@ async def bulk_delete(body: BulkIn) -> dict:
             refused.append(cid)
         else:
             if body.forever:
+                carried = files_virtual.mentioned((await db[COLL].find_one({"_id": cid}, {"messages.mentions": 1}) or {}).get("messages"))
                 await db[COLL].delete_one({"_id": cid})
+                await files_virtual.release_chat_files(db, carried, [cid])
             elif not await _trash(db, cid):
                 missing.append(cid)
                 continue
@@ -834,7 +836,10 @@ async def empty_trash() -> dict:
             kept += 1
     n = 0
     if mine:
+        carried = {i async for d in db[COLL].find({"_id": {"$in": mine}}, {"messages.mentions": 1})
+                   for i in files_virtual.mentioned(d.get("messages"))}
         res = await db[COLL].delete_many({"_id": {"$in": mine}, **TRASHED})
+        await files_virtual.release_chat_files(db, carried, mine)
         n = getattr(res, "deleted_count", len(mine))
         await actors.audit(db, "delete", "/api/cc/chats/empty-trash", {"how": "empty-trash", "count": n})
     return {"deleted": n, "kept": kept}
@@ -912,7 +917,9 @@ async def delete_chat(cid: str, forever: str = "0") -> dict:
     if not _mine(doc) and not _can_delete():
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
     if for_good:
+        carried = files_virtual.mentioned((await db[COLL].find_one({"_id": cid}, {"messages.mentions": 1}) or {}).get("messages"))
         await db[COLL].delete_one({"_id": cid})
+        await files_virtual.release_chat_files(db, carried, [cid])
         return {"deleted": cid, "forever": True}
     if not await _trash(db, cid):
         raise HTTPException(404, cid)
@@ -989,6 +996,7 @@ async def delete_message(cid: str, ref: str) -> dict:
         raise HTTPException(404, f"no line {ref!r} in this conversation")
     if not may_drop(msgs, [i], actors.current().get("id"), _can_delete()):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
+    carried = files_virtual.mentioned(msgs[i:i + 1])
     if msgs[i].get("id"):
         await db[COLL].update_one({"_id": cid}, {"$pull": {"messages": {"id": msgs[i]["id"]}}})
     else:
@@ -997,6 +1005,7 @@ async def delete_message(cid: str, ref: str) -> dict:
                                         {"$set": {"messages": rest}})
         if not getattr(res, "matched_count", 1):
             raise HTTPException(409, "the conversation changed meanwhile - try again")
+    await files_virtual.release_chat_files(db, carried)        # the Chat's own uploads no line holds: to Files' trash
     return await get_chat(cid)
 
 

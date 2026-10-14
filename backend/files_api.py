@@ -68,15 +68,30 @@ def _read_only(*ids: str) -> None:
 
 async def _not_parts(files_: list[str] = (), folders: list[str] = ()) -> None:
     """The Parts page's own uploads and folders are changed there (or by the
-    Chat's product tools, which check their own rights), never from Files: 403."""
+    Chat's product tools, which check their own rights), the Chat's own in the
+    Chat - never from Files: 403."""
     tops = await files_virtual.folder_tops(_db())
-    if any(tops.get(f, "") in files_virtual.PART_FOLDERS for f in folders if f):
-        raise HTTPException(403, files_virtual.PARTS_REFUSAL)
+    for f in folders:
+        if f and tops.get(f, "") in files_virtual.PART_FOLDERS:
+            raise HTTPException(403, files_virtual.PARTS_REFUSAL)
+        if f and tops.get(f, "") in files_virtual.CHAT_FOLDERS:
+            raise HTTPException(403, files_virtual.CHAT_REFUSAL)
     ids = [i for i in files_ if i and not files_virtual.is_virtual(i)]
     if ids:
         async for d in _db()[files.COLL].find({"_id": {"$in": ids}}, {"context": 1, "folder": 1}):
             if files_virtual.parts_owned(d, tops):
                 raise HTTPException(403, files_virtual.PARTS_REFUSAL)
+            if files_virtual.chat_owned(d, tops):
+                raise HTTPException(403, files_virtual.CHAT_REFUSAL)
+
+
+def _owner_of(d: dict, tops: dict) -> dict:
+    """Whose an upload is, for the page: the Parts page's, the Chat's, or one's own (nothing)."""
+    if files_virtual.parts_owned(d, tops):
+        return {"ro": True, "where": "parts"}
+    if files_virtual.chat_owned(d, tops):
+        return {"ro": True, "where": "chat"}
+    return {}
 
 
 def _disposition(how: str, name: str) -> str:
@@ -89,7 +104,8 @@ def _disposition(how: str, name: str) -> str:
 @router.get("/api/files/folders")
 async def folders_list():
     tops = await files_virtual.folder_tops(_db())
-    return [{**folder_out(f), **({"ro": True, "where": "parts"} if tops.get(f["_id"]) in files_virtual.PART_FOLDERS else {})}
+    area = {**{k: "parts" for k in files_virtual.PART_FOLDERS}, **{k: "chat" for k in files_virtual.CHAT_FOLDERS}}
+    return [{**folder_out(f), **({"ro": True, "where": area[tops[f["_id"]]]} if tops.get(f["_id"]) in area else {})}
             for f in await files.all_folders(_db())]
 
 
@@ -369,8 +385,7 @@ async def _virtual_entries(db, roots: list[str]) -> list[tuple[str, dict]]:
 @router.get("/api/files")
 async def files_list(q: str = "", kind: str = "", board: str = "", folder: str | None = None):
     tops = await files_virtual.folder_tops(_db())
-    out = [{**file_out(d), **({"ro": True, "where": "parts"} if files_virtual.parts_owned(d, tops) else {})}
-           for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
+    out = [{**file_out(d), **_owner_of(d, tops)} for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
     # Which 3D files have a picture already, so the grid asks only for those.
     want = {files.solid_key(f["sha256"]) for f in out if _solid(f) and f.get("sha256")}
     if want:
@@ -407,7 +422,9 @@ async def files_upload(upload: list[UploadFile] = File(...), context: str = Form
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
     _read_only(folder)
-    await _not_parts(folders=[folder])
+    # The Chat's composer puts what is sent in a line into the Chat folder: that stays open.
+    if (await files_virtual.folder_tops(_db())).get(folder, "") in files_virtual.PART_FOLDERS:
+        raise HTTPException(403, files_virtual.PARTS_REFUSAL)
     if folder and not await _db()[files.FOLDERS].find_one({"_id": folder}, {"_id": 1}):
         raise HTTPException(404, f"no folder {folder!r}")
     out = []

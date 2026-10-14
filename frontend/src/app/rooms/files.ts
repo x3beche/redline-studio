@@ -51,7 +51,7 @@ const ROOM_LABEL: Record<string, string> = { cad: '3D Drawing', pcb: 'PCB Design
 const WHERE_LABEL: Record<string, string> = {
   cad: 'Change it in the 3D Drawing room', pcb: 'Change it in the PCB Design room', firmware: 'Change it in the Firmware room',
   releases: 'Releases are made and deleted in the 3D Drawing room', projects: 'The project tree, as the 3D and PCB rooms keep it',
-  chat: 'Kept in My files; the conversation used it', parts: 'Change it on the Parts page',
+  chat: 'It goes with its line or conversation, deleted in the Chat', parts: 'Change it on the Parts page',
 };
 /** The areas, in the order the storage bar draws them; their colours are the charts' first four. */
 const AREAS: { id: Area; label: string; root: string }[] = [
@@ -120,7 +120,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                 (click)="toggleOpen(id); $event.stopPropagation()" [attr.aria-label]="(isOpen(id) ? 'Collapse' : 'Expand') | t">
           <i [fmIcon]="isOpen(id) ? 'down' : 'right'"></i></button>
         <i class="tcv-fm-tree-ico" [fmIcon]="'folder'"></i>
-        <span class="tcv-fm-tree-name">{{ f ? (f.root || f.build ? (f.name | t) : f.name) : ('My files' | t) }}</span>
+        <span class="tcv-fm-tree-name">{{ f ? (f.root || f.build || f.tr ? (f.name | t) : f.name) : ('My files' | t) }}</span>
         @if (!f) { <em class="tcv-fm-count">{{ mine().length }}</em> }
         @else if (f.root) {
           <em class="tcv-fm-count">{{ stats(f.id).files }}</em>
@@ -395,7 +395,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
              (keydown)="$event.stopPropagation()" (blur)="commitRename()" (click)="$event.stopPropagation()"
              (dblclick)="$event.stopPropagation()" [attr.aria-label]="'New name' | t">
     } @else {
-      <span class="tcv-fm-name" [title]="(it.file || it.folder).name">{{ it.folder?.root || it.folder?.build ? (it.folder.name | t) : (it.file || it.folder).name }}</span>
+      <span class="tcv-fm-name" [title]="(it.file || it.folder).name">{{ it.folder?.root || it.folder?.build || it.folder?.tr ? (it.folder.name | t) : (it.file || it.folder).name }}</span>
     }
   </ng-template>
 
@@ -760,8 +760,8 @@ export class RoomFiles implements OnDestroy {
 
   // ---- derived
   private byId = computed(() => new Map([...this.folders(), ...this.vfolders()].map(f => [f.id, f])));
-  /** One's own uploads: the Parts page's are under In the app > Parts, read-only (backend/files_virtual.py parts_owned). */
-  mine = computed(() => this.all().filter(f => f.where !== 'parts'));
+  /** One's own uploads: the Parts page's and the Chat's are under In the app, read-only (backend/files_virtual.py parts_owned, chat_owned). */
+  mine = computed(() => this.all().filter(f => f.where !== 'parts' && f.where !== 'chat'));
   private kids = computed(() => {
     const m = new Map<string, FileFolder[]>();
     for (const f of this.folders().filter(x => !x.ro)) {

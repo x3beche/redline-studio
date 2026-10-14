@@ -667,6 +667,9 @@ const TR: Record<string, string> = {
   'Build outputs are what the rooms\' builds keep for themselves - the 3D view\'s mesh, a board\'s layers':
     'Derleme çıktıları, odaların derlemelerinin kendileri için tuttuklarıdır - 3D görünümün ağı, bir kartın katmanları',
   'Build outputs': 'Derleme çıktıları',
+  'It goes with its line or conversation, deleted in the Chat': 'Satırıyla ya da sohbetiyle birlikte gider; Sohbet\'te silinir',
+  'Not in a conversation': 'Bir sohbette değil',
+  'file deleted · restore it from Files\' Deleted files': 'dosya silindi · Dosyalar\'daki Silinenler\'den geri yükleyin',
   'New folder': 'Yeni klasör',
   'New name': 'Yeni ad',
   'New uploads go with board': 'Yeni yüklemelerin bağlanacağı kart',

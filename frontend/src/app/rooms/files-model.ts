@@ -37,6 +37,8 @@ export interface FileFolder {
   /** A read-only folder (Projects, Chat, Parts and what is in them): `root`
    *  for those three, `where` the area that changes what it holds. */
   ro?: boolean; root?: boolean; where?: string; open?: VirtualOpen; chat?: string; build?: boolean;
+  /** Its name is the app's words, said in the page's language. */
+  tr?: boolean;
 }
 
 /** GET /api/files/virtual: the read-only folders, the Projects' own files,

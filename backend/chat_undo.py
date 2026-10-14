@@ -527,7 +527,15 @@ async def _after_measured(db, x: dict) -> None:
 
 
 # After an undo, per collection: what the page or a job must hear of it.
+async def _after_files(db, x: dict) -> None:
+    """A file a tool deleted, back: the Chat lines and products that said it was gone no longer do."""
+    from . import files, files_virtual
+    if x["op"] == "delete" and await db[files.COLL].find_one({"_id": x["id"]}, {"_id": 1}):
+        await files_virtual.mark_back(db, x["id"])
+
+
 AFTER: dict[str, Callable[[Any, dict], Awaitable[None]]] = {
+    "files": _after_files,
     "cc_chats": _after_cc_chats,
     "product_files": _after_measured,
     "linked_parts": _after_measured,
