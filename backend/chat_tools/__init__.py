@@ -78,6 +78,9 @@ class Tool:
     package: str = "other"           # its package (PACKAGES below): how the Tools panel and the model see it
     # A tool below "delete" that asks first for some inputs (memory_write's removals): given the input.
     asks: Callable[[dict], bool] | None = None
+    # What a tool that asks first would change, shown with Allow / Deny (wiki_write's diff): given the input.
+    # A ToolError here ends the step without asking.
+    preview: Callable[[Ctx, dict], Awaitable[str]] | None = None
     # How what it changed is undone (backend/chat_undo.py): None - the generic inverse of every write it made;
     # False - nothing kept (a cache); "words" - kept and shown, not undoable, the words say why; or its own
     # `async (ctx, change, apply: bool)`, which raises chat_undo.Conflict when it cannot.
@@ -132,6 +135,8 @@ PACKAGES = (
                             "and how many of each are on hand."),
     Package("commandcode", "Chat", "The Chat's conversations and what it can do on its own: the clock, the web, PDFs."),
     Package("files", "Files", "The Files room."),
+    Package("wiki", "Wiki", "Each project's wiki: what was decided and why, dimensions and limits, sourcing, "
+                            "open questions, production notes."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
 )
 PACKAGE = {p.name: p for p in PACKAGES}
@@ -260,7 +265,11 @@ SYSTEM_NOTE = (
     "limits it and what is short for a number of builds is build_count; shopping_list prices what is short (or a list "
     "given) across the sellers Parts knows, cheapest first per line; when the person says they built some, "
     "stock_consume takes their parts out of stock (it asks first). To show a 3D model or a board (\"show me the lid\"), "
-    "render it with model_render: the Chat shows the pictures under its step. You do not know today's "
+    "render it with model_render: the Chat shows the pictures under its step. A project's wiki - what was decided on it "
+    "and why, its dimensions and limits, sourcing, open questions, production notes - is found with wiki_search and read "
+    "with wiki_read: look there before answering what was decided on a project. Write to it with wiki_write when the "
+    "person asks (the person is always asked first and sees the change); the wiki is the project's facts, while "
+    "general design preferences are Taste. You do not know today's "
     "date or the time: when they matter - a date asked for, how long ago, a deadline, \"today\" - read them with "
     "clock first and never guess them."
 )

@@ -57,7 +57,7 @@ PANEL = {"mfr": "parts", "commandcode": "chats", "general": "queue"}
 LABELS = {
     "parts": "Parts", "stock": "Stock", "pcb": "PCB", "cad": "3D", "firmware": "Firmware", "notes": "Notes",
     "taste": "Taste", "files": "Files", "web": "Web", "chats": "Chats", "pdf": "PDF", "analytics": "Analytics",
-    "queue": "Queues", "tools": "Calculators",
+    "queue": "Queues", "tools": "Calculators", "wiki": "Wiki",
 }
 ABOUT = {
     "parts": "Parts products: makers' catalogs, product pages, McMaster/GrabCAD saves, a product's files "
@@ -75,6 +75,7 @@ ABOUT = {
     "analytics": "usage, costs and tokens from the Analytics room",
     "queue": "the rooms' agent queues and notes for them",
     "tools": "the Basic Tools calculators",
+    "wiki": "each project's wiki: decisions and why, dimensions and limits, sourcing, open questions",
 }
 
 # Words that point to a package: English and Turkish stems, matched at the
@@ -113,6 +114,9 @@ WORDS: dict[str, tuple[str, ...]] = {
                   "cache", "maliyet", "harca", "kullanım", "bütçe", "fatura", "analitik", "pahalı", "ne kadar tuttu"),
     "queue": ("queue", "agent", "task", "working on", "room note", "kuyruk", "ajan", "görev"),
     "tools": ("calculat", "compute", "formula", "convert", "hesap", "hesapla", "dönüştür", "formül"),
+    "wiki": ("wiki", "decision", "decided", "why did we", "why we", "open question", "limit", "dimension",
+             "tolerance", "sourcing", "production note", "karar", "neden böyle", "açık soru", "sınır", "ölçü",
+             "tolerans", "üretim not"),
 }
 # A mention's kind -> packages (cc_context.KINDS). An attached file can be a
 # product's new file: Parts too.

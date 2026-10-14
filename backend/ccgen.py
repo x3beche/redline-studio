@@ -401,6 +401,16 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
         end(status="error", error="step limit reached", say=tool.failed)
         return LIMIT_NOTE, True
     if tool.level == "delete" or (tool.asks and tool.asks(args)):
+        if tool.preview and ctx is not None:
+            # What it would change, beside Allow / Deny (wiki_write's diff); what cannot be done is not asked.
+            try:
+                step["preview"] = str(await asyncio.wait_for(tool.preview(ctx, args), TOOL_TIMEOUT))[:6000]
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:                             # noqa: BLE001 - the model is told, the page shows it
+                why = str(exc)[:400] or type(exc).__name__
+                end(status="error", error=why, say=tool.failed)
+                return f"Error: {why}", True
         end(status="ask")
         until = time.monotonic() + ASK_WAIT
         while (out.get("answers") or {}).get(step["id"]) is None:

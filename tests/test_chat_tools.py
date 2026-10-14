@@ -177,7 +177,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False, "pdf_make": True,
                   "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
-                  "clock": True, "memory_read": True, "memory_write": True}
+                  "clock": True, "memory_read": True, "memory_write": True,
+                  "wiki_search": True, "wiki_read": True, "wiki_write": True}
     assert [t["package"] for t in got["tools"]][:13] == ["general"] * 4 + ["cad"] * 3 + ["pcb"] * 6     # General, then the tabs
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
@@ -200,7 +201,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                                                                 "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",
                                                                 "chat_list", "chat_read", "pdf_make", "web_search",
                                                                 "web_read", "mcmaster_find", "grabcad_find", "clock",
-                                                                "memory_read", "memory_write"}
+                                                                "memory_read", "memory_write",
+                                                                "wiki_search", "wiki_read", "wiki_write"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
