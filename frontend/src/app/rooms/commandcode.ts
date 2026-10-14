@@ -2254,6 +2254,7 @@ export class RoomCommandCode implements OnDestroy {
     this.picked.set([]);
     this.closeMentions();
     this.setText('');
+    this.keepTyping();
     await this.run(c, (sig, on, beat) => this.api.say(c.id, { text, provider: this.provider(), model: this.model(), edit,
                                                                mentions, client: this.client }, sig, on, beat),
                    () => {
@@ -2353,7 +2354,23 @@ export class RoomCommandCode implements OnDestroy {
       // Not seen to the end here: the live stream picks it up where it is
       // (and does by itself when the conversation is opened again later).
       if ((started || stalled) && !finished && !left && here()) this.relisten(id);
+      if (here()) this.keepTyping();
     }
+  }
+
+  /** After a send, the cursor stays in the box - the next line is typed
+   *  without the mouse - unless the person has gone on to another field. A new
+   *  conversation draws a new box, so it is looked up once the page has settled. */
+  private keepTyping() {
+    setTimeout(() => {
+      const el = this.box()?.nativeElement;
+      const a = document.activeElement as HTMLElement | null;
+      if (!el || !el.offsetParent || a === el) return;
+      if (!a || a === document.body || a.closest('.tcv-cc-compbar') || a.classList.contains('tcv-cc-send')) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
   }
 
   /** This page's own answers being streamed: when each last heard anything, and how to give it up. */
