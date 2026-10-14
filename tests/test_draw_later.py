@@ -11,9 +11,11 @@ from backend import release
 
 def test_only_the_last_build_in_a_row_is_drawn(monkeypatch):
     drawn: list[str] = []
+    autos: list = []
 
-    async def fake(db, model_id, tag=""):
+    async def fake(db, model_id, tag="", **kw):
         drawn.append(model_id)
+        autos.append(kw.get("auto"))
         return b"%PDF"
 
     monkeypatch.setattr(release, "model_drawing", fake)
@@ -28,11 +30,12 @@ def test_only_the_last_build_in_a_row_is_drawn(monkeypatch):
 
     asyncio.run(run())
     assert sorted(drawn) == ["p/a", "p/b"]
+    assert autos == [True, True]                 # the background's: told only if it fails (notifications)
     assert release._DRAW_LATER == {}
 
 
 def test_a_failed_drawing_does_not_raise(monkeypatch, capsys):
-    async def broken(db, model_id, tag=""):
+    async def broken(db, model_id, tag="", **kw):
         raise RuntimeError("the drawing image is not built")
 
     monkeypatch.setattr(release, "model_drawing", broken)

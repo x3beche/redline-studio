@@ -33,6 +33,8 @@ PREFS = {
     "firmware": True,     # a firmware build finished, or failed
     "release": True,      # a release is ready to download, or failed
     "bodies": True,       # the PCB room asked the 3D room for a part's body, or one was bound
+    "drawing": True,      # a technical drawing someone asked for is made, or any drawing failed
+    "price": True,        # a Parts product's price read lower by 5% or more (backend/tgbot/notify.py prices)
     "library": False,     # a part came into the drawer from LCSC
     "budget": False,      # a budget crossed its warning or 100%
     "digest": False,      # once a day (or a week), what happened

@@ -65,6 +65,9 @@ def test_a_viewer_only_looks():
             # a shared link of what one may look at, and turning it off; the
             # routes keep both to people, and turning off to the maker (shares.py)
             ("POST", "/api/shares"), ("POST", "/api/shares/x/revoke"),
+            # one's own notifications: read, removed, and which kinds come (notifications.py)
+            ("POST", "/api/notifications/read"), ("POST", "/api/notifications/remove"),
+            ("PUT", "/api/notifications/settings"),
             ("POST", "/api/client-errors")}, (method, path)
 
 

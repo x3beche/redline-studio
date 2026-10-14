@@ -70,8 +70,12 @@ PREF_INFO = [
      "about": "flash and RAM used, or the first error"},
     {"id": "release", "group": "made", "label": "A release is ready",
      "about": "its size, what could not be made, a download link - or why it failed"},
+    {"id": "drawing", "group": "made", "label": "A technical drawing is made",
+     "about": "a drawing you asked for is ready, or any drawing failed - with why"},
     {"id": "bodies", "group": "made", "label": "Part bodies",
      "about": "the PCB room asks the 3D room for a part's body, and when one is bound"},
+    {"id": "price", "group": "made", "label": "A price drops",
+     "about": "a Parts product read 5% or more cheaper than its last price, same currency"},
     {"id": "library", "group": "made", "label": "A part joins the drawer",
      "about": "fetched from LCSC: footprint, symbol and 3D model"},
     {"id": "digest", "group": "digest", "label": "Digest",
@@ -265,7 +269,7 @@ async def put_token(body: TokenIn) -> dict:
     await core.patch_settings(raw, {
         "token": token, "bot": {k: me.get(k) for k in ("id", "username", "first_name", "can_join_groups")},
         "avatar": pic, "set_at": core.now(), "set_by": {"id": who.get("id"), "name": who.get("name")},
-        "online": {"ok": True, "at": core.now()}}, unset=["last_error", "watch", "profile_done"])
+        "online": {"ok": True, "at": core.now()}}, unset=["last_error", "profile_done"])
     try:
         await b.shutdown()
     except Exception:                                    # noqa: BLE001

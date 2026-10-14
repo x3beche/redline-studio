@@ -111,6 +111,9 @@ app.include_router(drawlayout.router)
 # Settings > Telegram: the bot, each person's own link, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
+# The notification centre: each person's events in the app, beside Telegram (backend/notifications.py).
+from . import notifications as notifications_api  # noqa: E402
+app.include_router(notifications_api.router)
 from . import profile as profile_api  # noqa: E402
 from . import client_errors  # noqa: E402
 app.include_router(client_errors.router)

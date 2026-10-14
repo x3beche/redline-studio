@@ -6,7 +6,8 @@ it goes, and the browser's Back works from it.
 
 The old form (/?ws=pcb&board=ctl, /?model=..&rev=..) still opens the same
 place; the page rewrites it. These return a path (and query) on the app's
-own origin; app_url() puts a base in front.
+own origin; app_url() puts a base in front. /notifications is the
+notification centre's page (backend/notifications.py).
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from urllib.parse import quote, urlencode
 ROOM_PATH = {
     "cad": "3d", "pcb": "pcb", "firmware": "firmware", "notes": "notes", "taste": "taste",
     "mfr": "parts", "commandcode": "chat", "files": "files", "tools": "basic-tools",
-    "settings": "settings", "analyze": "analytics",
+    "settings": "settings", "analyze": "analytics", "notifications": "notifications",
 }
 #: The names rooms had in old links (?ws=chat, ?ws=catalog).
 OLD_NAMES = {"chat": "commandcode", "catalog": "mfr", "supply": "mfr", "inventory": "mfr", "parts": "mfr",
@@ -86,6 +87,21 @@ def parts(maker: str | None = None, run: str | None = None) -> str:
 def share(token: str) -> str:
     """A shared link's own page (backend/shares.py): no room, no sign-in."""
     return f"/s/{seg(token)}"
+
+
+def product(maker: str, pid: str) -> str:
+    """One product of a maker's catalog (or a built-in source's: lcsc), open over Parts."""
+    return f"/parts/{seg(maker)}/{seg(pid)}"
+
+
+def settings(section: str | None = None) -> str:
+    """Settings, on one of its sections (costs, llm, telegram, notifications...)."""
+    return "/settings" + (f"/{seg(section)}" if section else "")
+
+
+def notifications() -> str:
+    """The notification centre's own page."""
+    return "/notifications"
 
 
 def analytics(range_: str | None = None, project: str | None = None) -> str:

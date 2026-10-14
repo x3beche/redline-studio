@@ -488,6 +488,48 @@ def library_event(link: dict | None, part: dict, base: str | None, pid: str | No
                                   _a(app_link(base, ws="pcb"), w(link, "open"))] if x)
 
 
+def drawing_event(link: dict | None, d: dict, base: str | None) -> str:
+    """A model's technical drawing made (one someone asked for), or failed,
+    with why (backend/release.py records it)."""
+    tr = ui_lang(link) == "tr"
+    ok = d.get("state") == "done"
+    if ok:
+        head = "📐 <b>Teknik çizim hazır</b>" if tr else "📐 <b>Drawing ready</b>"
+    else:
+        head = "⚠️ <b>Teknik çizim yapılamadı</b>" if tr else "⚠️ <b>Drawing failed</b>"
+    head += f" · {core.esc(d.get('title') or d.get('model') or '?')}"
+    why = f"<i>{core.esc(core.clip(d.get('error'), 300))}</i>" if not ok and d.get("error") else ""
+    took = core.esc(dur(d.get("secs"), tr)) if ok else ""
+    url = app_link(base, model=d.get("model"))
+    return "\n".join(x for x in [head, why or took, _a(url, w(link, "open"))] if x)
+
+
+def _money(v, cur: str | None) -> str:
+    return f"{v:,.2f}" + (f" {cur}" if cur else "")
+
+
+def price_event(link: dict | None, maker: dict, mid: str, drops: list, base: str | None) -> str:
+    """Parts products read cheaper (notify.price_drop): one, or several of
+    one maker's at once, the biggest drops first."""
+    tr = ui_lang(link) == "tr"
+    name = maker.get("name") or mid
+    if len(drops) == 1:
+        head = ("📉 <b>Fiyat düştü</b>" if tr else "📉 <b>Price dropped</b>") + f" · {core.esc(name)}"
+    else:
+        head = (f"📉 <b>{len(drops)} üründe fiyat düştü</b>" if tr else f"📉 <b>{len(drops)} prices dropped</b>") \
+            + f" · {core.esc(name)}"
+    rows = sorted(drops, key=lambda x: -x[1]["pct"])
+    lines = [head] + [f"{core.esc(core.clip(p.get('name') or p.get('id'), 80))}: "
+                      f"{core.esc(_money(d['was'], d['currency']))} → <b>{core.esc(_money(d['now'], d['currency']))}</b> "
+                      f"(−{d['pct']}%)" for p, d in rows[:8]]
+    if len(rows) > 8:
+        lines.append(f"+{len(rows) - 8}")
+    p0 = rows[0][0]
+    path = links_.product(mid, p0.get("id")) if len(drops) == 1 else links_.parts(mid)
+    lines.append(_a(links_.app_url(base, path), w(link, "open")))
+    return "\n".join(x for x in lines if x)
+
+
 def health_event(link: dict | None, what: str, d: dict, base: str | None) -> str:
     """The server's own trouble, for its owner and admins: `what` is disk,
     llm, pages or crash. `d` carries the figures, and what went wrong in

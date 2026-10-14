@@ -105,6 +105,9 @@ _RULES: list[tuple[str, str, str]] = [
     # one's own profile (backend/profile.py): anyone signed in, and only
     # themselves - the routes take no one else's id but a picture's
     ("*", "/api/me(/.*)?", "view"),
+    # one's own notifications and what comes in them (backend/notifications.py):
+    # anyone signed in, about themselves only; a page session only reads them
+    ("*", "/api/notifications(/.*)?", "view"),
     # the accounts (backend/admin.py): the owner and the admins; the routes
     # keep what only the owner may do (roles, deleting) to the owner
     ("*", "/api/admin(/.*)?", "users"),

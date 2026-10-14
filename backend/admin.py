@@ -341,6 +341,9 @@ async def delete_user(user_id: str, with_data: bool = False) -> dict:
     from .tgbot import core as tg
     await raw[tg.LINKS].delete_many({"_id": user_id})
     await raw[tg.CODES].delete_many({"user": user_id})
+    from . import notifications
+    await raw[notifications.COLL].delete_many({"user": user_id})
+    await raw[notifications.PREFS].delete_many({"_id": user_id})
     await raw[auth.USERS].delete_one({"_id": user_id})
     auth.forget_sessions()
     await _audit("user-delete", u["email"], {"id": user_id, "with_data": with_data, "removed": removed})

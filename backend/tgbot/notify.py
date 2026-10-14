@@ -1,4 +1,5 @@
-"""What happened, told to the people who asked to hear about it.
+"""What happened, told to the people who asked to hear about it - in the
+app's notification centre (backend/notifications.py), and on Telegram.
 
 The things worth a message are written by many hands - the API, the
 agents' command line (tools/revisions.py writes to the database
@@ -23,13 +24,22 @@ last looked, in
     parts            a part came into the drawer          -> "library"
     cc_usage_alerts  Command Code's weekly window at 90%  -> "ccusage"
                      or used up (owner and admins only)
+    drawing_events   a technical drawing someone asked    -> "drawing"
+                     for is made, or any drawing failed
+                     (backend/release.py records each)
+    manufacturers    a Parts product read 5% or more      -> "price"
+                     cheaper than its last reading
     the server       disk, a model provider failing, the  -> "health"
                      pages' errors, builds crashing (owner and admins only)
 
 Each event is announced once: its key goes into `telegram_events` (a
 unique _id) before anything is sent, so two processes, a reload, or the
-small overlap kept between looks never send it twice. The first look after
-a bot is set up starts from now - nothing from before is announced; nor is
+small overlap kept between looks never send it twice. An announced event
+becomes a row in the notification centre for each person of its space who
+wants that kind in the app (`notifications.deliver`, which never writes a
+person's row twice either), and a Telegram message for each linked chat
+that wants it. The watcher runs whether or not a bot is set up: without
+one, only the notification centre hears. The very first look starts from now - nothing from before is announced; nor is
 anything from before a kind of event was first watched (a new kind starts
 its clock at its first look, with no overlap). The server's health is told
 once per trouble per HEALTH_HOURS, and only when something new went wrong.
@@ -42,9 +52,11 @@ edited to show the answer, and its buttons go.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 from datetime import timedelta
 
+from .. import notifications as inapp
 from .. import questions, scope
 from . import core, fmt, languages, links, outbox
 
@@ -54,7 +66,8 @@ EVERY_S = 4
 OVERLAP = timedelta(seconds=90)
 DIGEST_HOUR_UTC = 6                 # 09:00 in Istanbul
 WATCHED = ("question", "applied", "failed", "rejected", "run", "budget", "build", "ccusage",
-           "reply", "ccreply", "route", "longbuild", "firmware", "release", "bodies", "library", "health")
+           "reply", "ccreply", "route", "longbuild", "firmware", "release", "bodies", "library", "health",
+           "drawing", "price")
 BUILD_KINDS = ["build", "layout", "convert", "run"]
 LONG_S = 60                         # a build this long is worth a "done"
 LONG_KINDS = ["build", "convert", "board"]   # a layout: from its board, with the routing
@@ -63,6 +76,10 @@ DISK_PCT, DISK_FREE_GB = 90, 5      # the disk is nearly full past either
 DISK_EVERY_S = 300                  # and is looked at this often
 LLM_FAILS, LLM_MINUTES = 3, 30      # a provider failing this often in this long
 PAGE_ERRORS, PAGE_MINUTES = 20, 15  # the pages' errors piling up
+PRICE_DROP = 0.05                   # a price read this much lower than the last one is news
+
+# Whether this look tells Telegram too: a bot is set up (tick sets it).
+TG: contextvars.ContextVar[bool] = contextvars.ContextVar("telegram_on", default=True)
 
 
 async def announce(db, key: str) -> bool:
@@ -126,7 +143,7 @@ async def translated(raw, ws: str, q: dict, lang: str | None) -> dict | None:
     return out
 
 
-async def send_question(raw, ws: str, q: dict) -> int:
+async def send_question(raw, ws: str, q: dict, key: str | None = None) -> int:
     """The question to everyone in its workspace who wants questions. Those
     who may answer get the options as buttons and "reply in your own
     words"; a viewer gets the card without them."""
@@ -135,7 +152,10 @@ async def send_question(raw, ws: str, q: dict) -> int:
         q = (await questions.with_rooms(scope.ScopedDb(raw, ws), [dict(q)]))[0]
     except Exception:                                   # noqa: BLE001 - the link goes to the 3D room's
         pass
+    await inapp.deliver(raw, ws, "question", key or f"q:{ws}:{q['_id']}", inapp.question(q))
     n = 0
+    if not TG.get():
+        return n
     for link, role in await links.recipients(raw, ws, "question"):
         shown = await translated(raw, ws, q, link.get("lang"))
         can = links.can(role, "draw")
@@ -154,6 +174,8 @@ async def sync_questions(raw) -> int:
     many cards were edited."""
     raw = core.raw_of(raw)
     groups: dict = {}
+    if not TG.get():
+        return 0
     async for m in raw[core.MSGS].find({"kind": {"$in": ["question", "prompt"]}, "state": "open"}):
         groups.setdefault((m.get("ws") or scope.DEFAULT, m["question"]), []).append(m)
     edited = 0
@@ -176,12 +198,15 @@ async def sync_questions(raw) -> int:
 
 # ---------------- notes, runs, budgets, builds ----------------
 
-async def note_out(raw, ws: str, rev: dict, ok: bool) -> int:
+async def note_out(raw, ws: str, rev: dict, ok: bool, key: str, rejected: bool = False) -> int:
     sdb = scope.ScopedDb(raw, ws)
     base = await _base(raw)
     title = await _title(sdb, rev.get("model"), rev.get("kind"))
+    await inapp.deliver(raw, ws, "note", key, inapp.note(rev, ok, title, rejected))
     which = "after" if ok and rev.get("image_after") else ("before" if rev.get("image") else None)
     n = 0
+    if not TG.get():
+        return n
     for link, _role in await links.recipients(raw, ws, "note"):
         await outbox.enqueue(raw, link["chat"], text=fmt.note_event(link, rev, ok, base, title),
                              kind="note-applied" if ok else "note-failed", user=link["_id"], ws=ws,
@@ -190,7 +215,13 @@ async def note_out(raw, ws: str, rev: dict, ok: bool) -> int:
     return n
 
 
-async def _each(raw, ws: str, pref: str, kind: str, make) -> int:
+async def _each(raw, ws: str, pref: str, kind: str, make, *, key: str, note: dict) -> int:
+    """An event to the space: its row in the notification centre for those
+    who want `pref` in the app, and `make(link, base)` to each linked chat
+    that wants it on Telegram."""
+    await inapp.deliver(raw, ws, pref, key, note)
+    if not TG.get():
+        return 0
     base = await _base(raw)
     n = 0
     for link, _role in await links.recipients(raw, ws, pref):
@@ -203,8 +234,8 @@ async def tick(raw=None, now=None) -> int:
     """One look. Returns how many events were announced."""
     raw = core.raw_of(raw) if raw is not None else core.raw()
     st = await core.settings(raw)
-    if not core.token_of(st):
-        return 0
+    # No bot: still a look - the notification centre hears of it all.
+    TG.set(bool(core.token_of(st)))
     t = now or core.now()
     wm = st.get("watch") or {}
     if not wm:
@@ -226,13 +257,13 @@ async def tick(raw=None, now=None) -> int:
     async for q in raw.questions.find({"status": "open", "at": {"$gt": core.iso(since("question"))}}):
         ws, qid = _ws(q), _id(q)
         if await announce(raw, f"q:{ws}:{qid}"):
-            await send_question(raw, ws, {**q, "_id": qid})
+            await send_question(raw, ws, {**q, "_id": qid}, key=f"q:{ws}:{qid}")
             n += 1
     # a note was applied
     async for r in raw.revisions.find({"status": "applied", "applied_at": {"$gt": core.iso(since("applied"))}}):
         ws, rid = _ws(r), _id(r)
         if await announce(raw, f"a:{ws}:{rid}"):
-            await note_out(raw, ws, {**r, "_id": rid}, ok=True)
+            await note_out(raw, ws, {**r, "_id": rid}, ok=True, key=f"a:{ws}:{rid}")
             n += 1
     # a note's run failed
     async for run in raw.runs.find({"status": "failed", "finished_at": {"$gt": core.iso(since("failed"))}}):
@@ -240,10 +271,11 @@ async def tick(raw=None, now=None) -> int:
         if not rid:
             continue
         ws = _ws(run)
-        if await announce(raw, f"f:{ws}:{rid}:{run.get('finished_at')}"):
+        key = f"f:{ws}:{rid}:{run.get('finished_at')}"
+        if await announce(raw, key):
             rev = await scope.ScopedDb(raw, ws).revisions.find_one({"_id": rid})
             if rev:
-                await note_out(raw, ws, rev, ok=False)
+                await note_out(raw, ws, rev, ok=False, key=key)
                 n += 1
     # a note was rejected (the status change is in the audit trail)
     async for a in raw.audit.find({"at": {"$gt": since("rejected")}, "action": "change",
@@ -254,14 +286,16 @@ async def tick(raw=None, now=None) -> int:
         if await announce(raw, f"f:{ws}:{rid}:rejected"):
             rev = await scope.ScopedDb(raw, ws).revisions.find_one({"_id": rid})
             if rev:
-                await note_out(raw, ws, rev, ok=False)
+                await note_out(raw, ws, rev, ok=False, key=f"f:{ws}:{rid}:rejected", rejected=True)
                 n += 1
     # a run started
     async for run in raw.runs.find({"status": "running", "started_at": {"$gt": core.iso(since("run"))}}):
         ws = _ws(run)
-        if await announce(raw, f"r:{ws}:{run.get('revision') or _id(run)}:{run.get('started_at')}"):
+        key = f"r:{ws}:{run.get('revision') or _id(run)}:{run.get('started_at')}"
+        if await announce(raw, key):
             n += 1
-            await _each(raw, ws, "run", "run-started", lambda link, base, run=run: fmt.run_event(link, run, base))
+            await _each(raw, ws, "run", "run-started", lambda link, base, run=run: fmt.run_event(link, run, base),
+                        key=key, note=inapp.run({**run, "model": _id(run, "model")}))
     # a budget crossed its line
     from .. import budgets
     async for al in raw[budgets.ALERTS].find({"at": {"$gt": since("budget")}}):
@@ -273,7 +307,8 @@ async def tick(raw=None, now=None) -> int:
                     f"for {al.get('month')}")
             n += 1
             await _each(raw, ws, "budget", "budget",
-                        lambda link, base, al=al, text=text: fmt.budget_event(link, al, text, base))
+                        lambda link, base, al=al, text=text: fmt.budget_event(link, al, text, base),
+                        key=f"b:{al['_id']}", note=inapp.budget(al, name))
     # a build failed
     from .. import compute
     async for j in raw[compute.JOBS].find({"at": {"$gt": core.iso(since("build"))}, "kind": {"$in": BUILD_KINDS},
@@ -281,7 +316,8 @@ async def tick(raw=None, now=None) -> int:
         ws = _ws(j)
         if await announce(raw, f"x:{j['_id']}"):
             n += 1
-            await _each(raw, ws, "build", "build-failed", lambda link, base, j=j: fmt.build_event(link, j, base))
+            await _each(raw, ws, "build", "build-failed", lambda link, base, j=j: fmt.build_event(link, j, base),
+                        key=f"x:{j['_id']}", note=inapp.build_failed(j))
 
     # Command Code's weekly window (backend/llm.py cc_check_alert): the
     # server's account, so its owner and admins, whichever space they are in
@@ -289,17 +325,21 @@ async def tick(raw=None, now=None) -> int:
     async for al in raw[llm.CC_ALERTS].find({"at": {"$gt": since("ccusage")}}):
         if await announce(raw, f"cc:{al['_id']}"):
             n += 1
+            await inapp.deliver(raw, scope.DEFAULT, "ccusage", f"cc:{al['_id']}", inapp.cc_usage(al))
             base = await _base(raw)
-            for link, _role in await links.server_recipients(raw, "ccusage"):
+            for link, _role in (await links.server_recipients(raw, "ccusage") if TG.get() else []):
                 await outbox.enqueue(raw, link["chat"], text=fmt.cc_usage_event(link, al, base),
                                      kind="cc-usage", user=link["_id"], ws=links.ws_of(link))
 
     n += await made(raw, t, since)
+    n += await drawings(raw, since)
+    n += await prices(raw, since)
     n += await health(raw, t, since)
 
     await core.patch_settings(raw, {"watch": {k: t for k in WATCHED}, "watch_from": first})
-    await sync_questions(raw)
-    await digests(raw, t)
+    if TG.get():
+        await sync_questions(raw)
+        await digests(raw, t)
     return n
 
 
@@ -322,7 +362,8 @@ async def made(raw, t, since) -> int:
         n += 1
         await _each(raw, ws, "reply", "agent-reply",
                     lambda link, base, room=room, last=rows[-1], more=len(rows) - 1:
-                    fmt.reply_event(link, room, last.get("text"), base, more=more))
+                    fmt.reply_event(link, room, last.get("text"), base, more=more),
+                    key=f"rp:{ws}:{_id(rows[-1])}", note=inapp.reply(room, rows[-1].get("text"), len(rows) - 1))
     # A Command Code answer ended: written, failed or cut off (stopped by
     # someone is not news to them).
     async for g in raw[ccgen.GENS].find({"status": {"$in": ["done", "failed", "interrupted"]},
@@ -338,11 +379,13 @@ async def made(raw, t, since) -> int:
         await _each(raw, ws, "reply", "cc-reply",
                     lambda link, base, g=g, conv=conv, error=error:
                     fmt.reply_event(link, "cc", g.get("text"), base, title=conv.get("title"),
-                                    chat=g.get("chat"), error=error or None))
+                                    chat=g.get("chat"), error=error or None),
+                    key=f"cr:{g['_id']}", note=inapp.cc_reply(g.get("chat"), conv.get("title"), g.get("text"), error or None))
     # A board laid out: routed (with its checks), or - unrouted - a long one done.
     async for b in raw[ato.BOARDS].find({"layout.at": {"$gt": core.iso(since("route"))}}):
         ws, bid = _ws(b), _id(b)
-        if not await announce(raw, f"rt:{ws}:{bid}:{(b.get('layout') or {}).get('at')}"):
+        key = f"rt:{ws}:{bid}:{(b.get('layout') or {}).get('at')}"
+        if not await announce(raw, key):
             continue
         title = b.get("title") or b.get("name")
         if b.get("route"):
@@ -350,7 +393,8 @@ async def made(raw, t, since) -> int:
             n += 1
             await _each(raw, ws, "route", "route",
                         lambda link, base, b=b, bid=bid, title=title, erc=erc:
-                        fmt.route_event(link, bid, title, b["route"], b.get("drc"), erc, base))
+                        fmt.route_event(link, bid, title, b["route"], b.get("drc"), erc, base),
+                        key=key, note=inapp.route(bid, title, b["route"]))
             continue
         job = await scope.ScopedDb(raw, ws)[compute.JOBS].find_one(
             {"kind": "layout", "model": bid, "rc": 0, "wall_s": {"$gte": LONG_S},
@@ -358,21 +402,24 @@ async def made(raw, t, since) -> int:
         if job:
             n += 1
             await _each(raw, ws, "longbuild", "long-build",
-                        lambda link, base, job=job, title=title: fmt.longbuild_event(link, job, base, title))
+                        lambda link, base, job=job, title=title: fmt.longbuild_event(link, job, base, title),
+                        key=key, note=inapp.long_build({**job, "model": bid}, title))
     # A build or convert that took long enough to walk away from is done.
     async for j in raw[compute.JOBS].find({"at": {"$gt": core.iso(since("longbuild"))}, "kind": {"$in": LONG_KINDS},
                                            "rc": 0, "wall_s": {"$gte": LONG_S}}):
         ws = _ws(j)
         if await announce(raw, f"lb:{j['_id']}"):
             n += 1
-            await _each(raw, ws, "longbuild", "long-build", lambda link, base, j=j: fmt.longbuild_event(link, j, base))
+            await _each(raw, ws, "longbuild", "long-build", lambda link, base, j=j: fmt.longbuild_event(link, j, base),
+                        key=f"lb:{j['_id']}", note=inapp.long_build(j))
     # A firmware build ended.
     async for j in raw[fwbuild.JOBS].find({"status": {"$in": ["done", "failed"]},
                                            "finished_at": {"$gt": since("firmware")}}):
         ws = j.get("workspace") or scope.DEFAULT
         if await announce(raw, f"fw:{j['_id']}"):
             n += 1
-            await _each(raw, ws, "firmware", "firmware", lambda link, base, j=j: fmt.firmware_event(link, j, base))
+            await _each(raw, ws, "firmware", "firmware", lambda link, base, j=j: fmt.firmware_event(link, j, base),
+                        key=f"fw:{j['_id']}", note=inapp.firmware(j))
     # A release is ready, or failed.
     async for rel in raw[release.COLL].find({"status": {"$in": ["ready", "failed"]},
                                              "done_at": {"$gt": core.iso(since("release"))}}):
@@ -380,7 +427,8 @@ async def made(raw, t, since) -> int:
         if await announce(raw, f"rl:{ws}:{rid}"):
             n += 1
             await _each(raw, ws, "release", f"release-{rel['status']}",
-                        lambda link, base, rel=rel, rid=rid: fmt.release_event(link, rel, base, rid))
+                        lambda link, base, rel=rel, rid=rid: fmt.release_event(link, rel, base, rid),
+                        key=f"rl:{ws}:{rid}", note=inapp.release_done(rel))
     # A part's drawn body: the PCB room asked the 3D room for one, or one was bound.
     async for a in raw.audit.find({"at": {"$gt": since("bodies")}, "action": {"$in": ["body-request", "body-bind"]}}):
         ws, d = _ws(a), a.get("detail") or {}
@@ -391,12 +439,15 @@ async def made(raw, t, since) -> int:
             await _each(raw, ws, "bodies", "body-asked",
                         lambda link, base, d=d: fmt.body_event(link, "asked", d.get("part") or "?", base,
                                                                name=d.get("name"), model=d.get("model"),
-                                                               board=d.get("board"), ref=d.get("ref")))
+                                                               board=d.get("board"), ref=d.get("ref")),
+                        key=f"bd:{a['_id']}", note=inapp.body("asked", d.get("part") or "?", d.get("name"),
+                                                             d.get("model"), d.get("board"), d.get("ref")))
         else:
             part = str(a.get("target") or "").removeprefix("part ")
             await _each(raw, ws, "bodies", "body-bound",
                         lambda link, base, d=d, part=part: fmt.body_event(link, "bound", part, base,
-                                                                          name=d.get("body"), model=d.get("model")))
+                                                                          name=d.get("body"), model=d.get("model")),
+                        key=f"bd:{a['_id']}", note=inapp.body("bound", part, d.get("body"), d.get("model")))
     # A part came into a drawer: each account hears about its own drawer
     # (backend/lcsc.py `hold`), not the parts another account fetched.
     s_lib = core.iso(since("library"))
@@ -406,10 +457,85 @@ async def made(raw, t, since) -> int:
         for ws in lcsc.spaces_of(p):
             if (held.get(ws) or p.get("at") or "") <= s_lib:
                 continue
-            if not await announce(raw, f"lib:{p['_id']}" + ("" if ws == scope.DEFAULT else f"@{ws}")):
+            key = f"lib:{p['_id']}" + ("" if ws == scope.DEFAULT else f"@{ws}")
+            if not await announce(raw, key):
                 continue
             n += 1
-            await _each(raw, ws, "library", "library", lambda link, base, p=p: fmt.library_event(link, p, base))
+            await _each(raw, ws, "library", "library", lambda link, base, p=p: fmt.library_event(link, p, base),
+                        key=key, note=inapp.library(p))
+    return n
+
+
+# ---------------- drawings and prices ----------------
+
+async def drawings(raw, since) -> int:
+    """A technical drawing finished or failed (backend/release.py keeps
+    each in `drawing_events`). Told: one someone asked for that is made,
+    and every one that failed - also the background's, made after a build
+    (draw_later): those that went well are not news, nobody waited."""
+    from .. import release
+    n = 0
+    async for d in raw[release.DRAWN].find({"at": {"$gt": since("drawing")}}):
+        if d.get("state") == "done" and d.get("auto"):
+            continue
+        key = f"dr:{d['_id']}"
+        if not await announce(raw, key):
+            continue
+        ws = _ws(d)
+        n += 1
+        await _each(raw, ws, "drawing", f"drawing-{d.get('state')}", lambda link, base, d=d: fmt.drawing_event(link, d, base),
+                    key=key, note=inapp.drawing(d))
+    return n
+
+
+def price_drop(p: dict) -> dict | None:
+    """Whether a Parts product's latest price reading is a drop worth
+    telling: its last two priced readings (manufacturers.py `history`, a
+    new row whenever the price changed) in the same currency and VAT, the
+    newer at least PRICE_DROP lower. Not when the price on it now was typed
+    or corrected by hand ("Wrong"), nor when the reading is doubted (a jump
+    of more than half, catalog_facts) - a misread is not a bargain.
+    Returns was, now, currency, pct and the reading's time."""
+    pr = p.get("price") or {}
+    if pr.get("manual") or pr.get("source") == "hand" or pr.get("doubt"):
+        return None
+    rows = [h for h in p.get("history") or [] if isinstance(h, dict) and isinstance(h.get("amount"), (int, float))]
+    if len(rows) < 2 or rows[-1] is not (p.get("history") or [None])[-1]:
+        return None                                     # the newest reading has no price
+    old, new = rows[-2], rows[-1]
+    if (old.get("currency") or "") != (new.get("currency") or "") or old.get("vat") != new.get("vat"):
+        return None
+    if not old["amount"] or old["amount"] <= 0 or new["amount"] > old["amount"] * (1 - PRICE_DROP):
+        return None
+    return {"was": old["amount"], "now": new["amount"], "currency": new.get("currency") or "",
+            "pct": round((1 - new["amount"] / old["amount"]) * 100), "at": str(new.get("at") or "")}
+
+
+async def prices(raw, since) -> int:
+    """Products read cheaper since the last look, in every space's Parts
+    (the makers' catalogs - their products keep their price readings): one
+    message per maker per look, however many of its products dropped (a
+    "Re-read all products" can lower dozens at once)."""
+    from .. import manufacturers
+    s = core.iso(since("price"))
+    n = 0
+    async for m in raw[manufacturers.COLL].find({"updated_at": {"$gt": s}},
+                                                {"name": 1, "workspace_id": 1, "products.id": 1, "products.name": 1,
+                                                 "products.price": 1, "products.history": 1}):
+        ws, mid = _ws(m), _id(m)
+        drops = []
+        for p in m.get("products") or []:
+            d = price_drop(p)
+            if d and d["at"] > s and await announce(raw, f"pd:{ws}:{mid}:{p.get('id')}:{d['at']}"):
+                drops.append((p, d))
+        if not drops:
+            continue
+        n += 1
+        drops.sort(key=lambda x: -x[1]["pct"])
+        await _each(raw, ws, "price", "price-drop",
+                    lambda link, base, m=m, mid=mid, drops=drops: fmt.price_event(link, m, mid, drops, base),
+                    key=f"pd:{ws}:{mid}:" + ",".join(f"{p.get('id')}@{d['at']}" for p, d in drops),
+                    note=inapp.price_drop(m, mid, drops))
     return n
 
 
@@ -425,6 +551,9 @@ def _bucket(t) -> int:
 async def _tell_admins(raw, key: str, what: str, d: dict) -> int:
     if not await announce(raw, key):
         return 0
+    await inapp.deliver(raw, scope.DEFAULT, "health", key, inapp.health(what, d))
+    if not TG.get():
+        return 1
     base = await _base(raw)
     for link, _role in await links.server_recipients(raw, "health"):
         await outbox.enqueue(raw, link["chat"], text=fmt.health_event(link, what, d, base), kind=f"health-{what}",

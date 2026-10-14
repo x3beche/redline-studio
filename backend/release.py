@@ -159,6 +159,30 @@ def _kept(meta: dict, suffix: str = ".pdf", layout: str = "") -> Path:
 # model, and only for the STEP it was about. In memory, like draw_later's
 # waits: a restart forgets it, and the files on disk still say what is made.
 _STATE: dict[str, dict] = {}
+# ... and, for the notification centre (backend/notifications.py, watched by
+# backend/tgbot/notify.py), each drawing finished or failed, kept a while in
+# the database: `_STATE` is gone after a restart, this is not. One row per
+# making: the model, its title, done or failed (and why), whether the
+# background made it (draw_later) or someone asked, how long it took.
+DRAWN = "drawing_events"
+DRAWN_DAYS = 14
+
+
+async def _drawn(db, model_id: str, title: str | None, ok: bool, *, error: str | None = None,
+                 auto: bool = False, secs: float | None = None) -> None:
+    """A drawing's outcome, for the watcher. Never raises: the drawing is
+    made whether or not anyone hears of it."""
+    try:
+        from . import scope
+        scoped = getattr(type(db), "SCOPED", False)
+        raw = db.raw if scoped else db
+        await raw[DRAWN].insert_one({
+            "workspace_id": db.workspace if scoped else scope.DEFAULT, "model": model_id,
+            "title": title, "state": "done" if ok else "failed", "error": (error or "")[:300] or None,
+            "auto": auto, "secs": round(secs, 1) if secs is not None else None,
+            "at": datetime.now(timezone.utc)})
+    except Exception as exc:                        # noqa: BLE001 - only the notification is lost
+        print(f"drawing {model_id}: not recorded ({exc})", flush=True)
 # When draw_later makes each model's drawing.
 _DUE: dict[str, str] = {}
 # One making of a kept drawing at a time: a click while the background
@@ -168,11 +192,13 @@ _MAKING: dict[str, asyncio.Lock] = {}
 _STARTED: set[asyncio.Task] = set()
 
 
-async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False) -> bytes:
+async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False, auto: bool = False) -> bytes:
     """A model's technical drawing on its own, for the 3D room: made once
     per STEP (kept by the STEP's fingerprint), with its PNG preview.
     `again` makes it anew even if it is kept. With the model's layout, if
-    it has one (backend/drawlayout.py) - kept apart by it."""
+    it has one (backend/drawlayout.py) - kept apart by it. `auto`: the
+    background makes it (draw_later), nobody waits for it. Each one made
+    or failed here is recorded (`_drawn`)."""
     asked = time.time()
     doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1, "drawing_layout": 1})
     if not doc:
@@ -208,11 +234,14 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
                     break
         except Exception as exc:                    # noqa: BLE001 - said on the tab, then raised
             why = str(exc) or type(exc).__name__
+        title = doc.get("title") or model_id.split("/")[-1]
         if why:
             _STATE[model_id] = {"sha": sha, "state": "failed", "error": why, "failed_at": _now()}
+            await _drawn(db, model_id, title, False, error=why, auto=auto, secs=time.time() - asked)
             raise RuntimeError(why)
         if _STATE.get(model_id) is live:
             _STATE.pop(model_id, None)
+        await _drawn(db, model_id, title, True, auto=auto, secs=time.time() - asked)
         return kept.read_bytes()
 
 
@@ -390,7 +419,7 @@ def draw_later(db, model_id: str) -> None:
             if model_id not in _STATE or _STATE[model_id].get("state") == "failed":
                 _STATE[model_id] = {"sha": None, "state": "queued"}
             async with _DRAW_ONE:
-                await model_drawing(db, model_id)
+                await model_drawing(db, model_id, auto=True)
         except asyncio.CancelledError:
             raise
         except Exception as exc:                    # noqa: BLE001 - a click makes it again

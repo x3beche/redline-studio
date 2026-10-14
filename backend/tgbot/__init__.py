@@ -11,6 +11,9 @@ from people's phones (Settings > Telegram).
 
 `start()` runs three loops beside the API: the send queue, the watcher, and
 - when updates come by long polling rather than the webhook - the poller.
+The watcher runs with no bot set up too: what it finds goes into the
+notification centre (backend/notifications.py) for everyone, and to
+Telegram only when there is a bot and a linked chat.
 """
 
 from __future__ import annotations
@@ -64,6 +67,11 @@ async def _boot() -> None:
         await core.ensure_indexes(core.raw())
     except Exception as exc:                              # noqa: BLE001 - it still works, only untidier
         log.warning("telegram indexes not made: %s", exc)
+    try:
+        from .. import notifications
+        await notifications.ensure_indexes(core.raw())
+    except Exception as exc:                              # noqa: BLE001 - it still works, only untidier
+        log.warning("notification indexes not made: %s", exc)
     asyncio.create_task(outbox.loop())
     asyncio.create_task(notify.loop())
     asyncio.create_task(poll_loop())
