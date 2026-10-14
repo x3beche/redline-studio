@@ -30,7 +30,7 @@ p.ln-caution { margin: 0; font-size: 12px; }
 .ln-specs { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 11.5px; color: var(--ink); }
 .ln-hit-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
 .ln-hit-foot .tcv-btn:last-child { margin-left: auto; }
-.ln-open, .ln-link a.tcv-btn { display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
+.ln-open { display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; }
 .ln-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); }
 
 /* the saved item in full */
@@ -44,15 +44,7 @@ p.ln-caution { margin: 0; font-size: 12px; }
 .ln-drop b { font-size: 13px; font-weight: 600; color: var(--ink); }
 .ln-drop:hover, .ln-drop[data-on] { border-color: var(--accent); background: var(--hover); }
 .ln-drop[data-busy] { opacity: .7; pointer-events: none; }
-.ln-files tr[data-main] td:first-child a { font-weight: 600; }
-.ln-agent { margin: 0; font-size: 11.5px; line-height: 1.4; }
-.ln-agent code { font-size: 11px; color: var(--ink); }
-.ln-title { width: 100%; font-size: 18px; line-height: 1.3; resize: none; box-sizing: border-box; }
-.ln-card .mf-dseller .st-more { margin: 0; }
 .ln-hit-how { margin-top: auto; padding-top: 2px; }
-.ln-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.ln-link .ln-hint { white-space: normal; }
-.ln-apinote { flex-basis: 100%; font-size: 11.5px; }
 .ln-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .ln-fields label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ln-fields .ln-wide { grid-column: span 3; }
@@ -104,3 +96,14 @@ p.ln-caution { margin: 0; font-size: 12px; }
 .ln-meas tr[data-bad] td { color: var(--warn); }
 .ln-meas .st-tag, .ln-table .st-tag[data-tone="warn"] { margin-left: 6px; }
 .ln-box { white-space: nowrap; }
+
+/* the item in full (LinkedCard), in the Parts product's box (manufacturers.css .mf-pd): the way to its STEP under
+   its specs, what the person wrote of it under its stock */
+.ln-how2 { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
+.ln-card .ln-caution { margin: 0; }
+.ln-notes .ln-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+.ln-body { grid-template-columns: minmax(300px, 1fr) minmax(0, 1fr); }
+.ln-one { grid-template-columns: minmax(0, 1fr); }
+.ln-notes { flex: 1 1 auto; min-height: 150px; }
+.ln-notebox { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+.ln-notebox textarea { flex: 1 1 auto; width: 100%; min-height: 72px; box-sizing: border-box; padding: 6px 8px; font: inherit; font-size: 12.5px; line-height: 1.5; resize: none; }

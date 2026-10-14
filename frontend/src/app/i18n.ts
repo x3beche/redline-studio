@@ -3978,6 +3978,7 @@ const TR: Record<string, string> = {
   'Detach it: the file stays in Files': 'Çıkar: dosya Dosyalar\'da kalır',
   'Its 3D model': '3B modeli',
   'Its picture': 'Resmi',
+  'Its search result gave no specs.': 'Arama sonucunda özellik yoktu.',
   'Drawing': 'Çizim',
   'Picture': 'Resim',
   '(no unit in the file: taken as mm)': '(dosyada birim yok: mm kabul edildi)',

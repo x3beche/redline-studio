@@ -1,4 +1,4 @@
-import { Component, Injectable, computed, inject, input, signal } from '@angular/core';
+import { Component, Injectable, computed, forwardRef, inject, input, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Auth } from '../auth';
@@ -10,6 +10,7 @@ import { Skeleton } from '../skeleton';
 import { MeshThumbs } from './mesh-thumb';
 import { StoredFile } from './files-model';
 import { StockPanel, StockState, qty } from './stock';
+import { BackCloses, GalleryModel, ProductFilesPanel, ProductGallery } from './product-files';
 
 /** McMaster-Carr and GrabCAD in Parts: search-and-link sources
  *  (backend/linked.py). Their parts and models are found through a web
@@ -128,7 +129,6 @@ export class LinkedDesk {
   busy = signal<string | null>(null);
   /** One saved item, in full. */
   open = signal<LinkedItem | null>(null);
-  dropping = signal(false);
   uploading = signal(false);
   mcm = signal<McmApi | null>(null);
 
@@ -208,10 +208,20 @@ export class LinkedDesk {
   /** An item in full, read again from the server. */
   show(src: string, item: LinkedItem) {
     this.open.set(item);
+    this.back.opened();
     this.want(item);
     if (src === 'mcmaster' && !this.mcm()) this.http.get<McmApi>('/api/mcmaster/settings').subscribe({ next: s => this.mcm.set(s), error: () => {} });
   }
-  close() { this.open.set(null); this.dropping.set(false); }
+  close() { this.back.closed(); this.open.set(null); }
+  /** Back closes the item open in full (product-files.ts). */
+  private back = new BackCloses(() => this.close());
+  /** The open item read again - its files changed in its files panel - and shown. */
+  reload(it: LinkedItem) {
+    this.http.get<LinkedItem>(`${this.base(it.source)}/parts/${encodeURIComponent(it.id || it.key)}`).subscribe({
+      next: r => { if (this.open()?.id === r.id) { this.open.set(r); this.want(r); } this.changed.update(n => n + 1); },
+      error: () => {},
+    });
+  }
   async patch(it: LinkedItem, body: Partial<Record<'title' | 'notes' | 'tags' | 'quantity' | 'licence' | 'author', unknown>>) {
     try {
       const r = await firstValueFrom(this.http.patch<LinkedItem>(`${this.base(it.source)}/parts/${encodeURIComponent(it.id || it.key)}`, body));
@@ -234,7 +244,7 @@ export class LinkedDesk {
     this.changed.update(n => n + 1);
     return gone > 0;
   }
-  /** Files dropped on an item: a STEP, a mesh, or the ZIP the site gave. */
+  /** Files dropped on an item: a STEP, a mesh, or the ZIP the site gave (its files panel hands them here). */
   async upload(it: LinkedItem, list: FileList | File[] | null) {
     const fs = [...(list ?? [])];
     if (!fs.length) return;
@@ -404,101 +414,121 @@ export class LinkedHead {
   toSettings() { this.prefs.open.set('proxy'); }
 }
 
-/** A saved item in full: its page and the hint, its CAD files and a drop zone for more, what the person wrote of it. */
+/** A saved item in full, in the Parts product's own box (manufacturers.ts): the head - its name, source and key,
+ *  the figures that matter, its page and the tools -, its model in the gallery, its specs and files (product-files.ts),
+ *  its stock and what the person wrote of it. */
 @Component({
   selector: 'wb-linked-card',
-  imports: [T, StockPanel],
+  // forwardRef: product-files.ts reads this file's helpers, so either may be loaded first
+  imports: [T, StockPanel, forwardRef(() => ProductFilesPanel), forwardRef(() => ProductGallery)],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './linked.css'],
   template: `
 @if (desk.open(); as it) {
   <div class="mf-modal tcv-m-veil" animate.leave="tcv-leave" (click)="desk.close()">
-    <div class="mf-detail ln-card tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="it.title || it.key" (click)="$event.stopPropagation()"
+    <div class="mf-pd ln-card tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="it.title || it.key" (click)="$event.stopPropagation()"
          (keydown.escape)="desk.close()">
-      <button class="tcv-cc-ib mf-x" (click)="desk.close()" [title]="'Close' | t">
-        <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
-      <div class="mf-dgal">
-        <div class="ln-pic">@if (desk.pic(it); as src) { <img class="tcv-fm-solid" [src]="src" alt=""> }
-          @else { <svg class="ln-cube" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9" /></svg>
-                  <span class="dim">{{ (it.cad ? 'drawing its picture…' : 'no CAD file yet') | t }}</span> }</div>
-        @if (desk.canEdit()) {
-          <label class="ln-drop" [attr.data-on]="desk.dropping() ? 1 : null" [attr.data-busy]="desk.uploading() ? 1 : null"
-                 (dragover)="$event.preventDefault(); desk.dropping.set(true)" (dragleave)="desk.dropping.set(false)"
-                 (drop)="$event.preventDefault(); desk.dropping.set(false); desk.upload(it, $any($event).dataTransfer?.files)">
-            <input type="file" multiple [accept]="m().accept" hidden (change)="desk.upload(it, $any($event.target).files); $any($event.target).value = ''">
-            <b>{{ (desk.uploading() ? 'Keeping it…' : (it.cad ? 'Drop another file here' : 'Drop the STEP here')) | t }}</b>
-            <span>{{ (it.source === 'grabcad' ? 'STEP, STL, 3MF, OBJ or the ZIP GrabCAD gives - or click to choose' : 'the STEP from its page, or click to choose') | t }}</span>
-          </label>
-        }
-        @if (it.files.length) {
-          <table class="mf-dspecs ln-files"><tbody>
-            @for (f of it.files; track f.file) {
-              <tr [attr.data-main]="f.file === it.cad?.file ? 1 : null">
-                <td class="mono give"><a class="mf-link" [href]="'/api/files/' + f.file" [title]="f.original || f.name">{{ f.name }}</a></td>
-                <td class="dim">{{ f.kind.toUpperCase() }}</td><td class="r mono dim">{{ kb(f.bytes) }}</td></tr>
-            }
-          </tbody></table>
-          <p class="ln-agent dim">{{ 'The CAD rooms use it as a model of its own:' | t }} <code>revisions.py linked to-model {{ it.source }}:{{ it.key }} --folder …</code></p>
-        }
-      </div>
-      <div class="mf-dinfo">
-        <span class="mf-dseller"><span>{{ m().name }}</span><span class="mono">{{ it.key.startsWith('cat:') ? ('Category' | t) : it.key }}</span>
-          <button class="st-more" (click)="copy(it.key)">{{ 'Copy' | t }}</button></span>
-        <textarea class="tst-name ln-title" rows="2" [value]="it.title" [placeholder]="m().key | t" [readonly]="!desk.canEdit()"
-                  (change)="desk.patch(it, { title: $any($event.target).value })" (keydown.enter)="$event.preventDefault(); $any($event.target).blur()" [attr.aria-label]="'Name' | t"></textarea>
-        <div class="ln-link">
-          <a class="tcv-btn tcv-btn-accent" [href]="it.url" target="_blank" rel="noopener noreferrer">{{ fmt('Open on {s}', { s: m().name }) }} ↗</a>
-          <span class="ln-hint">{{ m().how }}</span>
-          @if (it.source === 'mcmaster') {
-            @if (desk.mcm()?.filled) { <button class="tcv-btn" (click)="desk.apiStep(it)" [title]="'Through the McMaster-Carr API - not wired in yet' | t">{{ 'Download STEP (API)' | t }}</button> }
-            @else { <span class="dim ln-apinote">{{ 'With McMaster-Carr API access (Settings > Proxy & Data) this will be one click; access is pending.' | t }}</span> }
-          }
+      <header class="mf-pd-head">
+        <div class="mf-pd-top">
+          <div class="mf-pd-id">
+            <div class="mf-pd-title"><b class="mf-pd-name" [title]="it.title || it.key">{{ it.title || it.key }}</b>
+              @if (it.cad) { <i class="pdw-badge pdw-badge-3d mf-pd-3d" [title]="it.cad.name">3D</i> }</div>
+            <div class="mf-pd-line">
+              <span>{{ m().name }}</span>
+              <i class="mf-pd-sep"></i><span class="mono mf-pd-copy" [title]="'Copy' | t" (click)="copy(it.key)">{{ it.key.startsWith('cat:') ? ('Category' | t) : it.key }}</span>
+              @if (it.author) { <i class="mf-pd-sep"></i><span>{{ fmt('by {a}', { a: it.author }) }}</span> }
+              @if (it.licence) { <i class="mf-pd-sep"></i><span>{{ it.licence }}</span> }
+              <i class="mf-pd-sep"></i><span>{{ fmt('saved {w}', { w: stamp(it.created_at) }) }}@if (it.by?.name) { · {{ it.by?.name }} }</span>
+            </div>
+            <dl class="mf-pd-figs">
+              <div><dt>{{ 'Needed' | t }}</dt><dd>@if (it.quantity != null) { <b>{{ it.quantity }}</b> } @else { <span class="dim">{{ 'not said' | t }}</span> }</dd></div>
+              <div><dt>{{ 'On hand' | t }}</dt><dd [attr.data-low]="stock.of(it.source, it.key)?.low ? 1 : null">
+                @if (stock.of(it.source, it.key); as s) { <b>{{ qty(s.quantity) }} {{ s.unit }}</b> } @else { <span class="dim">{{ 'not counted yet' | t }}</span> }</dd></div>
+              <div><dt>{{ 'Size' | t }}</dt><dd>
+                @if (box(it); as b) { <b class="mono">{{ b }}</b> } @else if (it.measured?.pending) { <span class="dim">{{ 'measuring…' | t }}</span> }
+                @else { <span class="dim">{{ (it.cad ? 'not measured' : 'no CAD file yet') | t }}</span> }</dd></div>
+              <div><dt>{{ 'CAD file' | t }}</dt><dd>
+                @if (it.cad; as c) { <b class="mono" [title]="c.original || c.name">{{ c.kind.toUpperCase() }}</b><small>{{ stamp(c.at) }}</small> }
+                @else { <span class="dim">{{ 'not yet' | t }}</span> }</dd></div>
+            </dl>
+          </div>
+          <div class="mf-pd-acts">
+            <div class="mf-pd-tools" role="toolbar" [attr.aria-label]="m().name">
+              <a class="mf-pd-tool" [href]="it.url" target="_blank" rel="noopener noreferrer" [title]="it.url">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>{{ fmt('Open on {s}', { s: m().name }) }}</a>
+              @if (it.source === 'mcmaster' && desk.mcm()?.filled) {
+                <button class="mf-pd-tool" (click)="desk.apiStep(it)" [title]="'Through the McMaster-Carr API - not wired in yet' | t">{{ 'Download STEP (API)' | t }}</button> }
+              <button class="mf-pd-tool" (click)="copy(it.key)">{{ 'Copy' | t }} {{ m().key | t }}</button>
+            </div>
+            @if (desk.canEdit()) { <button class="mf-pd-icon mf-pd-del" (click)="desk.remove(it.source, [it.key])" [title]="'Remove' | t" [attr.aria-label]="'Remove' | t">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5" /></svg></button> }
+            <button class="mf-pd-icon" (click)="desk.close()" [title]="'close (Esc)' | t" [attr.aria-label]="'close (Esc)' | t">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
+          </div>
         </div>
-        @if (m().caution) { <p class="ln-caution">{{ m().caution | t }}</p> }
-        @if (it.fetch; as f) { <p class="st-hint" data-tone="warn">{{ fmt('Fetching its STEP through the API: {e}', { e: f.error }) }}</p> }
-        <div class="ln-fields mf-ctl">
-          <label><span class="mf-label">{{ 'Quantity' | t }}</span>
-            <input class="tst-in" inputmode="numeric" [value]="it.quantity ?? ''" [readonly]="!desk.canEdit()" [placeholder]="'how many are needed' | t"
-                   (change)="desk.patch(it, { quantity: $any($event.target).value })"></label>
-          <label class="ln-wide"><span class="mf-label">{{ 'Tags' | t }}</span>
-            <input class="tst-in" [value]="it.tags.join(', ')" [readonly]="!desk.canEdit()" [placeholder]="'fasteners, lamp' | t"
-                   (change)="desk.patch(it, { tags: $any($event.target).value })"></label>
-          @if (it.source === 'grabcad') {
-            <label><span class="mf-label">{{ 'Uploaded by' | t }}</span>
-              <input class="tst-in" [value]="it.author ?? ''" [readonly]="!desk.canEdit()" (change)="desk.patch(it, { author: $any($event.target).value })"></label>
-            <label class="ln-wide"><span class="mf-label">{{ 'Licence' | t }}</span>
-              <input class="tst-in" [value]="it.licence ?? ''" [readonly]="!desk.canEdit()" [placeholder]="'as its page says' | t"
-                     (change)="desk.patch(it, { licence: $any($event.target).value })"></label>
-          }
-          <label class="ln-full"><span class="mf-label">{{ 'Notes' | t }}</span>
-            <textarea class="tst-desc" rows="3" [value]="it.notes" [readonly]="!desk.canEdit()" [placeholder]="'what it is for, which design uses it' | t"
-                      (change)="desk.patch(it, { notes: $any($event.target).value })"></textarea></label>
-        </div>
-        @if (specs(it).length) {
-          <table class="mf-dspecs"><tbody>@for (s of specs(it); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
-        }
-        <!-- what its STEP measured (backend/linked_measure.py), a figure its words say otherwise marked -->
-        @if (it.measured; as ms) {
-          <div class="ln-meas">
-            <span class="mf-label">{{ (ms.kind === 'mesh' ? 'Measured from the mesh' : 'Measured from the STEP') | t }}</span>
-            @if (ms.pending) { <span class="dim">{{ 'measuring…' | t }}</span> }
-            @else if (ms.error) { <span class="dim">{{ fmt('could not be measured: {e}', { e: ms.error }) }}</span> }
-            @else {
-              <table class="mf-dspecs"><tbody>@for (r of rows(it); track r[0]) {
-                <tr [attr.data-bad]="r[2] ? 1 : null"><th>{{ r[0] }}</th><td class="mono">{{ r[1] }}
-                  @if (r[2]) { <span class="st-tag" data-tone="warn" [title]="mismatchTip(ms)">≠ {{ r[2] }}</span> }</td></tr>
-              }</tbody></table>
-            }
+      </header>
+      <!-- the body: its model large down the left - what it is saved for -, beside it one column: the specs and the way
+           to its STEP, its files, its stock, and what the person wrote of it, the notes filling what is left -->
+      <div class="mf-pd-body ln-body" [attr.data-nogal]="!it.cad && !desk.canEdit() ? 1 : null">
+        @if (it.cad || desk.canEdit()) {
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec mf-pd-grow">
+              <div class="mf-pd-sh"><h3>{{ '3D model' | t }}</h3></div>
+              <wb-pd-gallery class="mf-pd-fill" [key]="it.source + ':' + it.key" [model]="model(it)" [canDrop]="desk.canEdit()"
+                             [accept]="m().accept" (files)="pfl.upload($event)" />
+            </section>
           </div>
         }
-        <dl class="mf-dates">
-          <div><dt>{{ 'Saved' | t }}</dt><dd>{{ stamp(it.created_at) }} · {{ it.by?.name || ('someone' | t) }}</dd></div>
-          <div><dt>{{ 'CAD file' | t }}</dt><dd>{{ it.cad ? stamp(it.cad.at) + ' · ' + (it.cad.by?.name || '') : ('not yet' | t) }}</dd></div>
-        </dl>
-        @if (desk.canEdit()) {
-          <div class="mf-dacts"><button class="tcv-btn tst-del" (click)="desk.remove(it.source, [it.key])">{{ 'Remove' | t }}</button></div>
-        }
-        <!-- how many are on hand (stock.ts): a saved part is a Parts product like any other -->
-        <wb-stock-panel [maker]="it.source" [product]="it.key" />
+        <div class="mf-pd-main">
+          <div class="mf-pd-pair ln-one">
+            <div class="mf-pd-col mf-pd-fit">
+              <section class="mf-pd-sec mf-pd-specsec">
+                <div class="mf-pd-sh"><h3>{{ 'Specs' | t }}</h3>@if (specs(it).length) { <span class="st-sub">{{ specs(it).length }}</span> }</div>
+                <div class="mf-pd-scroll">
+                  @if (specs(it).length) {
+                    <dl class="mf-pd-specs">@for (s of specs(it); track s[0]) { <div><dt [title]="s[0]">{{ s[0] }}</dt><dd [title]="s[1]">{{ s[1] }}</dd></div> }</dl>
+                  } @else { <p class="mf-pd-none">{{ 'Its search result gave no specs.' | t }}</p> }
+                  <!-- where its STEP comes from: its page, the way to it there -->
+                  <p class="ln-how2"><span class="dim">{{ 'On its page:' | t }}</span> {{ m().how }}
+                    @if (it.source === 'mcmaster' && !desk.mcm()?.filled) { <span class="dim"> · {{ 'With McMaster-Carr API access (Settings > Proxy & Data) this will be one click; access is pending.' | t }}</span> }</p>
+                  @if (m().caution) { <p class="ln-caution">{{ m().caution | t }}</p> }
+                  @if (it.fetch; as f) { <p class="st-hint" data-tone="warn">{{ fmt('Fetching its STEP through the API: {e}', { e: f.error }) }}</p> }
+                </div>
+              </section>
+              <!-- its CAD files, what its STEP measured, more dropped on the whole section (product-files.ts; kept by its own route) -->
+              <wb-product-files #pfl class="mf-pd-sec mf-pd-filesec" [maker]="it.source" [product]="it.key" [compact]="true"
+                                [uploader]="keep" (changed)="desk.reload(it)" />
+              <section class="mf-pd-sec mf-pd-stocksec">
+                <div class="mf-pd-sh"><h3>{{ 'Stock' | t }}</h3></div>
+                <!-- how many are on hand (stock.ts): a saved part is a Parts product like any other -->
+                <wb-stock-panel class="mf-pd-fill" [maker]="it.source" [product]="it.key" [compact]="true" />
+              </section>
+              <!-- what the person wrote of it -->
+              <section class="mf-pd-sec ln-notes">
+                <div class="mf-pd-sh"><h3>{{ 'Your notes' | t }}</h3></div>
+                <div class="ln-fields mf-ctl">
+                  <label class="ln-full"><span class="mf-label">{{ 'Name' | t }}</span>
+                    <input class="tst-in" [value]="it.title" [placeholder]="m().key | t" [readonly]="!desk.canEdit()" (change)="desk.patch(it, { title: $any($event.target).value })"></label>
+                  <label><span class="mf-label">{{ 'Quantity' | t }}</span>
+                    <input class="tst-in" inputmode="numeric" [value]="it.quantity ?? ''" [readonly]="!desk.canEdit()" [placeholder]="'how many are needed' | t"
+                           (change)="desk.patch(it, { quantity: $any($event.target).value })"></label>
+                  <label class="ln-wide"><span class="mf-label">{{ 'Tags' | t }}</span>
+                    <input class="tst-in" [value]="it.tags.join(', ')" [readonly]="!desk.canEdit()" [placeholder]="'fasteners, lamp' | t"
+                           (change)="desk.patch(it, { tags: $any($event.target).value })"></label>
+                  @if (it.source === 'grabcad') {
+                    <label><span class="mf-label">{{ 'Uploaded by' | t }}</span>
+                      <input class="tst-in" [value]="it.author ?? ''" [readonly]="!desk.canEdit()" (change)="desk.patch(it, { author: $any($event.target).value })"></label>
+                    <label class="ln-wide"><span class="mf-label">{{ 'Licence' | t }}</span>
+                      <input class="tst-in" [value]="it.licence ?? ''" [readonly]="!desk.canEdit()" [placeholder]="'as its page says' | t"
+                             (change)="desk.patch(it, { licence: $any($event.target).value })"></label>
+                  }
+                </div>
+                <label class="ln-notebox mf-ctl"><span class="mf-label">{{ 'Notes' | t }}</span>
+                  <textarea class="tst-in" rows="3" [value]="it.notes" [readonly]="!desk.canEdit()" [placeholder]="'what it is for, which design uses it' | t"
+                            (change)="desk.patch(it, { notes: $any($event.target).value })"></textarea></label>
+              </section>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -506,14 +536,21 @@ export class LinkedHead {
 })
 export class LinkedCard {
   readonly desk = inject(LinkedDesk);
+  readonly stock = inject(StockState);
   m = computed(() => this.desk.meta(this.desk.open()?.source ?? 'mcmaster'));
   t = t;
   fmt = fmt;
-  kb = kb;
+  qty = qty;
   stamp = stamp;
   specs(it: LinkedItem) { return Object.entries(it.specs ?? {}); }
-  rows(it: LinkedItem) { return measuredRows(it.measured); }
-  mismatchTip = mismatchTip;
+  box(it: LinkedItem) { return measuredBox(it.measured); }
+  /** Its CAD file as the gallery's model. */
+  model(it: LinkedItem): GalleryModel | null {
+    const c = it.cad;
+    return c ? { file: c.file, name: c.original || c.name, kind: c.kind, thumb: c.has_thumb ? `/api/files/${encodeURIComponent(c.file)}/thumb?v=${c.has_thumb}` : null } : null;
+  }
+  /** A drop on its files panel or its gallery goes through its own route (its name, McMaster's STEP only). */
+  keep = (fs: File[]) => { const it = this.desk.open(); return it ? this.desk.upload(it, fs) : Promise.resolve(); };
   copy(k: string) {
     try { navigator.clipboard.writeText(k).then(() => Toast.show(fmt('{c} copied', { c: k })), () => {}); } catch { /* no clipboard */ }
   }
