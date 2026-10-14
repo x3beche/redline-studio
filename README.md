@@ -119,7 +119,7 @@ cp .env.example .env          # fill in MONGODB_URI
 ./start.sh
 ```
 
-On first run `start.sh` creates the virtual environment, installs the npm dependencies and starts both servers with live reload: the UI on <http://127.0.0.1:4200>, the API on <http://127.0.0.1:8000>. `./start.sh --build` compiles the UI and serves it from `:8000` alone. `compose.dev.yml` runs the same two servers in containers, with the checkout mounted.
+On first run `start.sh` creates the virtual environment, installs the npm dependencies and starts both servers with live reload: the UI on <http://127.0.0.1:4200>, the API on <http://127.0.0.1:8000>. `./start.sh --build` compiles the UI and serves it from `:8000` alone. `compose.dev.yml` runs the same two servers in containers, with the checkout mounted. To deploy it as a server (`docker compose up -d` or Portainer), see [DEPLOY.md](DEPLOY.md).
 
 The model API keys are not read from `.env`: they are kept in the database and typed in Settings > LLM settings, where each job also picks its provider and model. The board room (atopile, and KiCad with Freerouting in a container), the firmware room (PlatformIO in a container), technical drawings and the Tools tab's checks each need an image built once; without them the rest still works and says what is missing.
 

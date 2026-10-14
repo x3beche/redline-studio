@@ -13,3 +13,11 @@ venv
 frontend/node_modules
 frontend/dist
 frontend/.angular
+# The deployment's images (docker/deploy) copy the checkout: nothing local
+# goes with it - an agent's settings, the outputs start.sh makes again.
+.claude/settings.local.json
+assets
+exports
+views
+revisions
+*.env

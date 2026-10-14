@@ -34,6 +34,9 @@ again whatever a changed requirements file or lockfile brings:
 For a single-server production build, `./start.sh --build` compiles the UI and
 serves it from `:8000` alone.
 
+To run Workbench as a server - MongoDB included, with `docker compose up` or a
+Portainer stack and only environment variables to set - see [DEPLOY.md](DEPLOY.md).
+
 ## On Windows
 
 Run it inside WSL 2, not on Windows itself. On Windows 11, Smart App Control

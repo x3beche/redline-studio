@@ -1,0 +1,177 @@
+# Workbench, deployed: the database, the API, the page, and the images the
+# API runs its work in. Every setting comes from the environment - a `.env`
+# beside this file (cp deploy.env.example .env), or a Portainer stack's
+# environment variables. DEPLOY.md has the steps.
+#
+#   docker compose up -d --build                      # page on :8080
+#   COMPOSE_PROFILES=kicad,firmware docker compose up -d --build
+#   docker compose --profile full up -d --build       # every work image
+#
+# For development, with live reload, use compose.dev.yml (INSTALL.md).
+#
+# The API starts KiCad, the drawings, PlatformIO and the other work images
+# next to itself through the host's Docker socket, and hands them paths -
+# which the host has to have as well. So its working directory is a host
+# directory mounted at the same path on both sides (REDLINE_HOST_DIR): the
+# code is copied there on every start (docker/deploy/api-entrypoint.sh), and
+# its caches and scratch space live there. The services under `profiles` only
+# build (or pull) a work image and exit: the API runs them, not compose.
+
+name: ${COMPOSE_PROJECT_NAME:-workbench}
+
+x-work-image: &work-image
+  restart: "no"
+  entrypoint: ["true"]
+  command: []
+  network_mode: none
+
+services:
+  mongo:
+    image: ${MONGO_IMAGE:-mongo:7.0}
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-workbench}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD (letters and digits) - see deploy.env.example}
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-1}"]
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  api:
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-api:${REDLINE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/deploy/api.Dockerfile
+      args:
+        WITH_ATO: ${REDLINE_WITH_ATO:-true}
+    restart: unless-stopped
+    # tini as PID 1: builds and board jobs run as processes of their own and
+    # are reaped when they end.
+    init: true
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      # A database of your own instead of the bundled one: set MONGODB_URI.
+      MONGODB_URI: ${MONGODB_URI:-mongodb://${MONGO_ROOT_USER:-workbench}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin}
+      MONGODB_DB: ${MONGODB_DB:-redline}
+      REDLINE_HOST_DIR: ${REDLINE_HOST_DIR:-/var/lib/workbench}
+      REDLINE_REQUIRE_SIGNIN: ${REDLINE_REQUIRE_SIGNIN:-true}
+      REDLINE_OWNER_EMAIL: ${REDLINE_OWNER_EMAIL:-}
+      REDLINE_OWNER_PASSWORD: ${REDLINE_OWNER_PASSWORD:-}
+      REDLINE_OWNER_NAME: ${REDLINE_OWNER_NAME:-}
+      REDLINE_SECRET_KEY: ${REDLINE_SECRET_KEY:-}
+      REDLINE_LOCAL_USER: ${REDLINE_LOCAL_USER:-owner}
+      REDLINE_TZ: ${REDLINE_TZ:-UTC}
+      # The size the Analytics room forecasts the database against.
+      STORAGE_QUOTA_MB: ${STORAGE_QUOTA_MB:-10240}
+      REDLINE_BOX_CPUS: ${REDLINE_BOX_CPUS:-}
+      REDLINE_BOX_MEMORY: ${REDLINE_BOX_MEMORY:-}
+      REDLINE_BOX_PIDS: ${REDLINE_BOX_PIDS:-}
+      REDLINE_BUILD_MEM: ${REDLINE_BUILD_MEM:-10G}
+      REDLINE_FILE_MAX_MB: ${REDLINE_FILE_MAX_MB:-200}
+      REDLINE_KWH_PRICE: ${REDLINE_KWH_PRICE:-}
+      REDLINE_LOG_LEVEL: ${REDLINE_LOG_LEVEL:-info}
+      # The work images, by the names the services below give them.
+      REDLINE_DRAW_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-draw:${REDLINE_VERSION:-latest}
+      REDLINE_KICAD_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-kicad:${REDLINE_VERSION:-latest}
+      REDLINE_FIRMWARE_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-firmware:${REDLINE_VERSION:-latest}
+      REDLINE_TOOLS_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-tools:${REDLINE_VERSION:-latest}
+      REDLINE_TRACEMAKER_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-tracemaker:${REDLINE_VERSION:-latest}
+      REDLINE_CHROME_IMAGE: ${REDLINE_CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}
+      REDLINE_PDF_IMAGE: ${REDLINE_CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}
+      REDLINE_KIT_IMAGE: ${REDLINE_KIT_IMAGE:-node:20-alpine}
+    volumes:
+      # The same path on both sides - see the top of this file. Absolute.
+      - ${REDLINE_HOST_DIR:-/var/lib/workbench}:${REDLINE_HOST_DIR:-/var/lib/workbench}
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  web:
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-web:${REDLINE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: api:8000
+      WEB_MAX_BODY: ${WEB_MAX_BODY:-1g}
+    ports:
+      # The one published port. WORKBENCH_BIND=127.0.0.1 keeps it to this
+      # machine, for a reverse proxy on the same host.
+      - "${WORKBENCH_BIND:-0.0.0.0}:${WORKBENCH_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---- work images: built (or pulled) here, run by the API ----
+
+  # Technical drawings and the Taste renders (1.9 GB). Without it a release
+  # still goes out and says the drawings could not be made.
+  draw:
+    <<: *work-image
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-draw:${REDLINE_VERSION:-latest}
+    build:
+      context: docker/draw
+
+  # The board room: place, draw, route (Freerouting), DRC; schematics; the
+  # KiCad outputs of a release (8 GB).
+  kicad:
+    <<: *work-image
+    profiles: ["kicad", "full"]
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-kicad:${REDLINE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/kicad.Dockerfile
+
+  # The Firmware room's builds: PlatformIO with the ESP32 platform (2 GB).
+  firmware:
+    <<: *work-image
+    profiles: ["firmware", "full"]
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-firmware:${REDLINE_VERSION:-latest}
+    build:
+      context: docker/firmware
+
+  # The Tools tab's Check: PostgreSQL, TypeScript, Prisma, Mermaid... (2.4 GB).
+  tools:
+    <<: *work-image
+    profiles: ["tools", "full"]
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-tools:${REDLINE_VERSION:-latest}
+    build:
+      context: docker/tools
+      dockerfile: tools.Dockerfile
+
+  # Routing with TraceMaker instead of Freerouting (needs kicad too).
+  tracemaker:
+    <<: *work-image
+    profiles: ["tracemaker", "full"]
+    image: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-tracemaker:${REDLINE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/tracemaker.Dockerfile
+
+  # Headless Chromium for the Chat's PDFs - pulled, not built.
+  chrome:
+    <<: *work-image
+    profiles: ["pdf", "full"]
+    image: ${REDLINE_CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}
+
+volumes:
+  mongo-data:
+  mongo-config:

@@ -1,0 +1,62 @@
+# The page and its API behind one port (docker/deploy/web.Dockerfile).
+# ${API_UPSTREAM} and ${WEB_MAX_BODY} are filled in when the container starts.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
+# The scheme the browser used: a TLS proxy in front says it in
+# X-Forwarded-Proto, and the API marks its cookie Secure by it.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    client_max_body_size ${WEB_MAX_BODY};
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    # Docker's DNS, asked again as the API container comes and goes.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $api http://${API_UPSTREAM};
+
+    location /api/ {
+        proxy_pass $api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        # Live streams (SSE: the Chat's answers, build and board progress)
+        # go out as they are written, and stay open as long as they last.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # The build's hashed files (main-XXXXXXXX.js) never change: kept a year.
+    # index.html is never cached, so a new version is picked up on the next load.
+    location ~* "-[a-z0-9]{8}\.(?:js|css)$" {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}
