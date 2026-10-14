@@ -21,7 +21,10 @@ the LCSC drawer's part when it names one the drawer holds, else a product
 of My Items (backend/catalog_own.py) made from its words, or the one of
 the same code or name already there. Lines kept before this rule are given
 theirs by `home_unlinked` (tools/inventory_home.py), which changes nothing
-else of them.
+else of them. A product deleted takes its lines with it, into Parts'
+Deleted (backend/parts_trash.py), and brings them back when it is
+restored; a write to a line whose product is not in Parts is refused
+(`counted`), so the stock and the catalog never disagree.
 
 Each item keeps a short log of what happened to it: added, each quantity
 change (+/- with the reason and who - "used 4 for the fan board"), merges
@@ -244,6 +247,19 @@ async def link_catalog(db, ref: dict | None) -> dict | None:
            "product_name": p.get("name") or "", "url": p.get("url") or "", "sku": p.get("sku") or "",
            "category": p.get("category") or ""}
     return {k: v for k, v in out.items() if v not in (None, "")} | {"product": out["product"]}
+
+
+async def counted(db, d: dict) -> None:
+    """A line written to counts a product that is in Parts: one whose
+    product went - deleted products take their lines to Parts' Deleted
+    (backend/parts_trash.py), so this is a line written around that - is
+    refused rather than counted on (a ValueError)."""
+    link = linked_to(d)
+    if link and not await catalog_builtin.find_product(db, *link):
+        c = d.get("catalog") or {}
+        raise ValueError(f"{d.get('name') or 'this stock line'} counts {c.get('product_name') or link[1]} of "
+                         f"{c.get('manufacturer_name') or link[0]}, which is not in Parts any more - "
+                         "restore it from Parts' Deleted, or link the line to another product")
 
 
 def is_low(d: dict) -> bool:
@@ -531,6 +547,8 @@ async def add(db, raw: dict, by: dict | None = None, reason: str = "", merge: bo
     have = await find_same(db, f, rows) if merge else None
     if not have:
         return await _insert(db, await _home(db, f, by), by, reason), False
+    if not f.get("catalog"):
+        await counted(db, have)
     who, now = _who(by), _now()
     after = round(float(have.get("quantity") or 0) + f["quantity"], 6)
     if after > MAX_QTY:
@@ -573,6 +591,8 @@ async def patch(db, iid: str, raw: dict, by: dict | None = None, reason: str = "
     f = await _fields(db, raw, partial=True)
     if "catalog" in f and not f["catalog"]:
         raise ValueError("a stock line stays a catalog product's: link it to another product rather than to none")
+    if "catalog" not in f:
+        await counted(db, have)
     changed = {k: v for k, v in f.items() if have.get(k) != v}
     if not changed:
         return have
@@ -611,6 +631,7 @@ async def adjust(db, iid: str, delta: Any, reason: str = "", by: dict | None = N
     d = number(delta, "the change", negative=True)
     if not d:
         raise ValueError("the change is zero")
+    await counted(db, have)
     after = round(float(have.get("quantity") or 0) + d, 6)
     if after < 0:
         raise ValueError(f"only {qty(have.get('quantity'))} {have.get('unit') or 'pcs'} on hand - cannot take {qty(-d)}")

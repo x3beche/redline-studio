@@ -549,7 +549,9 @@ async def api_delete(src: str, key: str) -> dict:
         _404(k, key)
     if not may_delete(have):
         raise HTTPException(403, "only whoever saved it, or someone who may delete, can remove it")
-    await remove(_db(), k, have["_id"])
+    from . import parts_trash
+    # Into Parts' Deleted with its stock lines (its files are on it), restorable for a while.
+    await parts_trash.trash_products(_db(), k.id, [have["key"]])
     await actors.audit(_db(), "linked-remove", f"{k.id}:{have['key']}")
     return {"deleted": have["key"]}
 

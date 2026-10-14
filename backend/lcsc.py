@@ -1155,18 +1155,29 @@ async def hold(db, lcsc: str, ws: str | None = None) -> None:
                                                         "held_last": now}})
 
 
-async def let_go(db, lcsc: str, ws: str | None = None) -> bool:
+async def let_go(db, lcsc: str, ws: str | None = None, keep: bool = False) -> bool:
     """Take a part out of this space's drawer. The cached files go only
-    when no drawer has it any more. False: it was not in this one."""
+    when no drawer has it any more - and not even then with `keep`: a part
+    in Parts' Deleted (backend/parts_trash.py) stays cached, held by none,
+    until it is restored or purged (drop_unheld). False: it was not in this one."""
     ws = _space(ws)
     doc = await db[PARTS].find_one({"_id": lcsc}, {"spaces": 1})
     if not doc or ws not in spaces_of(doc):
         return False
     rest = [x for x in spaces_of(doc) if x != ws]
-    if rest:
+    if rest or keep:
         await db[PARTS].update_one({"_id": lcsc}, {"$set": {"spaces": rest}, "$unset": {f"held.{ws}": ""}})
     else:
         await db[PARTS].delete_one({"_id": lcsc})
+    return True
+
+
+async def drop_unheld(db, lcsc: str) -> bool:
+    """A cached part no drawer holds any more, gone (a part purged from Parts' Deleted)."""
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"spaces": 1})
+    if not doc or spaces_of(doc):
+        return False
+    await db[PARTS].delete_one({"_id": lcsc})
     return True
 
 

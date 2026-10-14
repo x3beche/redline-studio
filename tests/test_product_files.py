@@ -328,10 +328,12 @@ def test_a_deleted_product_leaves_its_files_and_the_export_carries_them(db, grid
     assert files_said.get("linked") == 1 and files_said.get("missing") == ["latch.pdf"]
     pb = next(p for p in got["products"] if p["name"] == "Hinge")
     assert b.get(f"/api/manufacturers/{got['id']}/products/{pb['id']}/files").json()["cad"]["name"] == "my hinge.step"
-    # deleted by hand: the files stay in Files, the product is an orphan the summary names
+    # deleted by hand: the files stay in Files, their references go to Parts' Deleted with it - no orphan
     a.delete(f"/api/manufacturers/{mid}/products/{p2}")
     s = a.get("/api/product-files/summary").json()
-    assert s["orphans"] == [f"{mid}:{p2}"] and any(f["name"] == "latch.pdf" for f in a.get("/api/files").json())
+    assert s["orphans"] == [] and any(f["name"] == "latch.pdf" for f in a.get("/api/files").json())
+    unit = a.get("/api/manufacturers/trash").json()["units"][0]
+    assert unit["name"] == "Latch" and [f["name"] for f in unit["files"]] == ["latch.pdf"]
 
 
 # ---------------------------------------------------------------- from an address
@@ -423,8 +425,8 @@ def test_an_orphans_files_go_to_another_product_or_are_let_go(db, grid, site):  
     a.post(f"/api/manufacturers/{mid}/products/{p1}/files", files={"upload": ("hinge datasheet.pdf", PDF)})
     a.post(f"/api/manufacturers/{mid}/products/{p2}/files", files={"upload": ("latch.pdf", PDF + b" ")})
     assert a.get("/api/product-files/orphans").json() == []
-    a.delete(f"/api/manufacturers/{mid}/products/{p1}")
-    a.delete(f"/api/manufacturers/{mid}/products/{p2}")
+    # deleted the way products were before Parts' Deleted: out of the catalog's document only
+    run(mf.drop_products(scope.ScopedDb(db, "ua"), mid, [p1, p2]))
     got = a.get("/api/product-files/orphans").json()
     assert {o["pid"] for o in got} == {p1, p2}
     hinge = next(o for o in got if o["pid"] == p1)

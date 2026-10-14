@@ -23,6 +23,7 @@ import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
 import { PriceChart } from './product-charts';
+import { PartsTrash, PartsTrashView } from './parts-trash';
 import { Fmt } from './charts';
 import { BackCloses, GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
 
@@ -102,6 +103,8 @@ export interface Product {
   added_at?: string; read_at?: string; updated?: string; history?: PriceRow[];
   /** Added by hand ('manual'), or changed by hand (`edited`): kept through a full exploration. */
   source?: 'manual'; edited?: boolean;
+  /** No longer listed by its site, kept because it has stock or files (backend/manufacturers.py fold_in). */
+  gone_at?: string;
   /** An LCSC part of the parts drawer (the LCSC seller, backend/catalog_lcsc.py): what only a part has. */
   part?: PartFacts;
   /** A part or model saved from McMaster-Carr or GrabCAD (backend/linked.py, linked.ts). */
@@ -329,7 +332,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles, PriceChart],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles, PartsTrashView, PriceChart],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
@@ -662,7 +665,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
-                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: m.id }" />@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: m.id }" />@if (p.gone_at) { <span class="st-tag mf-hand" data-tone="warn" [title]="'The site no longer lists it; it is kept because it has stock or files' | t">{{ 'gone from the site' | t }}</span> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="r mf-ponhand">@if (onHand(m.id, p.id); as s) { <button class="mf-onhand mf-onhand-btn" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null" (click)="openDetail(asItem(p, m))" [title]="'On hand - open it for its stock' | t">{{ qty(s.quantity) }} {{ s.unit }}</button> } @else { <span class="dim">–</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
@@ -710,6 +713,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             @if (pfiles.orphans().length || sub() === 'orphans') {
               <button [class.on]="sub() === 'orphans'" (click)="sub.set('orphans')" [title]="'Files of products deleted by hand: attach them to another product, open them in Files or let them go' | t">{{ fmt('Orphan files ({n})', { n: pfiles.orphans().length }) }}</button>
             }
+            <button [class.on]="sub() === 'deleted'" (click)="sub.set('deleted')" [title]="'Products deleted from Parts, with their stock lines and files: restore them or delete them for good' | t">{{ fmt('Deleted ({n})', { n: ptrash.units()?.length ?? 0 }) }}</button>
           </div>
           @if (can()) {
             <button class="tcv-btn" (click)="openCheck()" [title]="'Read every saved product page again and see what changed' | t">{{ 'Re-read all products' | t }}</button>
@@ -764,7 +768,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                   @for (p of g.items; track p.maker.id + p.id) {
                     <tr class="mf-prow" (click)="openDetail(p)" (contextmenu)="openMenu($event, p)">
                       <td class="mf-gthumb">@if (img(p); as src) { <img [src]="src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> } @else { <span class="mf-thumb0"></span> }</td>
-                      <td class="give"><b>{{ p.name }}</b><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: p.maker.id }" /></td>
+                      <td class="give"><b>{{ p.name }}</b><ng-container *ngTemplateOutlet="filesT; context: { $implicit: p, mid: p.maker.id }" />@if (p.gone_at) { <span class="st-tag mf-hand" data-tone="warn" [title]="'The site no longer lists it; it is kept because it has stock or files' | t">{{ 'gone from the site' | t }}</span> }</td>
                       <td class="r"><ng-container *ngTemplateOutlet="onHandT; context: { $implicit: p }" /></td>
                       <td class="dim">{{ sellerName(p) }}</td>
                       <td class="r" [title]="p.price ? moneyTip(p.price.amount, p.price.currency) : ''"><ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" />@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }</td>
@@ -792,6 +796,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       } @else if (sub() === 'orphans') {
         <!-- the files of products deleted by hand (product-files.ts) -->
         <wb-orphan-files />
+      } @else if (sub() === 'deleted') {
+        <!-- Parts' Deleted: products deleted with their stock and files, restorable (parts-trash.ts) -->
+        <wb-parts-trash />
       } @else {
       <div class="st-tiles mf-htiles">
         <div class="st-tile" [attr.data-tone]="own().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b [wbCount]="own().length"></b>
@@ -1370,8 +1377,9 @@ export class RoomMfr implements OnDestroy {
   listQ = signal('');
   /** The overview: every product (the grid, the default), every product on hand (an old link to the stock's
    *  own tab opens here too), or the sites and adding one. */
-  sub = signal<'products' | 'stock' | 'sites' | 'orphans'>(STOCK_ASKED || this.url.get('sub') === 'stock' ? 'stock'
-    : this.url.get('sub') === 'sites' ? 'sites' : this.url.get('sub') === 'orphans' ? 'orphans' : 'products');
+  sub = signal<'products' | 'stock' | 'sites' | 'orphans' | 'deleted'>(STOCK_ASKED || this.url.get('sub') === 'stock' ? 'stock'
+    : this.url.get('sub') === 'sites' ? 'sites' : this.url.get('sub') === 'orphans' ? 'orphans'
+    : this.url.get('sub') === 'deleted' ? 'deleted' : 'products');
   readonly PARTS_LABEL = PARTS_LABEL;
   /** Cards or rows - the overview's and a maker's catalog alike. */
   layout = signal<Layout>(this.url.get('view') === 'table' ? 'table' : this.url.get('view') === 'drawer' ? 'drawer' : 'grid');
@@ -1446,6 +1454,8 @@ export class RoomMfr implements OnDestroy {
   readonly held = inject(StockState);
   /** Which products hold files - a "3D" badge, a picture of their own (product-files.ts). */
   readonly pfiles = inject(ProductFilesState);
+  /** Parts' Deleted: its count on the tab, and what a delete takes with it in the question (parts-trash.ts). */
+  readonly ptrash = inject(PartsTrash);
   stockFor = signal<string | null>(null);
   sf = signal({ quantity: '1', unit: 'pcs', location: '', note: '' });
   readonly units = ['pcs', 'm', 'cm', 'mm', 'kg', 'g', 'l', 'ml', 'roll', 'reel', 'box', 'pack', 'set', 'pair', 'sheet', 'bag'];
@@ -1883,7 +1893,7 @@ export class RoomMfr implements OnDestroy {
     const by = new Map<string, string[]>();
     for (const k of this.gsel()) { const i = k.indexOf(':'); by.set(k.slice(0, i), [...(by.get(k.slice(0, i)) ?? []), k.slice(i + 1)]); }
     const n = this.gsel().size;
-    this.sure(n === 1 ? t('Delete this product?') : this.fmt('Delete {n} products?', { n }), '').then(async ok => {
+    this.sure(n === 1 ? t('Delete this product?') : this.fmt('Delete {n} products?', { n }), '', [...by].filter(([mid]) => !isLinked(mid))).then(async ok => {
       if (!ok) return;
       this.saving.set(true);
       try {
@@ -1896,6 +1906,7 @@ export class RoomMfr implements OnDestroy {
       } catch (e) { this.failed('Could not delete it.')(e as HttpErrorResponse); }
       this.saving.set(false);
       this.read();
+      this.ptrash.load();
     });
   }
   /** Cards per row on the grid, 0 = as many as fit - kept in this browser. */
@@ -1920,8 +1931,8 @@ export class RoomMfr implements OnDestroy {
     ]);
   }
   deleteFromDetail(d: GridItem) {
-    this.sure(t('Delete this product?'), d.name + (this.pfiles.of(d.maker.id, d.id)?.files ? ' - ' + t('its attached files stay in Files') : '')).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
-      next: r => { this.closeDetail(); this.replace(r.manufacturer); this.read(); },
+    this.sure(t('Delete this product?'), d.name, [[d.maker.id, [d.id]]]).then(ok => ok && this.api.deleteProducts(d.maker.id, [d.id]).subscribe({
+      next: r => { this.closeDetail(); this.replace(r.manufacturer); this.read(); this.ptrash.load(); },
       error: this.failed('Could not delete it.'),
     }));
   }
@@ -2037,7 +2048,7 @@ export class RoomMfr implements OnDestroy {
     this.api.patch(m.id, { notes: notes.trim() }).subscribe({ next: r => { this.replace(r); this.say(t('Notes saved.')); }, error: this.failed('Could not save it.') });
   }
   remove(m: Maker) {
-    this.sure(t('Delete this manufacturer, its catalog and its runs?'), m.name).then(ok => ok && this.api.remove(m.id).subscribe({ next: () => { this.goHome(); this.read(); this.runs.refresh(); }, error: this.failed('Could not delete it.') }));
+    this.sure(t('Delete this manufacturer, its catalog and its runs?'), m.name, [[m.id, null]]).then(ok => ok && this.api.remove(m.id).subscribe({ next: () => { this.goHome(); this.read(); this.runs.refresh(); this.ptrash.load(); }, error: this.failed('Could not delete it.') }));
   }
   private replace(m: Maker) {
     this.all.update(l => l.map(x => x.id === m.id ? { ...m, products: undefined } : x));
@@ -2174,9 +2185,10 @@ export class RoomMfr implements OnDestroy {
     if (m.view === 'linked') { this.linked.remove(m.id, ids); return; }
     if (!ids.length) return;
     const one = ids.length === 1 ? (m.products ?? []).find(p => p.id === ids[0]) : null;
-    this.sure(one ? t('Delete this product?') : this.fmt('Delete {n} products?', { n: ids.length }), one?.name ?? '').then(ok => ok && this.api.deleteProducts(m.id, ids).subscribe({
+    this.sure(one ? t('Delete this product?') : this.fmt('Delete {n} products?', { n: ids.length }), one?.name ?? '', [[m.id, ids]]).then(ok => ok && this.api.deleteProducts(m.id, ids).subscribe({
       next: r => {
         this.replace(r.manufacturer);
+        this.ptrash.load();
         this.picked_.update(s => new Set([...s].filter(x => !ids.includes(x))));
         if (this.editing() && ids.includes(this.editing()!)) this.editing.set(null);
       },
@@ -2567,9 +2579,13 @@ export class RoomMfr implements OnDestroy {
   fmt(text: string, vars: Record<string, string | number>) {
     return t(text).replace(/\{(\w+)\}/g, (m, k) => k in vars ? String(vars[k]) : m);
   }
-  /** Asked before anything is deleted: the question, and what it is about. */
-  private async sure(question: string, what: string): Promise<boolean> {
-    return Confirm.ask({ title: question, text: what || undefined, ok: t('Delete'), danger: true });
+  /** Asked before anything is deleted: the question, what it is about and - for
+   *  products and makers, `goes` [maker, products or null for all of it] - what
+   *  goes to Parts' Deleted with them (parts-trash.ts). */
+  private async sure(question: string, what: string, goes: [string, string[] | null][] = []): Promise<boolean> {
+    const said = goes.length === 1 ? await this.ptrash.goesWith(goes[0][0], goes[0][1])
+      : goes.length ? (await Promise.all(goes.map(([m, ids]) => this.ptrash.goesWith(m, ids)))).map(x => x.split('\n')[0]).join('\n') : '';
+    return Confirm.ask({ title: question, text: [what, said].filter(x => !!x).join('\n') || undefined, ok: t('Delete'), danger: true });
   }
   /** A word in passing: the app's toast (toast.ts). */
   private say(msg: string, tone: ToastTone = 'info') { Toast.show(msg, { tone }); }

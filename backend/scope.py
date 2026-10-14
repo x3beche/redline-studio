@@ -58,6 +58,8 @@ SCOPED = frozenset({
     "agent_sessions",
     # what the Chat's tools changed, kept for undo (backend/chat_undo.py)
     "cc_changes",
+    # products deleted from Parts with their stock lines and files, restorable for a while (backend/parts_trash.py)
+    "parts_trash",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

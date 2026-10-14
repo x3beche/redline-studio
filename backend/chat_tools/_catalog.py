@@ -201,6 +201,6 @@ async def edit_product(db, mid: str, pid: str, f: dict, by: dict | None = None) 
 
 
 async def delete_products(db, mid: str, ids: list[str]) -> int:
-    from .. import catalog_builtin
-    src = catalog_builtin.writable(mid)
-    return await (src.delete(db, ids) if src else mf.delete_products(db, mid, ids))
+    """Into Parts' Deleted, with their stock lines and files (backend/parts_trash.py)."""
+    from .. import parts_trash
+    return await parts_trash.trash_products(db, mid, ids, how="chat")

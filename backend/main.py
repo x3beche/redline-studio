@@ -145,6 +145,10 @@ app.include_router(taste_api.router)
 # The Taste check before a note is marked applied (backend/taste_check.py).
 from . import taste_check  # noqa: E402
 app.include_router(taste_check.router)
+# Parts' Deleted: products deleted with their stock and files, restorable (backend/parts_trash.py) -
+# before the catalog's routes, so /api/manufacturers/trash is not a maker's id.
+from . import parts_trash  # noqa: E402
+app.include_router(parts_trash.router)
 # Manufacturers: makers' catalogs, explored from their sites (backend/manufacturers.py).
 from . import manufacturers as manufacturers_api  # noqa: E402
 app.include_router(manufacturers_api.router)
@@ -2701,8 +2705,10 @@ async def add_part(lcsc_id: str, force: bool = False, refresh: bool = False):
 
 @app.delete("/api/parts/{lcsc_id}")
 async def drop_part(lcsc_id: str):
-    # out of this account's drawer; the cache stays while another holds it
-    if not await lcsc.let_go(db(), lcsc_id):
+    # out of this account's drawer, into Parts' Deleted with its stock lines and files (backend/parts_trash.py);
+    # the cache stays while another holds it, or while it may be restored
+    from . import parts_trash
+    if not await parts_trash.trash_products(db(), "lcsc", [lcsc_id]):
         raise HTTPException(404, lcsc_id)
     return {"deleted": lcsc_id}
 
@@ -3173,6 +3179,8 @@ async def _start_sampler():
             asyncio.create_task(cc_chat.retitle_loop(db().raw))
             # Files' trash: what is past its days, deleted for good, every hour (backend/files.py).
             asyncio.create_task(files.trash_loop(db().raw))
+            # Parts' Deleted likewise: units past their days purged (backend/parts_trash.py).
+            asyncio.create_task(parts_trash.trash_loop(db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
         except Exception as exc:                       # noqa: BLE001 - the rest of the server still starts

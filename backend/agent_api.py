@@ -111,6 +111,56 @@ async def _run(body: dict):
         # The cache is everyone's: another space fetches through the
         # server (POST /api/parts/{code}), which keeps to its drawer.
         raise HTTPException(403, "the parts cache is written through POST /api/parts/{code} from this space")
+    if coll in _PRODUCTS and op in ("delete_one", "delete_many"):
+        return _json({"deleted_count": await _parts_delete(d, coll, op, a["filter"])})
+    if coll == "inventory" and op not in READS:
+        await _counts_a_product(d, op, a)
+    before = [x async for x in c.find(a["filter"])] if coll == "manufacturers" and op not in READS and "filter" in a else []
+    res = await _do(c, d, coll, op, a)
+    from . import parts_trash
+    for x in before:
+        # products a write took out of a catalog go to Parts' Deleted with their stock and files
+        await parts_trash.dropped(d, x["_id"], x.get("products") or [], how="agent")
+    return res
+
+
+# The collections a Parts product lives in: a delete through here goes to
+# Parts' Deleted with the product's stock lines and files (backend/parts_trash.py).
+_PRODUCTS = frozenset({"manufacturers", "own_items", "linked_parts"})
+
+
+async def _parts_delete(d, coll: str, op: str, flt: dict) -> int:
+    from . import parts_trash
+    docs = [x async for x in d[coll].find(flt)]
+    for x in docs[:1] if op == "delete_one" else docs:
+        if coll == "manufacturers":
+            await parts_trash.trash_maker(d, x["_id"], how="agent")
+        elif coll == "own_items":
+            await parts_trash.trash_products(d, "own", [x["_id"]], how="agent")
+        else:
+            await parts_trash.trash_products(d, x["source"], [x["key"]], how="agent")
+    n = len(docs[:1] if op == "delete_one" else docs)
+    if n:
+        await actors.audit(d, "delete", coll, {"op": op, "count": n, "filter": json_util.dumps(flt)[:300],
+                                               "to": "parts_trash"})
+    return n
+
+
+async def _counts_a_product(d, op: str, a: dict) -> None:
+    """A stock line written through here counts a product that is in Parts, or is refused."""
+    from . import inventory
+    docs = [a["doc"]] if "doc" in a else list(a.get("docs") or [])
+    upd = a.get("update") or {}
+    docs += [x for x in (upd.get("$set") or {}, upd.get("$setOnInsert") or {}) if "catalog" in x]
+    for x in docs:
+        if x.get("catalog"):
+            try:
+                await inventory.link_catalog(d, inventory._catalog_ref(x["catalog"]))
+            except ValueError as exc:
+                raise HTTPException(400, f"a stock line counts a product in Parts: {exc}") from exc
+
+
+async def _do(c, d, coll: str, op: str, a: dict):
     if op == "find":
         cur = c.find(a.get("filter") or {}, a.get("projection"))
         if a.get("sort"):

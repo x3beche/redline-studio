@@ -1622,7 +1622,10 @@ def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False,
     replaces the catalog with what it found, keeping what was added or
     changed by hand - and the products whose ids are in `keep`: those
     holding files or counted in stock (product_files.kept_ids), so a site
-    that stops listing one never takes its STEP or its stock line away."""
+    that stops listing one never takes its STEP or its stock line away.
+    Such a site's product is marked `gone_at` (gone from the site) until
+    a run finds it again; one dropped holds nothing, so nothing goes to
+    Parts' Deleted with it."""
     index: dict[str, dict] = {}
     for p in have:
         index.setdefault(product_key(p), p)
@@ -1641,9 +1644,13 @@ def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False,
             added += 1
         else:
             q = _refresh(old, p, at, keep_old=(not replace) or by_hand(old))
+            q.pop("gone_at", None)                      # listed again
         fresh[k] = q
     if replace:
         out = [p for p in have if (by_hand(p) or p.get("id") in keep) and product_key(p) not in fresh]
+        # A site's product kept although the site no longer lists it (it holds stock or files, or was
+        # changed by hand) is marked gone from the site, never deleted: the page says so.
+        out = [{**p, "gone_at": p.get("gone_at") or at} if p.get("source") != "manual" else p for p in out]
         out += list(fresh.values())
     else:
         out = [fresh.pop(product_key(p), p) for p in have]
@@ -2122,6 +2129,14 @@ def revised_product(old: dict, have: list[dict], fields: dict, by: dict | None =
 
 
 async def delete_products(db, mid: str, ids: list[str]) -> int:
+    """Products out of the catalog - into Parts' Deleted with their stock
+    lines and files, as every delete of a product does (backend/parts_trash.py)."""
+    from . import parts_trash
+    return await parts_trash.trash_products(db, mid, ids)
+
+
+async def drop_products(db, mid: str, ids: list[str]) -> int:
+    """The products out of the catalog's document only - parts_trash's step, never a delete on its own."""
     doc = await get(db, mid)
     if not doc:
         raise LookupError(f"no manufacturer {mid}")
@@ -3508,7 +3523,8 @@ async def api_delete(mid: str):
         _404(mid)
     if (doc.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    await remove(db, mid)
+    from . import parts_trash
+    await parts_trash.trash_maker(db, mid)
     return {"deleted": mid}
 
 
@@ -3567,11 +3583,11 @@ async def api_product_add(mid: str, body: ProductIn):
 
 @router.post("/{mid}/products/delete")
 async def api_products_delete(mid: str, body: ProductIds):
+    from . import parts_trash
     db = _db()
-    src = catalog_builtin.writable(mid)
     try:
-        n = await (src.delete(db, body.ids) if src else delete_products(db, mid, body.ids))
-    except LookupError as exc:
+        n = await parts_trash.trash_products(db, mid, body.ids)
+    except (LookupError, ValueError) as exc:
         _product_call(exc)
     return {"deleted": n, "manufacturer": await _maker_out(db, mid)}
 
@@ -3613,11 +3629,11 @@ async def api_product_correct(mid: str, pid: str, body: CorrectIn):
 
 @router.delete("/{mid}/products/{pid}")
 async def api_product_delete(mid: str, pid: str):
+    from . import parts_trash
     db = _db()
-    src = catalog_builtin.writable(mid)
     try:
-        n = await (src.delete(db, [pid]) if src else delete_products(db, mid, [pid]))
-    except LookupError as exc:
+        n = await parts_trash.trash_products(db, mid, [pid])
+    except (LookupError, ValueError) as exc:
         _product_call(exc)
     if not n:
         raise HTTPException(404, f"no product {pid}")

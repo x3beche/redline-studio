@@ -10,6 +10,7 @@ import { Skeleton } from '../skeleton';
 import { MeshThumbs } from './mesh-thumb';
 import { StoredFile } from './files-model';
 import { StockPanel, StockState, qty } from './stock';
+import { PartsTrash } from './parts-trash';
 import { BackCloses, GalleryModel, ProductFilesPanel, ProductGallery } from './product-files';
 
 /** McMaster-Carr and GrabCAD in Parts: search-and-link sources
@@ -116,6 +117,7 @@ function stamp(iso: string | null | undefined): string {
 @Injectable()
 export class LinkedDesk {
   private http = inject(HttpClient);
+  private ptrash = inject(PartsTrash);
   private auth = inject(Auth);
   private solids = inject(MeshThumbs);
   /** Bumped when a saved item changes: the catalog reads the source again. */
@@ -234,7 +236,7 @@ export class LinkedDesk {
     if (!keys.length) return false;
     const m = this.meta(src);
     if (ask && !await Confirm.ask({ title: keys.length === 1 ? fmt('Remove {k} from {s}?', { k: keys[0], s: m.name }) : fmt('Remove {n} saved items from {s}?', { n: keys.length, s: m.name }),
-                                    text: t('Their CAD files stay in Files.'), ok: t('Remove'), danger: true })) return false;
+                                    text: await this.ptrash.goesWith(src, keys), ok: t('Remove'), danger: true })) return false;
     let gone = 0;
     for (const k of keys) {
       try { await firstValueFrom(this.http.delete(`${this.base(src)}/parts/${encodeURIComponent(k)}`)); gone++; }

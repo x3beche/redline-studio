@@ -75,7 +75,8 @@ KEYS = ("id", "file", "_id", "key")   # what tells the members of a list of dict
 # What a target is called on the page (English keys of i18n.ts).
 KIND = {"inventory": "stock line", "manufacturers": "catalog", "own_items": "My Items product",
         "product_files": "product files", "linked_parts": "saved part", "notes": "note", "cc_chats": "chat",
-        "files": "file", "revisions": "queued note", "models": "model", "lcsc_parts": "drawer"}
+        "files": "file", "revisions": "queued note", "models": "model", "lcsc_parts": "drawer",
+        "parts_trash": "Parts' Deleted"}
 
 
 class Conflict(Exception):

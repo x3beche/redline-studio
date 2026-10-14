@@ -9,6 +9,7 @@ import { PartCard } from './part-card';
 import { warmPart } from './part-assets';
 import { StockPanel } from './stock';
 import { ProductFilesPanel } from './product-files';
+import { PartsTrash } from './parts-trash';
 
 /** An add being watched (backend main.py /api/parts-add). */
 export interface PartAdd {
@@ -27,6 +28,7 @@ export interface PartAdd {
 export class PartDesk implements OnDestroy {
   readonly store = inject(Parts);
   private http = inject(HttpClient);
+  private ptrash = inject(PartsTrash);
   private auth = inject(Auth);
 
   /** The drawer of parts, and what a search in LCSC turned up. */
@@ -223,8 +225,9 @@ export class PartDesk implements OnDestroy {
     const warn = !used ? t('Could not check which boards use them.')
       : one ? (usedIds.length ? on(used[ids[0]]) : '')
       : usedIds.map(c => `${c} · ${on(used![c])}`).join('\n');
+    const goes = await this.ptrash.goesWith('lcsc', ids);
     return Confirm.ask({ title: one ? t('Remove this part from the drawer?') : fmt('Remove {n} parts from the drawer?', { n: ids.length }),
-                         text: (warn ? warn + '\n\n' : '') + ids.join(', '), ok: t('Remove'), danger: true });
+                         text: (warn ? warn + '\n\n' : '') + ids.join(', ') + (goes ? '\n' + goes : ''), ok: t('Remove'), danger: true });
   }
 
   ngOnDestroy() { clearTimeout(this.addTimer); }

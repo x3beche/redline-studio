@@ -22,8 +22,11 @@ Where the references are kept:
     the catalog, so a site read again never drops it; and a full
     exploration keeps a product that holds files or stock even when the
     site no longer lists it (manufacturers.fold_in `keep`). A product
-    deleted by hand leaves its document behind as an orphan, the files
-    still in Files: `summary` says how many there are.
+    deleted takes its document into Parts' Deleted with it
+    (backend/parts_trash.py), the files still in Files; it comes back
+    when the product is restored. Orphans - documents whose product was
+    deleted before that, the files still in Files - are moved there by
+    tools/parts_trash_orphans.py; `summary` and `orphans` still name any.
 
 Each file has a role, read from its kind and name unless the person says:
 a STEP, STP, STL, 3MF, OBJ or GLB is a 3D `model`; a PDF a `datasheet` (a
