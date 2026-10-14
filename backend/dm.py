@@ -675,9 +675,12 @@ async def _product(db, ref):
         return None
     d, p = got
     mid, pid = d["_id"], str(p["id"])
+    from . import product_files
     from .chat_tools import _catalog
+    # Its files stay the sender's (in their Files); the card says they are there.
     return (p.get("name") or pid, [d.get("name") or mid, stock_line(await _on_hand(db, mid, pid)), p.get("sku") or "",
-                                    _catalog.price(p).split(": ", 1)[-1], _catalog.stock(p), p.get("category") or ""],
+                                    _catalog.price(p).split(": ", 1)[-1], _catalog.stock(p), p.get("category") or "",
+                                    await product_files.card_line(db, mid, pid)],
             {"maker": mid, "name": p.get("name") or ""})
 
 

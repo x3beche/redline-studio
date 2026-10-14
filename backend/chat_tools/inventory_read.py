@@ -8,10 +8,16 @@ from . import Ctx, Result, Tool, clip
 from ._inventory import amount, block, one
 
 
+def _product_of(d: dict) -> dict:
+    """The Parts product the line counts, kept on the step (m, pid): "this product" for the product tools."""
+    c = d.get("catalog") or {}
+    return {"m": c["manufacturer"], "pid": c["product"]} if c.get("manufacturer") and c.get("product") else {}
+
+
 async def run(ctx: Ctx, args: dict) -> Result:
     d = await one(ctx.db, args.get("item"))
     return Result(text=clip(block(d, 60)), say="Read the stock of {name}",
-                  vars={"name": d.get("name") or d["_id"], "item": d["_id"]},
+                  vars={"name": d.get("name") or d["_id"], "item": d["_id"], **_product_of(d)},
                   summary=amount(d) + (f" · {d['location']}" if d.get("location") else ""))
 
 

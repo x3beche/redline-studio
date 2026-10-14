@@ -1612,14 +1612,17 @@ def _refresh(old: dict, new: dict, at: str, keep_old: bool) -> dict:
     return p
 
 
-def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False) -> tuple[list[dict], int]:
+def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False,
+            keep: set[str] | frozenset = frozenset()) -> tuple[list[dict], int]:
     """A run's products into the catalog `have`: (catalog, how many are
     new). The same product (by its code, else its name) is read again -
     its id, its first date and its readings kept, its price and stock
     brought up to date (_refresh); a new one starts its readings. A page
     read adds (`replace` off: nothing is dropped); a full exploration
     replaces the catalog with what it found, keeping what was added or
-    changed by hand."""
+    changed by hand - and the products whose ids are in `keep`: those
+    holding files or counted in stock (product_files.kept_ids), so a site
+    that stops listing one never takes its STEP or its stock line away."""
     index: dict[str, dict] = {}
     for p in have:
         index.setdefault(product_key(p), p)
@@ -1640,7 +1643,7 @@ def fold_in(have: list[dict], found: list[dict], at: str, replace: bool = False)
             q = _refresh(old, p, at, keep_old=(not replace) or by_hand(old))
         fresh[k] = q
     if replace:
-        out = [p for p in have if by_hand(p) and product_key(p) not in fresh]
+        out = [p for p in have if (by_hand(p) or p.get("id") in keep) and product_key(p) not in fresh]
         out += list(fresh.values())
     else:
         out = [fresh.pop(product_key(p), p) for p in have]
@@ -2625,7 +2628,9 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
             if got["products"] or not have:
                 # The site's catalog replaces the old one; what was added or changed by hand stays,
                 # and a product found again keeps its id, its first date and its price readings.
-                sets["products"], _ = fold_in(have, got["products"], _now(), replace=True)
+                from . import product_files
+                sets["products"], _ = fold_in(have, got["products"], _now(), replace=True,
+                                              keep=await product_files.kept_ids(db, mid))
             if doc.get("name_auto") and got["company"]["name"]:
                 sets["name"] = got["company"]["name"][:120]
             added = None
@@ -3431,6 +3436,13 @@ async def import_doc(db, data: dict, by: dict) -> dict:
             "docs": docs, "explored_at": data.get("explored_at") if isinstance(data.get("explored_at"), str) else None,
             "imported": {"by": _clean(data.get("by"), 120), "at": _now(), "count": len(prods)}}
     await db[COLL].update_one({"_id": doc["_id"]}, {"$set": sets})
+    # Files its products held where it was exported: attached again where Files here holds the same bytes.
+    refs = {product_key(x): x["attachments"] for x in (data.get("products") or [])[:MAX_PRODUCTS]
+            if isinstance(x, dict) and isinstance(x.get("attachments"), list) and x.get("name")}
+    if refs:
+        from . import product_files
+        got = await product_files.import_refs(db, doc["_id"], prods, refs, by)
+        await db[COLL].update_one({"_id": doc["_id"]}, {"$set": {"imported.files": got}})
     return await get(db, doc["_id"])
 
 
@@ -3457,10 +3469,16 @@ async def api_get(mid: str):
 
 @router.get("/{mid}/export")
 async def api_export(mid: str):
+    from . import product_files
     doc = await get(_db(), mid)
     if not doc:
         _404(mid)
-    return export_doc(doc)
+    out = export_doc(doc)
+    # The files attached to its products go as references (name, role, hash): the bytes stay in Files.
+    refs = await product_files.export_refs(_db(), mid)
+    if refs:
+        out["products"] = [{**p, "attachments": refs[p["id"]]} if p.get("id") in refs else p for p in out["products"]]
+    return out
 
 
 @router.patch("/{mid}")

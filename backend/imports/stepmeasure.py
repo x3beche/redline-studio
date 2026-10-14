@@ -24,7 +24,9 @@ STEP holds the interpreter for a second or more.
     python -m backend.imports.stepmeasure in.step
 
 prints one JSON line: {"size": [x, y, z], "axis": "z", "screw": {...} or
-null, "seconds": s}, or {"error": "..."} with exit status 1.
+null, "solids": n, "seconds": s}, or {"error": "..."} with exit status 1.
+An assembly - more than one solid - is its overall box and how many solids
+it holds; it is never read as a screw (a screw with its nut is not one).
 """
 
 from __future__ import annotations
@@ -68,6 +70,17 @@ def _box(shape):
         raise ValueError("the STEP file has no shapes in it")
     lo, hi = box.CornerMin(), box.CornerMax()
     return [lo.X(), lo.Y(), lo.Z()], [hi.X(), hi.Y(), hi.Z()]
+
+
+def _solids(shape) -> int:
+    """How many solids the file holds: one for a part, more for an assembly."""
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    n, exp = 0, TopExp_Explorer(shape, TopAbs_SOLID)
+    while exp.More():
+        n += 1
+        exp.Next()
+    return n
 
 
 def _triangles(shape, deflection: float):
@@ -190,10 +203,12 @@ def measure(src: str) -> dict:
     size = [hi[i] - lo[i] for i in range(3)]
     axis = max(range(3), key=lambda i: size[i])
     o = [i for i in range(3) if i != axis]
-    out = {"size": [round(x, 2) for x in size], "axis": "xyz"[axis], "screw": None}
+    solids = _solids(shape)
+    out = {"size": [round(x, 2) for x in size], "axis": "xyz"[axis], "screw": None, "solids": solids}
     across = sorted(size[i] for i in o)
-    # Only a round, long part is sliced: a fan or a bracket is its box.
-    if across[0] > 0 and (across[1] - across[0]) <= ROUND * across[1] and size[axis] >= 1.25 * across[1]:
+    # Only a round, long part is sliced: a fan or a bracket is its box, an assembly its overall box.
+    if solids <= 1 and across[0] > 0 and (across[1] - across[0]) <= ROUND * across[1] \
+            and size[axis] >= 1.25 * across[1]:
         diag = sum(x * x for x in size) ** 0.5
         tris = _triangles(shape, max(diag * 0.002, 0.002))
         if len(tris):

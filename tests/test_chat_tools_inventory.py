@@ -164,7 +164,7 @@ def test_search_and_read(ws):
     assert got.say == "Found {n} items on hand" and got.vars == {"n": 2}
     assert "\"ESP32-C3 module\"  2 pcs  at Shelf B  LOW (minimum 5)" in got.text and "3 roll  at Cabinet" in got.text
     low = call(db, "inventory_search", {"low": True})
-    assert low.vars == {"n": 1} and "PLA" not in low.text
+    assert low.vars["n"] == 1 and low.vars["m"] == "own" and "PLA" not in low.text   # one line: "this product" too
     none = call(db, "inventory_search", {"query": "stepper"})
     assert none.say == "Nothing on hand matches {q}" and "Categories: Filament, Modules" in none.text
     run(inv.adjust(db, run(inv.everything(db))[0]["_id"], -1, "a prototype", ME))
@@ -205,7 +205,7 @@ def test_a_viewer_reads_but_changes_nothing(ws):
     db, _, state = ws
     d, _ = run(inv.add(db, {"name": "Fan 40mm", "quantity": 6}, ME))
     state["role"] = "viewer"
-    assert call(db, "inventory_search", {}).vars == {"n": 1}
+    assert call(db, "inventory_search", {}).vars["n"] == 1
     for name, args in (("inventory_add", {"items": [{"name": "x", "quantity": 1}]}),
                        ("inventory_adjust", {"item": d["_id"], "change": 1, "reason": "x"}),
                        ("inventory_edit", {"item": d["_id"], "set": {"location": "y"}}),

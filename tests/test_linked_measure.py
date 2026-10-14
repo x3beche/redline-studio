@@ -93,7 +93,8 @@ def test_only_a_screw_by_name_gets_a_length_under_the_head():
     v = lm.view(_item(title="Male-Female Threaded Hex Standoff", specs={"Length": "30 mm"}))
     assert v["rows"] == [["Size", "6 × 6 × 27.45 mm"]] and v["mismatch"] == [] and not v["screw"]
     assert lm.view(_item(title="Fan", measured={}))["pending"] is True          # not measured yet
-    assert lm.view({**_item(), "cad": {"kind": "mesh", "sha256": "x"}}) is None   # no STEP: nothing to say
+    assert lm.view({**_item(), "cad": {"kind": "pdf", "sha256": "x"}}) is None    # no 3D file: nothing to say
+    assert lm.view({**_item(), "cad": {"kind": "mesh", "sha256": "x"}})["pending"] is True   # a mesh is measured too
     gone = lm.view(_item(measured={"v": lm.VERSION, "sha256": "abc", "error": "unreadable"}))
     assert gone["error"] == "unreadable" and gone["rows"] == []
     assert lm._mm_of("1-1/4\"") == pytest.approx(31.75) and lm._mm_of("0.5 in") == pytest.approx(12.7)

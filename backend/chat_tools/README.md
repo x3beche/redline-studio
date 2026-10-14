@@ -56,6 +56,18 @@ through the workspace, and the list of them when the name fits nothing).
 
 - Parts: `drawer_search`, `drawer_list`, `lcsc_search`, `drawer_add`,
   `datasheet_get`, `datasheet_read`.
+- Files on Parts products (package `mfr`; backend/product_files.py, the
+  helper `_product.py`): `product_find` (a product of any source by words,
+  with its `maker:product` ids), `product_files_read` (its files and what
+  its 3D model measured), `product_file_attach` (change, on: a STEP, PDF or
+  picture onto a product - the files attached to the person's latest line,
+  Files ids, or a link; a STEP is its model and measured, the answer waits
+  a little for the size), `product_file_detach` (delete: asks first),
+  `product_set_main` (an attached picture or model made the product's
+  own), `product_to_model` (its model into a CAD project, as Files' "Add to
+  project": a build, no agent), `product_files_missing` (which have no 3D
+  model or datasheet) and `product_to_my_items` (change, off). A product
+  left unnamed is the one the conversation's last product step named.
 - `basic_tool`: the Tools tab's calculators, in two steps - `task` finds
   them (tool_router.py, as the MCP server's find_tool) with their inputs,
   `id` + `input` runs one (tools_api.py `run_kit`: its own tool.js, in a

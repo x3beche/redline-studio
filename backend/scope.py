@@ -52,6 +52,8 @@ SCOPED = frozenset({
     "linked_parts",
     # the Parts page's My Items: things no site sells, typed in by hand (backend/catalog_own.py)
     "own_items",
+    # the files attached to any Parts product: its 3D model, datasheets, drawings, pictures (backend/product_files.py)
+    "product_files",
     # the agent sessions' heartbeats: who holds a note, and whether it is still there (backend/asks.py)
     "agent_sessions",
 })

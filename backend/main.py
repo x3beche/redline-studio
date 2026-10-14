@@ -150,6 +150,9 @@ app.include_router(inventory_api.router)
 from . import linked, mcmaster  # noqa: E402
 app.include_router(linked.router)
 app.include_router(mcmaster.router)
+# Files on any Parts product: its 3D model (measured), datasheets, drawings, pictures (backend/product_files.py).
+from . import product_files  # noqa: E402
+app.include_router(product_files.router)
 
 
 def _raw_db():

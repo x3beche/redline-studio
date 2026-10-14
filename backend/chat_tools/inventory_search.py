@@ -50,7 +50,9 @@ async def run(ctx: Ctx, args: dict) -> Result:
     text = head + "\n".join(line(d) for d in rows[:limit])
     if len(rows) > limit:
         text += f"\n[... {len(rows) - limit} more - narrow the search]"
-    return Result(text=clip(text), say="Found {n} items on hand", vars={"n": len(rows)},
+    from .inventory_read import _product_of
+    return Result(text=clip(text), say="Found {n} items on hand",
+                  vars={"n": len(rows), **(_product_of(rows[0]) if len(rows) == 1 else {})},
                   summary="\n".join(f"{d.get('name')} · {amount(d)}" + (f" · {d['location']}" if d.get("location") else "")
                                     for d in rows[:15]))
 

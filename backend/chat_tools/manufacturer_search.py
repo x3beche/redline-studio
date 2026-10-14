@@ -31,6 +31,20 @@ def _line(d: dict) -> str:
     return line
 
 
+def _files(h: dict | None) -> str:
+    """What files a product holds (backend/product_files.py), for its line: [files: 3D model STEP 6 × 6 × 27 mm, 1 datasheet]."""
+    if not h:
+        return ""
+    bits = []
+    if h.get("cad"):
+        box = " × ".join(f"{x:g}" for x in h["box"]) + " mm" if h.get("box") else ""
+        bits.append(f"3D model {h['cad'].upper() if h['cad'] == 'step' else 'mesh'}" + (f" {box}" if box else ""))
+    for r, n in (h.get("roles") or {}).items():
+        if r != "model":
+            bits.append(f"{n} {r}")
+    return f" [files: {', '.join(bits)}; product_files_read reads them]" if bits else ""
+
+
 async def _builtins(ctx: Ctx) -> list[dict]:
     """The built-in sources (LCSC's drawer, the McMaster-Carr parts and GrabCAD
     models saved here, My Items) as makers with products - only those holding some."""
@@ -97,14 +111,18 @@ async def run(ctx: Ctx, args: dict) -> Result:
                 "a synonym, or fewer words. Parts not saved here can be looked up on McMaster-Carr with "
                 "mcmaster_find (models on GrabCAD with grabcad_find)." + (f" Categories there: {', '.join(cats)}." if cats else ""))
         return Result(text=text, say="Nothing found for {q}", vars={"q": q or cat}, summary="no match")
+    from .. import product_files as pf
+    held = (await pf.summary(ctx.db))["products"]
     lines = []
     for d, p, _ in hits:
         lines.append(f"- {d.get('name')} ({d['_id']}): " + mf.product_line(p, 10, stock.get(d["_id"], {}))
-                     + (f" [image {p['image']}]" if p.get("image") else ""))
+                     + (f" [image {p['image']}]" if p.get("image") else "") + _files(held.get(f"{d['_id']}:{p['id']}")))
     text = (f"{len(hits)} product(s) of {where} for {what}, best matches first. The manufacturer's (id) and the "
             "product's [id] are how inventory_add counts one in stock; [in stock: ...] is what is on hand of it:\n"
             + "\n".join(lines))
-    return Result(text=clip(text), say="Found {n} products for {q}", vars={"n": len(hits), "q": q or cat},
+    # One product found: "this product" for the product tools (backend/chat_tools/_product.py).
+    one_hit = {"m": hits[0][0]["_id"], "pid": str(hits[0][1]["id"])} if len(hits) == 1 else {}
+    return Result(text=clip(text), say="Found {n} products for {q}", vars={"n": len(hits), "q": q or cat, **one_hit},
                   summary="\n".join(f"{d.get('name')} · {p['name']}" for d, p, _ in hits[:15]))
 
 

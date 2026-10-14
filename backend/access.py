@@ -138,6 +138,11 @@ _RULES: list[tuple[str, str, str]] = [
     # extraction is) and cancelling a run; the routes keep deleting someone
     # else's manufacturer or run to those who may delete. Reading them,
     # their runs and the proxy's state is looking
+    # a product's 3D model into a project as a model of its own changes the
+    # design, as Files' "Add to project" (backend/product_files.py); attaching
+    # files to a product is the catalog's, detaching someone else's needs the
+    # right to delete (the route says)
+    ("POST", "/api/manufacturers/{}/products/{}/to-model", "edit"),
     ("POST", "/api/manufacturers(/.*)?", "draw"),
     ("PATCH", "/api/manufacturers/.+", "draw"),
     ("PUT", "/api/manufacturers/.+", "draw"),

@@ -57,6 +57,16 @@ through the server, like `files`:
     python tools/revisions.py linked to-model mcmaster:91290A115 --folder lamp/purchased [--title T]
                                                                    one as a model of its own (import it by name)
 
+Files on any Parts product - a site's, My Items, an LCSC part, a McMaster
+or GrabCAD item: its 3D model (measured), datasheets, drawings, pictures
+(backend/product_files.py); a product is <maker id>:<product id>:
+
+    python tools/revisions.py product files <maker:product>        its files, and what its 3D model measured
+    python tools/revisions.py product attach <maker:product> --file ID [--file ID] | --url URL
+                                                                   attach Files ids or a file's link (a STEP becomes its model)
+    python tools/revisions.py product to-model <maker:product> --folder F [--title T]
+                                                                   its 3D model as a model of its own
+
 Reading a PDF - a datasheet in Files, a part's datasheet, or one on disk
 (backend/pdftext.py); ids go through the server, a local path is read here:
 
@@ -2400,7 +2410,10 @@ def cmd_linked(args):
             raise ApiError("linked to-model <source>:<key> --folder F (e.g. mcmaster:91290A115 --folder lamp/purchased)")
         src, key = args.target.split(":", 1)
         body = {"folder": args.folder, **({"title": args.title} if args.title else {})}
-        got = api_call(f"/api/linked/{_q(src)}/parts/{_q(key)}/to-model", "POST", body, timeout=300)
+        # Another source's product (a site's, My Items, LCSC) takes its 3D model the same way.
+        path = (f"/api/linked/{_q(src)}/parts/{_q(key)}/to-model" if src in ("mcmaster", "grabcad")
+                else f"/api/manufacturers/{_pq(src)}/products/{_pq(key)}/to-model")
+        got = api_call(path, "POST", body, timeout=300)
         print(f"model {got['model']} ({got['title']}) from {got['upload']} - building (job {got.get('build_job')})")
         return
     shown = 0
@@ -2422,6 +2435,53 @@ def cmd_linked(args):
                 print("    no CAD file yet - the person downloads it from the page and drops it on the part")
     if not shown:
         print("no saved parts with a CAD file" + ("" if args.all else " (--all lists those without one too)"))
+
+
+def _pq(v: str) -> str:
+    import urllib.parse
+    return urllib.parse.quote(v, safe="")
+
+
+def cmd_product(args):
+    """The files of any Parts product (backend/product_files.py): read,
+    attached by Files id or by a link, or its 3D model into a project."""
+    if not args.target or ":" not in args.target:
+        raise ApiError("product files|attach|to-model <maker:product> (the ids the Parts page and the Chat give)")
+    mid, pid = (x.strip() for x in args.target.split(":", 1))
+    base = f"/api/manufacturers/{_pq(mid)}/products/{_pq(pid)}"
+    if args.what == "attach":
+        if not args.file and not args.url:
+            raise ApiError("product attach <maker:product> --file <Files id> [--file ...] | --url <link to the file>")
+        body = {"url": args.url} if args.url else {"files": args.file}
+        got = api_call(base + "/files/attach", "POST", body, timeout=300)
+        for r in got.get("report") or []:
+            print(f"{r['status']:<9} {r.get('name')} ({r.get('role') or '-'})" + (f" - {r['why']}" if r.get("why") else "")
+                  + (" - its 3D model now" if r.get("main") and r.get("role") == "model" else ""))
+    elif args.what == "to-model":
+        if not args.folder:
+            raise ApiError("product to-model <maker:product> --folder F")
+        body = {"folder": args.folder, **({"title": args.title} if args.title else {})}
+        got = api_call(base + "/to-model", "POST", body, timeout=300)
+        print(f"model {got['model']} ({got['title']}) from {got['upload']} - building (job {got.get('build_job')})")
+        return
+    else:
+        got = api_call(base + "/files")
+    print(f"{got['name']}  [{got['maker']}:{got['product']}] of {got['maker_name']}")
+    for f in got.get("files") or []:
+        tag = " [3D model]" if (got.get("cad") or {}).get("file") == f["file"] else ""
+        print(f"    {f['file']}  {f['name']}  {f['role']}, {f['kind']}, {f['bytes'] // 1024} kB{tag}")
+    m = got.get("measured")
+    if m and m.get("pending"):
+        print("    measuring its 3D model - ask again in a moment")
+    elif m and m.get("error"):
+        print(f"    its 3D model could not be measured: {m['error']}")
+    elif m:
+        for what, value in m.get("rows") or []:
+            print(f"    {what}: {value}")
+        for b in m.get("mismatch") or []:
+            print(f"    MISMATCH {b['what']}: its words say {b['said']}, the model measures {b['measured']}")
+    if not got.get("files"):
+        print("    no files attached")
 
 
 # ---------------------------------------------------------------- firmware
@@ -2776,6 +2836,16 @@ def main() -> None:
     s.add_argument("--folder", help="to-model: the catalog folder it goes in (e.g. lamp/purchased)")
     s.add_argument("--title", help="to-model: the model's name (default: the source, key and title)")
     s.set_defaults(fn=cmd_linked, sync=True)
+    s = sub.add_parser("product", help="the files of any Parts product - its 3D model (measured), datasheets, "
+                                       "drawings, pictures (backend/product_files.py)")
+    s.add_argument("what", choices=["files", "attach", "to-model"],
+                   help="files: list them; attach: Files ids (--file) or a link (--url); to-model --folder F")
+    s.add_argument("target", help="<maker id>:<product id>, e.g. own:3f2a9c1b0d4e or lcsc:C25744")
+    s.add_argument("--file", action="append", help="attach: a Files id (again for more)")
+    s.add_argument("--url", help="attach: a direct link to the file (never mcmaster.com or grabcad.com)")
+    s.add_argument("--folder", help="to-model: the catalog folder it goes in")
+    s.add_argument("--title", help="to-model: the model's name")
+    s.set_defaults(fn=cmd_product, sync=True)
     s = sub.add_parser("pdf", help="read a PDF: its text, or a page as a picture "
                                    "(a Files id, an LCSC number's datasheet, or a local file)")
     s.add_argument("what", choices=["text", "page"],
