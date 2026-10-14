@@ -16,6 +16,7 @@
  *    /files                   /files/mine/<folder>     /files/app/<area…>
  *    /files/storage           /files/deleted
  *    /basic-tools/<tool>      /settings/<section>      /analytics
+ *    /notifications           (the notification centre's page)
  *
  *  What has no place in the path (a search, a filter, ?rev=, ?shot=) stays in
  *  the query. An old link (?ws=catalog&m=…, ?model=…&rev=…, ?ws=chat&chat=…)
@@ -26,12 +27,14 @@
  *  Pure functions only, so nav-url.spec.ts can check every way there and back.
  */
 
-export type RoomId = 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+export type RoomId = 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze'
+  | 'notifications';
 
 /** Each room's first path segment. */
 export const ROOM_PATH: Record<RoomId, string> = {
   cad: '3d', pcb: 'pcb', firmware: 'firmware', notes: 'notes', taste: 'taste', mfr: 'parts',
   commandcode: 'chat', files: 'files', tools: 'basic-tools', settings: 'settings', analyze: 'analytics',
+  notifications: 'notifications',
 };
 const PATH_ROOM: Record<string, RoomId> = Object.fromEntries(
   Object.entries(ROOM_PATH).map(([id, p]) => [p, id as RoomId])) as Record<string, RoomId>;
@@ -50,6 +53,7 @@ export const ROOM_KEYS: Record<RoomId, string[]> = {
   tools: ['tool'],
   settings: ['section'],
   analyze: ['range', 'project'],
+  notifications: [],
 };
 
 /** The values that make a place of their own: a change of one is a new entry
@@ -60,7 +64,7 @@ export const ROOM_KEYS: Record<RoomId, string[]> = {
 export const PLACE_KEYS: Record<RoomId, string[]> = {
   cad: ['model'], pcb: ['board'], firmware: ['fw'], notes: ['note'], taste: ['palette', 'run'],
   mfr: ['m', 'run', 'sub'], commandcode: ['chat', 'thread', 'dm'], files: ['dir'], tools: ['tool'],
-  settings: ['section'], analyze: [],
+  settings: ['section'], analyze: [], notifications: [],
 };
 
 /** The names the rooms had in old addresses (?ws=chat, ?ws=catalog, ...). */

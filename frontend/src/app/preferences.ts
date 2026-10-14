@@ -13,7 +13,7 @@ import { TreeLook, currentTree, setTree } from './editor/tree-prefs';
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page). The owner
  *  and the admins also get the admin panel: the accounts (admin-users.ts).
  */
-export type PrefsTab = 'profile' | 'shares' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'dashboard' | 'admin' | 'rustdesk' | 'backups';
+export type PrefsTab = 'profile' | 'notifications' | 'shares' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'dashboard' | 'admin' | 'rustdesk' | 'backups';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {

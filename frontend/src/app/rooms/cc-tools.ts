@@ -9,7 +9,7 @@ import { Skeleton } from '../skeleton';
 import { onUsagePing } from '../cc-usage';
 
 /** Tabs with no tool package: Settings, Analytics. */
-const NO_PACKAGE = new Set(['settings', 'analyze']);
+const NO_PACKAGE = new Set(['settings', 'analyze', 'notifications']);
 
 /** What a tool may do, in the order it is asked about: reads run on their
  *  own, changes always leave a step in the answer, deletes ask first. */

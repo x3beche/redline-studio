@@ -34,7 +34,7 @@ export const GAP = 'gap';
 /** Where the More button stands. One more item in the order; never hidden. */
 export const MORE = 'more';
 /** Never in the bar's lists: always shown, never moved. */
-const FIXED = new Set<string>(['settings', 'analyze']);
+const FIXED = new Set<string>(['settings', 'analyze', 'notifications']);
 const KEY = 'redline.topbar';
 
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
@@ -338,6 +338,9 @@ export class TopbarFit implements OnDestroy {
     let reserve = 0;
     const settings = h.querySelector<HTMLElement>('.tcv-tab-end');
     if (settings) reserve += settings.getBoundingClientRect().width + (parseFloat(getComputedStyle(settings).marginRight) || 0) + gap;
+    // The bell beside it (notifications.ts).
+    const bell = h.querySelector<HTMLElement>('.tcv-bell');
+    if (bell) reserve += bell.getBoundingClientRect().width + gap;
     const chip = h.querySelector<HTMLElement>('.tcv-user-end');
     if (chip && getComputedStyle(chip).position !== 'absolute') reserve += chip.getBoundingClientRect().width + gap;
     const room = h.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - reserve;

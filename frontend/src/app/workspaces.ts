@@ -12,7 +12,8 @@ import { navParams } from './nav';
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze'
+    | 'notifications';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -99,6 +100,14 @@ export const WORKSPACES: Workspace[] = [
     label: 'Analytics',
     blurb: 'Everything the app has used: LLM tokens and money, the machine '
          + 'and its energy, the work in each room, storage, projects.',
+    ready: true,
+  },
+  {
+    // The notification centre's page (/notifications): opened from the bell
+    // beside Settings (notifications.ts), not a tab of its own.
+    id: 'notifications',
+    label: 'Notifications',
+    blurb: 'What happened while you were elsewhere: builds, drawings, questions, prices - kept 60 days.',
     ready: true,
   },
 ];

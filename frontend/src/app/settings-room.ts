@@ -8,6 +8,7 @@ import { ProxySettingsPanel } from './proxy-settings';
 import { CostsSettingsPanel } from './costs-settings';
 import { TelegramSettingsPanel } from './telegram-settings';
 import { TopbarSettingsPanel } from './topbar-settings';
+import { NotificationSettingsPanel } from './notification-settings';
 import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
@@ -67,7 +68,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -99,10 +100,10 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'shares' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'accent' : null">{{ (x.id === 'profile' || x.id === 'shares' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'accent' : null">{{ (x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
-          @if (x.id === 'profile' || x.id === 'shares') {
+          @if (x.id === 'profile' || x.id === 'shares' || x.id === 'notifications') {
             <span>{{ 'only you can change these' | t }}</span>
           } @else if (x.id === 'admin') {
             <span>{{ (auth.state()?.role === 'owner' ? 'owner: everything here' : 'admin: manages user accounts') | t }}</span>
@@ -371,6 +372,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('rustdesk') { @if (auth.admin()) { @defer { <app-rustdesk-settings /> } } }
         @case ('backups') { @if (auth.admin()) { @defer { <app-backups-settings /> } } }
         @case ('topbar') { @defer { <app-topbar-settings /> } }
+        @case ('notifications') { @defer { <app-notification-settings /> } }
         @case ('shortcuts') {
           <div class="st-page">
             <div class="st-row">
@@ -446,6 +448,9 @@ export class RoomSettings {
         blurb: 'Who you are here: your name and picture, your password, and where you are signed in.' },
       { id: 'shares', label: 'Shared links', about: 'read-only links you sent', ico: 'M15.5 5.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M3.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M15.5 18.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M8.2 10.8l7.6-4M8.2 13.2l7.6 4',
         blurb: 'Links to a model, a board or a drawing that open without an account; how often they were opened, and turning them off.' },
+      { id: 'notifications', label: 'Notifications', about: 'the bell, toasts, and what comes on Telegram',
+        ico: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0',
+        blurb: 'What you hear about: in the app under the bell, as a toast, and on Telegram.' },
     ] },
     { group: 'This browser', items: [
       { id: 'appearance', label: 'Appearance', about: 'theme', ico: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 3v18M12 8h6M12 12h9M12 16h6',

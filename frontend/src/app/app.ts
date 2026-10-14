@@ -29,6 +29,8 @@ import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 import { ConfirmHost } from './confirm';
 import { Toasts } from './toast';
+import { NotifyBell } from './notifications';
+import { RoomNotifications } from './rooms/notifications';
 import { DmSend, DmStore } from './dm';
 import { DmViewer } from './rooms/dm-viewer';
 import { Avatar } from './avatar';
@@ -36,12 +38,12 @@ import { navHold, navHref, navParams, navPopped, navSet, navTitle } from './nav'
 import { ROOM_KEYS, RoomId, roomOf } from './nav-url';
 
 /** The sections of Settings an address may name (/settings/<section>; PrefsTab). */
-const SECTIONS = ['profile', 'shares', 'appearance', 'language', 'llm', 'proxy', 'costs', 'telegram', 'tokens', 'shortcuts', 'topbar',
+const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language', 'llm', 'proxy', 'costs', 'telegram', 'tokens', 'shortcuts', 'topbar',
                   'dashboard', 'admin', 'rustdesk', 'backups'];
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar, NotifyBell, RoomNotifications],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -116,6 +118,9 @@ const SECTIONS = ['profile', 'shares', 'appearance', 'language', 'llm', 'proxy',
       </a>
       }
     }
+    <!-- The notification centre (notifications.ts): the bell, how many are
+         unread, and the latest in a panel under it. -->
+    <app-notify-bell [tight]="bar.tight()" />
     <!-- Settings: the theme and the language for this browser, the LLM
          keys and the proxy for the server - a tab, not a menu item. -->
     @if (settingsTab; as w) {
@@ -154,6 +159,7 @@ const SECTIONS = ['profile', 'shares', 'appearance', 'language', 'llm', 'proxy',
       @case ('tools') { @defer { <app-room-tools /> } }
       @case ('settings') { @defer { <app-room-settings /> } }
       @case ('analyze') { @defer { <app-room-analyze /> } }
+      @case ('notifications') { @defer { <app-room-notifications /> } }
     }
     }
   </div>

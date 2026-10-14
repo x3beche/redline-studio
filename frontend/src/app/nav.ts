@@ -207,6 +207,7 @@ export function navBoxFollows(open: () => unknown, close: () => void) {
 const ROOM_TITLE: Record<RoomId, string> = {
   cad: '3D Drawing', pcb: 'PCB Design', firmware: 'Firmware', notes: 'Notes', taste: 'Taste', mfr: 'Parts',
   commandcode: 'Chat', files: 'Files', tools: 'Basic Tools', settings: 'Settings', analyze: 'Analytics',
+  notifications: 'Notifications',
 };
 let named: { room: string | null; what: string | null } = { room: null, what: null };
 export function navTitle(room: string | null, what: string | null) { named = { room, what }; title(); }
