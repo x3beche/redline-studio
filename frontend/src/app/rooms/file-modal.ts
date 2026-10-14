@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { T, t } from '../i18n';
+import { Toast } from '../toast';
 import { Selection } from '../selection';
 import { FileView } from './file-view';
 import { Icon, StoredFile, downloadUrl, iconOf, inlineUrl, size } from './files-model';
@@ -64,6 +65,11 @@ export function fileIdOf(href: string | null | undefined): string | null {
       <div class="fm-acts">
         <a class="tcv-btn fm-btn" [href]="download()" download>{{ 'Download' | t }}</a>
         <button type="button" class="tcv-btn fm-btn" (click)="toFiles()">{{ 'Open in Files' | t }}</button>
+        @if (info()?.ro) {
+          <!-- What the app made is kept in its own area of Files: a copy of one's own, on asking -->
+          <button type="button" class="tcv-btn fm-btn" (click)="saveMine()" [disabled]="saving()"
+                  [title]="'A copy of your own, to rename, move or delete; this one stays' | t">{{ 'Save to My files' | t }}</button>
+        }
         <button #closer type="button" class="fm-x" (click)="close()" [title]="('Close' | t) + ' (Esc)'"
                 [attr.aria-label]="'Close' | t">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
@@ -167,6 +173,17 @@ export class FileModalHost implements OnDestroy {
     const back = this.back;
     this.back = null;
     if (back?.isConnected) back.focus();
+  }
+
+  saving = signal(false);
+  saveMine() {
+    const id = this.cur()?.id;
+    if (!id) return;
+    this.saving.set(true);
+    this.http.post<StoredFile>(`/api/files/${encodeURIComponent(id)}/copy`, {}).subscribe({
+      next: c => { this.saving.set(false); Toast.show(`${t('Saved to My files')}: ${c.name}`, { tone: 'ok' }); },
+      error: () => { this.saving.set(false); Toast.show(t('Could not save it to My files.'), { tone: 'danger' }); },
+    });
   }
 
   toFiles() {

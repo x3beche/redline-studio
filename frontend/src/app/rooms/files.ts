@@ -52,11 +52,13 @@ const WHERE_LABEL: Record<string, string> = {
   cad: 'Change it in the 3D Drawing room', pcb: 'Change it in the PCB Design room', firmware: 'Change it in the Firmware room',
   releases: 'Releases are made and deleted in the 3D Drawing room', projects: 'The project tree, as the 3D and PCB rooms keep it',
   chat: 'It goes with its line or conversation, deleted in the Chat', parts: 'Change it on the Parts page',
+  agents: 'An agent made it - save a copy to My files to change it', taste: 'A taste palette\'s reference render, made in the Taste room',
 };
 /** The areas, in the order the storage bar draws them; their colours are the charts' first four. */
 const AREAS: { id: Area; label: string; root: string }[] = [
   { id: 'projects', label: 'Projects', root: 'v:projects' }, { id: 'chat', label: 'Chat', root: 'v:chat' },
-  { id: 'parts', label: 'Parts', root: 'v:parts' }, { id: 'own', label: 'My files', root: '' },
+  { id: 'parts', label: 'Parts', root: 'v:parts' }, { id: 'agents', label: 'Agents', root: 'v:agents' },
+  { id: 'taste', label: 'Taste', root: 'v:taste' }, { id: 'own', label: 'My files', root: '' },
 ];
 /** The main pane's storage overview and the trash, in place of a folder. */
 const STORAGE = '~storage';
@@ -430,6 +432,10 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         @if (openable(f.open); as label) {
           <button class="tcv-btn tcv-fm-btn fm-d-open" (click)="openThere(f.open)"><i [fmIcon]="'open'"></i><span>{{ label | t }}</span></button>
         }
+        @if (auth.can('draw')) {
+          <button class="tcv-btn tcv-fm-btn fm-d-open" (click)="saveMine(f)" [title]="'A copy of your own, to rename, move or delete; this one stays' | t">
+            <i [fmIcon]="'download'"></i><span>{{ 'Save to My files' | t }}</span></button>
+        }
       } @else {
       <label class="tcv-fm-d-label" [for]="'fm-note-' + f.id">{{ 'Note' | t }}</label>
       @if (auth.can('draw')) {
@@ -534,7 +540,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
       @if (usage(); as u) {
         <div class="tcv-dash-grid fm-sv-grid">
           @for (a of areaRows(); track a.id) {
-            <button type="button" class="tcv-stat c3 fm-sv-area" (click)="go(a.root)" [title]="a.hint | t">
+            <button type="button" class="tcv-stat c2 fm-sv-area" (click)="go(a.root)" [title]="a.hint | t">
               <span><i [style.background]="a.color"></i>{{ a.label | t }}</span>
               <b>{{ fmt(a.bytes) }}</b>
               <em>{{ a.files }} {{ 'files' | t }} · {{ pct(a.bytes, u.total.bytes) }}{{ a.stored !== a.bytes ? ' · ' + ('kept as' | t) + ' ' + fmt(a.stored) : '' }}</em>
@@ -761,7 +767,7 @@ export class RoomFiles implements OnDestroy {
   // ---- derived
   private byId = computed(() => new Map([...this.folders(), ...this.vfolders()].map(f => [f.id, f])));
   /** One's own uploads: the Parts page's and the Chat's are under In the app, read-only (backend/files_virtual.py parts_owned, chat_owned). */
-  mine = computed(() => this.all().filter(f => f.where !== 'parts' && f.where !== 'chat'));
+  mine = computed(() => this.all().filter(f => !f.where));
   private kids = computed(() => {
     const m = new Map<string, FileFolder[]>();
     for (const f of this.folders().filter(x => !x.ro)) {
@@ -996,6 +1002,13 @@ export class RoomFiles implements OnDestroy {
     this.api.usage(range).subscribe({ next: u => { this.usage.set(u); this.usageErr.set(false); }, error: () => this.usageErr.set(true) });
   }
   setRange(r: string) { this.loadUsage(r); }
+  /** A copy of a read-only file in one's own folders, at the top of My files. */
+  saveMine(f: StoredFile) {
+    this.api.copy(f.id).subscribe({
+      next: c => { this.say(`${t('Saved to My files')}: ${c.name}`); this.api.bump(); },
+      error: err => this.fail(err, 'Could not save it to My files.'),
+    });
+  }
   showSide(s: 'mine' | 'app') {
     this.side.set(s);
     if (s === 'app' && !isV(this.here())) this.go('v:projects');
@@ -1411,6 +1424,7 @@ export class RoomFiles implements OnDestroy {
       out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) });
       const there = this.openable(f.open);
       if (there) out.push({ label: there, icon: 'open', run: () => this.openThere(f.open) });
+      if (this.auth.can('draw')) out.push({ label: 'Save to My files', icon: 'download', run: () => this.saveMine(f) });
       if (!f.ro) {
         // An upload the Chat or a product used: it is kept in My files.
         out.push({ label: 'Show in My files', icon: 'folder', run: () => { this.go(this.placeOf(f)); this.selected.set(new Set(['f:' + f.id])); } });

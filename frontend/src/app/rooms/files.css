@@ -87,6 +87,7 @@
 @container (max-width: 1000px) {
   .fm-sv-grid { grid-template-rows: none; grid-auto-flow: row dense; }
   .fm-sv-grid > .c3 { grid-column: span 6; }
+  .fm-sv-grid > .c2 { grid-column: span 4; }
   .fm-sv-grid > .c4 { grid-column: span 6; }
   .fm-sv-grid > .c8 { grid-column: span 12; }
   .fm-sv-files { min-height: 420px; }

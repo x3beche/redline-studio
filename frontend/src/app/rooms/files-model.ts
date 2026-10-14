@@ -45,7 +45,7 @@ export interface FileFolder {
  *  and which uploads the Chat's and Parts' folders refer to. */
 export interface VirtualTree { folders: FileFolder[]; files: StoredFile[]; links: { folder: string; file: string }[] }
 
-export type Area = 'projects' | 'chat' | 'parts' | 'own';
+export type Area = 'projects' | 'chat' | 'parts' | 'agents' | 'taste' | 'own';
 export interface AreaUse { files: number; bytes: number; stored: number; shared?: { files: number; bytes: number } }
 export interface UsageRow { id: string; name: string; bytes: number; area: Area; folder: string; kind: string; at?: string }
 /** GET /api/files/usage: how much there is, per area, counted once; `chart`
@@ -110,6 +110,11 @@ export class FilesApi {
     return this.http.patch<StoredFile>(`/api/files/${id}`, patch);
   }
   remove(id: string) { return this.http.delete(`/api/files/${id}`); }
+  /** A copy of any file - the app's, an agent's, a room's - into one's own folders (the one way they reach My files). */
+  copy(id: string, folderPath = '', name = '') {
+    return this.http.post<StoredFile>(`/api/files/${encodeURIComponent(id)}/copy`,
+                                      { ...(folderPath ? { folder_path: folderPath } : {}), ...(name ? { name } : {}) });
+  }
   removeMany(ids: string[]) { return this.http.post<{ deleted: string[] }>('/api/files/bulk-delete', { files: ids }); }
   send(id: string, room: string) { return this.http.post(`/api/files/${id}/send`, { room }); }
   /** A STEP or mesh copied into a project folder as a model of its own. */
