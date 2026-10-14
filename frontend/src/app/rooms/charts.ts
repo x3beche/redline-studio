@@ -170,6 +170,8 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   sums = input(true);
   /** Buckets to mark as unusual. */
   marks = input<number[]>([]);
+  /** Where the y axis starts; 0 unless asked (a price that moves a little starts near its lowest). */
+  floor = input(0);
   /** A sparkline-sized chart (a sidebar card): no axes, no labels, no
    *  margins - only the marks, and the reading on hover above them. */
   bare = input(false);
@@ -221,7 +223,8 @@ export class TimeChart implements AfterViewInit, OnDestroy {
         for (const s of shown) m = Math.max(m, s.values[i] ?? 0);
       }
     }
-    return nice(m || 1);
+    const lo = this.floor();
+    return lo + nice(m - lo || 1);
   });
   private x(i: number) {
     const n = this.data().n;
@@ -229,10 +232,13 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   }
   slot() { return (this.w() - this.L - this.R) / Math.max(1, this.data().n); }
   markX(i: number) { return this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i); }
-  private y(v: number) { return this.height() - this.B - (this.height() - this.B - this.T) * v / this.max(); }
+  private y(v: number) {
+    const lo = this.floor();
+    return this.height() - this.B - (this.height() - this.B - this.T) * (Math.max(v, lo) - lo) / (this.max() - lo);
+  }
 
   yTicks = computed(() => this.bare() ? [] : [0, 0.25, 0.5, 0.75, 1].map(k => {
-    const v = this.max() * k;
+    const v = this.floor() + (this.max() - this.floor()) * k;
     return { v, y: this.y(v), label: this.f()(v) };
   }));
   /** The time labels under the chart. Every `stride` buckets from the

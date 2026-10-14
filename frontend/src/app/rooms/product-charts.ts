@@ -144,7 +144,7 @@ export interface PriceReading { at: string; amount?: number | null; currency?: s
 </dl>
 <div class="pch-plot">
   @if (h() > 40 && data(); as d) {
-    <app-time-chart [data]="d" kind="line" [stacked]="false" [legend]="false" [sums]="false" [height]="h()" [f]="f()" [marks]="marks()" />
+    <app-time-chart [data]="d" kind="line" [stacked]="false" [legend]="false" [sums]="false" [height]="h()" [f]="f()" [marks]="marks()" [floor]="floor()" />
   }
 </div>
 @if (rows().length && outs()) { <p class="pch-key"><i></i>{{ 'its seller said out of stock' | t }}</p> }`,
@@ -180,6 +180,13 @@ export class PriceChart extends Fills {
   last = computed(() => { const r = this.rows(); return r.length ? r[r.length - 1].amount! : null; });
   change = computed(() => { const r = this.rows(); if (r.length < 2) return 0; const a = r[r.length - 2].amount!, b = r[r.length - 1].amount!; return a ? (b - a) / a * 100 : 0; });
   lo = computed(() => { const r = this.rows(); return r.length ? Math.min(...r.map(x => x.amount!)) : null; });
+  /** The axis starts a round step below the lowest reading, so a price that moves a little is seen moving. */
+  floor = computed(() => {
+    const lo = this.lo(), hi = this.hi();
+    if (lo == null || hi == null || lo <= 0) return 0;
+    const step = Math.pow(10, Math.floor(Math.log10(Math.max(hi - lo, lo * 0.1))));
+    return Math.max(0, Math.floor((lo - (hi - lo || lo * 0.1) * 0.25) / step) * step);
+  });
   hi = computed(() => { const r = this.rows(); return r.length ? Math.max(...r.map(x => x.amount!)) : null; });
   outs = computed(() => this.rows().filter(r => r.stock === 'out').length);
 }
