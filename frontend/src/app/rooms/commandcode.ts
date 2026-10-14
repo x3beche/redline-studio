@@ -77,6 +77,8 @@ export interface CcStep {
   id: string; tool: string; level: ToolLevel; pos: number; say: string;
   status: 'running' | 'done' | 'error' | 'ask' | 'denied' | 'stopped' | 'interrupted';
   args?: Record<string, unknown>; vars?: Record<string, string | number>; summary?: string; error?: string; ms?: number;
+  /** What a tool that asks first would change (wiki_write's diff), shown with Allow / Deny. */
+  preview?: string;
 }
 export type ToolLevel = 'read' | 'change' | 'delete';
 /** A chat tool, and whether it is on for me (GET /api/cc/tools). */
@@ -1098,6 +1100,7 @@ type Ask = { text: string; label: string; go: () => void };
           <button class="tcv-cc-textbtn" (click)="answerStep(cid, s, true)">{{ 'Allow' | t }}</button>
           <button class="tcv-cc-textbtn" (click)="answerStep(cid, s, false)">{{ 'Deny' | t }}</button>
         </div>
+        @if (s.preview) { <pre class="tcv-cc-steppreview" [attr.aria-label]="'What it would change' | t">{{ s.preview }}</pre> }
       }
     }
   </div>

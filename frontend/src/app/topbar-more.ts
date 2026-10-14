@@ -31,6 +31,8 @@ import { CcTabUsage } from './cc-usage';
 @if (open()) {
   <div class="tb-menu" animate.leave="tcv-leave" [style.--tcv-origin]="at().right != null ? 'top right' : 'top left'" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">
     @for (w of bar.overflow(); track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
+    <!-- Rooms that are never a tab (topbar.ts MENU_ONLY): the wiki. -->
+    @for (w of bar.menuTabs; track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
     @if (bar.hiddenTabs().length) {
       <div class="tb-menu-head">{{ 'Hidden' | t }}</div>
       @for (w of bar.hiddenTabs(); track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
@@ -66,7 +68,8 @@ export class TopbarMore implements OnDestroy {
 
   open = signal(false);
   at = signal<{ top: number; left: number | null; right: number | null }>({ top: 0, left: null, right: 0 });
-  here = computed(() => [...this.bar.overflow(), ...this.bar.hiddenTabs()].find(w => w.id === this.picked.room()) ?? null);
+  here = computed(() => [...this.bar.overflow(), ...this.bar.menuTabs, ...this.bar.hiddenTabs()]
+    .find(w => w.id === this.picked.room()) ?? null);
   inMore = computed(() => !!this.here());
 
   /** Shut when the room changes, or when More goes away. */

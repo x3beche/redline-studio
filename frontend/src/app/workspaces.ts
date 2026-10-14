@@ -12,7 +12,7 @@ import { navParams } from './nav';
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze'
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze' | 'wiki'
     | 'notifications';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
@@ -79,6 +79,15 @@ export const WORKSPACES: Workspace[] = [
     label: 'Files',
     blurb: 'What the work needs that is not a model or a board: a BOM, a pick-and-place '
          + 'file, a datasheet, a photo - kept as it came, and handed to a room\'s agent.',
+    ready: true,
+  },
+  {
+    // Each project's wiki (rooms/wiki.ts): not a tab - it is always under the top bar's More
+    // (topbar.ts MENU_ONLY), and the 3D, PCB and Firmware rooms link to the open project's.
+    id: 'wiki',
+    label: 'Wiki',
+    blurb: 'Each project\'s short pages: what was decided and why, dimensions and limits, sourcing, '
+         + 'open questions, production notes - read by the rooms\' agents before they work a note.',
     ready: true,
   },
   {

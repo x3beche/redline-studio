@@ -63,11 +63,12 @@ type Mark =
   | { kind: 'text'; color: string; size: number; at: Pt; text: string };
 
 import { WorkNowPanel } from '../rooms/work-now';
+import { WikiLink } from '../rooms/wiki-link';
 import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, DrawingLayout, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, TasteGateHost, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, DecimalPipe, DrawingLayout, LinksCard, LogPanel, Markdown, ModelHealth, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, TasteGateHost, WorkNowPanel, UiSelect, WikiLink],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })

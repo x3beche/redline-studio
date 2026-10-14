@@ -1,0 +1,124 @@
+/* The Wiki room (rooms/wiki.ts). Flat: hairlines between the parts, no
+   cards; the page open in the list and the mode on in a toolbar are told
+   by weight and ink alone, never a fill, a border or an underline. Colours
+   are the theme's tokens; own variables are --tcv-*. */
+
+.wk { display: flex; min-height: 0; gap: 0; }
+
+/* ---- the list ---------------------------------------------------------- */
+.wk-side { flex: none; width: 272px; display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--line); }
+.wk-proj { padding: 8px 8px 4px; }
+.wk-proj wb-select { display: block; width: 100%; }
+.wk-find { display: flex; gap: 4px; padding: 4px 8px 6px; }
+.wk-find .tcv-cc-search { flex: 1; min-width: 0; }
+.wk-list { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 0 10px; }
+.wk-group { padding: 10px 12px 3px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-dim); }
+.wk-row { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 5px 12px; text-align: left;
+  background: none; border: 0; color: var(--ink); cursor: pointer; font: inherit; font-size: 12.5px; }
+.wk-row:hover .wk-row-name, .wk-row:focus-visible .wk-row-name { color: var(--ink-bright); }
+.wk-row:focus-visible { outline: none; }
+.wk-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-row[data-on] .wk-row-name { color: var(--ink-bright); font-weight: 650; }
+.wk-row-when { flex: none; font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.wk-row-pin { flex: none; width: 10px; height: 10px; color: var(--ink-dim); }
+.wk-hit { display: block; padding: 6px 12px; }
+.wk-hit-snip { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-dim); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.wk-hit-proj { color: var(--ink-dim); font-weight: 400; }
+.wk-side-foot { flex: none; padding: 6px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-dim);
+  display: flex; gap: 8px; }
+
+/* ---- the page ---------------------------------------------------------- */
+.wk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; position: relative; }
+/* One row, always: what does not fit is shortened, never wrapped. */
+.wk-bar { flex: none; display: flex; align-items: center; gap: 6px; min-width: 0; height: 40px; padding: 0 14px;
+  border-bottom: 1px solid var(--line); white-space: nowrap; }
+.wk-bar h2 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; font-weight: 650;
+  color: var(--ink-bright); }
+.wk-bar .grow { flex: 1; min-width: 8px; }
+.wk-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: var(--ink-dim); }
+.wk-meta b { font-weight: 500; color: var(--ink); }
+.wk-btn { flex: none; height: 26px; padding: 0 9px; font-size: 12px; }
+.wk-tb { flex: none; height: 26px; padding: 0 8px; font: inherit; font-size: 12px; color: var(--ink-dim); background: none;
+  border: 0; border-radius: 4px; cursor: pointer; }
+.wk-tb:hover:not(:disabled) { color: var(--ink-bright); }
+.wk-tb[data-on] { color: var(--ink-bright); font-weight: 650; }
+.wk-tb:disabled { opacity: .45; cursor: default; }
+.wk-tb.wk-danger:hover:not(:disabled) { color: var(--danger); }
+.wk-sep { flex: none; width: 1px; height: 16px; background: var(--line); }
+.wk-title-in { min-width: 120px; flex: 0 1 280px; height: 26px; padding: 0 8px; font: inherit; font-size: 13.5px;
+  font-weight: 650; color: var(--ink-bright); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
+.wk-sum-in { min-width: 120px; flex: 1 1 260px; height: 26px; padding: 0 8px; font: inherit; font-size: 12px; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
+.wk-title-in:focus, .wk-sum-in:focus { outline: none; border-color: var(--accent); }
+
+.wk-body { flex: 1; min-height: 0; overflow-y: auto; }
+.wk-read { display: flex; gap: 0; min-height: 100%; }
+.wk-text { flex: 1; min-width: 0; padding: 16px 22px 40px; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.wk-text[data-can] { cursor: text; }
+/* What [innerHTML] draws has no view attribute: reached through ::ng-deep, under this room only. */
+:host ::ng-deep .wk-text.md h3 { font-size: 16px; }
+:host ::ng-deep .wk-text.md h4 { font-size: 14px; }
+:host ::ng-deep .wk-text.md table { width: 100%; }
+:host ::ng-deep .wk-text a.wk-link, :host ::ng-deep .wk-text a.wk-at { color: var(--accent); font-weight: 550; text-decoration: none; }
+:host ::ng-deep .wk-text a.wk-link:hover, :host ::ng-deep .wk-text a.wk-at:hover { text-decoration: underline; }
+:host ::ng-deep .wk-text a.wk-new { color: var(--ink-dim); text-decoration: underline dashed; }
+:host ::ng-deep .wk-text a.wk-at { font-weight: 550; }
+/* What links here, what it points at: a narrow column, only when there is something. */
+.wk-aside { flex: none; width: 220px; padding: 16px 14px; border-left: 1px solid var(--line); font-size: 11.5px;
+  color: var(--ink-dim); }
+.wk-aside h4 { margin: 0 0 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.wk-aside ul { list-style: none; margin: 0 0 14px; padding: 0; }
+.wk-aside li { padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-aside a { color: var(--ink); text-decoration: none; }
+.wk-aside a:hover { color: var(--ink-bright); }
+
+.wk-edit { position: relative; display: flex; flex-direction: column; height: 100%; }
+.wk-area { flex: 1; min-height: 0; width: 100%; resize: none; padding: 16px 22px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; line-height: 1.65; color: var(--ink); background: transparent; border: 0; outline: none; }
+.wk-hint { flex: none; padding: 5px 22px; border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-hint kbd { font: inherit; color: var(--ink); }
+/* The picker for @mentions and [[pages]]: the Chat composer's look (.tcv-cc-mpop). */
+.wk-pop { position: absolute; left: 18px; bottom: 34px; width: min(460px, calc(100% - 36px)); z-index: 5; }
+
+.wk-hist { display: flex; min-height: 100%; }
+.wk-vers { flex: none; width: 260px; border-right: 1px solid var(--line); padding: 4px 0; }
+.wk-ver { display: block; width: 100%; padding: 6px 14px; text-align: left; background: none; border: 0; font: inherit;
+  font-size: 12px; color: var(--ink); cursor: pointer; }
+.wk-ver:hover .wk-ver-head { color: var(--ink-bright); }
+.wk-ver[data-on] .wk-ver-head { color: var(--ink-bright); font-weight: 650; }
+.wk-ver-head { display: flex; gap: 6px; align-items: baseline; }
+.wk-ver-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-ver-n { flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.wk-ver-sum { display: block; margin-top: 1px; color: var(--ink-dim); font-size: 11.5px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.wk-plus { color: var(--ok); margin-right: 4px; }
+.wk-minus { color: var(--danger); margin-right: 6px; }
+.wk-diff { flex: 1; min-width: 0; padding: 10px 0 30px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; }
+.wk-dl { display: flex; min-width: 0; padding: 0 18px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--ink); }
+.wk-dl i { flex: none; width: 44px; padding-right: 10px; text-align: right; font-style: normal; color: var(--ink-dim);
+  user-select: none; }
+.wk-dl b { flex: none; width: 16px; font-weight: 400; color: var(--ink-dim); user-select: none; }
+.wk-dl[data-op="+"] { background: color-mix(in srgb, var(--ok) 11%, transparent); }
+.wk-dl[data-op="+"] b { color: var(--ok); }
+.wk-dl[data-op="-"] { background: color-mix(in srgb, var(--danger) 11%, transparent); }
+.wk-dl[data-op="-"] b { color: var(--danger); }
+.wk-dl[data-op="…"] { color: var(--ink-dim); padding-left: 60px; }
+.wk-whole { padding: 0 22px; }
+
+.wk-none { padding: 56px 22px; }
+.wk-starts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 14px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .wk-text, .wk-diff, .wk-area { animation: tcv-wk-in .12s ease-out both; }
+  @keyframes tcv-wk-in { from { opacity: 0; } to { opacity: 1; } }
+}
+
+@media (max-width: 768px) {
+  .wk { flex-direction: column; }
+  .wk-side { width: 100%; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .wk-aside, .wk-vers { display: none; }
+}

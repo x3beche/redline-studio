@@ -16,6 +16,7 @@
  *    /files                   /files/mine/<folder>     /files/app/<area…>
  *    /files/storage           /files/deleted
  *    /basic-tools/<tool>      /settings/<section>      /analytics
+ *    /wiki/<project>/<page>   (each project's wiki)
  *    /notifications           (the notification centre's page)
  *
  *  What has no place in the path (a search, a filter, ?rev=, ?shot=) stays in
@@ -27,13 +28,13 @@
  *  Pure functions only, so nav-url.spec.ts can check every way there and back.
  */
 
-export type RoomId = 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze'
+export type RoomId = 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze' | 'wiki'
   | 'notifications';
 
 /** Each room's first path segment. */
 export const ROOM_PATH: Record<RoomId, string> = {
   cad: '3d', pcb: 'pcb', firmware: 'firmware', notes: 'notes', taste: 'taste', mfr: 'parts',
-  commandcode: 'chat', files: 'files', tools: 'basic-tools', settings: 'settings', analyze: 'analytics',
+  commandcode: 'chat', files: 'files', tools: 'basic-tools', settings: 'settings', analyze: 'analytics', wiki: 'wiki',
   notifications: 'notifications',
 };
 const PATH_ROOM: Record<string, RoomId> = Object.fromEntries(
@@ -53,6 +54,7 @@ export const ROOM_KEYS: Record<RoomId, string[]> = {
   tools: ['tool'],
   settings: ['section'],
   analyze: ['range', 'project'],
+  wiki: ['project', 'page'],
   notifications: [],
 };
 
@@ -64,7 +66,7 @@ export const ROOM_KEYS: Record<RoomId, string[]> = {
 export const PLACE_KEYS: Record<RoomId, string[]> = {
   cad: ['model'], pcb: ['board'], firmware: ['fw'], notes: ['note'], taste: ['palette', 'run'],
   mfr: ['m', 'run', 'sub'], commandcode: ['chat', 'thread', 'dm'], files: ['dir'], tools: ['tool'],
-  settings: ['section'], analyze: [], notifications: [],
+  settings: ['section'], analyze: [], wiki: ['project', 'page'], notifications: [],
 };
 
 /** The names the rooms had in old addresses (?ws=chat, ?ws=catalog, ...). */
@@ -139,6 +141,7 @@ export function parse(pathname: string, search: string): URLSearchParams {
     case 'tools': put('tool', rest[0]); break;
     case 'settings': put('section', rest[0]); break;
     case 'mfr': parseParts(rest, q); break;
+    case 'wiki': put('project', rest[0]); put('page', rest[1]); break;
     case 'analyze': break;
   }
   return q;
@@ -192,6 +195,7 @@ export function build(v: URLSearchParams): string {
     case 'tools': { const t = take('tool'); if (t) path += '/' + seg(t); break; }
     case 'settings': { const s = take('section'); if (s) path += '/' + seg(s); break; }
     case 'mfr': path += buildParts(q); break;
+    case 'wiki': { const p = take('project'), g = take('page'); if (p) path += '/' + seg(p) + (g ? '/' + seg(g) : ''); break; }
     case 'analyze': break;
   }
   const rest = q.toString();
@@ -214,7 +218,7 @@ function buildParts(q: URLSearchParams): string {
 
 /** The rooms that open something by themselves when nothing is named (the last model, the last
  *  note, the last conversation): their first choice fills the entry in rather than being a step. */
-const FILLS_IN = new Set<RoomId>(['cad', 'pcb', 'firmware', 'notes', 'taste', 'commandcode', 'tools', 'settings']);
+const FILLS_IN = new Set<RoomId>(['cad', 'pcb', 'firmware', 'notes', 'taste', 'commandcode', 'tools', 'settings', 'wiki']);
 
 /** Whether going from `a` to `b` is a step in the browser's history: another room, or another
  *  place in it (PLACE_KEYS) - but not a room filling in its first choice where nothing was named. */

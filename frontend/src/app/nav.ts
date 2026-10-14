@@ -206,7 +206,7 @@ export function navBoxFollows(open: () => unknown, close: () => void) {
 /** The tab's title: the room, and what is open in it when the shell says (navTitle). */
 const ROOM_TITLE: Record<RoomId, string> = {
   cad: '3D Drawing', pcb: 'PCB Design', firmware: 'Firmware', notes: 'Notes', taste: 'Taste', mfr: 'Parts',
-  commandcode: 'Chat', files: 'Files', tools: 'Basic Tools', settings: 'Settings', analyze: 'Analytics',
+  commandcode: 'Chat', files: 'Files', tools: 'Basic Tools', settings: 'Settings', analyze: 'Analytics', wiki: 'Wiki',
   notifications: 'Notifications',
 };
 let named: { room: string | null; what: string | null } = { room: null, what: null };

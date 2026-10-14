@@ -10,6 +10,7 @@ import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
 import { AgentThreads } from './rooms/agent-thread';
 import { DmKind, DmStore } from './dm';
+import { navOpen } from './nav';
 
 /** Ctrl+K: one box to go anywhere and do anything.
  *
@@ -38,8 +39,8 @@ interface AskCtx { label: string; what: string; mention?: NonNullable<CcWant['me
 const ASK = /^\s*ask\s*[:>]\s*(.*)$/i;
 
 interface Hit {
-  kind: 'code' | 'note' | 'chat' | 'revision' | 'part';
-  id: string; label: string; text?: string; file?: 'model' | 'board'; line?: number; room?: string; model?: string;
+  kind: 'code' | 'note' | 'chat' | 'revision' | 'part' | 'wiki';
+  id: string; label: string; text?: string; project?: string; file?: 'model' | 'board'; line?: number; room?: string; model?: string;
 }
 
 const ROOM_ICON: Record<string, string> = {
@@ -327,6 +328,9 @@ export class Palette {
           run: () => { this.picked.room.set('notes'); this.picked.ask('note', h.id); } };
         case 'chat': return { group: 'Chats', icon: '💬', label: h.text ?? '', hint: h.label,
           run: () => this.picked.openThread(h.room ?? 'cad') };
+        // A page of a project's wiki (backend/wiki.py): opened in the Wiki room.
+        case 'wiki': return { group: 'Wiki', icon: '¶', label: h.label, hint: h.text,
+          run: () => navOpen(`/wiki/${encodeURIComponent(h.project ?? '')}/${encodeURIComponent(h.id)}`) };
         case 'revision': return { group: 'Revisions', icon: '✦', label: h.label, hint: h.text,
           run: () => this.picked.room.set((h.room === 'pcb' ? 'pcb' : 'cad') as never) };
         default: return { group: 'Parts', icon: '⬚', label: h.label, hint: h.text,

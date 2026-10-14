@@ -33,6 +33,8 @@ export const TOPBAR_DISPLAYS: { id: TopbarDisplay; label: string }[] = [
 export const GAP = 'gap';
 /** Where the More button stands. One more item in the order; never hidden. */
 export const MORE = 'more';
+/** Rooms that are never a tab: always under More (the wiki, linked from the rooms too). */
+export const MENU_ONLY = new Set<string>(['wiki']);
 /** Never in the bar's lists: always shown, never moved. */
 const FIXED = new Set<string>(['settings', 'analyze', 'notifications']);
 const KEY = 'redline.topbar';
@@ -54,6 +56,7 @@ const ICON: Record<string, string> = {
   commandcode: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
   files: 'M3 6h6l2 2h10v11H3z',
   tools: 'M14.5 4.5a4 4 0 0 0-4.6 5.4L4 15.8 8.2 20l5.9-5.9a4 4 0 0 0 5.4-4.6l-2.6 2.6-2.8-.7-.7-2.8z',
+  wiki: 'M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z',
 };
 const ICON_ANY = 'M5 5h14v14H5z';
 
@@ -76,7 +79,7 @@ export const CC_TAB_WINDOWS: { id: CcTabWindow; label: string }[] = [
 /** The default: the rooms you work in, the gap, then Notes and the rest -
  *  the bar exactly as it was before it could be arranged. */
 export function defaultOrder(): string[] {
-  const ids: string[] = WORKSPACES.filter(w => !FIXED.has(w.id)).map(w => w.id);
+  const ids: string[] = WORKSPACES.filter(w => !FIXED.has(w.id) && !MENU_ONLY.has(w.id)).map(w => w.id);
   const at = ids.indexOf('notes');
   ids.splice(at < 0 ? ids.length : at, 0, GAP);
   ids.push(MORE);
@@ -219,7 +222,9 @@ export class TopBar {
   overflow = computed(() => this.shown().slice(this.fit()).map(s => s.ws));
   /** Hidden by choice. */
   hiddenTabs = computed(() => this.entries().filter(e => e.hidden && e.ws).map(e => e.ws!));
-  moreNeeded = computed(() => this.overflow().length + this.hiddenTabs().length > 0);
+  /** Never tabs, always under More (MENU_ONLY): so More is always there. */
+  readonly menuTabs = WORKSPACES.filter(w => MENU_ONLY.has(w.id));
+  moreNeeded = computed(() => this.overflow().length + this.hiddenTabs().length + this.menuTabs.length > 0);
 
   /** What the widths depend on: when it changes, the bar measures again. */
   looks = computed(() => `${this.display()}|${LANG()}|${this.shownIds().join()}|${this.ccStyle()}|${this.ccWindow()}`);
@@ -348,7 +353,7 @@ export class TopbarFit implements OnDestroy {
     const total = w.reduce((a, b) => a + b, 0);
     const moreW = (this.widths.get('\0more') ?? 64) + gap;
     let n = ids.length;
-    if (total + (this.bar.hiddenTabs().length ? moreW : 0) > room) {
+    if (total + (this.bar.hiddenTabs().length || this.bar.menuTabs.length ? moreW : 0) > room) {
       const budget = room - moreW;
       let used = 0;
       n = 0;

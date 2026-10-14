@@ -39,6 +39,9 @@ describe('nav-url', () => {
     [{ ws: 'tools', tool: 'crc-calc' }, '/basic-tools/crc-calc'],
     [{ ws: 'settings', section: 'appearance' }, '/settings/appearance'],
     [{ ws: 'analyze', range: '30d', project: 'iot-fan' }, '/analytics?range=30d&project=iot-fan'],
+    [{ ws: 'wiki' }, '/wiki'],
+    [{ ws: 'wiki', project: 'iot-fan' }, '/wiki/iot-fan'],
+    [{ ws: 'wiki', project: 'iot-fan', page: 'open-questions' }, '/wiki/iot-fan/open-questions'],
     [{ ws: 'cad', theme: 'light' }, '/3d?theme=light'],
   ];
   for (const [v, href] of places) {

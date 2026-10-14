@@ -660,6 +660,8 @@
       <!-- The column's first row carries its fold, at the outer end. -->
       <div class="tcv-fold-head mb-1">
         <label class="tcv-label min-w-0 flex-1">{{ 'Part' | t }}</label>
+        <!-- The open project's wiki, one small link (rooms/wiki-link.ts). -->
+        <app-wiki-link />
         <button (click)="toggleQueue()" class="tcv-fold-ctl"
                 [title]="foldTip('r')" [attr.aria-label]="foldTip('r')" aria-expanded="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg></button>
       </div>

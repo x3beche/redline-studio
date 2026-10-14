@@ -12,6 +12,7 @@ import { RoomTaste } from './rooms/taste';
 import { RoomMfr } from './rooms/manufacturers';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
+import { RoomWiki } from './rooms/wiki';
 import { TasteRuns } from './rooms/taste-api';
 import type { MfrRuns } from './rooms/manufacturers';
 import { Palette } from './palette';
@@ -43,7 +44,7 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar, NotifyBell, RoomNotifications],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, RoomWiki, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar, NotifyBell, RoomNotifications],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -159,6 +160,7 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
       @case ('tools') { @defer { <app-room-tools /> } }
       @case ('settings') { @defer { <app-room-settings /> } }
       @case ('analyze') { @defer { <app-room-analyze /> } }
+      @case ('wiki') { @defer { <app-room-wiki /> } }
       @case ('notifications') { @defer { <app-room-notifications /> } }
     }
     }
