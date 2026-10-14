@@ -59,7 +59,7 @@ PANEL = {"mfr": "parts", "commandcode": "chats", "general": "queue"}
 LABELS = {
     "parts": "Parts", "stock": "Stock", "pcb": "PCB", "datasheets": "Datasheets", "cad": "3D", "firmware": "Firmware", "notes": "Notes",
     "taste": "Taste", "files": "Files", "web": "Web", "chats": "Chats", "pdf": "PDF", "analytics": "Analytics",
-    "queue": "Queues", "tools": "Calculators", "dm": "Messages", "settings": "Settings", "wiki": "Wiki",
+    "queue": "Queues", "tools": "Calculators", "dm": "Messages", "settings": "Settings", "wiki": "Wiki", "tasks": "Tasks",
 }
 ABOUT = {
     "parts": "Parts products: makers' catalogs, product pages, McMaster/GrabCAD saves, a product's files "
@@ -78,6 +78,7 @@ ABOUT = {
     "analytics": "usage, costs and tokens from the Analytics room",
     "queue": "the rooms' agent queues and notes for them",
     "tools": "the Basic Tools calculators",
+    "tasks": "scheduled tasks: recurring reports and refreshes, made, listed and run now",
     "dm": "direct messages with the other people of this server: reading them, sending one (asks first)",
     "settings": "which model each LLM job uses, this month's LLM usage and spend, the backups' state",
     "wiki": "each project's wiki: decisions and why, dimensions and limits, sourcing, open questions",
@@ -124,6 +125,10 @@ WORDS: dict[str, tuple[str, ...]] = {
                   "cache", "maliyet", "harca", "kullanım", "bütçe", "fatura", "analitik", "pahalı", "ne kadar tuttu"),
     "queue": ("queue", "agent", "task", "working on", "room note", "kuyruk", "ajan", "görev"),
     "tools": ("calculat", "compute", "formula", "convert", "hesap", "hesapla", "dönüştür", "formül"),
+    "tasks": ("schedul", "every day", "every week", "every monday", "every morning", "every night", "nightly",
+              "weekly report", "daily report", "recurring", "cron", "her gün", "her hafta", "her pazartesi",
+              "her sabah", "her gece", "her akşam", "haftalık", "günlük rapor", "zamanla", "tekrarla", "periyodik",
+              "otomatik gönder", "zamanlanmış"),
     "dm": ("direct message", "message", "dm$", "dms$", "inbox", "wrote me", "wrote to me", "mesaj", "ileti",
            "yazdı", "yazmış"),
     "settings": ("setting", "backup", "provider", "which model", "llm", "restore check", "ayar", "yedek",

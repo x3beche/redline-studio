@@ -138,6 +138,7 @@ PACKAGES = (
     Package("wiki", "Wiki", "Each project's wiki: what was decided and why, dimensions and limits, sourcing, "
                             "open questions, production notes."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
+    Package("tasks", "Tasks", "Scheduled tasks: reports and refreshes that run by themselves, on a schedule."),
 )
 PACKAGE = {p.name: p for p in PACKAGES}
 
