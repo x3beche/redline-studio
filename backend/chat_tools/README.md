@@ -121,6 +121,30 @@ through the workspace, and the list of them when the name fits nothing).
   `overview_cached`, kept per workspace and range), with the right that GET
   needs; a compact overview, or one `section` (costs, llm, tokens, runs,
   notes, api, budget) or `project` in full, in the display currency.
+- What other tabs already do, from the Chat (each the tab's own path and
+  rights; the step's card is `frontend/src/app/rooms/cc-tool-card.ts`):
+  `price_history` (Parts, read: a product's price and stock readings -
+  manufacturers.py `remember`'s rows the product box's chart draws - and
+  a one-line trend), `stock_low` (Parts, change, on: the Stock tab's Low
+  lines, or at most `threshold`, with reorder quantities from the
+  minimum and the log's use, by seller; `add` puts them through
+  shopping_list's path and asks first), `files_search` (Files, read: the
+  Files search box over My files / In the app / Deleted files) and
+  `files_restore` (Files, change, asks: the trash's Restore, within its
+  30 days, one's own or with the right to delete; undone by the generic
+  inverse - back among the Deleted files), `taste_propose` (Taste,
+  change, asks: one proposal on the conversation's own finished run of
+  `taste_jobs`, reviewed and saved in the Taste tab like an
+  extraction's; `palette` is offered first), `manufacturer_explore`
+  (Parts, change, off, asks: manufacturers.start_job as Explore does;
+  refuses mcmaster.com / grabcad.com and starts nothing while any
+  exploration on the server is queued, crawling, asking or merging),
+  `dm_read` (Chat, read, off: one's own direct conversations, as dm.py's
+  routes; marks nothing read) and `dm_send` (Chat, change, off, asks:
+  the exact text to the person named by their whole name; the card shows
+  both before Allow), `settings_read` (General, read: the LLM job routes
+  - never a key nor its hint - this month's LLM usage, and the backups'
+  last dump and restore check for the owner and admins). Helper `_dm.py`.
 - Notes (the Notes tab, notes.py): `notes_search`, `note_read`; and, off
   by default, `note_write`, `note_todo` (tick or untick one to-do),
   `note_edit` - with the rights the Notes API's routes need (`_notes.py`).
@@ -183,9 +207,10 @@ Which tools: generic - stock (`inventory_add`, `_adjust`, `_edit`,
 `_remove_product`), a product's files (`product_file_attach`, `_detach`,
 `product_set_main`, `product_to_my_items`), notes (`note_write`,
 `note_edit`, `note_todo`), `rename_chat`, `chat_archive`, `mcmaster_save`,
-`grabcad_save`, `room_note`, `pdf_make`, `drawing_layout`; its own -
+`grabcad_save`, `room_note`, `pdf_make`, `drawing_layout`, `stock_low`,
+`files_restore`, `taste_propose`; its own -
 `drawer_add`; shown, not undoable - `catalog_read_page`,
-`catalog_add_maker`, `product_to_model`; not kept - `datasheet_get`.
+`catalog_add_maker`, `product_to_model`, `manufacturer_explore`, `dm_send`; not kept - `datasheet_get`.
 
 ## Who gets which
 
