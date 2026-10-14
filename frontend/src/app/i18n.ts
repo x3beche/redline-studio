@@ -2681,7 +2681,6 @@ const TR: Record<string, string> = {
   'No tool only reads yet.': 'Henüz yalnızca okuyan bir araç yok.',
   'No tool changes anything yet.': 'Henüz bir şey değiştiren araç yok.',
   'No tool deletes anything yet. When one does, the answer stops and asks you before it runs.': 'Henüz bir şey silen araç yok. Olduğunda yanıt durur ve çalışmadan önce size sorar.',
-  'A model that cannot use tools answers without them. Turning a tool off takes effect from your next message.': 'Araç kullanamayan bir model araçsız yanıt verir. Kapattığınız araç bir sonraki mesajınızdan itibaren kullanılmaz.',
   'Only reads': 'Yalnızca okur',
   'Changes': 'Değiştirir',
   'Deletes': 'Siler',
