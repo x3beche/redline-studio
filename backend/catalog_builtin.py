@@ -52,6 +52,10 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {}
+# The order the Parts page lists them in. They register as their modules are
+# imported, and which is imported first depends on who asked: the order is
+# this, never that.
+ORDER = ("lcsc", "mcmaster", "grabcad", "own")
 
 
 def register(src: Source) -> Source:
@@ -85,8 +89,13 @@ async def maker(db, mid: str) -> dict:
             "created_at": min(added, default="") or None, "updated_at": max(added, default="") or None, "explored_at": None}
 
 
+def ordered() -> list[str]:
+    """The sources' ids in ORDER; one not in it after them, by id."""
+    return sorted(SOURCES, key=lambda m: (ORDER.index(m) if m in ORDER else len(ORDER), m))
+
+
 async def makers(db) -> list[dict]:
-    return [await maker(db, mid) for mid in SOURCES]
+    return [await maker(db, mid) for mid in ordered()]
 
 
 async def maker_doc(db, mid: str) -> dict | None:
