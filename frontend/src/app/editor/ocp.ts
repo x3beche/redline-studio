@@ -6,6 +6,7 @@ import { Motions } from './motions';
 import { ModelTab } from './model-tab';
 import { TreePanel } from './tree-panel';
 import { SwitchMotion } from './model-switch';
+import { dressGrid, dressGridMenu } from './grid-look';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -116,6 +117,8 @@ export class OcpViewer {
     // The toolbar's icons hang off data-theme, which the viewer only sets on
     // its first render: with no model yet the buttons were blank frames.
     if (!this.container.hasAttribute('data-theme')) this.container.setAttribute('data-theme', opts.theme);
+    // The grid button's planes as the app's menu (grid-look.ts).
+    dressGridMenu(this.container);
     // render() lives on Viewer, not Display; the docs' display.render is wrong.
     this.viewer = new Viewer(this.display, opts, null);
     // Handle for tooling: the headless render and UI tests drive clipping
@@ -206,6 +209,8 @@ export class OcpViewer {
       centerGrid: false,
     } as any);
     this.rendered = true;
+    // The grid in the app's look, not the viewer's dashes (grid-look.ts).
+    dressGrid(this.viewer);
     // Its moving parts as they were last set on this model's Motion tab,
     // else at their rest pose. tools/render.py's shot starts no spin and
     // takes nothing kept: a picture is taken at the rest pose.

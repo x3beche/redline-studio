@@ -6,6 +6,8 @@
    identifier but found "-"" warning. They have no classes to find. */
 @source not "../public/tools/*/tool.js";
 @import "./fonts.css";
+/* The 3D viewer's grid menu and scale (app/editor/grid-look.ts). */
+@import "./app/editor/viewer-grid.css";
 /* The toolbars' icon packs (app/icon-packs.ts). */
 @import "./app/icon-packs.css";
 /* The 3D viewer's side panel: tabs, tree, clip and studio (app/editor/viewer-panel.css). */

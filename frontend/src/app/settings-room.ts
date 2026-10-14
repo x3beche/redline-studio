@@ -15,6 +15,7 @@ import { ModelSwitch, SWITCHES, SWITCH_DEFAULT, SWITCH_INFO, reducedMotion } fro
 import { ICON_PACKS, ICON_PACK_DEFAULT, ICON_PACK_INFO, ICON_SIZES, ICON_SIZE_DEFAULT, PREVIEW } from './icon-packs';
 import { TREE_DEFAULT, TREE_DENSITIES, TREE_FONTS, TREE_ICONS, TreeDensity, isDefaultTree } from './editor/tree-prefs';
 import { SwitchPreview } from './editor/switch-preview';
+import { GridSettings } from './editor/grid-settings';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
@@ -65,7 +66,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -309,6 +310,8 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 </div>
               </div>
             </div>
+            <!-- The 3D viewer's grid (editor/grid-settings.ts, grid-look.ts). -->
+            <app-grid-settings />
             @for (grp of groups; track grp.name) {
               @if (themeFilter() === 'All' || themeFilter() === grp.name) {
                 <div class="st-card">

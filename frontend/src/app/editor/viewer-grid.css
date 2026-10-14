@@ -1,0 +1,35 @@
+/* The 3D viewer's grid button and its scale (editor/grid-look.ts).
+   The viewer's stylesheet comes after ours (angular.json), so these name
+   the viewer's parent to win. */
+
+/* The planes menu: the app's menu (.tcv-fm-menu) in place of a strip of
+   bare checkboxes; opens on hover as before, and from the keyboard. */
+.tcv_cad_toolbar .tcv_grid-content.wb-gridmenu {
+  top: calc(100% + 4px); left: 0; width: auto; min-width: 176px; margin: 0; padding: 4px;
+  background: var(--surface); border: 1px solid var(--line) !important; border-radius: 7px;
+  box-shadow: 0 8px 24px var(--shadow-soft); z-index: 680; cursor: default;
+}
+/* Bridges the gap under the button, so the pointer can get to the menu. */
+.tcv_cad_toolbar .wb-gridmenu::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; height: 6px; }
+.tcv_cad_toolbar .tcv_grid-dropdown:hover > .wb-gridmenu,
+.tcv_cad_toolbar .tcv_grid-dropdown[data-open] > .wb-gridmenu { display: block; }
+.wb-gridmenu-head { padding: 6px 10px 4px; font-size: 11px; font-weight: 500; color: var(--ink-dim); white-space: nowrap; }
+.wb-gridmenu-row {
+  display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px;
+  font-size: 12.5px; color: var(--ink); border-radius: 5px; cursor: pointer; white-space: nowrap;
+}
+.wb-gridmenu-row:hover, .wb-gridmenu-row:focus-within { background: var(--hover); }
+.tcv_cad_toolbar .wb-gridmenu-row > .tcv-check { margin: 0; }
+.tcv_cad_toolbar .wb-gridmenu-row > label { flex: 1; margin: 0; color: inherit; font-size: inherit; cursor: pointer; }
+.wb-gridmenu-tag { font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+@media (prefers-reduced-motion: no-preference) {
+  .tcv_cad_toolbar .tcv_grid-dropdown:is(:hover, [data-open]) > .wb-gridmenu {
+    transform-origin: top left; animation: tcv-pop-in var(--tcv-t-pop) var(--tcv-ease); }
+}
+
+/* "Grid 4 mm" over the canvas: the app's mono figures, no chip behind them. */
+.tcv_cad_view .tcv_tick_size {
+  padding: 0; font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim);
+  background: none; pointer-events: none;
+}
+.tcv_cad_view .tcv_tick_size_value { padding: 0; color: var(--ink); }

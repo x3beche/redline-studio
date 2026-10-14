@@ -1,0 +1,27 @@
+/* Settings > Appearance > 3D grid (grid-settings.ts). The rows are the
+   Model tree card's (settings.css .st-icons-row / .st-pick); this is the
+   strength slider, the axis colour chips and the sample. */
+.gs-range { width: 160px; margin: 0; accent-color: var(--accent); }
+.gs-range:disabled { opacity: .45; }
+.gs-pct { min-width: 34px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.gs-axis { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; font: 11px 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.gs-axis[data-own] { border-color: var(--ink-dim); }
+.gs-axis input[type="color"] { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; }
+.gs-axis input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.gs-axis input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 3px; }
+.gs-axis input[type="color"]::-moz-color-swatch { border: 0; border-radius: 3px; }
+.gs-axis:focus-within { outline: 1px solid var(--accent); outline-offset: 1px; }
+.gs-axis-reset { margin-left: -4px; }
+
+/* The sample: one plane from above, on the 3D room's backdrop. */
+.gs-demo { flex: none; width: 340px; height: 190px; border: 1px solid var(--line); border-radius: 6px;
+  background: linear-gradient(180deg, var(--view-top), var(--view-mid) 55%, var(--view-bottom)); }
+.gs-minor, .gs-major { stroke: var(--ink-dim); stroke-width: 1; }
+.gs-minor { opacity: calc(var(--gs-op, .5) * .26); }
+.gs-major { opacity: calc(var(--gs-op, .5) * .85); }
+.gs-dot { stroke: var(--ink-dim); stroke-width: 1; fill: none; opacity: calc(var(--gs-op, .5) * .7); }
+.gs-dot-major { opacity: var(--gs-op, .5); }
+.gs-axisline { stroke-width: 1; opacity: .8; }
+.gs-num { font: 9px 'IBM Plex Mono', ui-monospace, monospace; fill: var(--ink-dim); }
+@media (max-width: 768px) { .gs-demo { width: 100%; height: auto; } }

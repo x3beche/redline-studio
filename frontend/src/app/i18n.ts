@@ -4253,6 +4253,12 @@ const TR: Record<string, string> = {
   'a maker\'s exploration runs on its own - remove the maker on the Parts page': 'bir üreticinin taranması kendi başına çalışır - üreticiyi Parçalar sayfasında kaldırın',
   'a model put in a project is built - remove it in the 3D room': 'projeye konan model derlenir - 3D odasında kaldırın',
   'a tool\'s own undo is not redone - ask the Chat again': 'aracın kendi geri alması yinelenmez - Sohbet\'e yeniden sorun',
+  // The 3D viewer's grid (editor/grid-look.ts, grid-pref.ts)
+  'Grid planes': 'Izgara düzlemleri', 'XY plane': 'XY düzlemi', 'XZ plane': 'XZ düzlemi', 'YZ plane': 'YZ düzlemi',
+  '3D grid': '3D ızgara', 'The grid and axes of the 3D room. Which planes show is on its toolbar\'s grid button.': '3D odasının ızgarası ve eksenleri. Hangi düzlemlerin görüneceği araç çubuğundaki ızgara düğmesindedir.',
+  'Dots': 'Noktalar', 'Numbers': 'Sayılar', 'Major': 'Ana', 'Axes': 'Eksenler', 'Axis colour': 'Eksen rengi',
+  'No numbers on the axes.': 'Eksenlerde sayı yok.', 'At the major lines, each axis once.': 'Ana çizgilerde, her eksende bir kez.',
+  'At the major lines, on every plane that is on.': 'Ana çizgilerde, açık olan her düzlemde.',
 };
 
 export function t(text: string): string {
