@@ -408,7 +408,7 @@ const TR: Record<string, string> = {
     'Çalışma alanı belleğine ekler, bir öğeyi değiştirir ya da kaldırır (önce sorar).',
   'Changing the workspace memory': 'Çalışma alanı belleği değiştiriliyor', 'Could not change the workspace memory': 'Çalışma alanı belleği değiştirilemedi',
   'Changed the workspace memory: {count} changes': 'Çalışma alanı belleği değişti: {count} değişiklik',
-  'Tools sent': 'Gönderilen araçlar', 'Tool packages sent with this line': 'Bu satırla gönderilen araç paketleri',
+  'Tools sent': 'Gönderilen araçlar',
   'Web': 'Web', 'Queues': 'Kuyruklar', 'Calculators': 'Hesaplayıcılar',
   'Took more tools: {packages}': 'Daha fazla araç alındı: {packages}', 'Taking more tools': 'Daha fazla araç alınıyor',
   'Could not take more tools': 'Daha fazla araç alınamadı',
