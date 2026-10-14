@@ -22,6 +22,8 @@ import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
+import { PriceChart } from './product-charts';
+import { Fmt } from './charts';
 import { BackCloses, GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
@@ -327,7 +329,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles, PriceChart],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
@@ -1021,10 +1023,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <!-- the body: three columns down to the box's foot, sections under plain headers, the parts that can grow filling it:
              the gallery (its pictures and its 3D model); the specs, its files, where its figures came from; the stock over
              the price as read, the price's line filling what is left -->
-        <!-- the body: the gallery (its pictures and its 3D model) down the left, when it has any; beside it the specs and
-             its files over against the stock and where its figures came from, and under both, as wide as they are, the
-             price and the seller's stock as read - its line, when there are two readings or more, filling what is left -->
-        <div class="mf-pd-body" [attr.data-hist]="spark(d) ? 1 : null" [attr.data-nogal]="!gallery().length && !galModel() ? 1 : null">
+        <!-- the body: the gallery (its pictures and its 3D model) down the left, when it has any; beside it the specs, its
+             files and the price as read - its chart filling what is left - over against the stock - its count over time
+             and its log - and where its figures came from -->
+        <div class="mf-pd-body" [attr.data-nogal]="!gallery().length && !galModel() ? 1 : null">
           @if (gallery().length || galModel()) {
           <div class="mf-pd-col">
             <section class="mf-pd-sec mf-pd-grow">
@@ -1037,7 +1039,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <div class="mf-pd-main">
             <div class="mf-pd-pair">
               <div class="mf-pd-col mf-pd-fit">
-                <section class="mf-pd-sec mf-pd-specsec">
+                <section class="mf-pd-sec mf-pd-specsec" [class.mf-pd-grow]="(d.history?.length ?? 0) < 3">
                   <div class="mf-pd-sh"><h3>{{ 'Specs' | t }}</h3>@if (specList(d).length) { <span class="st-sub">{{ specList(d).length }}</span> }</div>
                   <div class="mf-pd-scroll">
                     @if (d.description) { <p class="mf-pd-desc">{{ d.description }}</p> }
@@ -1048,12 +1050,28 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 </section>
                 <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts); the whole section takes a drop -->
                 <wb-product-files #pfl class="mf-pd-sec mf-pd-filesec" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
+                <!-- the price and the seller's stock each time its page was read: the Analytics room's line (product-charts.ts)
+                     filling what is left - one reading a line to today with its value -, its readings under it -->
+                <section class="mf-pd-sec mf-pd-histsec" [class.mf-pd-grow]="(d.history?.length ?? 0) > 2">
+                  <div class="mf-pd-sh"><h3>{{ 'Price and stock, as read' | t }}</h3>@if (d.history?.length) { <span class="st-sub">{{ d.history!.length }}</span> }</div>
+                  @if (d.history?.length) {
+                    <wb-price-chart class="mf-pd-fill" [history]="d.history!" [currency]="d.price?.currency || ''" [f]="priceF()" />
+                    <div class="mf-pd-histwrap"><table class="mf-pd-hist">
+                      <tbody>@for (h of histRows(d); track h.at) {
+                        <tr><td class="dim">{{ ago(h.at) }}</td>
+                          <td class="r mono" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}</td>
+                          <td class="dim">{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
+                          <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
+                      }</tbody>
+                    </table></div>
+                  } @else { <p class="mf-pd-none">{{ 'No price or stock read from its page yet: it is charted here once one is.' | t }}</p> }
+                </section>
               </div>
               <div class="mf-pd-col mf-pd-fit">
-                <section class="mf-pd-sec mf-pd-stocksec">
+                <section class="mf-pd-sec mf-pd-stocksec mf-pd-grow">
                   <div class="mf-pd-sh"><h3>{{ 'Stock' | t }}</h3></div>
-                  <!-- how many are on hand, where, the log (stock.ts) -->
-                  <wb-stock-panel class="mf-pd-fill" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
+                  <!-- how many are on hand, where, the count over time and what the log says plainly, the log (stock.ts) -->
+                  <wb-stock-panel class="mf-pd-fill" [maker]="d.maker.id" [product]="d.id" [compact]="true" [charts]="true" />
                 </section>
                 <!-- where its figures came from and when: the dates and the readings' sources, plainly (the head's link has the doubts and "this is wrong") -->
                 <section class="mf-pd-sec mf-pd-whence">
@@ -1064,28 +1082,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 </section>
               </div>
             </div>
-            <!-- the price and the seller's stock each time its page was read, under both: the line of the price beside its readings -->
-            @if (d.history?.length) {
-              <section class="mf-pd-sec mf-pd-histsec">
-                <div class="mf-pd-sh"><h3>{{ 'Price and stock, as read' | t }}</h3><span class="st-sub">{{ d.history!.length }}</span></div>
-                <div class="mf-pd-histrow">
-                  @if (spark(d); as sp) {
-                    <div class="mf-pd-spark"><svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
-                        <path class="mf-pd-grid" [attr.d]="sp.grid" /><path [attr.d]="sp.line" /><path class="mf-pd-dots" [attr.d]="sp.dots" /></svg>
-                      <span class="mono">{{ moneyIn(sp.max, sp.cur) }}</span><span class="mono">{{ moneyIn(sp.min, sp.cur) }}</span>
-                      <span class="mf-pd-when"><span>{{ sp.from }}</span><span>{{ sp.to }}</span></span></div>
-                  }
-                  <div class="mf-pd-histwrap"><table class="mf-pd-hist">
-                    <tbody>@for (h of histRows(d); track h.at) {
-                      <tr><td class="dim">{{ ago(h.at) }}</td>
-                        <td class="r mono" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}</td>
-                        <td class="dim">{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
-                        <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
-                    }</tbody>
-                  </table></div>
-                </div>
-              </section>
-            }
           </div>
         </div>
       </div>
@@ -1992,19 +1988,8 @@ export class RoomMfr implements OnDestroy {
   }
   /** "40 × 40 × 12.13 mm". */
   boxOf(b: number[]): string { return b.map(x => String(Math.round(x * 100) / 100)).join(' × ') + ' mm'; }
-  /** The price readings as a line, oldest left: its path, its area and its range. */
-  spark(p: Product): { line: string; area: string; dots: string; grid: string; min: number; max: number; cur: string; from: string; to: string } | null {
-    const cur = p.price?.currency;
-    const h = (p.history ?? []).filter(x => x.amount != null && (!cur || !x.currency || x.currency === cur));
-    if (h.length < 2) return null;
-    const v = h.map(x => x.amount as number), min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
-    const pts = v.map((y, i) => [i / (v.length - 1) * 200, 40 - (y - min) / span * 36]);
-    const line = pts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
-    // Each reading a round dot (a zero-length stroke keeps round however the line is stretched), quiet rules at the top, middle and foot.
-    const dots = pts.map(([x, y]) => 'M' + x.toFixed(1) + ' ' + y.toFixed(1) + 'l0 0').join(' ');
-    const grid = [4, 22, 40].map(y => `M0 ${y}H200`).join(' ');
-    return { line, area: line + ' L200 44 L0 44 Z', dots, grid, min, max, cur: cur || h[0].currency || 'TRY', from: this.ago(h[0].at), to: this.ago(h[h.length - 1].at) };
-  }
+  /** The price chart's money: the product's currency, as the page writes it. */
+  priceF = computed<Fmt>(() => { const c = this.detail()?.price?.currency; return (v: number) => this.moneyIn(v, c); });
   copyText(v: string) {
     try { navigator.clipboard.writeText(v).then(() => Toast.show(this.fmt('{c} copied', { c: v })), () => {}); } catch { /* no clipboard */ }
   }

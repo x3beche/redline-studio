@@ -214,3 +214,6 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
 .inv-panel[data-compact] .inv-pfields .inv-pdel { grid-column: 4; grid-row: 1; }
 .inv-panel[data-compact] .inv-adjust { flex-basis: 100%; }
 .inv-panel[data-compact] .inv-log th:nth-child(6), .inv-panel[data-compact] .inv-log td:nth-child(6) { display: none; }
+/* with its chart (product-charts.ts): the chart takes the height, the log keeps to its rows and scrolls */
+.inv-panel[data-compact] .inv-chart { flex: 1 0 190px; min-height: 0; }
+.inv-panel[data-compact] > .inv-line:has(.inv-chart) > .inv-logwrap { flex: 0 1 auto; max-height: 232px; min-height: 0; }

@@ -13,6 +13,7 @@ import { CountUp } from '../count';
 import { CURRENCY, convert, moneyIn, moneyTip } from '../money';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
+import { StockChart } from './product-charts';
 
 /** Stock on the Parts page: how many of each product are on hand, and where
  *  (backend/inventory.py). What a thing is - its name, maker, code, price,
@@ -238,7 +239,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
  *  or, with none, adding it to stock. */
 @Component({
   selector: 'wb-stock-panel',
-  imports: [T],
+  imports: [T, StockChart],
   host: { style: 'display: block' },
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   template: `
@@ -277,6 +278,8 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
         @if (can()) { <button class="tcv-cc-ib tcv-cc-danger inv-pdel" (click)="remove(it)" [title]="'Stop counting it: the line and its log go, the product stays' | t">
           <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5" /></svg></button> }
       </div>
+      <!-- in the product's detail: how many were on hand over time, what the log says plainly (product-charts.ts) -->
+      @if (charts()) { <wb-stock-chart class="inv-chart" [log]="it.log ?? []" [quantity]="it.quantity" [min]="it.min_stock" [unit]="it.unit" /> }
       <div class="st-table-wrap inv-logwrap">
         <table class="st-table inv-log">
           <thead><tr><th>{{ 'When' | t }}</th><th>{{ 'What' | t }}</th><th class="r">{{ 'Change' | t }}</th><th class="r">{{ 'After' | t }}</th>
@@ -323,6 +326,8 @@ export class StockPanel {
   readonly product = input.required<string>();
   /** In a narrow column (the product's detail): the fields in two rows, the log without who. */
   readonly compact = input(false);
+  /** Its chart over the log: the count over time, used and added, how long it lasts. */
+  readonly charts = input(false);
   can = computed(() => this.auth.can('draw'));
   lines = signal<Item[]>([]);
   loaded = signal(false);

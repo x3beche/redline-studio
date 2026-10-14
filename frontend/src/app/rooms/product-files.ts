@@ -340,7 +340,7 @@ export interface GalleryModel { file: string; name: string; kind: string; thumb?
     @if (c.solid && live() && model(); as m) {
       <app-mesh-view [src]="meshSrc(m)" [name]="m.name" [step]="m.kind === 'step'" />
     } @else if (c.src) {
-      <img [class.tcv-fm-solid]="c.solid" [src]="c.src" referrerpolicy="no-referrer" alt="" (error)="broke.emit(c.src)">
+      <img [class.tcv-fm-solid]="c.solid" [src]="c.src" referrerpolicy="no-referrer" alt="" (error)="lost(c.src)">
     } @else {
       <div class="pdg-none"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="CUBE" /></svg><span>{{ 'drawing its picture…' | t }}</span></div>
     }
@@ -364,7 +364,7 @@ export interface GalleryModel { file: string; name: string; kind: string; thumb?
     @for (it of items(); track it.key) {
       <button role="option" [attr.aria-selected]="it.key === cur()?.key" [class.on]="it.key === cur()?.key" (click)="pick.set(it.key)"
               [title]="it.solid ? ('3D model' | t) : ''">
-        @if (it.src) { <img [class.tcv-fm-solid]="it.solid" [src]="it.src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke.emit(it.src)"> }
+        @if (it.src) { <img [class.tcv-fm-solid]="it.solid" [src]="it.src" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="lost(it.src)"> }
         @else { <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="CUBE" /></svg> }
         @if (it.solid) { <i>3D</i> }
       </button>
@@ -386,6 +386,8 @@ export class ProductGallery {
   readonly CUBE = 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9';
   pick = signal<string | null>(null);
   live = signal(false);
+  /** The model's pictures that did not load: its cube instead. */
+  gone = signal<Set<string>>(new Set());
   dropping = signal(false);
 
   constructor() {
@@ -396,12 +398,18 @@ export class ProductGallery {
     const m = this.model();
     const out = this.pics().map(src => ({ key: src, src: src as string | null, solid: false }));
     if (m) {
-      const it = { key: '3d:' + m.file, src: this.solids.drawn()[m.file] ?? m.thumb ?? null, solid: true };
+      const src = this.solids.drawn()[m.file] ?? m.thumb ?? null;
+      const it = { key: '3d:' + m.file, src: src && !this.gone().has(src) ? src : null, solid: true };
       if (out.length) out.push(it); else out.unshift(it);
     }
     return out;
   });
   cur = computed(() => { const l = this.items(), k = this.pick(); return l.find(x => x.key === k) ?? (l.length ? l[0] : null); });
+  /** A picture that did not load: the page leaves it out; the model's keeps its place, as its cube. */
+  lost(src: string) {
+    if (this.model() && this.items().some(x => x.solid && x.src === src)) this.gone.update(g => new Set(g).add(src));
+    else this.broke.emit(src);
+  }
   meshSrc(m: GalleryModel) { return m.kind === 'step' ? meshUrl(m.file) : inlineUrl(m.file); }
   over(e: DragEvent) { if (this.canDrop() && !this.cur()) { e.preventDefault(); this.dropping.set(true); } }
   drop(e: DragEvent) {
