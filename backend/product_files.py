@@ -542,7 +542,7 @@ async def summary(db) -> dict:
     picture}} - for the 3D badge of the cards and rows, and for "which
     products have no 3D model". Orphans (their product deleted) are listed
     apart, with their files' names."""
-    from . import catalog_builtin, files, linked
+    from . import files, linked
     out: dict[str, dict] = {}
 
     def one(doc: dict, title: str = "") -> dict:
@@ -580,17 +580,115 @@ async def summary(db) -> dict:
     # Which of them lost their product (deleted by hand): said, never dropped.
     orphans = []
     if docs:
-        have: set[str] = set()
-        for m in await catalog_builtin.makers(db):
-            have |= {f"{m['_id']}:{p['id']}" for p in m.get("products") or []}
-        async for m in db["manufacturers"].find({}, {"products.id": 1}):
-            have |= {f"{m['_id']}:{p.get('id')}" for p in m.get("products") or []}
+        have = await _catalog_keys(db)
         for d in docs:
             key = f"{d['mid']}:{d['pid']}"
             if d.get("files") and key not in have:
                 out[key]["orphan"] = True
                 orphans.append(key)
     return {"products": out, "orphans": orphans}
+
+
+async def _catalog_keys(db) -> set[str]:
+    """"maker:product" of every product in Parts, of every source."""
+    from . import catalog_builtin
+    have: set[str] = set()
+    for m in await catalog_builtin.makers(db):
+        have |= {f"{m['_id']}:{p['id']}" for p in m.get("products") or []}
+    async for m in db["manufacturers"].find({}, {"products.id": 1}):
+        have |= {f"{m['_id']}:{p.get('id')}" for p in m.get("products") or []}
+    return have
+
+
+# ---------------------------------------------------------------- orphans: files whose product is gone
+
+async def orphans(db) -> list[dict]:
+    """The products deleted by hand whose files are still referred to,
+    newest first: each with its maker's name (when the maker is still
+    there), its files - their roles, and whether Files still holds them -
+    and which was its model."""
+    from . import files
+    docs = [d async for d in db[COLL].find({}) if d.get("files")]
+    if not docs:
+        return []
+    have = await _catalog_keys(db)
+    out = []
+    for d in docs:
+        if f"{d['mid']}:{d['pid']}" in have:
+            continue
+        fl = entries(d)
+        held = {x["_id"] async for x in db[files.COLL].find({"_id": {"$in": [f["file"] for f in fl]}}, {"_id": 1})}
+        m = await db["manufacturers"].find_one({"_id": d["mid"]}, {"name": 1})
+        out.append({"mid": d["mid"], "pid": d["pid"], "name": d.get("name") or "", "maker_name": (m or {}).get("name") or "",
+                    "files": [{**f, "in_files": f["file"] in held} for f in fl],
+                    "cad": (d.get("cad") or {}).get("file"), "picture": (d.get("picture") or {}).get("file"),
+                    "updated_at": d.get("updated_at")})
+    out.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+    return out
+
+
+async def _orphan(db, mid: str, pid: str) -> dict:
+    """An orphan's document, or LookupError / Refused when it is none."""
+    doc = await db[COLL].find_one({"mid": mid, "pid": pid})
+    if not doc:
+        raise LookupError(f"no files are kept for {mid}:{pid}")
+    if f"{mid}:{pid}" in await _catalog_keys(db):
+        raise Refused(f"{doc.get('name') or pid} is still in Parts: its files are its own, not an orphan's")
+    return doc
+
+
+async def adopt(db, mid: str, pid: str, to_mid: str, to_pid: str, measure: bool = True) -> dict:
+    """An orphan's files attached to a product of Parts: its model the
+    product's model only when it has none (a STEP never replaces one it
+    has), its picture its picture only when it has none. What was attached
+    leaves the orphan; once nothing is left, the orphan is gone.
+    {product: its files as `view` gives them, report, left}."""
+    doc = await _orphan(db, mid, pid)
+    fl = entries(doc)
+    cad = (doc.get("cad") or {}).get("file")
+    ids = ([cad] if cad else []) + [f["file"] for f in fl if f["file"] != cad]
+    before = await of(db, to_mid, to_pid)
+    v, reps = await attach(db, to_mid, to_pid, ids, main=None if not before.get("cad") else False, measure=measure)
+    pic = (doc.get("picture") or {}).get("file")
+    took = {r["file"] for r in reps if r.get("status") in ("attached", "already")}
+    if pic and pic in took and not before.get("picture") and not before.get("linked"):
+        v = await set_main(db, to_mid, to_pid, pic, measure=measure)
+    rest = [f for f in doc.get("files") or [] if f.get("file") not in took]
+    if rest:
+        await db[COLL].update_one({"_id": doc["_id"]}, {"$set": {"files": rest, "updated_at": _now()}})
+    else:
+        await db[COLL].delete_one({"_id": doc["_id"]})
+    await actors.audit(db, "product-files-adopt", f"{mid}:{pid}", {"to": f"{to_mid}:{to_pid}", "files": sorted(took)[:20]})
+    return {"product": v, "report": reps, "left": len(rest)}
+
+
+async def forget(db, mid: str, pid: str, delete_files: bool = False) -> dict:
+    """An orphan let go. Its files stay in Files unless `delete_files` -
+    then each goes only when nothing else refers to it, and only for
+    whoever may delete it there (its own uploader, or the right to delete),
+    as detaching does. {removed: [names], kept: [[name, why]]}."""
+    from . import files
+    doc = await _orphan(db, mid, pid)
+    removed: list[str] = []
+    kept: list[list[str]] = []
+    if delete_files:
+        for f in entries(doc):
+            others = await users_of(db, f["file"], (mid, pid))
+            if others:
+                kept.append([f["name"], f"{', '.join(others[:5])} still refer(s) to it"])
+                continue
+            fd = await db[files.COLL].find_one({"_id": f["file"]}, {"by": 1})
+            if not fd:
+                continue
+            if not ((fd.get("by") or {}).get("id") == (actors.current() or {}).get("id")
+                    or access.allowed(access.current(), "delete")):
+                kept.append([f["name"], "removing someone else's file from Files needs the right to delete"])
+                continue
+            if await files.remove(db, f["file"]):
+                removed.append(f["name"])
+    await db[COLL].delete_one({"_id": doc["_id"]})
+    await actors.audit(db, "product-files-forget", f"{mid}:{pid}", {"removed": removed[:20], "kept": len(kept)})
+    return {"removed": removed, "kept": kept}
 
 
 async def card_line(db, mid: str, pid: str) -> str:
@@ -782,6 +880,38 @@ async def api_detach(mid: str, pid: str, fid: str, background: BackgroundTasks, 
         return {**out, "product": await of(_db(), mid, pid)}
     except LookupError:
         return {**out, "product": None}
+
+
+@router.get("/api/product-files/orphans")
+async def api_orphans() -> list[dict]:
+    """The files of products deleted by hand, for the Parts page to attach elsewhere or let go."""
+    return await orphans(_db())
+
+
+class AdoptIn(BaseModel):
+    maker: str = Field(min_length=1, max_length=200)
+    product: str = Field(min_length=1, max_length=200)
+
+
+# Under /api/manufacturers, so attaching them and letting them go are the catalog's right ("draw", access.py).
+@router.post("/api/manufacturers/orphan-files/{mid}/{pid}/adopt")
+async def api_adopt(mid: str, pid: str, body: AdoptIn, background: BackgroundTasks) -> dict:
+    """An orphan's files attached to another product."""
+    try:
+        out = await adopt(_db(), mid, pid, body.maker, body.product, measure=False)
+    except (LookupError, Refused, ValueError) as exc:
+        _http(exc)
+    await measure_later(_db(), body.maker, body.product, background)
+    return out
+
+
+@router.delete("/api/manufacturers/orphan-files/{mid}/{pid}")
+async def api_forget(mid: str, pid: str, delete_files: bool = False) -> dict:
+    """An orphan let go; its files removed from Files too when asked and allowed."""
+    try:
+        return await forget(_db(), mid, pid, delete_files)
+    except (LookupError, Refused) as exc:
+        _http(exc)
 
 
 class ToModel(BaseModel):

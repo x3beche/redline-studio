@@ -414,3 +414,33 @@ def test_the_agents_read_attach_and_model_a_products_files(monkeypatch, capsys):
     revisions.cmd_linked(argparse.Namespace(what="to-model", target="own:abc", source=None, all=False,
                                             folder="lamp/p", title=None))
     assert asked[-1][1] == "/api/manufacturers/own/products/abc/to-model"
+
+
+def test_an_orphans_files_go_to_another_product_or_are_let_go(db, grid, site):  # noqa: F811
+    a = person(db, "a")
+    mid, (p1, p2, p3) = maker(a, products=({"name": "Hinge"}, {"name": "Latch"}, {"name": "Hinge v2"}))
+    a.post(f"/api/manufacturers/{mid}/products/{p1}/files", files={"upload": ("hinge.step", STEP)})
+    a.post(f"/api/manufacturers/{mid}/products/{p1}/files", files={"upload": ("hinge datasheet.pdf", PDF)})
+    a.post(f"/api/manufacturers/{mid}/products/{p2}/files", files={"upload": ("latch.pdf", PDF + b" ")})
+    assert a.get("/api/product-files/orphans").json() == []
+    a.delete(f"/api/manufacturers/{mid}/products/{p1}")
+    a.delete(f"/api/manufacturers/{mid}/products/{p2}")
+    got = a.get("/api/product-files/orphans").json()
+    assert {o["pid"] for o in got} == {p1, p2}
+    hinge = next(o for o in got if o["pid"] == p1)
+    assert hinge["name"] == "Hinge" and hinge["maker_name"] == "Robo90"
+    assert sorted(f["name"] for f in hinge["files"]) == ["hinge datasheet.pdf", "hinge.step"]
+    assert all(f["in_files"] for f in hinge["files"]) and hinge["cad"]
+    # attached to another product: its STEP its model, the orphan gone
+    r = a.post(f"/api/manufacturers/orphan-files/{mid}/{p1}/adopt", json={"maker": mid, "product": p3}).json()
+    assert r["left"] == 0 and r["product"]["cad"]["name"] == "hinge.step" and len(r["product"]["files"]) == 2
+    assert [o["pid"] for o in a.get("/api/product-files/orphans").json()] == [p2]
+    # a product still in Parts is no orphan
+    assert a.post(f"/api/manufacturers/orphan-files/{mid}/{p3}/adopt", json={"maker": mid, "product": p3}).status_code == 400
+    assert a.delete(f"/api/manufacturers/orphan-files/{mid}/{p3}").status_code == 400
+    # let go with its file removed from Files - nothing else refers to it, and its uploader asks
+    r = a.delete(f"/api/manufacturers/orphan-files/{mid}/{p2}?delete_files=true").json()
+    assert r == {"removed": ["latch.pdf"], "kept": []}
+    assert a.get("/api/product-files/orphans").json() == []
+    assert not any(f["name"] == "latch.pdf" for f in a.get("/api/files").json())
+    assert a.delete(f"/api/manufacturers/orphan-files/{mid}/{p2}").status_code == 404

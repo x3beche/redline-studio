@@ -22,7 +22,7 @@ import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
 import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
-import { BackCloses, GalleryModel, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
+import { BackCloses, GalleryModel, OrphanFiles, ProductFilesPanel, ProductFilesState, ProductGallery } from './product-files';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
@@ -327,7 +327,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 @Component({
   selector: 'app-room-mfr',
   imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar,
-            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery],
+            PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
@@ -705,6 +705,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button [class.on]="sub() === 'products'" (click)="sub.set('products')">{{ 'All products' | t }}</button>
             <button [class.on]="sub() === 'stock'" (click)="sub.set('stock')" [title]="'Every product on hand, from every source, in one list' | t">{{ fmt('Stock ({n})', { n: heldTotal() }) }}</button>
             <button [class.on]="sub() === 'sites'" (click)="sub.set('sites')">{{ fmt('Sites ({n})', { n: own().length }) }}</button>
+            @if (pfiles.orphans().length || sub() === 'orphans') {
+              <button [class.on]="sub() === 'orphans'" (click)="sub.set('orphans')" [title]="'Files of products deleted by hand: attach them to another product, open them in Files or let them go' | t">{{ fmt('Orphan files ({n})', { n: pfiles.orphans().length }) }}</button>
+            }
           </div>
           @if (can()) {
             <button class="tcv-btn" (click)="openCheck()" [title]="'Read every saved product page again and see what changed' | t">{{ 'Re-read all products' | t }}</button>
@@ -784,6 +787,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       } @else if (sub() === 'stock') {
         <!-- every product on hand, from every source, in one list (stock.ts); a line opens its product -->
         <wb-stock-view (open)="openLine($event)" />
+      } @else if (sub() === 'orphans') {
+        <!-- the files of products deleted by hand (product-files.ts) -->
+        <wb-orphan-files />
       } @else {
       <div class="st-tiles mf-htiles">
         <div class="st-tile" [attr.data-tone]="own().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b [wbCount]="own().length"></b>
@@ -1368,7 +1374,8 @@ export class RoomMfr implements OnDestroy {
   listQ = signal('');
   /** The overview: every product (the grid, the default), every product on hand (an old link to the stock's
    *  own tab opens here too), or the sites and adding one. */
-  sub = signal<'products' | 'stock' | 'sites'>(STOCK_ASKED || this.url.get('sub') === 'stock' ? 'stock' : this.url.get('sub') === 'sites' ? 'sites' : 'products');
+  sub = signal<'products' | 'stock' | 'sites' | 'orphans'>(STOCK_ASKED || this.url.get('sub') === 'stock' ? 'stock'
+    : this.url.get('sub') === 'sites' ? 'sites' : this.url.get('sub') === 'orphans' ? 'orphans' : 'products');
   readonly PARTS_LABEL = PARTS_LABEL;
   /** Cards or rows - the overview's and a maker's catalog alike. */
   layout = signal<Layout>(this.url.get('view') === 'table' ? 'table' : this.url.get('view') === 'drawer' ? 'drawer' : 'grid');

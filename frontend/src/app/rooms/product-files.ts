@@ -6,6 +6,8 @@ import { Auth } from '../auth';
 import { Confirm } from '../confirm';
 import { LANG, T, t } from '../i18n';
 import { Toast } from '../toast';
+import { Selection } from '../selection';
+import { EmptyState } from '../empty-state';
 import { MeshThumbs } from './mesh-thumb';
 import { StoredFile, inlineUrl, meshUrl } from './files-model';
 import { MeshView } from './mesh-view';
@@ -48,7 +50,12 @@ const ROLE: Record<string, string> = { model: '3D model', datasheet: 'Datasheet'
 export class ProductFilesState {
   private http = inject(HttpClient);
   held = signal<Record<string, HeldFiles>>({});
-  load() { this.http.get<{ products: Record<string, HeldFiles> }>('/api/product-files/summary').subscribe({ next: r => this.held.set(r.products), error: () => {} }); }
+  /** "maker:product" of the products deleted by hand whose files are still kept (OrphanFiles). */
+  orphans = signal<string[]>([]);
+  load() {
+    this.http.get<{ products: Record<string, HeldFiles>; orphans?: string[] }>('/api/product-files/summary').subscribe({
+      next: r => { this.held.set(r.products); this.orphans.set(r.orphans ?? []); }, error: () => {} });
+  }
   of(mid: string | undefined, pid: string | undefined): HeldFiles | null { return mid && pid ? this.held()[mid + ':' + pid] ?? null : null; }
   /** "3D" on a card or row: a model attached (a McMaster/GrabCAD item and an LCSC part say theirs already). */
   model(mid: string | undefined, pid: string | undefined): HeldFiles | null { const h = this.of(mid, pid); return h?.cad ? h : null; }
@@ -421,4 +428,141 @@ export class BackCloses {
     removeEventListener('popstate', this.pop);
     history.back();
   }
+}
+
+/** A product deleted by hand whose files are still kept (backend/product_files.py `orphans`). */
+export interface Orphan { mid: string; pid: string; name: string; maker_name: string; cad: string | null; picture: string | null;
+  updated_at?: string; files: (ProductFile & { in_files: boolean })[] }
+interface Pick { maker: { id: string; name: string }; id: string; name: string; sku?: string }
+
+/** "Orphan files" on the Parts page: the files of products deleted by hand,
+ *  each product a group of its files - attached to another product (its
+ *  STEP its model when it has none), opened in Files, or let go: kept in
+ *  Files, or removed from it too where nothing else uses them. */
+@Component({
+  selector: 'wb-orphan-files',
+  imports: [T, EmptyState],
+  styleUrls: ['../settings.css', './manufacturers.css', './product-files.css'],
+  template: `
+@if (list(); as l) {
+  @if (l.length) {
+    <div class="st-table-wrap pfo-wrap">
+      <table class="st-table pfo">
+        <thead><tr><th>{{ 'File' | t }}</th><th>{{ 'Role' | t }}</th><th class="r">{{ 'Size' | t }}</th><th>{{ 'Attached' | t }}</th><th class="r"></th></tr></thead>
+        @for (o of l; track o.mid + ':' + o.pid) {
+          <tbody>
+            <tr class="pfo-head">
+              <td colspan="5"><div class="pfo-hrow">
+                <b>{{ o.name || o.pid }}</b>
+                <span class="dim">{{ o.maker_name || o.mid }} · {{ fmt(o.files.length === 1 ? '{n} file' : '{n} files', { n: o.files.length }) }} · {{ 'its product was deleted' | t }}</span>
+                @if (can()) { <span class="pfo-acts">
+                  <button class="st-more" (click)="openPick(o)" [attr.aria-expanded]="picking() === key(o)">{{ 'Attach to a product…' | t }}</button>
+                  <button class="st-more" (click)="letGo(o, false)" [title]="'The files stay in Files' | t">{{ 'Let go' | t }}</button>
+                  <button class="st-more pfo-del" (click)="letGo(o, true)">{{ 'Delete the files' | t }}</button>
+                </span> }
+              </div></td>
+            </tr>
+            @if (picking() === key(o)) {
+              <tr class="pfo-pickrow"><td colspan="5">
+                <div class="pfo-pick mf-ctl">
+                  <input class="tst-in" [placeholder]="'Find the product: name, code, seller' | t" [value]="q()" (input)="find($any($event.target).value)"
+                         (keydown.escape)="picking.set(null)" [attr.aria-label]="'Find the product' | t" autofocus>
+                  <div class="pfo-hits" role="listbox">
+                    @for (p of hits(); track p.maker.id + ':' + p.id) {
+                      <button role="option" (click)="adopt(o, p)" [disabled]="busy()">
+                        <b>{{ p.name }}</b><span class="dim">{{ p.maker.name }}@if (p.sku) { · <span class="mono">{{ p.sku }}</span> }</span></button>
+                    } @empty { <span class="dim">{{ (q().trim() ? 'No product matches.' : 'Type to find the product to attach them to.') | t }}</span> }
+                  </div>
+                </div>
+              </td></tr>
+            }
+            @for (f of o.files; track f.file) {
+              <tr [attr.data-gone]="f.in_files ? null : 1">
+                <td class="give"><span class="pfo-name" [class.pfo-main]="f.file === o.cad || f.file === o.picture" [title]="f.name">{{ f.name }}</span>
+                  @if (!f.in_files) { <span class="st-tag" data-tone="warn">{{ 'not in Files any more' | t }}</span> }</td>
+                <td><span class="st-tag" [attr.data-tone]="f.file === o.cad ? 'ok' : null">{{ (f.file === o.cad ? 'Its 3D model' : role(f.role)) | t }}</span></td>
+                <td class="r mono dim">{{ kb(f.bytes) }}</td>
+                <td class="dim">{{ f.by?.name || ('someone' | t) }}@if (f.at) { · {{ when(f.at) }} }</td>
+                <td class="r nowrap">@if (f.in_files) {
+                  <button class="st-more" (click)="toFiles(f.file)">{{ 'Open in Files' | t }}</button>
+                  <a class="st-more" [href]="'/api/files/' + f.file" download>{{ 'Download' | t }}</a> }</td>
+              </tr>
+            }
+          </tbody>
+        }
+      </table>
+    </div>
+  } @else {
+    <wb-empty icon="table" text="No orphan files: every file kept for a product belongs to one still in Parts." />
+  }
+} @else if (err()) { <p class="st-err">{{ err() }}</p> } @else { <p class="st-sub">…</p> }`,
+})
+export class OrphanFiles {
+  private http = inject(HttpClient);
+  private auth = inject(Auth);
+  private sel = inject(Selection);
+  private state = inject(ProductFilesState);
+  list = signal<Orphan[] | null>(null);
+  err = signal('');
+  picking = signal<string | null>(null);
+  q = signal('');
+  hits = signal<Pick[]>([]);
+  busy = signal(false);
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  fmt = fmt;
+  kb = kb;
+
+  constructor() { this.read(); }
+  can() { return this.auth.can('draw'); }
+  key(o: Orphan) { return o.mid + ':' + o.pid; }
+  role(r: string) { return ROLE[r] ?? r; }
+  when(iso: string) { return new Date(iso).toLocaleDateString(LANG() === 'tr' ? 'tr-TR' : [], { day: 'numeric', month: 'short', year: 'numeric' }); }
+  private read() {
+    this.http.get<Orphan[]>('/api/product-files/orphans').subscribe({
+      next: r => this.list.set(r), error: e => this.err.set(why(e, 'Could not read the orphan files.')) });
+  }
+  private done() { this.picking.set(null); this.read(); this.state.load(); }
+  openPick(o: Orphan) {
+    const k = this.key(o);
+    this.picking.set(this.picking() === k ? null : k);
+    this.q.set(''); this.hits.set([]);
+    // The product of the same name, when the catalog has one again, is the likely place.
+    if (this.picking() && o.name) this.find(o.name);
+  }
+  find(words: string) {
+    this.q.set(words);
+    clearTimeout(this.timer);
+    if (!words.trim()) { this.hits.set([]); return; }
+    this.timer = setTimeout(() => this.http.get<{ items: Pick[] }>(`/api/manufacturers/products?q=${encodeURIComponent(words.trim())}&size=8`)
+      .subscribe({ next: r => this.hits.set(r.items ?? []), error: () => this.hits.set([]) }), 180);
+  }
+  async adopt(o: Orphan, p: Pick) {
+    this.busy.set(true);
+    try {
+      const r = await firstValueFrom(this.http.post<{ left: number; report: { status: string }[] }>(
+        `/api/manufacturers/orphan-files/${encodeURIComponent(o.mid)}/${encodeURIComponent(o.pid)}/adopt`, { maker: p.maker.id, product: p.id }));
+      const n = r.report.filter(x => x.status === 'attached' || x.status === 'already').length;
+      Toast.show(fmt('{n} attached to {p}', { n, p: p.name }) + (r.left ? ' - ' + fmt('{n} could not be', { n: r.left }) : ''), { tone: r.left ? 'warn' : 'ok' });
+      this.done();
+    } catch (e) { Toast.show(why(e, 'Could not attach them.'), { tone: 'danger' }); }
+    this.busy.set(false);
+  }
+  async letGo(o: Orphan, remove: boolean) {
+    const name = o.name || o.pid;
+    if (!await Confirm.ask(remove
+      ? { title: fmt('Delete the files of {p}?', { p: name }), ok: t('Delete'), danger: true,
+          text: t('Each file is removed from Files too, unless another product or a CAD model uses it or it is someone else\'s and you may not delete.') }
+      : { title: fmt('Let go of the files of {p}?', { p: name }), ok: t('Let go'),
+          text: t('They are no longer kept for it; the files themselves stay in Files.') })) return;
+    try {
+      const r = await firstValueFrom(this.http.delete<{ removed: string[]; kept: [string, string][] }>(
+        `/api/manufacturers/orphan-files/${encodeURIComponent(o.mid)}/${encodeURIComponent(o.pid)}${remove ? '?delete_files=true' : ''}`));
+      if (remove) Toast.show(fmt('{n} removed from Files', { n: r.removed.length }) + (r.kept.length ? ' - ' + r.kept.map(k => k[0] + ': ' + k[1]).join('; ') : ''),
+                             { tone: r.kept.length ? 'warn' : 'ok' });
+      else Toast.show(fmt('{p} let go; its files stay in Files', { p: name }), { tone: 'ok' });
+      this.done();
+    } catch (e) { Toast.show(why(e, 'Could not do it.'), { tone: 'danger' }); }
+  }
+  /** Files, with the file open in its folder. */
+  toFiles(id: string) { this.sel.room.set('files'); this.sel.ask('file', id); }
 }
