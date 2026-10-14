@@ -649,3 +649,30 @@ def test_the_agents_save_mine_command_copies_through_the_api(env, monkeypatch, c
     assert "saved a copy to My files/Renders: lid.png" in out
     copy = next(x for x in web.get("/api/files").json() if x["name"] == "lid.png")
     assert "ro" not in copy and web.get(f"/api/files/{copy['id']}").content == b"png"
+
+
+def test_the_agents_old_files_in_the_persons_folders_get_a_copy_of_their_own_once(env):
+    from backend import files_migrate
+    web, db, sdb = env["web"], env["db"], env["sdb"]
+    agent = {"type": "agent", "id": "3d room", "name": "3d room"}
+    pyro = web.post("/api/files/folders", headers=H, json={"name": "pyro"}).json()
+    old = asyncio.run(files.put(sdb, "pyro.step", b"ISO-10303-21;", None, {"room": "cad"}, agent, folder=pyro["id"]))
+    db["files"].rows[-1]["created_at"] = "2026-10-10T10:00:00+00:00"
+    new = asyncio.run(files.put(sdb, "today.png", b"png", None, {"room": "cad"}, agent))   # made today: left alone
+    docs = web.post("/api/files/folders", headers=H, json={"name": "Documents"}).json()
+    person = {"type": "user", "id": "a69", "name": "Mustafa"}
+    dry = asyncio.run(files_migrate.agent_copies(sdb, person, "2026-10-14", apply=False))
+    assert dry["files"] == 1 and dry["bytes"] == len(b"ISO-10303-21;") and not dry["done"]
+    assert asyncio.run(files_migrate.empty_documents(sdb)) == [docs["id"]]
+    got = asyncio.run(files_migrate.agent_copies(sdb, person, "2026-10-14", apply=True))
+    (orig, copy), = got["done"]
+    assert orig == old["_id"]
+    rows = {x["id"]: x for x in web.get("/api/files").json()}
+    assert rows[old["_id"]]["where"] == "agents" and "ro" not in rows[copy] and rows[copy]["folder"] == pyro["id"]
+    assert rows[copy]["by"]["id"] == "a69" and rows[copy]["created_at"].startswith("2026-10-10") and new["_id"] in rows
+    # the person's copy is theirs: deleting it leaves the agent's; and it is never made again
+    assert web.delete(f"/api/files/{copy}", headers=H).status_code == 200
+    assert web.get(f"/api/files/{old['_id']}").status_code == 200
+    assert asyncio.run(files_migrate.agent_copies(sdb, person, "2026-10-14", apply=True))["files"] == 0
+    assert asyncio.run(files_migrate.empty_documents(sdb, apply=True)) == [docs["id"]]
+    assert docs["id"] not in {f["id"] for f in web.get("/api/files/folders").json()}
