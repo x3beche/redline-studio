@@ -3873,6 +3873,11 @@ const TR: Record<string, string> = {
   'as its page says': 'sayfasında yazdığı gibi', 'what it is for, which design uses it': 'ne için, hangi tasarım kullanıyor',
   'CAD file': 'CAD dosyası', 'not yet': 'henüz yok', '{n} needed': '{n} gerekli', 'no CAD': 'CAD yok',
   'no CAD file yet: download it from its page': 'henüz CAD dosyası yok: sayfasından indirin',
+  // what a saved item's STEP measured (linked.ts, backend/linked_measure.py)
+  'Measured from the STEP': 'STEP\'ten ölçülen', 'measuring…': 'ölçülüyor…', 'could not be measured: {e}': 'ölçülemedi: {e}',
+  '{n} mm under the head': 'başın altında {n} mm', '{n} mm overall (countersunk)': 'toplam {n} mm (havşa baş)',
+  'Shank': 'Gövde', 'Thread': 'Diş', '{w}: its words say {s}; the STEP measures {m}': '{w}: yazılı olan {s}; STEP\'te ölçülen {m}',
+  '{k}: the STEP does not match its words': '{k}: STEP yazılı olanla uyuşmuyor',
   // Settings > Proxy & Data: McMaster-Carr's API, pending (mcmaster-settings.ts)
   'McMaster-Carr\'s API is given out on approval. Until it is connected, parts are found through a web search (never by reading mcmaster.com) and their STEPs downloaded from each part\'s page: CAD → 3-D STEP → Save.': 'McMaster-Carr\'ın API\'si onayla verilir. Bağlanana kadar parçalar web aramasıyla bulunur (mcmaster.com hiç okunmaz) ve STEP\'leri her parçanın sayfasından indirilir: CAD → 3-D STEP → Save.',
   'filled in · not connected: the API is not wired in yet': 'dolduruldu · bağlı değil: API henüz bağlanmadı', 'API access pending · not connected': 'API erişimi beklemede · bağlı değil',

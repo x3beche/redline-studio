@@ -99,3 +99,8 @@ p.ln-caution { margin: 0; font-size: 12px; }
 .ln-ghost { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 @media (prefers-reduced-motion: reduce) { .ln-spin, .ln-steps li[data-state="run"] i { animation: none; } }
 
+/* What the STEP measured, beside the specs; a figure its words say otherwise in warn. */
+.ln-meas { display: flex; flex-direction: column; gap: 4px; }
+.ln-meas tr[data-bad] td { color: var(--warn); }
+.ln-meas .st-tag, .ln-table .st-tag[data-tone="warn"] { margin-left: 6px; }
+.ln-box { white-space: nowrap; }

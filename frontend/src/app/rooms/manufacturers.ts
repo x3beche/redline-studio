@@ -21,7 +21,7 @@ import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { Cabinet, CabinetItem, FootprintThumb } from './cabinet';
-import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked } from './linked';
+import { LINKED, LinkedCard, LinkedDesk, LinkedHead, LinkedItem, LinkedTable, isLinked, measuredBox, mismatchTip } from './linked';
 
 /** Parts ("Parçalar"; the page's name is PARTS_LABEL, workspaces.ts): the
  *  parts the workspace buys and keeps - the makers whose catalogs it keeps,
@@ -1147,7 +1147,11 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       @if (p.price) {
         <span class="mf-card-price" [title]="moneyTip(p.price.amount, p.price.currency)"><b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small>{{ '+VAT' | t }}</small> }
           @if (p.list_price && p.list_price.amount > p.price.amount) { <s>{{ moneyIn(p.list_price.amount, p.list_price.currency || p.price.currency) }}</s> }<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span>
-      } @else if (p.linked; as l) { <span class="mf-card-price mono">{{ l.key }}@if (l.cad) { <small> · {{ l.cad.kind.toUpperCase() }}</small> }</span>
+      } @else if (p.linked; as l) { <span class="mf-card-price mono">{{ l.key }}@if (l.cad) {
+          <!-- a measured STEP says its box in place of its kind (linked_measure.py), a figure its words say otherwise marked -->
+          @if (box(l); as b) { <small [title]="('Measured from the STEP' | t) + ' (' + l.cad.kind.toUpperCase() + ')'">· {{ b }}</small>
+            @if (l.measured?.mismatch?.length) { <span class="st-tag" data-tone="warn" [title]="mismatchTip(l.measured)">≠</span> } }
+          @else { <small> · {{ l.cad.kind.toUpperCase() }}</small> } }</span>
       } @else { <span class="mf-card-price mf-noprice">{{ 'No price' | t }}<ng-container *ngTemplateOutlet="doubtT; context: { $implicit: p }" /></span> }
       <span class="mf-card-seller"><img class="mf-fav" [src]="fav(p)" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'"><span>{{ sellerName(p) }}</span></span>
       <span class="mf-card-foot"><ng-container *ngTemplateOutlet="onHandT; context: { $implicit: p }" />@if (p.category) { <span class="mf-chip" [title]="p.category">{{ p.category }}</span> }<span class="mf-ago">{{ readAgo(p) }}</span></span>
@@ -2335,12 +2339,16 @@ export class RoomMfr implements OnDestroy {
     return { key: m.id + ':' + p.id, group: l.tags[0] || t('Saved'), sub: l.tags[1] || null, title: p.name, line: l.author || null,
              copy: l.key,
              badge: { text: l.cad ? l.cad.kind.toUpperCase() : t('no CAD'), on: !!l.cad, tip: l.cad ? l.cad.name : 'no CAD file yet: download it from its page' },
-             note: [this.onHandLine(m.id, p.id), l.quantity != null ? this.fmt('{n} needed', { n: l.quantity }) : ''].filter(Boolean).join(' · ') || null,
+             note: [this.onHandLine(m.id, p.id), l.quantity != null ? this.fmt('{n} needed', { n: l.quantity }) : '',
+                    measuredBox(l.measured) + (l.measured?.mismatch?.length ? ' ≠' : '')].filter(Boolean).join(' · ') || null,
              thumb: src ? { srcs: [src], solid: true } : null, tip: [l.key, p.name].join(' · ') };
   }
   /** The open source's saved items, as its search and category leave them, for the table. */
   linkedFound = computed(() => this.found().map(p => p.linked).filter((l): l is LinkedItem => !!l));
   linkedEmpty(mid: string) { return LINKED[mid]?.empty ?? ''; }
+  /** A saved item's box as its STEP measured it, and where its words say otherwise (linked_measure.py). */
+  box(l: LinkedItem) { return measuredBox(l.measured, true); }
+  mismatchTip = mismatchTip;
   /** A saved McMaster-Carr part's or GrabCAD model's right-click menu. */
   private linkedMenu(e: MouseEvent, p: GridItem) {
     const l = p.linked!, name = LINKED[p.maker.id]?.name ?? p.maker.name;

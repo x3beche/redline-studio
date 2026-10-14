@@ -31,6 +31,15 @@ export interface LinkedItem {
   cad: LinkedFile | null; files: LinkedFile[]; by?: { id?: string; name?: string }; created_at?: string; updated_at?: string;
   /** The McMaster API's own fetch of its STEP, when it was asked and could not. */
   fetch?: { error: string; at: string };
+  /** What its STEP measured (backend/linked_measure.py); null without a STEP. */
+  measured?: LinkedMeasured | null;
+}
+/** A screw's figures, read off its STEP: length under the head (overall when countersunk), head, shank - mm. */
+export interface MeasuredScrew { length: number; head: number; head_d: number; shank: number; countersunk: boolean }
+export interface LinkedMeasured {
+  pending?: boolean; error?: string; at?: string; size?: number[] | null; screw?: MeasuredScrew | null;
+  /** A figure its words give that the STEP does not bear out. */
+  mismatch: { what: string; said: string; measured: string }[];
 }
 export interface LinkedHit { key: string; kind?: 'category'; filtered?: boolean; title: string; url: string; author?: string; specs: Record<string, string>;
   snippet: string; source: string; saved: boolean }
@@ -62,6 +71,30 @@ export const LINKED: Record<string, { name: string; noun: string; key: string; h
   },
 };
 export const isLinked = (mid: string | null | undefined) => !!mid && mid in LINKED;
+
+/** 27.4466 -> "27.45", 6 -> "6". */
+export function mm(v: number) { return String(Math.round(v * 100) / 100); }
+/** The box a STEP fills, compactly: "6 × 6 × 27.45 mm"; '' when not measured. */
+export function measuredBox(m: LinkedMeasured | null | undefined, tight = false) {
+  return m?.size?.length === 3 ? m.size.map(mm).join(tight ? '×' : ' × ') + ' mm' : '';
+}
+/** What its words say against what the STEP measured, one line each. */
+export function mismatchTip(m: LinkedMeasured | null | undefined) {
+  return (m?.mismatch ?? []).map(b => fmt('{w}: its words say {s}; the STEP measures {m}', { w: t(b.what), s: b.said, m: b.measured })).join('\n');
+}
+/** The measured rows of an item's detail, translated: [what, value, said-otherwise or '']. */
+export function measuredRows(m: LinkedMeasured | null | undefined): [string, string, string][] {
+  if (!m?.size) return [];
+  const bad = (w: string) => m.mismatch.find(b => b.what === w)?.said ?? '';
+  const rows: [string, string, string][] = [[t('Size'), measuredBox(m), '']];
+  const s = m.screw;
+  if (s) {
+    rows.push([t('Length'), fmt(s.countersunk ? '{n} mm overall (countersunk)' : '{n} mm under the head', { n: mm(s.length) }), bad('Length')]);
+    rows.push([t('Head'), 'Ø' + mm(s.head_d) + ' × ' + mm(s.head) + ' mm', '']);
+    rows.push([t('Shank'), 'Ø' + mm(s.shank) + ' mm', bad('Thread')]);
+  }
+  return rows;
+}
 
 /** A size, as Files writes it. */
 export function kb(n: number) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
@@ -211,11 +244,25 @@ export class LinkedDesk {
         const r = await firstValueFrom(this.http.post<LinkedItem>(`${this.base(it.source)}/parts/${encodeURIComponent(it.id || it.key)}/files`, body));
         if (this.open()?.id === r.id) this.open.set(r);
         this.want(r);
+        if (r.measured?.pending) this.follow(r);
         Toast.show(fmt('{f} kept with {k}', { f: f.name, k: it.key }), { tone: 'ok' });
       } catch (e) { Toast.show(why(e, 'Could not keep the file.'), { tone: 'danger' }); }
     }
     this.uploading.set(false);
     this.changed.update(n => n + 1);
+  }
+  /** A STEP just dropped is measured on the server after the answer: ask
+   *  for the item again until it is (a minute at most), then show it. */
+  private follow(it: LinkedItem, tries = 0) {
+    setTimeout(() => this.http.get<LinkedItem>(`${this.base(it.source)}/parts/${encodeURIComponent(it.id)}`).subscribe({
+      next: r => {
+        if (r.measured?.pending && tries < 40) { this.follow(r, tries + 1); return; }
+        if (this.open()?.id === r.id) this.open.set(r);
+        this.changed.update(n => n + 1);
+        if (r.measured?.mismatch?.length) Toast.show(fmt('{k}: the STEP does not match its words', { k: r.key }) + ' - ' + mismatchTip(r.measured).replace(/\n/g, '; '), { tone: 'warn' });
+      },
+      error: () => {},
+    }), 1500);
   }
   /** "Download STEP" through the McMaster API: it says what it can. */
   apiStep(it: LinkedItem) {
@@ -427,6 +474,20 @@ export class LinkedHead {
         @if (specs(it).length) {
           <table class="mf-dspecs"><tbody>@for (s of specs(it); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
         }
+        <!-- what its STEP measured (backend/linked_measure.py), a figure its words say otherwise marked -->
+        @if (it.measured; as ms) {
+          <div class="ln-meas">
+            <span class="mf-label">{{ 'Measured from the STEP' | t }}</span>
+            @if (ms.pending) { <span class="dim">{{ 'measuring…' | t }}</span> }
+            @else if (ms.error) { <span class="dim">{{ fmt('could not be measured: {e}', { e: ms.error }) }}</span> }
+            @else {
+              <table class="mf-dspecs"><tbody>@for (r of rows(it); track r[0]) {
+                <tr [attr.data-bad]="r[2] ? 1 : null"><th>{{ r[0] }}</th><td class="mono">{{ r[1] }}
+                  @if (r[2]) { <span class="st-tag" data-tone="warn" [title]="mismatchTip(ms)">≠ {{ r[2] }}</span> }</td></tr>
+              }</tbody></table>
+            }
+          </div>
+        }
         <dl class="mf-dates">
           <div><dt>{{ 'Saved' | t }}</dt><dd>{{ stamp(it.created_at) }} · {{ it.by?.name || ('someone' | t) }}</dd></div>
           <div><dt>{{ 'CAD file' | t }}</dt><dd>{{ it.cad ? stamp(it.cad.at) + ' · ' + (it.cad.by?.name || '') : ('not yet' | t) }}</dd></div>
@@ -449,6 +510,8 @@ export class LinkedCard {
   kb = kb;
   stamp = stamp;
   specs(it: LinkedItem) { return Object.entries(it.specs ?? {}); }
+  rows(it: LinkedItem) { return measuredRows(it.measured); }
+  mismatchTip = mismatchTip;
   copy(k: string) {
     try { navigator.clipboard.writeText(k).then(() => Toast.show(fmt('{c} copied', { c: k })), () => {}); } catch { /* no clipboard */ }
   }
@@ -477,7 +540,9 @@ export class LinkedCard {
           <td class="r mono">{{ it.quantity ?? '–' }}</td>
           <td class="r">@if (stock.of(src(), it.key); as s) { <span class="mf-onhand" [attr.data-low]="s.low ? 1 : null" [attr.data-out]="s.quantity <= 0 ? 1 : null">{{ qty(s.quantity) }} {{ s.unit }}</span> } @else { <span class="dim">–</span> }</td>
           <td>@if (it.cad; as c) { <span class="st-tag" data-tone="ok" [title]="c.name">{{ c.kind.toUpperCase() }}</span>
-                @if (it.files.length > 1) { <span class="dim"> +{{ it.files.length - 1 }}</span> } }
+                @if (it.files.length > 1) { <span class="dim"> +{{ it.files.length - 1 }}</span> }
+                @if (box(it); as b) { <span class="mono dim ln-box" [title]="'Measured from the STEP' | t"> {{ b }}</span>
+                  @if (it.measured?.mismatch?.length) { <span class="st-tag" data-tone="warn" [title]="mismatchTip(it.measured)">≠</span> } } }
               @else { <span class="dim">{{ 'not yet' | t }}</span> }</td>
           <td class="dim">{{ it.by?.name || '' }}</td>
           <td class="r"><a class="st-more" [href]="it.url" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">{{ 'Open' | t }} ↗</a></td>
@@ -494,4 +559,6 @@ export class LinkedTable {
   readonly src = input.required<string>();
   readonly items = input<LinkedItem[]>([]);
   m = computed(() => this.desk.meta(this.src()));
+  box(it: LinkedItem) { return measuredBox(it.measured); }
+  mismatchTip = mismatchTip;
 }

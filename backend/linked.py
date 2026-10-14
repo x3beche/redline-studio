@@ -22,6 +22,9 @@ other, a ZIP unpacked and only its STEP and mesh files kept. The first STEP
 (else the first mesh) is the item's `cad`: the Files tab draws its picture,
 and `revisions.py linked to-model <source>:<key> --folder F` makes it a
 model a CAD design imports (POST .../to-model, as Files' "Add to project").
+A STEP that becomes the `cad` is measured once the drop has been answered
+(backend/linked_measure.py): its box and, for a screw, its length under
+the head, shown beside the specs with a mismatch where the words differ.
 """
 
 from __future__ import annotations
@@ -35,10 +38,10 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from typing import Awaitable, Callable
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from . import access, actors, jina
+from . import access, actors, jina, linked_measure
 
 COLL = "linked_parts"
 MAX_TAGS = 12
@@ -400,7 +403,8 @@ async def put_files(db, k: Kind, key: str, name: str, data: bytes, by: dict | No
 
 async def out(db, docs: list[dict]) -> list[dict]:
     """Saved items for a page: whether the CAD file's picture is drawn yet
-    (files.py: the first page that shows it draws it)."""
+    (files.py: the first page that shows it draws it), and what its STEP
+    measured, held against what its words say (linked_measure.view)."""
     from . import files
     keys = {files.solid_key(d["cad"]["sha256"]) for d in docs if (d.get("cad") or {}).get("sha256")}
     have = set()
@@ -413,6 +417,8 @@ async def out(db, docs: list[dict]) -> list[dict]:
         if c := d.get("cad"):
             o["cad"] = {**c, "has_thumb": f"{c['sha256'][:12]}.{files.SOLID_VERSION}"
                         if files.solid_key(c.get("sha256") or "") in have else None}
+        k = KINDS.get(d.get("source") or "")
+        o["measured"] = linked_measure.view(d, k.specs_of if k else None)
         res.append(o)
     return res
 
@@ -425,7 +431,7 @@ def product(k: Kind, p: dict) -> dict:
     specs = {k.key_label: p["key"], **({"Author": p["author"]} if p.get("author") else {}), **(p.get("specs") or {}),
              **({"Licence": p["licence"]} if p.get("licence") else {}),
              **({"Quantity": str(p["quantity"])} if p.get("quantity") is not None else {}),
-             "CAD": c["name"] if c else "not yet"}
+             "CAD": c["name"] if c else "not yet", **linked_measure.specs(p.get("measured"))}
     thumb = f"/api/files/{c['file']}/thumb?v={c['has_thumb']}" if c and c.get("has_thumb") else ""
     return {"id": p["key"], "name": p.get("title") or p["key"], "category": (p.get("tags") or ["Saved"])[0],
             "description": p.get("notes") or "", "specs": specs, "sku": p["key"], "url": p.get("url") or k.url_of(p["key"]),
@@ -546,9 +552,20 @@ async def api_delete(src: str, key: str) -> dict:
     return {"deleted": have["key"]}
 
 
+@router.get("/{src}/parts/{key}")
+async def api_get(src: str, key: str) -> dict:
+    """One saved item: the page asks again while its STEP is being measured."""
+    k = kind(src)
+    have = await get(_db(), k, key)
+    if not have:
+        _404(k, key)
+    return (await out(_db(), [have]))[0]
+
+
 @router.post("/{src}/parts/{key}/files")
-async def api_files(src: str, key: str, upload: UploadFile = File(...)) -> dict:
-    """The files downloaded from the item's page, dropped on it."""
+async def api_files(src: str, key: str, background: BackgroundTasks, upload: UploadFile = File(...)) -> dict:
+    """The files downloaded from the item's page, dropped on it. A new STEP
+    is measured after the answer has gone; the page asks for the item again."""
     from . import files
     k = kind(src)
     data = await upload.read(files.MAX_BYTES + 1)
@@ -561,6 +578,8 @@ async def api_files(src: str, key: str, upload: UploadFile = File(...)) -> dict:
     if not doc:
         _404(k, key)
     await actors.audit(_db(), "linked-files", f"{k.id}:{doc['key']}", {"files": [f["file"] for f in doc["files"][:5]]})
+    if linked_measure.stale(doc):
+        background.add_task(linked_measure.measure_quietly, _db(), doc["_id"])
     return (await out(_db(), [doc]))[0]
 
 
