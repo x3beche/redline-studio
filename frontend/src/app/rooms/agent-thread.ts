@@ -13,6 +13,7 @@ import { WORKSPACES } from '../workspaces';
 import { TaskBlockView } from './task-block';
 import { Reading, ReadingNote, ReadingPick } from '../editor/reading';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
+import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
 import { FilesApi } from './files-model';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { LogWindow } from './log-window';
@@ -146,7 +147,7 @@ export function sender(it: ThreadItem): string {
   selector: 'app-room-thread',
   // Its header, lines and composer are the conversation column's own rows.
   host: { style: 'display: contents' },
-  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick, AttachChips, MentionPics, SuggestChip],
+  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick, AttachChips, MentionPics, SuggestChip, MicButton],
   template: `
 <header class="tcv-cc-bar">
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
@@ -350,7 +351,8 @@ export function sender(it: ThreadItem): string {
               [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
         <ng-container *ngTemplateOutlet="ico(); context: { $implicit: CLIP }" /></button>
       <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
-      <span class="tcv-cc-hint"><kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }}</span>
+      <rl-mic [v]="voice" />
+      <span class="tcv-cc-hint"><kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }}@if (voice.prefs.on()) { · <kbd>Alt M</kbd> {{ 'speak' | t }}}</span>
       <rl-suggest-chip [sg]="sg" />
       <span class="grow"></span>
       <button class="tcv-cc-send" [disabled]="!canSend()" (click)="say()"
@@ -390,6 +392,14 @@ export class RoomThread {
              empty: !this.saying().trim() && !this.att.items().length };
   }, s => { this.saying.set(s); const el = this.box()?.nativeElement;
             if (el) { el.value = s; el.focus(); el.setSelectionRange(s.length, s.length); this.grow(); } });
+  /** Spoken instead of typed: the words come into the box, to be read and
+   *  changed before they are sent (rooms/voice-input.ts). */
+  voice = new VoiceInput(inject(HttpClient), inject(VoicePrefs), 'chat', words => {
+    const s = withWords(this.saying(), words);
+    this.saying.set(s);
+    const el = this.box()?.nativeElement;
+    if (el) { el.value = s; el.focus(); el.setSelectionRange(s.length, s.length); this.grow(); }
+  });
   canSend() { return !this.att.busy() && (!!this.saying().trim() || this.att.ready().length > 0); }
   /** A line's files that are not pictures (those are drawn as pictures). */
   otherFiles(m: ChatLine) { return (m.mentions ?? []).filter(x => !isPicture(x)); }

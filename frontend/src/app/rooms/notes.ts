@@ -16,6 +16,8 @@ import { SelectionBar } from '../selection-bar';
 import { EmptyState } from '../empty-state';
 import { NgTemplateOutlet } from '@angular/common';
 import { NOTE_TEMPLATES, NoteTemplate } from './note-templates';
+import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
+import { UiSelect } from '../ui-select';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -37,10 +39,16 @@ export interface Note {
 }
 
 const ROOM_NAMES: Record<string, string> = {
-  cad: '3D Drawing', pcb: 'PCB Design',
+  cad: '3D Drawing', pcb: 'PCB Design', firmware: 'Firmware',
   notes: 'Notes', tools: 'Tools', analyze: 'Analytics', commandcode: 'Chat',
 };
 export const AGENT_ROOMS = ['cad', 'pcb'];
+/** The rooms a voice note can be sent to: every room with an agent thread (backend/chat.py ROOMS). */
+const VOICE_ROOMS = ['cad', 'pcb', 'firmware'];
+const VOICE_ROOM_KEY = 'redline.voice.room';
+function readRoom(): string | null {
+  try { const r = localStorage.getItem(VOICE_ROOM_KEY); return r && VOICE_ROOMS.includes(r) ? r : null; } catch { return null; }
+}
 
 @Injectable({ providedIn: 'root' })
 export class NotesApi {
@@ -96,38 +104,23 @@ function group(iso: string): string {
   return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? 'This week' : days < 31 ? 'This month' : 'Earlier';
 }
 
-/** Speech to text, where the browser has it (Chrome, on localhost or
- *  HTTPS). The words land where the caret is. */
-class Dictation {
-  on = signal(false);
-  readonly supported = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-  private rec: any = null;
-
-  toggle(write: (text: string) => void) {
-    if (this.on()) { this.rec?.stop(); return; }
-    const R = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!R) return;
-    this.rec = new R();
-    this.rec.lang = navigator.language || 'en-US';
-    this.rec.continuous = true;
-    this.rec.interimResults = false;
-    this.rec.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) write(e.results[i][0].transcript.trim());
-      }
-    };
-    this.rec.onend = () => this.on.set(false);
-    this.rec.onerror = () => this.on.set(false);
-    this.rec.start();
-    this.on.set(true);
-  }
-}
-
 /** The box a note is written in - the room's, and the quick one. Enter
- *  keeps it (Shift+Enter for a new line), and the box is ready again. */
+ *  keeps it (Shift+Enter for a new line), and the box is ready again.
+ *
+ *  A voice note: the microphone writes what was said into the box
+ *  (rooms/voice-input.ts) to be read and changed; then "Send" keeps it as a
+ *  note, with where the person was, and hands it to the chosen room's
+ *  agent - the same two steps as keeping a note and "Send to the agent"
+ *  from the list (POST /api/notes, then /api/notes/{id}/send). The room is
+ *  the one open when it is one with an agent, else the last one chosen. */
 @Component({
   selector: 'app-note-compose',
-  imports: [T],
+  imports: [T, MicButton, UiSelect],
+  // One row whatever it holds: the hint gives way, the buttons never wrap.
+  styles: [`
+    .tcv-note-hint { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tcv-note-keep, wb-select { flex: none; white-space: nowrap; }
+  `],
   template: `
 <div class="tcv-note-compose" [attr.data-focus]="focused() ? 1 : null">
   <textarea #box rows="1" [value]="text()" [placeholder]="placeholder | t"
@@ -137,9 +130,12 @@ class Dictation {
   <div class="tcv-note-compose-bar">
     <span class="tcv-note-hint">{{ hint() | t }}</span>
     <span class="grow"></span>
-    @if (dict.supported) {
-      <button class="tcv-note-icon" [attr.data-on]="dict.on() ? 1 : null" (click)="dictate()"
-              [title]="dict.on() ? 'Stop listening' : 'Speak the note'" aria-label="Dictate">🎙</button>
+    <rl-mic [v]="voice" />
+    @if (voiced() && text().trim() && voice.state() === 'idle') {
+      <wb-select size="sm" label="Send to" [options]="roomOpts()" [value]="toRoom()" (pick)="pickRoom($event)"
+                 [tip]="'The agent the voice note goes to' | t" />
+      <button class="tcv-btn tcv-note-keep" [disabled]="busy()" (click)="keep(toRoom())"
+              [title]="'Keep it in Notes and send it to that agent' | t">{{ 'Send' | t }}</button>
     }
     <button class="tcv-btn tcv-note-keep" [disabled]="!text().trim() || busy()" (click)="keep()">
       {{ busy() ? '…' : ('Keep' | t) }} <kbd>↵</kbd></button>
@@ -152,7 +148,26 @@ export class NoteCompose {
   text = signal('');
   busy = signal(false);
   focused = signal(false);
-  dict = new Dictation();
+  /** The text came (at least partly) from the microphone: the room picker shows. */
+  voiced = signal(false);
+  voice = new VoiceInput(inject(HttpClient), inject(VoicePrefs), 'note', words => {
+    const s = withWords(this.text(), words);
+    this.text.set(s);
+    this.voiced.set(true);
+    const el = this.box().nativeElement;
+    el.value = s; el.focus(); el.setSelectionRange(s.length, s.length);
+    this.grow();
+  });
+  private picked = inject(Selection);
+  /** Picked in this box: holds until the note is sent. */
+  private override = signal<string | null>(null);
+  /** Where the voice note goes: the one picked, else the open room when it
+   *  has an agent, else the last one picked before. */
+  toRoom = computed(() => {
+    const here = this.picked.room();
+    return this.override() ?? (VOICE_ROOMS.includes(here) ? here : readRoom() ?? 'cad');
+  });
+  roomOpts = computed(() => { LANG(); return VOICE_ROOMS.map(r => ({ value: r, label: t('{x} agent').replace('{x}', t(ROOM_NAMES[r])) })); });
   /** Set by the owner: called with the note once it is kept. */
   kept: (n: Note) => void = () => {};
   readonly placeholder = 'Just write. First line is the title - #tags, @controller, - [ ] to-dos…';
@@ -175,27 +190,37 @@ export class NoteCompose {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.keep(); }
   }
 
-  dictate() {
-    this.dict.toggle(words => {
-      const cur = this.text();
-      this.text.set(cur ? `${cur}${/\s$/.test(cur) ? '' : ' '}${words}` : words);
-      this.box().nativeElement.value = this.text();
-      this.grow();
-    });
+  pickRoom(r: string) {
+    this.override.set(r);
+    try { localStorage.setItem(VOICE_ROOM_KEY, r); } catch { /* for this page only */ }
   }
 
-  keep() {
+  /** Kept as a note; with `room`, also handed to that room's agent. */
+  keep(room?: string) {
     const text = this.text().trim();
     if (!text || this.busy()) return;
     this.busy.set(true);
     this.api.create(text).subscribe({
       next: n => {
-        this.busy.set(false);
         this.text.set('');
+        this.voiced.set(false);
+        this.override.set(null);
         this.box().nativeElement.value = '';
         this.grow();
         this.api.changed.update(v => v + 1);
-        this.kept(n);
+        if (!room) { this.busy.set(false); this.kept(n); return; }
+        this.api.send(n.id, room).subscribe({
+          next: () => {
+            this.busy.set(false);
+            Toast.show(t('Sent to the {x} agent.').replace('{x}', t(ROOM_NAMES[room!] ?? room!)), { tone: 'ok' });
+            this.kept(n);
+          },
+          error: (e: HttpErrorResponse) => {
+            this.busy.set(false);
+            Toast.show(`${t('Kept in Notes, but not sent')}: ${typeof e.error?.detail === 'string' ? e.error.detail : t('could not send it')}`, { tone: 'danger' });
+            this.kept(n);
+          },
+        });
       },
       error: () => this.busy.set(false),
     });

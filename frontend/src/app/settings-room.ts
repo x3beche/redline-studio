@@ -24,6 +24,7 @@ import { AdminOverview } from './admin-overview';
 import { RustdeskSettings } from './rustdesk-settings';
 import { BackupsSettings } from './backups-settings';
 import { Prefs, PrefsTab } from './preferences';
+import { VoiceLang, VoicePrefs } from './rooms/voice-input';
 import { SharesSettings } from './share/shares-settings';
 
 /** The Settings tab (Prefs, preferences.ts, is what the rest of the app
@@ -358,6 +359,29 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 </div>
               </div>
             </div>
+            <!-- Voice to text in the composers (rooms/voice-input.ts): the
+                 microphone on or off, and the language spoken. This browser's. -->
+            <div class="st-card" data-sec="voice">
+              <div class="st-card-head"><h3>{{ 'Voice to text' | t }}</h3>
+                <span class="st-sub">{{ 'the microphone in the Chat, the agent threads and Notes' | t }}</span>
+                <div class="st-right">
+                  <label class="st-row">
+                    <button type="button" class="tcv-switch" [attr.data-on]="voice.on() ? 1 : null" [attr.aria-pressed]="voice.on()"
+                            (click)="voice.set({ on: !voice.on() })" [attr.aria-label]="'Microphone button' | t"></button>
+                    <span class="st-sub">{{ 'Microphone button' | t }}</span>
+                  </label>
+                  <span class="st-sub">{{ 'I speak' | t }}</span>
+                  <div class="st-seg" role="group" [attr.aria-label]="'I speak' | t">
+                    @for (l of voiceLangs; track l.id) {
+                      <button [class.on]="voice.lang() === l.id" [disabled]="!voice.on()" (click)="voice.set({ lang: l.id })">{{ l.name | t }}</button>
+                    }
+                  </div>
+                </div>
+              </div>
+              <div class="st-card-body">
+                <p class="st-hint">{{ 'Click the microphone or press Alt+M, speak, then stop: the words come into the box to read and change before you send. Esc throws a recording away. At most 5 minutes a recording. The model is chosen in LLM settings (Voice to text).' | t }}</p>
+              </div>
+            </div>
           </div>
         }
         @case ('profile') { @defer { <app-profile-settings /> } }
@@ -406,6 +430,9 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 })
 export class RoomSettings {
   prefs = inject(Prefs);
+  voice = inject(VoicePrefs);
+  readonly voiceLangs: { id: VoiceLang; name: string }[] = [
+    { id: 'auto', name: 'Auto' }, { id: 'tr', name: 'Türkçe' }, { id: 'en', name: 'English' }];
   auth = inject(Auth);
   readonly canEdit = this.auth.can('settings');
   private topbar = inject(TopBar);
@@ -540,6 +567,8 @@ export class RoomSettings {
       { keys: ['Shift', 'Enter'], what: 'A new line' },
       { keys: ['↑'], what: 'In an empty box: edit your last message' },
       { keys: ['Esc'], what: 'Stop the answer / cancel an edit' },
+      { keys: ['Alt', 'M'], what: 'Speak instead of typing: start, then stop and write it into the box (also in the agent threads and Notes)' },
+      { keys: ['Esc'], what: 'Throw a recording away' },
     ] },
   ];
   shortcutCount() { return this.shortcuts.reduce((a, g) => a + g.items.length, 0); }

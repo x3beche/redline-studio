@@ -20,6 +20,7 @@ import { CcMemoryPanel, MEMORY_ICO } from './cc-memory';
 import { CcChanged, CcChangesPanel } from './cc-changes';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
+import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
 import { FilesApi } from './files-model';
 import { FileModal, FileModalHost, fileIdOf } from './file-modal';
 import { ContextMenu } from '../context-menu';
@@ -414,7 +415,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel],
+  imports: [CcMemoryPanel, EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, MicButton, ModelPicker, FileModalHost, DmView, Avatar, Skeleton, CcChanged, CcChangesPanel],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -1169,6 +1170,7 @@ type Ask = { text: string; label: string; go: () => void };
               [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
         <ng-container *ngTemplateOutlet="ico; context: { $implicit: CLIP }" /></button>
       <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
+      <rl-mic [v]="voice" />
       @if (meter(); as mt) {
         <span class="tcv-cc-meter" [attr.data-state]="mt.state" [title]="mt.title">
           <span class="tcv-cc-meterbar"><i [style.width.%]="mt.pct"></i></span>
@@ -1176,7 +1178,7 @@ type Ask = { text: string; label: string; go: () => void };
         </span>
       }
       <span class="tcv-cc-hint">
-        <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
+        <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}@if (voice.prefs.on()) { · <kbd>Alt M</kbd> {{ 'speak' | t }}}
       </span>
       <rl-suggest-chip [sg]="sg" />
       <span class="grow"></span>
@@ -2212,6 +2214,14 @@ export class RoomCommandCode implements OnDestroy {
     this.editDraft = '';
     this.editPicked = [];
   }
+
+  /** Spoken instead of typed: the words come into the box, to be read and
+   *  changed before they are sent (rooms/voice-input.ts). */
+  voice = new VoiceInput(inject(HttpClient), inject(VoicePrefs), 'chat', words => {
+    this.setText(withWords(this.text(), words));
+    const el = this.box()?.nativeElement;
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
 
   private setText(s: string) {
     this.text.set(s);

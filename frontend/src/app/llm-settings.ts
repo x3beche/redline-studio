@@ -649,7 +649,7 @@ export class LlmSettingsPanel {
     const job = this.data()!.jobs[j];
     this.testing.set(j);
     this.http.post<{ ok: boolean; answer?: string; error?: string; ms: number }>('/api/llm/test',
-      { provider: job.provider, model: job.model }).subscribe({
+      { provider: job.provider, model: job.model, job: j }).subscribe({
       next: r => { this.tests.update(x => ({ ...x, [j]: r })); this.testing.set(null); },
       error: e => { this.tests.update(x => ({ ...x, [j]: { ok: false, error: this.text(e), ms: 0 } })); this.testing.set(null); },
     });
