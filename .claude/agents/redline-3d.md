@@ -35,6 +35,14 @@ use the token the person gave you (`REDLINE_TRANSPORT=api`, `REDLINE_TOKEN`) - A
 "Working without the database password"; never ask for the database password.
 Never ask in your own output - nobody is reading it but the main agent.
 
+**The project's wiki** comes with the note: `show` prints it under the note
+(`wiki :`, pinned pages first, then the newest, bounded) - the project's
+decisions, dimensions and limits, sourcing and open questions. Follow it;
+when the note asks for something a page decided otherwise, ask on their
+screen before doing it, naming the page. A page that was cut or only
+named: `revisions.py wiki <project> <page>` (MCP `wiki`). You read the
+wiki, you do not write it: put what belongs there in your report.
+
 This room has a thread of its own under the queue. Read it with
 `revisions.py chat --room cad` and answer in it with
 `revisions.py say --room cad "..."`; `wait --room cad` listens to it

@@ -82,6 +82,17 @@ Taste palettes - the person's design taste (backend/taste.py); `show` and
     python tools/revisions.py taste <model|board|firmware|folder> <id>   the ones that apply (its folders' too)
     python tools/revisions.py taste-check <palette-id> <model>     the design beside the reference renders
 
+The project's wiki - its decisions and why, dimensions and limits, sourcing,
+open questions, production notes (backend/wiki.py); `show` and `next` print
+the note's project's pages by themselves (pinned first, then the newest,
+bounded):
+
+    python tools/revisions.py wiki                                 the projects, with how many pages each
+    python tools/revisions.py wiki <project>                       its pages
+    python tools/revisions.py wiki <project> <page>                one page, whole
+    python tools/revisions.py wiki --search "words" [--project P]  pages with the words
+    python tools/revisions.py wiki --for <model|board|firmware> <id>   the brief of the project it is in
+
 Firmware - the Firmware room's projects (backend/firmware.py) and the notes
 filed on them (backend/fwnotes.py); through the server, like `board`:
 
@@ -1486,6 +1497,7 @@ async def cmd_show(args):
     print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
     print(f"status  : {doc.get('status')}")
     await _print_taste(db, _note_projects(doc), doc.get("comment") or "")
+    await _print_wiki(db, _note_projects(doc))
     # A note about a part is a valid revision on its own - freeze and draw is
     # optional - so say so instead of dying on the missing image.
     if not (doc.get("image") or {}).get("gridfs_id"):
@@ -1531,6 +1543,73 @@ async def _print_taste(db, targets: list[tuple[str, str]], note: str = "") -> No
     for p in rows:
         if p.get("references"):
             print(f"  reference renders: .venv/bin/python tools/revisions.py taste {p['_id']}   (writes them; open each)")
+
+
+async def _print_wiki(db, targets: list[tuple[str, str]]) -> None:
+    """The wiki of the project the note is about (backend/wiki.py): the
+    project's own facts - what was decided and why, its limits, its
+    sourcing - pinned pages first, then the newest, bounded."""
+    from backend import wiki
+
+    try:
+        project, lines = await wiki.brief_for(db, targets)
+    except Exception as exc:                                      # noqa: BLE001 - the note still shows
+        print(f"wiki    : (could not be read: {type(exc).__name__})")
+        return
+    if not project or not lines:
+        return
+    print(f"wiki    : project \"{project}\" - its facts and decisions; follow them, and ask on their screen "
+          "when the note goes against one. Whole pages: .venv/bin/python tools/revisions.py wiki "
+          f"{project} <page>")
+    for line in lines:
+        print(f"  {line}" if line else "")
+
+
+async def cmd_wiki(args):
+    """The projects' wikis: the list, a project's pages, one page, a search,
+    or the brief a note on a model, board or firmware gets."""
+    from backend import wiki
+
+    db = connect()
+    if args.search:
+        hits = await wiki.search(db, args.search, args.project or args.name or None)
+        if not hits:
+            print("no page has those words")
+            sys.exit(2)
+        for h in hits:
+            print(f"{h['project']}/{h['slug']}  {h['title']}" + (f"  (line {h['line']})" if h["line"] else ""))
+            print(f"    {h['snippet']}")
+        return
+    if args.for_:
+        project, lines = await wiki.brief_for(db, [(args.for_, args.name or "")])
+        if not project:
+            sys.exit(f"{args.for_} {args.name} is in no project (a top folder of the tree)")
+        print(f"wiki of {project}" + ("" if lines else ": no pages yet"))
+        for line in lines:
+            print(line)
+        return
+    if not args.name:
+        for p in await wiki.projects(db):
+            print(f"{p['id']:<28} {p['pages']} pages" + (f", last changed {p['updated_at'][:16]}" if p["updated_at"] else ""))
+        return
+    if not args.page:
+        rows = await wiki.pages(db, args.name)
+        if not rows:
+            print(f"{args.name}'s wiki has no pages")
+            return
+        for r in rows:
+            print(f"{r['slug']:<32} {r['title']}" + ("  (pinned)" if r["pinned"] else "")
+                  + f"  v{r['version']}, {str(r['updated_at'] or '')[:16]}, {(r['updated_by'] or {}).get('name') or '?'}")
+        return
+    d = await wiki.get(db, args.name, args.page)
+    if not d:
+        sys.exit(f"no page {args.page!r} in {args.name}'s wiki")
+    print(f"# {d['title']}   [{args.name}/{d['slug']}] version {d['version']}, {str(d['updated_at'] or '')[:16]}, "
+          f"{(d['updated_by'] or {}).get('name') or '?'}" + (", pinned" if d["pinned"] else ""))
+    if d["linked_from"]:
+        print("linked from: " + ", ".join(x["slug"] for x in d["linked_from"]))
+    print()
+    print(d["text"].rstrip())
 
 
 async def _write_refs(db, doc: dict, out: Path) -> list[Path]:
@@ -2892,6 +2971,15 @@ def main() -> None:
     s.add_argument("-o", "--out", help="directory (default /tmp/taste-check-<palette>-<model>)")
     s.add_argument("--no-wait", action="store_true", help="shoot the build on record, do not wait for one")
     s.set_defaults(fn=cmd_taste_check)
+    s = sub.add_parser("wiki", help="the projects' wikis: the list, a project's pages (<project>), one page "
+                                    "(<project> <page>), a search (--search), or a note's brief (--for kind id)")
+    s.add_argument("name", nargs="?", help="a project (or, with --for, the model/board/firmware id)")
+    s.add_argument("page", nargs="?")
+    s.add_argument("--search", help="words to find in the pages")
+    s.add_argument("--project", help="with --search: only this project's")
+    s.add_argument("--for", dest="for_", choices=["model", "board", "firmware"],
+                   help="the brief of the project this model, board or firmware is in")
+    s.set_defaults(fn=cmd_wiki)
     s = sub.add_parser("next", help="the oldest queued note nobody has started, in full")
     s.add_argument("--room", choices=["cad", "pcb", "firmware"], help="only this room's")
     s.add_argument("-o", "--out", help="where its drawing is written")

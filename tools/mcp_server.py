@@ -62,6 +62,16 @@ TOOLS: dict[str, tuple] = {
         "A note in full. It writes its drawing to disk - open that file and "
         "look at it before doing anything.",
         {"id": _s("revision id")}, ["id"], lambda a: ["show", a["id"]]),
+    "wiki": (
+        "A project's wiki - its decisions and why, dimensions and limits, sourcing, open "
+        "questions, production notes. `show` prints the note's project's pages already; this "
+        "reads one page whole (project and page), lists a project's pages (project only), "
+        "lists the projects (neither), or finds pages by words (query).",
+        {"project": _s("a project: a top folder of the tree, e.g. iot-fan"),
+         "page": _s("a page's id or name"), "query": _s("words to find")},
+        [], lambda a: ["wiki"] + (["--search", a["query"]] + (["--project", a["project"]] if a.get("project") else [])
+                                  if a.get("query") else
+                                  ([a["project"]] if a.get("project") else []) + ([a["page"]] if a.get("page") else []))),
     "start": (
         "Open the run for a note: the progress bar and live cost in its room. "
         "Refuses while another note's run is open in the same room, and while "

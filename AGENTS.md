@@ -704,6 +704,37 @@ already looked at come from disk without asking. Every ask - yours, the
 page's - is written down and shown in the board room's **lcsc** tab.
 When `find` says it is cooling off, wait; do not loop on it.
 
+## The project's wiki
+
+Every project (a top folder: iot-fan, aribax, pyro) has a wiki of short
+Markdown pages - what was decided and why, the dimensions and limits,
+where the parts come from, the open questions, the production notes. The
+person writes it in the **Wiki** room (top bar > More), or has the Chat
+write it; it is the project's facts, where a taste palette is how the
+person likes things designed in general.
+
+`show` and `next` print the wiki of the note's project under the note, as
+`wiki :` and its pages - pinned ones first, then the newest, each under
+its name and id (`## Decisions  [decisions]`), cut to a few thousand
+characters in all; pages that did not fit are named at the end. Read a
+page whole when the work touches it:
+
+```bash
+.venv/bin/python tools/revisions.py wiki iot-fan                    # its pages
+.venv/bin/python tools/revisions.py wiki iot-fan decisions           # one, whole
+.venv/bin/python tools/revisions.py wiki --search "insert" --project iot-fan
+.venv/bin/python tools/revisions.py wiki --for model iot-fan/parts/lid   # the brief show prints
+```
+
+(MCP: `wiki`.) Follow what it says: a dimension, a limit, a part chosen
+there is the person's decision. When a note asks for something a page
+decided otherwise ("the lid is 3 mm for the M3 inserts" and the note says
+2 mm), ask on their screen before doing it, naming the page. A page links
+another as `[[name]]` and points at things as `@model:iot-fan/parts/lid`,
+`@board:controller`, `@part:C25744`, `@firmware:<id>`. Agents read the
+wiki; they do not write it - say in your report what you found that
+belongs there, and the person or the Chat puts it in.
+
 ## Taste palettes: the person's design taste
 
 A **taste palette** (the Taste tab; "Tadım" in Turkish) is a list of short
@@ -860,6 +891,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py board body <board> [REF variant|lcsc|default]  # which body a ref wears
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py taste [<kind> <id>]  # taste palettes (attached to a project)
+.venv/bin/python tools/revisions.py wiki [<project> [<page>]]  # the project's wiki (show prints its brief)
 .venv/bin/python tools/revisions.py taste-check <palette> <model>  # the design beside the reference renders
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk

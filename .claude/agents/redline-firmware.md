@@ -53,6 +53,14 @@ as yourself: `REDLINE_AGENT="firmware room"`; with sign-in on, use the token
 the person gave you (`REDLINE_TRANSPORT=api`, `REDLINE_TOKEN`) - AGENTS.md,
 "Working without the database password".
 
+**The project's wiki** comes with the note: `show` prints it under the note
+(`wiki :`, pinned pages first, then the newest, bounded) - the project's
+decisions, dimensions and limits, sourcing and open questions. Follow it;
+when the note asks for something a page decided otherwise, ask on their
+screen before doing it, naming the page. A page that was cut or only
+named: `revisions.py wiki <project> <page>` (MCP `wiki`). You read the
+wiki, you do not write it: put what belongs there in your report.
+
 This room has a thread of its own: `revisions.py chat --room firmware`,
 `say --room firmware "..."`, `wait --room firmware`. The same tools exist
 over MCP (the `redline` server in .mcp.json): `next`, `show`, `start`,
