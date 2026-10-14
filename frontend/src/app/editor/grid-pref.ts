@@ -74,3 +74,29 @@ export function axisColour(a: GridAxis): string {
   const cs = getComputedStyle(document.documentElement);
   return cs.getPropertyValue(AXIS_VAR[a]).trim() || cs.getPropertyValue(AXIS_TOKEN[a]).trim();
 }
+
+/** Which planes and whether the axes show, as last left in the 3D room:
+ *  kept per browser so a reload or the next model keeps them. Off on a
+ *  first visit. */
+export interface GridShown { grid: [boolean, boolean, boolean]; axes: boolean }
+const SHOWN_KEY = 'redline.gridShown';
+
+export function currentShown(): GridShown {
+  let raw: Partial<GridShown> | null = null;
+  try { raw = JSON.parse(localStorage.getItem(SHOWN_KEY) ?? 'null'); } catch { /* private window, or not JSON */ }
+  const g = Array.isArray(raw?.grid) && raw.grid.length === 3 ? raw.grid.map(v => v === true) : [false, false, false];
+  return { grid: g as [boolean, boolean, boolean], axes: raw?.axes === true };
+}
+
+export function keepShown(s: GridShown) {
+  try {
+    if (!s.axes && !s.grid.some(Boolean)) localStorage.removeItem(SHOWN_KEY);
+    else localStorage.setItem(SHOWN_KEY, JSON.stringify(s));
+  } catch { /* private window: this page only */ }
+}
+
+/** The render options for them; a picture for tools/render.py (?shot) shows neither. */
+export function shownOptions(shot: boolean): { axes: boolean; grid: [boolean, boolean, boolean] } {
+  const s = shot ? { grid: [false, false, false] as [boolean, boolean, boolean], axes: false } : currentShown();
+  return { axes: s.axes, grid: [...s.grid] as [boolean, boolean, boolean] };
+}

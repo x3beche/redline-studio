@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { GRID_AXES, GRID_EVENT, GridAxis, GridLook, applyGridVars, axisColour, currentGrid } from './grid-pref';
+import { GRID_AXES, GRID_EVENT, GridAxis, GridLook, applyGridVars, axisColour, currentGrid, keepShown } from './grid-pref';
 
 /** The 3D viewer's grid, drawn in the app's language.
  *
@@ -328,6 +328,18 @@ function listen() {
   document.fonts?.load(`500 64px ${MONO}`).then(later, () => {});
 }
 
+const remembered = new WeakSet<object>();
+/** The planes and the axes as they are switched, kept for the next load
+ *  (grid-pref.ts keepShown); the viewer's state outlives its renders. */
+function remember(viewer: any) {
+  const st = viewer?.state;
+  if (!st?.subscribe || remembered.has(st)) return;
+  remembered.add(st);
+  const keep = () => keepShown({ grid: [...(st.get('grid') ?? [false, false, false])].map(Boolean) as [boolean, boolean, boolean], axes: !!st.get('axes') });
+  st.subscribe('grid', keep);
+  st.subscribe('axes', keep);
+}
+
 /** After each render(): the viewer's new grid gets our drawing. The first
  *  grid of the page is built by the viewer's own code (it is what the
  *  classes are taken from) and drawn again at once. */
@@ -335,6 +347,7 @@ export function dressGrid(viewer: any) {
   let grid: any;
   try { grid = viewer?.gridHelper; } catch { return; }
   if (!grid) return;
+  remember(viewer);
   kit ??= capture(grid);
   if (!kit) return;
   patch(Object.getPrototypeOf(grid));

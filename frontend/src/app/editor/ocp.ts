@@ -7,6 +7,7 @@ import { ModelTab } from './model-tab';
 import { TreePanel } from './tree-panel';
 import { SwitchMotion } from './model-switch';
 import { dressGrid, dressGridMenu } from './grid-look';
+import { shownOptions } from './grid-pref';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -201,9 +202,9 @@ export class OcpViewer {
       control: 'orbit',
       transparent: false,
       blackEdges: false,
-      axes: false,
+      // The planes and axes as last left (grid-pref.ts); off on a first visit.
+      ...shownOptions(!!this.shot),
       axes0: false,
-      grid: [false, false, false],
       ortho: false,
       ticks: 10,
       centerGrid: false,
