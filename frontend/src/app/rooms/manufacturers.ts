@@ -965,7 +965,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                 @if (pfiles.model(d.maker.id, d.id); as h) { <i class="pdw-badge pdw-badge-3d mf-pd-3d" [title]="pfiles.tip(h)">3D</i> }</div>
               <div class="mf-pd-line">
                 <span class="mf-pd-seller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">{{ sellerName(d) }}</span>
-                @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <i class="mf-pd-sep"></i><span>{{ d.maker.name }}</span> }
+                @if (d.maker.name && d.maker.domain !== d.seller?.domain && d.maker.name !== sellerName(d)) { <i class="mf-pd-sep"></i><span>{{ d.maker.name }}</span> }
                 @if (d.sku) { <i class="mf-pd-sep"></i><span class="mono mf-pd-copy" [title]="'Copy' | t" (click)="copyText(d.sku)">{{ d.sku }}</span> }
                 @if (d.category) { <i class="mf-pd-sep"></i><span>{{ d.category }}</span> }
                 @if (d.source === 'manual') { <i class="mf-pd-sep"></i><span>{{ 'by hand' | t }}</span> } @else if (d.edited) { <i class="mf-pd-sep"></i><span>{{ 'edited' | t }}</span> }
