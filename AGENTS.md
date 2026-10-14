@@ -931,7 +931,8 @@ rarely the origin; leave the target out to look at the middle of what is shown).
 
 Open that file with the Read tool and compare it against the revision drawing.
 Same viewpoint, so the before and after line up and a mistake is obvious. The
-app also accepts `?rev=<id>` in the URL, which opens the model at that camera.
+app also accepts `/3d?rev=<id>` (or `?rev=<id>` on any of its addresses), which
+opens the model at that camera.
 
 ## Model contract
 

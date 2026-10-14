@@ -163,7 +163,8 @@ picture from that same angle and look at it before you call the work done:
 
 Open that file with the Read tool and compare it against the revision drawing.
 Same viewpoint, so the before and after line up and a mistake is obvious. The
-app also accepts `?rev=<id>` in the URL, which opens the model at that camera.
+app also accepts `/3d?rev=<id>` (or `?rev=<id>` on any of its addresses), which
+opens the model at that camera.
 
 Two flags for when that angle is not the one that shows the change:
 

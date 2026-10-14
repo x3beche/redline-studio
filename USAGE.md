@@ -8,8 +8,13 @@ Along the top: **3D Drawing**, **PCB Design** and **Analyze**. All but
 Analyze are built, and every built room has the same layout - the 3D
 room's: a toolbar across the top with the pen at its end, tabs down the
 left, the view, and the room's own log under it. Analyze opens on what it
-needs before it can exist. `?ws=pcb` in the URL opens a room, and the
-browser remembers the last one you were in.
+needs before it can exist. Each room has its own address - `/3d/<model>`,
+`/pcb/<board>`, `/firmware/<fw>`, `/notes/<note>`, `/parts/<maker>/<product>`,
+`/chat/<conversation>`, `/files/...`, `/basic-tools/<tool>`, `/settings/<section>`,
+`/analytics` - so the browser's Back and Forward (Alt+Left / Alt+Right) step
+through what you opened, a middle click on a tab opens it in a new tab, and
+the browser remembers the last room you were in. Old links (`?ws=pcb&board=...`)
+still work and are rewritten to the new form.
 
 The left column belongs to no room. One tree holds everything: a model is
 a `.3d`, a board is a `.pcb`, and clicking either opens the room that can
@@ -25,7 +30,7 @@ look at another tab would mean waiting for it again on the way back.
 2. Write it, then build with **↻**. build123d runs on the server and the result
    goes into the database.
 3. Click the model to open it in the viewer, or open one directly with
-   `?model=<name>`. **Double-click a part** and the form on the right fills
+   `/3d/<name>`. **Double-click a part** and the form on the right fills
    itself in.
 4. **Freeze and draw** → mark it up → write the comment and save. Seven tools:
    freehand, line, arrow, rectangle, ellipse, triangle and text. Text is typed
@@ -614,8 +619,8 @@ moment it opens the project:
 ```
 
 Every revision stores the camera it was drawn from, so the result can be
-photographed from the same viewpoint. `?rev=<id>` in the URL opens the model at
-that camera too.
+photographed from the same viewpoint. `/3d?rev=<id>` (or `?rev=<id>` on any
+address of the app) opens the model at that camera too.
 
 The tool talks to MongoDB directly, so it works with the server stopped. Only
 **queued** revisions count as work; drafts stay invisible.
