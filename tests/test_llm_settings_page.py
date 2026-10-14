@@ -102,3 +102,25 @@ def test_the_default_is_a_row_of_the_picker_not_a_button():
     # The chip names the provider whose model it is, and the list says whose list it is.
     # The provider is named by its own select beside the picker, not a tag in it.
     assert '[models]="models()[prov(j)] || []"' in jobs and "setProvider(j, " in jobs
+
+
+def test_a_model_command_code_cannot_route_is_said_plainly():
+    """Command Code once answered every call to MiMo V2.5 Pro with its raw
+    routing error ("No available providers match the 'only' filter:
+    xiaomi"); the chat showed that JSON. It is said in words, with what to do."""
+    class R:
+        status_code = 400
+        text = ""
+
+        def json(self):
+            return {"error": {"message": '{"error":{"message":"No available providers match the \'only\' filter: '
+                                         'xiaomi. Available providers are: gmicloud","type":"invalid_request_error",'
+                                         '"param":{"modelId":"xiaomi/mimo-v2.5-pro"}}}'}}
+    said = str(llm._error("commandcode", R()))
+    assert said.startswith("Command Code cannot serve xiaomi/mimo-v2.5-pro right now")
+    assert "(xiaomi)" in said and "Choose another model" in said and "{" not in said
+
+    class Other(R):
+        def json(self):
+            return {"error": {"message": "rate limited"}}
+    assert str(llm._error("commandcode", Other())) == "Command Code answered HTTP 400: rate limited"

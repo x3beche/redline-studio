@@ -33,6 +33,8 @@ interface JobInfo {
   /** A job with an on/off of its own (the next-question suggestion): whether
    *  it runs, and the seconds of quiet before it does (backend/llm.py). */
   switch?: boolean; on?: boolean; delay?: number; delay_range?: [number, number];
+  /** A job that reads the conversation: at most this many tokens of its end are sent. */
+  ctx?: number; ctx_range?: [number, number];
   /** The empty Chat's example questions (backend/chat_ideas.py): how often
    *  they are written again (seconds), how many, and whether the titles of
    *  one's recent conversations are read for them. */
@@ -390,6 +392,15 @@ export class LlmUsagePanel {
                   }
                 </div>
                 @if (job.delay != null && !delays.includes(job.delay)) { <span class="st-job-wait">{{ delayLabel(job.delay) }}</span> }
+                @if (job.ctx != null) {
+                  <label class="st-job-ctx" [title]="'The conversation\\'s end sent to the model, at most this many tokens: older lines are left out, the oldest one kept is cut at its start.' | t">
+                    <span class="st-job-wait">{{ 'context' | t }}</span>
+                    <input type="number" inputmode="numeric" [min]="job.ctx_range?.[0] ?? 500" [max]="job.ctx_range?.[1] ?? 1000000" step="1000"
+                           [value]="job.ctx" [disabled]="!canEdit || busy()"
+                           (change)="setCtx(j, $any($event.target))" (keydown.enter)="$any($event.target).blur()">
+                    <span class="st-job-wait">{{ 'model tokens' | t }}</span>
+                  </label>
+                }
                 <span class="st-job-wait">{{ (job.on ? 'one short call per finished answer, only after that quiet' : 'off: no calls, nothing is shown') | t }}</span>
               </div>
             }
@@ -606,7 +617,21 @@ export class LlmSettingsPanel {
   }
   countRange(job: JobInfo): [number, number] { return job.count_range ?? [3, 12]; }
 
-  setSwitch(j: string, change: { on?: boolean; delay?: number; every?: number; count?: number; chats?: boolean }) {
+  /** The context typed beside the switch: kept inside its bounds, saved
+   *  when it is a whole number there, else put back as it was. */
+  setCtx(j: string, input: HTMLInputElement) {
+    const job = this.data()!.jobs[j];
+    const [lo, hi] = job.ctx_range ?? [500, 1000000];
+    const n = Math.round(Number(input.value));
+    if (!Number.isFinite(n) || n < lo || n > hi) {
+      input.value = String(job.ctx ?? '');
+      Toast.show(t('The context is {lo}-{hi} tokens.').replace('{lo}', String(lo)).replace('{hi}', String(hi)), { tone: 'danger' });
+      return;
+    }
+    if (n !== job.ctx) this.setSwitch(j, { ctx: n });
+  }
+
+  setSwitch(j: string, change: { on?: boolean; delay?: number; ctx?: number; every?: number; count?: number; chats?: boolean }) {
     const job = this.data()!.jobs[j];
     const msg = change.on === undefined ? t('Saved.') : change.on ? t('Turned on.') : t('Turned off.');
     this.patchJob(j, change);

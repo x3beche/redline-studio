@@ -116,7 +116,7 @@ def turn_on(**extra):
 def test_off_by_default_and_then_nothing_is_asked(env):
     db, calls = env
     convo(db)
-    assert suggest.settings() == {"on": False, "delay": 60}
+    assert suggest.settings() == {"on": False, "delay": 60, "ctx": 4000}
     assert llm.public()["jobs"]["suggest"]["on"] is False
     assert run(suggest.suggest(db, "cc", "c1")) is None
     # A route chosen but the switch left off: still nothing.
@@ -136,9 +136,11 @@ def test_on_asks_the_jobs_model_with_a_bounded_context(env):
     assert c["job"] == "suggest" and c["max_tokens"] <= 100
     assert llm.route("suggest") == ("openrouter", "some/small-model")
     sent = c["messages"][1]["content"]
-    assert sent.count("Person:") + sent.count("Assistant:") == suggest.TURNS
-    assert "<19>" in sent and "<14>" in sent and "<13>" not in sent
-    assert len(sent) < suggest.TURNS * (suggest.TURN_CHARS + 20)
+    # The default 4000 tokens: 12000 characters - the last three lines
+    # (of about 3000 each) whole, the fourth cut at its start, nothing older.
+    assert len(sent) <= 4000 * suggest.CHARS_PER_TOKEN
+    assert "x" * 3000 + " <17>" in sent and "<19>" in sent and "<16>" in sent
+    assert "x" * 3000 + " <16>" not in sent and "<15>" not in sent
     assert "language" in c["messages"][0]["content"]
 
 
@@ -221,14 +223,14 @@ def test_the_switch_and_the_wait_are_kept_with_the_route(monkeypatch):
     db = Db()
     run(llm.save(db, jobs={"suggest": {"provider": "openrouter", "model": "a/b", "on": True, "delay": 30}}))
     assert llm._conf["jobs"]["suggest"] == {"provider": "openrouter", "model": "a/b", "on": True, "delay": 30}
-    assert suggest.settings() == {"on": True, "delay": 30}
+    assert suggest.settings() == {"on": True, "delay": 30, "ctx": 4000}
     # A model change leaves the switch and the wait as they were.
     run(llm.save(db, jobs={"suggest": {"provider": "commandcode", "model": "Qwen/Qwen3.8-Flash"}}))
-    assert suggest.settings() == {"on": True, "delay": 30}
+    assert suggest.settings() == {"on": True, "delay": 30, "ctx": 4000}
     shown = llm.public()["jobs"]["suggest"]
     assert shown["switch"] and shown["delay_range"] == [llm.DELAY_MIN, llm.DELAY_MAX]
     run(llm.save(db, jobs={"suggest": {"provider": "commandcode", "model": "Qwen/Qwen3.8-Flash", "on": False}}))
-    assert suggest.settings() == {"on": False, "delay": 30}
+    assert suggest.settings() == {"on": False, "delay": 30, "ctx": 4000}
     for bad in (4, 601, True, "30"):
         with pytest.raises(ValueError):
             run(llm.save(db, jobs={"suggest": {"provider": "openrouter", "model": "a/b", "delay": bad}}))
@@ -306,3 +308,30 @@ def test_a_model_that_refuses_a_temperature_is_asked_again_without_one(monkeypat
     asyncio.run(llm.complete([{"role": "user", "content": "x"}], provider="commandcode",
                              model="claude-haiku-5-5", temperature=0.3))
     assert "temperature" not in sent[2] and len(sent) == 3          # remembered: no second refusal
+
+
+def test_the_context_is_set_and_the_conversation_trimmed_to_it(env, monkeypatch):
+    """Settings: "context 90000 tokens" - the conversation's end up to that
+    is sent, the oldest line that does not fit cut at its start; a change
+    of model keeps it, and one out of bounds is refused."""
+    db, calls = env
+    run(llm.save(db, jobs={"suggest": {"provider": "openrouter", "model": "a/b", "on": True, "ctx": 90000}}))
+    assert suggest.settings()["ctx"] == 90000
+    assert llm.public()["jobs"]["suggest"]["ctx_range"] == [llm.CTX_MIN, llm.CTX_MAX]
+    run(llm.save(db, jobs={"suggest": {"provider": "commandcode", "model": "Qwen/Qwen3.8-Flash"}}))
+    assert suggest.settings()["ctx"] == 90000
+    for bad in (499, llm.CTX_MAX + 1, True, "9000"):
+        with pytest.raises(ValueError):
+            run(llm.save(db, jobs={"suggest": {"provider": "openrouter", "model": "a/b", "ctx": bad}}))
+    # 90000 tokens hold the whole 20-line conversation.
+    llm._conf["keys"] = {"commandcode": "k"}      # the fake database keeps no keys
+    convo(db)
+    run(suggest.suggest(db, "cc", "c1"))
+    sent = calls[-1]["messages"][1]["content"]
+    assert "<0>" in sent and "<19>" in sent and sent.count("Person:") + sent.count("Assistant:") == 20
+    # The smallest context: only the end of the last answer.
+    out = suggest.transcript([("user", "a" * 5000), ("assistant", "b" * 5000 + " END")], 500)
+    assert len(out) <= 500 * suggest.CHARS_PER_TOKEN
+    assert "END" in out and "aaaa" not in out and "Person:" not in out
+    # A new job that reads nothing takes no context setting.
+    assert "ctx" not in llm.public()["jobs"]["summary"]

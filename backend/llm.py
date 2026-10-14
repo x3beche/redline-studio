@@ -100,10 +100,11 @@ JOBS = {
                      "default": CHEAP},
     # Off until someone turns it on: it costs a call per finished answer
     # (backend/suggest.py). `switch`: the job has an on/off of its own;
-    # `delay`: seconds of quiet after an answer before it is asked for.
+    # `delay`: seconds of quiet after an answer before it is asked for;
+    # `ctx`: at most this many tokens of the conversation's end are sent.
     "suggest": {"label": "Next-question suggestion",
                 "about": "after an answer and a quiet while, the question you are likely to ask next, shown in the empty composer",
-                "default": CHEAP, "switch": True, "delay": 60},
+                "default": CHEAP, "switch": True, "delay": 60, "ctx": 4000},
     # The example questions on an empty Chat, written from the person's own
     # workspace (backend/chat_ideas.py). `ideas`: the job has settings of
     # its own - on/off, how often the questions are written again, how
@@ -121,6 +122,8 @@ IDEAS_DEFAULT = {"on": True, "every": 86400, "count": 6, "chats": True}
 
 # The bounds of a job's `delay`, in seconds.
 DELAY_MIN, DELAY_MAX = 5, 600
+# The bounds of a job's `ctx`: the tokens of conversation it is sent.
+CTX_MIN, CTX_MAX = 500, 1_000_000
 
 # The usage log's `kind` of a call -> the job it did, named as in the
 # "Which model does what" list. The room's titles are written by the
@@ -227,13 +230,21 @@ def route(job: str) -> tuple[str, str]:
 
 
 def job_switch(job: str) -> dict:
-    """A switched job's on/off and delay: what was saved, else off and its default delay."""
+    """A switched job's on/off and delay - and, for a job that reads the
+    conversation, its context in tokens: what was saved, else off and the
+    job's defaults."""
     _ready(f"whether the {JOBS[job]['label'] if job in JOBS else job!r} job ({job}) is on")
     got = _conf["jobs"].get(job) or {}
     delay = got.get("delay")
     if not isinstance(delay, int) or not DELAY_MIN <= delay <= DELAY_MAX:
         delay = JOBS[job].get("delay")
-    return {"on": bool(got.get("on")), "delay": delay}
+    out = {"on": bool(got.get("on")), "delay": delay}
+    if "ctx" in JOBS.get(job, {}):
+        ctx = got.get("ctx")
+        if isinstance(ctx, bool) or not isinstance(ctx, int) or not CTX_MIN <= ctx <= CTX_MAX:
+            ctx = JOBS[job]["ctx"]
+        out["ctx"] = ctx
+    return out
 
 
 def job_ideas(job: str) -> dict:
@@ -294,6 +305,8 @@ def public() -> dict:
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
         if info.get("switch"):
             jobs[j].update(job_switch(j), switch=True, delay_range=[DELAY_MIN, DELAY_MAX])
+            if "ctx" in info:
+                jobs[j]["ctx_range"] = [CTX_MIN, CTX_MAX]
         if info.get("ideas"):
             jobs[j].update(job_ideas(j), ideas=True, every_options=list(IDEAS_EVERY),
                            count_range=list(IDEAS_COUNT))
@@ -341,6 +354,14 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
                 entry["on"] = bool(on)
             if delay is not None:
                 entry["delay"] = delay
+            if "ctx" in JOBS[j]:
+                ctx = (r or {}).get("ctx")
+                ctx = was.get("ctx") if ctx is None else ctx
+                if ctx is not None and (isinstance(ctx, bool) or not isinstance(ctx, int)
+                                        or not CTX_MIN <= ctx <= CTX_MAX):
+                    raise ValueError(f"{JOBS[j]['label']}: the context is {CTX_MIN}-{CTX_MAX} tokens")
+                if ctx is not None:
+                    entry["ctx"] = ctx
         if JOBS[j].get("ideas"):
             entry.update(_ideas_entry(j, r or {}))
         sets[f"jobs.{j}"] = entry
@@ -948,7 +969,23 @@ def _error(provider: str, r) -> RuntimeError:
         msg = msg or d.get("detail") or r.text
     except Exception:                                  # noqa: BLE001
         msg = r.text
-    return RuntimeError(f"{PROVIDERS[provider]['name']} answered HTTP {r.status_code}: {str(msg)[:300]}")
+    name = PROVIDERS[provider]['name']
+    # Command Code passes a model on to the hosts it routes it to; when the
+    # one it allows for a model is down, the answer is a raw routing error
+    # ("No available providers match the 'only' filter: xiaomi"). Nothing in
+    # the call can change its route: say so, and that another model works.
+    down = _ROUTE_DOWN.search(str(msg))
+    if down:
+        model = _MODEL_ID.search(str(msg))
+        which = model[1] if model else "this model"
+        return RuntimeError(f"{name} cannot serve {which} right now: the one host it sends it to "
+                            f"({down[1]}) is down. Choose another model - this is on {name}'s side "
+                            "and usually passes.")
+    return RuntimeError(f"{name} answered HTTP {r.status_code}: {str(msg)[:300]}")
+
+
+_ROUTE_DOWN = re.compile(r"No available providers match the 'only' filter: ([\w-]+)")
+_MODEL_ID = re.compile(r'modelId\\?"\s*:\s*\\?"([^"\\]+)')
 
 
 # Models that answer 400 to a temperature, as they said so (complete()).

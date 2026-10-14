@@ -549,6 +549,17 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
 .st-job-saved { margin-left: 8px; font-size: 11px; font-weight: 400; white-space: nowrap; }
 .st-job-on { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
 .st-job-wait { font-size: 11px; color: var(--ink-dim); }
+/* The tokens of conversation a job is sent: a small figure between two words. */
+.st-job-ctx { display: inline-flex; align-items: center; gap: 6px; }
+.st-job-ctx input {
+  width: 84px; height: 22px; padding: 0 6px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--ink);
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; text-align: right;
+  outline: none; -moz-appearance: textfield; appearance: textfield;
+}
+.st-job-ctx input::-webkit-inner-spin-button, .st-job-ctx input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.st-job-ctx input:focus { border-color: var(--accent); }
+.st-job-ctx input:disabled { opacity: .55; }
 .st-seg .st-job-count { min-width: 30px; font-variant-numeric: tabular-nums; }
 
 /* Settings > Proxy & Data: each lookup's order of routes (route-order.ts) */

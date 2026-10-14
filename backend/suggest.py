@@ -10,8 +10,11 @@ JOBS): a provider and a model like the others, plus a switch - off by
 default, so nobody pays for it without choosing to - and the seconds of
 quiet the page waits (`delay`).
 
-What it costs is bounded: the last TURNS lines, each cut to TURN_CHARS,
-an answer of a line, and at most one call per finished answer. The
+What it costs is bounded: the conversation's end up to the job's context
+(`ctx`, in tokens, set beside the switch - counted as CHARS_PER_TOKEN
+characters each, so a Turkish text, which takes more tokens per
+character than English, stays under it), an answer of a line, and at
+most one call per finished answer. The
 suggestion is kept against the answer it follows (`COLL`, keyed by
 workspace, conversation and that line's id): asked again - another tab,
 another person, a reload - it is the kept one, and a call that failed is
@@ -36,8 +39,11 @@ router = APIRouter(prefix="/api/suggest")
 JOB = "suggest"
 COLL = "suggestions"           # the machine's: the key carries the workspace
 KEEP_DAYS = 7                  # a kept suggestion goes after this (TTL index)
-TURNS = 6                      # lines of the conversation the model reads
-TURN_CHARS = 1200              # each cut to this, its end kept
+# A token is counted as this many characters. Low on purpose: Turkish
+# and code take about 3, English about 4, so the context is not overrun.
+CHARS_PER_TOKEN = 3
+# Lines read back from a room's thread to fill the context from.
+ROOM_ROWS = 400
 MAX_CHARS = 120                # the suggestion itself
 MAX_TOKENS = 60
 TIMEOUT = 20.0
@@ -64,7 +70,8 @@ def _db():
 
 
 def settings() -> dict:
-    """Whether the feature is on, and how long the page waits before asking."""
+    """Whether the feature is on, how long the page waits before asking,
+    and how many tokens of the conversation are sent."""
     return llm.job_switch(JOB)
 
 
@@ -92,16 +99,26 @@ def clean(raw: str) -> str:
     return line
 
 
-def _cut(text: str) -> str:
-    text = (text or "").strip()
-    return text if len(text) <= TURN_CHARS else "…" + text[-TURN_CHARS:]
-
-
-def transcript(turns: list[tuple[str, str]]) -> str:
-    """The last TURNS lines, each cut short, as the model reads them."""
-    rows = [(r, t) for r, t in turns if (t or "").strip()][-TURNS:]
-    return "\n\n".join(f"{'Person' if r == 'user' else 'Assistant'}: {_cut(t)}" for r, t in rows) + \
-        "\n\nPerson (the next message, to the assistant):"
+def transcript(turns: list[tuple[str, str]], ctx: int) -> str:
+    """The conversation's end, as the model reads it: whole lines from the
+    newest back while they fit in `ctx` tokens, and the line that no
+    longer fits cut at its start - its end, the part nearest what follows,
+    kept."""
+    budget = max(1, ctx) * CHARS_PER_TOKEN
+    tail = "\n\nPerson (the next message, to the assistant):"
+    budget -= len(tail)
+    rows: list[str] = []
+    for r, t in reversed([(r, (t or "").strip()) for r, t in turns if (t or "").strip()]):
+        head = f"{'Person' if r == 'user' else 'Assistant'}: "
+        room = budget - len(head) - (2 if rows else 0)
+        if room <= 0:
+            break
+        if len(t) > room:
+            rows.append(head + "…" + t[-(room - 1):] if room > 1 else head + "…")
+            break
+        rows.append(head + t)
+        budget = room - len(t)
+    return "\n\n".join(reversed(rows)) + tail
 
 
 async def _turns(db, kind: str, ref: str) -> tuple[str, list[tuple[str, str]]] | None:
@@ -121,10 +138,10 @@ async def _turns(db, kind: str, ref: str) -> tuple[str, list[tuple[str, str]]] |
         if last.get("role") != "assistant" or last.get("error") or not (last.get("content") or "").strip():
             return None
         lid = last.get("id") or f"#{len(msgs) - 1}"
-        return lid, [(m.get("role") or "user", m.get("content") or "") for m in msgs[-TURNS * 2:]]
+        return lid, [(m.get("role") or "user", m.get("content") or "") for m in msgs]
     if ref not in chat.ROOMS:
         raise HTTPException(404, ref)
-    rows = await chat.history(db, TURNS * 2, ref)
+    rows = await chat.history(db, ROOM_ROWS, ref)
     if not rows or rows[-1].get("role") != chat.AGENT:
         return None
     return rows[-1]["_id"], [("assistant" if d.get("role") == chat.AGENT else "user", chat.preview(d))
@@ -185,7 +202,7 @@ async def suggest(db, kind: str, ref: str) -> str | None:
     text, state = "", "failed"
     try:
         d = await asyncio.wait_for(llm.complete(
-            [{"role": "system", "content": PROMPT}, {"role": "user", "content": transcript(turns)}],
+            [{"role": "system", "content": PROMPT}, {"role": "user", "content": transcript(turns, s["ctx"])}],
             job=JOB, max_tokens=MAX_TOKENS, temperature=0.3, timeout=TIMEOUT), TIMEOUT + 5)
         text = clean(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
         state = "done" if text else "empty"
