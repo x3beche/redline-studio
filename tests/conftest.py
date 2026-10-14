@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Tests read the repo's files (frontend/src/app/i18n.ts...) by their paths from the root: run from there wherever pytest was started.
+os.chdir(Path(__file__).resolve().parent.parent)
 
 
 @pytest.fixture(autouse=True)
