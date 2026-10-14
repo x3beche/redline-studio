@@ -208,6 +208,7 @@ const ROOM_TITLE: Record<RoomId, string> = {
   cad: '3D Drawing', pcb: 'PCB Design', firmware: 'Firmware', notes: 'Notes', taste: 'Taste', mfr: 'Parts',
   commandcode: 'Chat', files: 'Files', tools: 'Basic Tools', settings: 'Settings', analyze: 'Analytics', wiki: 'Wiki',
   notifications: 'Notifications',
+  tasks: 'Tasks',
 };
 let named: { room: string | null; what: string | null } = { room: null, what: null };
 export function navTitle(room: string | null, what: string | null) { named = { room, what }; title(); }

@@ -13,7 +13,8 @@ import { navParams } from './nav';
  */
 export interface Workspace {
   id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze' | 'wiki'
-    | 'notifications';
+    | 'notifications'
+    | 'tasks';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -95,6 +96,16 @@ export const WORKSPACES: Workspace[] = [
     label: 'Basic Tools',
     blurb: 'Small calculators and sketch pads for any room: units, track '
          + 'widths, resistors, a layout grid.',
+    ready: true,
+  },
+  {
+    // Scheduled tasks: built-in reports and refreshes that run on a schedule and send their
+    // result (rooms/scheduled.ts, backend/sched). After Basic Tools; the bar puts it under More
+    // when there is no room for it.
+    id: 'tasks',
+    label: 'Tasks',
+    blurb: 'Reports and refreshes that run by themselves on a schedule - the stock every Monday, the '
+         + 'prices every night - and send you the result here, on Telegram or as a file.',
     ready: true,
   },
   {

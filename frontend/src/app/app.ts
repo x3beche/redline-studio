@@ -11,6 +11,7 @@ import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomTaste } from './rooms/taste';
 import { RoomMfr } from './rooms/manufacturers';
 import { RoomFiles } from './rooms/files';
+import { RoomTasks } from './rooms/scheduled';
 import { RoomCommandCode } from './rooms/commandcode';
 import { RoomWiki } from './rooms/wiki';
 import { TasteRuns } from './rooms/taste-api';
@@ -44,7 +45,7 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, RoomWiki, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar, NotifyBell, RoomNotifications],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, RoomTasks, RoomWiki, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost, Toasts, DmSend, DmViewer, Avatar, NotifyBell, RoomNotifications],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -158,6 +159,7 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
       @case ('commandcode') { @defer { <app-room-commandcode /> } }
       @case ('files') { @defer { <app-room-files /> } }
       @case ('tools') { @defer { <app-room-tools /> } }
+      @case ('tasks') { @defer { <app-room-tasks /> } }
       @case ('settings') { @defer { <app-room-settings /> } }
       @case ('analyze') { @defer { <app-room-analyze /> } }
       @case ('wiki') { @defer { <app-room-wiki /> } }
@@ -385,7 +387,7 @@ export class App {
   mount = signal(0);
   /** The rooms put back that way, by the values that make them again; the others are told what to
    *  open (restore). Taste is told its palette, and made again only for an extraction run. */
-  private static REMAKE: Partial<Record<RoomId, string[]>> = { mfr: ROOM_KEYS.mfr, files: ROOM_KEYS.files, taste: ['run'] };
+  private static REMAKE: Partial<Record<RoomId, string[]>> = { mfr: ROOM_KEYS.mfr, files: ROOM_KEYS.files, taste: ['run'], tasks: ['task'] };
 
   /** The address's values put on screen: at the start (`prev` null) what the rooms that do not read
    *  the address themselves are to open; after Back or Forward, the room and all of it. */

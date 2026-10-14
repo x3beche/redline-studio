@@ -1,0 +1,186 @@
+/* The Tasks tab (scheduled.ts): a dense list of the scheduled tasks on the
+   left, the open one on the right - what it does, when, where its result
+   goes, and its history. Flat: hairlines between things, no cards in cards,
+   no stripes; what is chosen is told by ink and weight alone. Colours are the
+   theme's tokens; sizes of our own are --tcv-*. */
+
+:host { display: contents; }
+
+.sk-room { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; background: var(--surface);
+  color: var(--ink); font-size: 12px; }
+
+/* ---- the one-row toolbar ---------------------------------------------------- */
+.sk-bar { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border-bottom: 1px solid var(--line);
+  flex-wrap: nowrap; overflow: hidden; }
+.sk-title { font-size: 13px; font-weight: 600; color: var(--ink-bright); white-space: nowrap; }
+.sk-title small { margin-left: 6px; font-weight: 400; font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.sk-fill { flex: 1 1 auto; min-width: 8px; }
+.sk-seg { display: inline-flex; flex: none; align-self: flex-start; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.sk-seg button { padding: 3px 9px; font-size: 11.5px; line-height: 16px; color: var(--ink-dim); background: transparent; border: 0;
+  cursor: pointer; white-space: nowrap; font-weight: 400; }
+.sk-seg button + button { border-left: 1px solid var(--line); }
+.sk-seg button:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.sk-seg button[data-on] { color: var(--ink-bright); font-weight: 600; }
+.sk-seg button:disabled { cursor: default; opacity: .5; }
+.sk-seg button em { font-style: normal; margin-left: 4px; font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.sk-btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; font-size: 12px; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; white-space: nowrap; flex: none; }
+.sk-btn:hover:not(:disabled) { background: var(--hover); }
+.sk-btn:disabled { opacity: .45; cursor: not-allowed; }
+.sk-btn[data-tone="accent"] { background: var(--accent-deep); border-color: var(--accent); color: var(--ink-bright); }
+.sk-btn[data-tone="accent"]:hover:not(:disabled) { background: var(--accent); }
+.sk-btn[data-tone="danger"] { color: var(--danger); }
+.sk-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sk-joined { display: inline-flex; flex: none; }
+.sk-joined .sk-btn { border-radius: 0; }
+.sk-joined .sk-btn + .sk-btn { border-left: 0; }
+.sk-joined .sk-btn:first-child { border-radius: 4px 0 0 4px; }
+.sk-joined .sk-btn:last-child { border-radius: 0 4px 4px 0; }
+.sk-switchrow { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); background: none;
+  border: 0; cursor: pointer; padding: 0 2px; white-space: nowrap; flex: none; }
+.sk-switchrow:hover { color: var(--ink); }
+.sk-switchrow:disabled { cursor: default; }
+.sk-off { color: var(--warn); font-weight: 600; }
+
+/* ---- the split -------------------------------------------------------------- */
+.sk-split { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(420px, 44%) minmax(0, 1fr); }
+.sk-list { min-height: 0; overflow: auto; border-right: 1px solid var(--line); }
+.sk-detail { min-height: 0; overflow: auto; }
+
+/* ---- the list: a table that fills its column -------------------------------- */
+.sk-thead, .sk-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) minmax(76px, .7fr) minmax(0, 1fr) 40px;
+  align-items: center; column-gap: 10px; padding: 0 10px; }
+.sk-thead { position: sticky; top: 0; z-index: 1; height: 26px; background: var(--surface); border-bottom: 1px solid var(--line);
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); }
+.sk-row { min-height: 40px; border-bottom: 1px solid var(--line); cursor: pointer; color: var(--ink); }
+.sk-row:hover { background: var(--hover); }
+.sk-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.sk-row[data-on] .sk-name { color: var(--ink-bright); font-weight: 600; }
+.sk-row[data-off] .sk-name, .sk-row[data-off] .sk-when { color: var(--ink-dim); }
+.sk-cell { min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.3; padding: 4px 0; }
+.sk-cell > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-name { font-size: 12.5px; }
+.sk-sub { font-size: 11px; color: var(--ink-dim); }
+.sk-when { font-variant-numeric: tabular-nums; }
+.sk-tone[data-tone="ok"] { color: var(--ok); }
+.sk-tone[data-tone="danger"] { color: var(--danger); }
+.sk-tone[data-tone="warn"] { color: var(--warn); }
+.sk-tone[data-tone="live"] { color: var(--accent); }
+.sk-tone[data-tone="dim"] { color: var(--ink-dim); }
+.sk-sw { justify-self: end; }
+.sk-sw .tcv-switch { cursor: pointer; }
+.sk-sw button { background: none; border: 0; padding: 4px; cursor: pointer; display: inline-flex; }
+.sk-sw button:disabled { cursor: not-allowed; opacity: .5; }
+
+/* Templates to start from, under the list (and in an empty one). */
+.sk-tpls { padding: 12px 10px 16px; }
+.sk-tpls h4 { margin: 0 0 6px; font-size: 10.5px; font-weight: 400; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); }
+.sk-tplgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.sk-tpl { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px 9px 0; background: none; border: 0;
+  border-bottom: 1px solid var(--line); color: var(--ink); cursor: pointer; min-width: 0; }
+.sk-tpl:nth-child(2n) { padding-left: 10px; border-left: 1px solid var(--line); }
+.sk-tpl:hover b { color: var(--ink-bright); }
+.sk-tpl:disabled { cursor: not-allowed; opacity: .5; }
+.sk-tpl b { font-size: 12px; font-weight: 600; }
+.sk-tpl span { font-size: 11px; color: var(--ink-dim); line-height: 1.4; }
+
+/* ---- the detail -------------------------------------------------------------- */
+.sk-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px;
+  background: var(--surface); border-bottom: 1px solid var(--line); }
+.sk-headname { flex: 1 1 auto; min-width: 120px; font-size: 14px; font-weight: 600; color: var(--ink-bright); background: transparent;
+  border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; outline: none; }
+.sk-headname:hover { border-color: var(--line); }
+.sk-headname:focus { border-color: var(--accent); background: var(--surface-2); }
+.sk-headtype { font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; }
+.sk-dirty { font-size: 11px; color: var(--warn); white-space: nowrap; }
+
+.sk-sec { padding: 12px 14px 14px; border-bottom: 1px solid var(--line); }
+.sk-sec h3 { margin: 0 0 8px; font-size: 10.5px; font-weight: 400; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim);
+  display: flex; align-items: baseline; gap: 8px; }
+.sk-sec h3 .sk-aside { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.sk-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.sk-two > .sk-sec + .sk-sec, .sk-two > .sk-col { border-left: 1px solid var(--line); }
+.sk-col { display: flex; flex-direction: column; min-width: 0; }
+.sk-col > .sk-sec:last-child { flex: 1 1 auto; }
+.sk-about { margin: -2px 0 10px; font-size: 11.5px; color: var(--ink-dim); line-height: 1.45; }
+
+/* label above, field below; as many to a row as fit */
+.sk-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
+.sk-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sk-f[data-wide] { grid-column: 1 / -1; }
+.sk-f > label, .sk-f > .sk-lab { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-f > small { font-size: 10.5px; color: var(--ink-dim); line-height: 1.35; }
+.sk-in { min-width: 0; height: 26px; padding: 0 7px; font-size: 12px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 4px; outline: none; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.sk-in:focus { border-color: var(--accent); }
+.sk-in:disabled { opacity: .6; }
+textarea.sk-in { height: auto; min-height: 84px; padding: 6px 7px; resize: vertical; line-height: 1.45; font-family: inherit; }
+.sk-in[data-bad] { border-color: var(--danger); }
+.sk-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; min-height: 26px; }
+.sk-checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.sk-checks label[data-off] { color: var(--ink-dim); cursor: not-allowed; }
+.sk-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px; }
+.sk-chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px 0 8px; font-size: 11.5px; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--surface-2); font-family: 'IBM Plex Mono', ui-monospace, monospace; max-width: 100%; }
+.sk-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-chip button { background: none; border: 0; color: var(--ink-dim); cursor: pointer; padding: 0 3px; font-size: 13px; line-height: 1; }
+.sk-chip button:hover { color: var(--danger); }
+
+/* The cost warning: a plain line with a mark, not a coloured card. */
+.sk-warn { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--ink); }
+.sk-warn svg { flex: none; width: 15px; height: 15px; margin-top: 1px; fill: none; stroke: var(--warn); stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
+.sk-err { margin: 8px 0 0; font-size: 11.5px; color: var(--danger); }
+
+/* ---- the schedule editor ---------------------------------------------------- */
+.sk-when-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+.sk-days { display: inline-flex; align-self: flex-start; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.sk-days button { width: 34px; height: 24px; font-size: 11.5px; background: transparent; border: 0; color: var(--ink-dim); cursor: pointer; }
+.sk-days button + button { border-left: 1px solid var(--line); }
+.sk-days button:hover { background: var(--hover); color: var(--ink); }
+.sk-days button[data-on] { color: var(--ink-bright); font-weight: 600; }
+.sk-words { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-bright); }
+.sk-words small { margin-left: 6px; color: var(--ink-dim); font-size: 11px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.sk-next { margin: 0; padding: 0; list-style: none; border-left: 1px solid var(--line); padding-left: 12px; }
+.sk-next li { display: flex; justify-content: space-between; gap: 8px; height: 22px; align-items: center; font-size: 12px;
+  font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--line); }
+.sk-next li:last-child { border-bottom: 0; }
+.sk-next li span { color: var(--ink-dim); font-size: 11px; }
+.sk-next-head { font-size: 10.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+
+/* ---- the history ------------------------------------------------------------- */
+.sk-hist { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.sk-hist th { text-align: left; font-weight: 400; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim);
+  padding: 0 8px 5px 0; border-bottom: 1px solid var(--line); }
+.sk-hist td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.sk-hist td.r, .sk-hist th.r { text-align: right; }
+.sk-hist tr.sk-hrow { cursor: pointer; }
+.sk-hist tr.sk-hrow:hover td { background: var(--hover); }
+.sk-hist tr[data-open] td { border-bottom-color: transparent; }
+.sk-hist tr[data-open] .sk-hsum { color: var(--ink-bright); }
+.sk-hist .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.sk-hist .sk-caret { display: inline-block; width: 10px; color: var(--ink-dim); transition: transform .12s ease; }
+.sk-hist tr[data-open] .sk-caret { transform: rotate(90deg); }
+.sk-out { padding: 2px 0 12px 18px; white-space: normal; }
+.sk-out .md { font-size: 12px; max-width: 980px; }
+.sk-outmeta { font-size: 11px; color: var(--ink-dim); margin: 0 0 6px; }
+.sk-more { margin-top: 8px; }
+
+/* ---- motion: under 200 ms, and none for those who asked for none ------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .sk-detail > * { animation: sk-in .14s var(--tcv-ease, ease) both; }
+  .sk-out { animation: sk-in .12s ease both; }
+}
+@keyframes sk-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+/* ---- phones ------------------------------------------------------------------ */
+@media (max-width: 900px) {
+  .sk-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 42%) minmax(0, 1fr); }
+  .sk-list { border-right: 0; border-bottom: 1px solid var(--line); }
+  .sk-two, .sk-when-grid { grid-template-columns: minmax(0, 1fr); }
+  .sk-two > .sk-sec + .sk-sec, .sk-two > .sk-col { border-left: 0; }
+  .sk-next { border-left: 0; padding-left: 0; }
+  .sk-thead, .sk-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 40px; }
+  .sk-hide-sm { display: none !important; }
+}

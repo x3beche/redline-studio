@@ -42,7 +42,7 @@ const KEY = 'redline.topbar';
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
 const SHORT: Record<string, string> = {
   cad: '3D', pcb: 'PCB', firmware: 'FW',
-  notes: 'Notes', taste: 'Taste', mfr: 'Parts', commandcode: 'Chat', files: 'Files', tools: 'Tools',
+  notes: 'Notes', taste: 'Taste', mfr: 'Parts', commandcode: 'Chat', files: 'Files', tools: 'Tools', tasks: 'Tasks',
 };
 
 /** A line drawing for each tab, 24 units square, drawn with the text colour. */
@@ -56,6 +56,7 @@ const ICON: Record<string, string> = {
   commandcode: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
   files: 'M3 6h6l2 2h10v11H3z',
   tools: 'M14.5 4.5a4 4 0 0 0-4.6 5.4L4 15.8 8.2 20l5.9-5.9a4 4 0 0 0 5.4-4.6l-2.6 2.6-2.8-.7-.7-2.8z',
+  tasks: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M12 7.5V12l3 2 M3 6.5L6 3.5 M21 6.5L18 3.5',
   wiki: 'M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z',
 };
 const ICON_ANY = 'M5 5h14v14H5z';
