@@ -33,7 +33,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import ato, drawlayout, kicad, lcsc, limits, store
+from . import ato, drawlayout, kicad, lcsc, limits, store, workimages
 
 COLL = "releases"
 BUCKET = "releases"
@@ -107,7 +107,8 @@ async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str,
         pdf = work / "drawing.pdf"
         if proc.returncode != 0 or not pdf.exists():
             if any("Unable to find image" in t or "pull access denied" in t for t in text):
-                return "the drawing image is not built: docker build -t redline-draw -f docker/draw/Dockerfile docker/draw"
+                return "the drawing image is not built: " + workimages.build_hint(
+                    DRAW_IMAGE, f"docker build -t {DRAW_IMAGE} -f docker/draw/Dockerfile docker/draw")
             if text:
                 return text[-1][:300]
             # Nothing said: killed from outside - 137 is what running out of memory looks like.

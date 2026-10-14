@@ -1,0 +1,8 @@
+# The bundled MongoDB without its profile, for a Portainer stack that does
+# not apply COMPOSE_PROFILES: add this file under the stack's "Additional
+# paths" (DEPLOY.md > Portainer: when something is wrong).
+#
+#   docker compose -f docker-compose.yml -f docker/deploy/mongo-always.yml up -d
+services:
+  mongo:
+    profiles: !reset []

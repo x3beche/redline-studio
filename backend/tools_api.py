@@ -21,6 +21,8 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import workimages
+
 router = APIRouter(prefix="/api/tools")
 
 # The tool pages themselves. Served from disk by the API rather than as the
@@ -49,7 +51,7 @@ def mount(app: FastAPI) -> None:
 
 IMAGE = os.environ.get("REDLINE_TOOLS_IMAGE", "redline-tools")
 KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext", "dts", "ubootenv")
-BUILD = "docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools"
+BUILD = workimages.build_hint(IMAGE, f"docker build -f docker/tools/tools.Dockerfile -t {IMAGE} docker/tools", "tools")
 LIMIT = 400_000                  # characters: a check is for a tool's output, not a dump
 PDF_LIMIT = 20_000_000           # a datasheet PDF, as base64
 TIMEOUT = 180

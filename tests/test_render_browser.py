@@ -74,7 +74,8 @@ def test_local_argv():
     assert argv[-1] == "http://x/"
 
 
-def test_docker_argv_shares_the_host_network_and_renders_in_software():
+def test_docker_argv_shares_the_host_network_and_renders_in_software(monkeypatch):
+    monkeypatch.delenv("REDLINE_CHROME_NETWORK", raising=False)
     argv = render.browser_argv(("docker", "img"), 9411, 800, 600, "/tmp/p",
                                "http://127.0.0.1:4200/?rev=r", "redline-render-1")
     assert argv[:2] == ["docker", "run"]
@@ -83,3 +84,39 @@ def test_docker_argv_shares_the_host_network_and_renders_in_software():
     assert "--no-sandbox" in argv and "--use-angle=swiftshader" in argv
     assert "--user-data-dir=/tmp/p" not in argv        # the host path means nothing there
     assert argv[-1] == "http://127.0.0.1:4200/?rev=r"
+
+
+def test_deployed_the_browser_joins_the_api_containers_network(monkeypatch):
+    # docker-compose.yml: REDLINE_CHROME_NETWORK=self - the DevTools port on
+    # the API container's 127.0.0.1, the page reached as http://web.
+    from backend import browser
+    monkeypatch.setenv("REDLINE_CHROME_NETWORK", "self")
+    monkeypatch.setattr(browser, "own_container", lambda: "c" * 64)
+    argv = render.browser_argv(("docker", "img"), 9411, 800, 600, "/tmp/p", "http://web/", "n")
+    assert argv[argv.index("--network") + 1] == "container:" + "c" * 64
+    assert "--remote-debugging-address=127.0.0.1" in argv
+    monkeypatch.setattr(browser, "own_container", lambda: None)
+    with pytest.raises(browser.NoBrowser, match="not in a container"):
+        browser.network()
+    assert browser.network({"REDLINE_CHROME_NETWORK": "wb_default"}) == "wb_default"
+
+
+def test_own_container_reads_the_mounted_hostname(monkeypatch, tmp_path):
+    from backend import browser
+    cid = "ab12" * 16
+    info = tmp_path / "mountinfo"
+    info.write_text("1 2 0:1 / / rw - overlay overlay rw\n"
+                    f"3 1 8:1 /var/lib/docker/containers/{cid}/hostname /etc/hostname rw - ext4 /dev/sda1 rw\n")
+    real = open
+    monkeypatch.setattr("builtins.open", lambda p, *a, **k: real(info if p == "/proc/self/mountinfo" else p, *a, **k))
+    assert browser.own_container() == cid
+
+
+def test_a_missing_work_image_names_its_compose_profile_when_deployed(monkeypatch):
+    from backend import workimages
+    monkeypatch.delenv("REDLINE_DEPLOY", raising=False)
+    assert workimages.build_hint("img", "docker build -t img .", "kicad") == "docker build -t img ."
+    monkeypatch.setenv("REDLINE_DEPLOY", "compose")
+    said = workimages.build_hint("ghcr.io/x/workbench-kicad:1", "docker build -t img .", "kicad")
+    assert "COMPOSE_PROFILES" in said and "kicad" in said and "ghcr.io/x/workbench-kicad:1" in said
+    assert "docker build" not in said

@@ -14,6 +14,7 @@ failed with FileNotFoundError before it had looked anywhere.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -33,6 +34,37 @@ DOCKER_FLAGS = ["--headless=new", "--no-first-run", "--no-sandbox",
 
 class NoBrowser(RuntimeError):
     pass
+
+
+def own_container() -> str | None:
+    """This process's container id, when it runs in one: Docker mounts the
+    container's own hostname file from /var/lib/docker/containers/<id>/."""
+    try:
+        with open("/proc/self/mountinfo") as fh:
+            for line in fh:
+                m = re.search(r"/containers/([0-9a-f]{64})/(?:hostname|resolv\.conf|hosts)\s", line)
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return None
+
+
+def network(env: dict | None = None) -> str:
+    """The container browser's network. REDLINE_CHROME_NETWORK: "host" (the
+    default - the dev setup, where the page and the API are on the host's
+    127.0.0.1), "self" (the network of the container this runs in: the
+    deployed API, docker-compose.yml - its DevTools port is then on this
+    container's 127.0.0.1, and the page is reached by its service name,
+    REDLINE_WEB=http://web), or anything `docker run --network` takes."""
+    env = os.environ if env is None else env
+    want = (env.get("REDLINE_CHROME_NETWORK") or "").strip() or "host"
+    if want == "self":
+        me = own_container()
+        if not me:
+            raise NoBrowser("REDLINE_CHROME_NETWORK=self: this process is not in a container")
+        return f"container:{me}"
+    return want
 
 
 def _image_there(image: str) -> bool:
@@ -83,10 +115,10 @@ def argv(found: tuple[str, str], *, port: int, width: int, height: int,
     how, what = found
     tail = [f"--remote-debugging-port={port}", f"--window-size={width},{height}"]
     if how == "docker":
-        # Host network: the page is on 127.0.0.1 and the DevTools port has
-        # to be reachable on the host's 127.0.0.1 too. The profile lives
-        # and dies in the container.
-        return ["docker", "run", "--rm", "--name", name, "--network", "host",
+        # Host network (or the calling container's, network()): the page is
+        # on 127.0.0.1 and the DevTools port has to be reachable on the
+        # caller's 127.0.0.1 too. The profile lives and dies in the container.
+        return ["docker", "run", "--rm", "--name", name, "--network", network(),
                 "--shm-size", "1g", "--entrypoint", "chromium-browser", what,
                 *DOCKER_FLAGS, *tail, "--remote-debugging-address=127.0.0.1",
                 "--user-data-dir=/tmp/profile", url]

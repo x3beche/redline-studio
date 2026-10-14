@@ -45,7 +45,7 @@ import traceback
 import uuid
 from pathlib import Path
 
-from . import firmware, jobs, limits, store
+from . import firmware, jobs, limits, store, workimages
 from .jobs import BEAT, alive, now  # one clock for every kind of job
 
 JOBS = "firmware_jobs"
@@ -352,8 +352,8 @@ async def build(db, fw: dict, lines: Lines, *, run=_stream) -> dict:
     """Write the project out, fetch what it needs, compile it; the result."""
     ws = getattr(db, "workspace", None) or "default"
     if not await image_ready():
-        raise RuntimeError(f"the firmware image is not built - on the host: "
-                           f"docker build -t {IMAGE} docker/firmware")
+        raise RuntimeError("the firmware image is not built - " + workimages.build_hint(
+            IMAGE, f"on the host: docker build -t {IMAGE} docker/firmware", "firmware"))
     files = await firmware.contents(db, fw["_id"])
     env = fw.get("env") or "esp32dev"
     where = project_dir(ws, fw["_id"])

@@ -28,7 +28,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, compute, lcsc, limits, poses, routelive, rules, store
+from . import ato, compute, lcsc, limits, poses, routelive, rules, store, workimages
 
 IMAGE = os.environ.get("REDLINE_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
@@ -335,7 +335,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
     if not await available():
         raise NoDocker(
             f"the KiCad container ({IMAGE}) is not built. "
-            f"docker build -f docker/kicad.Dockerfile -t {IMAGE} .")
+            + workimages.build_hint(IMAGE, f"docker build -f docker/kicad.Dockerfile -t {IMAGE} .", "kicad"))
 
     graph = json.loads(await store.get_artifact(db, board_id, "graph",
                                                 ato.BOARDS))
@@ -488,8 +488,9 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             -> pour, count, report (route.py finish)."""
             rc, _ = await _run(["docker", "image", "inspect", TM_IMAGE], work)
             if rc != 0:
-                return {"error": f"the TraceMaker container ({TM_IMAGE}) is not built. docker build "
-                                 f"-f docker/tracemaker.Dockerfile -t {TM_IMAGE} . - or route with Freerouting"}
+                return {"error": f"the TraceMaker container ({TM_IMAGE}) is not built. " + workimages.build_hint(
+                    TM_IMAGE, f"docker build -f docker/tracemaker.Dockerfile -t {TM_IMAGE} .", "tracemaker")
+                    + " - or route with Freerouting"}
             got = await boxed(IMAGE, "/work/route.py",
                               {**payload, "stage": "prepare", "pre": "/work/pre.kicad_pcb"}, ROUTE_TIMEOUT)
             if got.get("error"):

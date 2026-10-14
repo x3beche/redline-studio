@@ -260,7 +260,7 @@ def used_in(files: dict[str, str], macros: list[str]) -> dict[str, list[str]]:
 
 def platformio_ini(target: dict, title: str) -> str:
     return "\n".join([
-        f"; {title} - PlatformIO project. Built by Workbench in docker (redline-firmware),",
+        f"; {title} - PlatformIO project. Built by Workbench in its firmware image (docker),",
         "; offline: the platform and the libraries below are in the image.",
         f"[env:{target['env']}]",
         f"platform = {target['platform']}",

@@ -4,8 +4,13 @@
 # environment variables. DEPLOY.md has the steps.
 #
 #   docker compose up -d --build                      # page on :8080
-#   COMPOSE_PROFILES=kicad,firmware docker compose up -d --build
-#   docker compose --profile full up -d --build       # every work image
+#   COMPOSE_PROFILES=mongo,kicad,firmware docker compose up -d --build
+#   docker compose --profile mongo --profile full up -d --build
+#
+# The bundled MongoDB is the profile `mongo`, which deploy.env.example turns
+# on (COMPOSE_PROFILES=mongo). With a database of your own, set MONGODB_URI
+# and leave `mongo` out of COMPOSE_PROFILES: nothing of the bundled one
+# starts, and MONGO_ROOT_PASSWORD is not needed.
 #
 # For development, with live reload, use compose.dev.yml (INSTALL.md).
 #
@@ -28,11 +33,18 @@ x-work-image: &work-image
 services:
   mongo:
     image: ${MONGO_IMAGE:-mongo:7.0}
+    profiles: ["mongo"]
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-workbench}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD (letters and digits) - see deploy.env.example}
-    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-1}"]
+      # Not ${...:?}: compose would demand it even with this service off.
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-}
+    entrypoint:
+      - sh
+      - -c
+      - '[ -n "$$MONGO_INITDB_ROOT_PASSWORD" ] || { echo "set MONGO_ROOT_PASSWORD (letters and digits) - see deploy.env.example" >&2; exit 1; }; exec docker-entrypoint.sh "$$@"'
+      - mongo
+    command: ["mongod", "--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-1}"]
     volumes:
       - mongo-data:/data/db
       - mongo-config:/data/configdb
@@ -55,8 +67,11 @@ services:
     # are reaped when they end.
     init: true
     depends_on:
+      # Waited for when it runs; with the profile `mongo` off (MONGODB_URI
+      # to a database of your own) there is nothing to wait for.
       mongo:
         condition: service_healthy
+        required: false
     environment:
       # A database of your own instead of the bundled one: set MONGODB_URI.
       MONGODB_URI: ${MONGODB_URI:-mongodb://${MONGO_ROOT_USER:-workbench}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin}
@@ -78,6 +93,14 @@ services:
       REDLINE_FILE_MAX_MB: ${REDLINE_FILE_MAX_MB:-200}
       REDLINE_KWH_PRICE: ${REDLINE_KWH_PRICE:-}
       REDLINE_LOG_LEVEL: ${REDLINE_LOG_LEVEL:-info}
+      # A missing work image is reported with its compose profile
+      # (backend/workimages.py), not a docker build of a checkout.
+      REDLINE_DEPLOY: compose
+      # The headless Chromium of the Taste renders and screenshots
+      # (tools/render.py) runs in this container's network: its DevTools on
+      # the API's 127.0.0.1, the page through the web service.
+      REDLINE_CHROME_NETWORK: ${REDLINE_CHROME_NETWORK:-self}
+      REDLINE_WEB: ${REDLINE_RENDER_WEB:-http://web}
       # The work images, by the names the services below give them.
       REDLINE_DRAW_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-draw:${REDLINE_VERSION:-latest}
       REDLINE_KICAD_IMAGE: ${REDLINE_IMAGE_PREFIX:-ghcr.io/x3beche/workbench}-kicad:${REDLINE_VERSION:-latest}
@@ -166,10 +189,11 @@ services:
       context: .
       dockerfile: docker/tracemaker.Dockerfile
 
-  # Headless Chromium for the Chat's PDFs - pulled, not built.
+  # Headless Chromium for the Chat's PDFs, the Taste renders and the model
+  # screenshots - pulled, not built.
   chrome:
     <<: *work-image
-    profiles: ["pdf", "full"]
+    profiles: ["pdf", "chrome", "full"]
     image: ${REDLINE_CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}
 
 volumes:
