@@ -79,6 +79,11 @@ export class OcpViewer {
    *  (a rebuild) keeps its camera rather than gliding. */
   private shownKey: string | null = null;
 
+  /** The viewer alone, for a shared link's page (share/share-page.ts): no
+   *  Model tab - its build, releases and drawing are the project's, not
+   *  the visitor's. Set before init(). */
+  bare = false;
+
   constructor(private container: HTMLElement) {}
 
   /** The viewer's own toolbar, so a control of ours can sit among its
@@ -131,12 +136,14 @@ export class OcpViewer {
     this.motions = new Motions(this.container);
     // For the page's tests and tools, like `tcv` above.
     (window as unknown as Record<string, unknown>)['redlineMotions'] = this.motions;
-    this.modelTab = new ModelTab(this.container, () => this.viewer);
-    this.modelTab.ensure();
+    if (!this.bare) {
+      this.modelTab = new ModelTab(this.container, () => this.viewer);
+      this.modelTab.ensure();
+    }
     this.treePanel = new TreePanel(this.container);
     // One of our two tabs at a time.
     this.motions.onOpen = () => this.modelTab?.show(false);
-    this.modelTab.onOpen = () => this.motions?.showTab(false);
+    if (this.modelTab) this.modelTab.onOpen = () => this.motions?.showTab(false);
     (window as unknown as Record<string, unknown>)['redlineOcp'] = this;
   }
 

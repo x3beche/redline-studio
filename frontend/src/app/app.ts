@@ -36,7 +36,7 @@ import { navHold, navHref, navParams, navPopped, navSet, navTitle } from './nav'
 import { ROOM_KEYS, RoomId, roomOf } from './nav-url';
 
 /** The sections of Settings an address may name (/settings/<section>; PrefsTab). */
-const SECTIONS = ['profile', 'appearance', 'language', 'llm', 'proxy', 'costs', 'telegram', 'tokens', 'shortcuts', 'topbar',
+const SECTIONS = ['profile', 'shares', 'appearance', 'language', 'llm', 'proxy', 'costs', 'telegram', 'tokens', 'shortcuts', 'topbar',
                   'dashboard', 'admin', 'rustdesk', 'backups'];
 
 @Component({

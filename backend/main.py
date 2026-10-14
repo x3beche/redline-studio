@@ -163,9 +163,6 @@ app.include_router(mcmaster.router)
 # Files on any Parts product: its 3D model (measured), datasheets, drawings, pictures (backend/product_files.py).
 from . import product_files  # noqa: E402
 app.include_router(product_files.router)
-# A spoken chat line or note, written out by the voice job's model (backend/voice.py).
-from . import voice  # noqa: E402
-app.include_router(voice.router)
 # Shared links: a model, board or drawing, read-only, for someone without an account (backend/shares.py).
 from . import shares as shares_api  # noqa: E402
 app.include_router(shares_api.router)
@@ -3467,7 +3464,7 @@ async def notes_delete(nid: str):
 
 
 class NoteSend(BaseModel):
-    room: str = Field(pattern="^(cad|pcb|firmware)$")
+    room: str = Field(pattern="^(cad|pcb)$")
     urgent: bool = False
 
 

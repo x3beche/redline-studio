@@ -413,3 +413,38 @@ def test_cleaning_keeps_the_file_and_drops_the_people():
     assert shares.clean_step(b"no header at all") == b"no header at all"
     assert b"tEXt" not in shares.clean_png(png(b"someone")) and shares.clean_png(png()).startswith(b"\x89PNG")
     assert shares.clean_svg(b"<svg><metadata>x</metadata><!-- y --><g/></svg>") == b"<svg><g/></svg>"
+
+
+# ---------------------------------------------------------------- the pages wear the theme
+
+def test_the_share_pages_wear_the_theme_and_nothing_else():
+    """The dialog, the visitor's page and the Settings list (frontend/src/app/share/)
+    take every colour from the theme: no literal, no token the theme lacks, no
+    Tailwind colour - in light, Spartan Dark and every other theme alike."""
+    import test_theme as th
+    files = sorted(p for p in (th.ROOT / "frontend/src/app/share").iterdir() if p.suffix in (".ts", ".css"))
+    assert {p.name for p in files} >= {"share-dialog.ts", "share-page.ts", "shares-settings.ts", "share.css",
+                                       "share-page.css"}
+    base = set(th.defined(th.blocks(th.CSS.read_text())["default"]))
+    for path in files:
+        assert not th.literals(path), (path.name, th.literals(path))
+        text = th.strip_comments(path.read_text(), css=path.suffix == ".css")
+        loose = {v for v in th.used(text) if not v.startswith(("--tcv-", "--layout-"))} - base
+        assert not loose, (path.name, sorted(loose))
+        assert not th.TAILWIND.findall(text), path.name
+
+
+def test_the_visitor_page_is_started_apart_from_the_app():
+    """/s/<token> starts share/boot.ts and never the app (main.ts), and the
+    page and the server agree on where a link lives (nav-url.ts, app_links.py)."""
+    from backend import app_links
+    root = __import__("test_theme").ROOT / "frontend/src"
+    main = (root / "main.ts").read_text()
+    assert "shareToken(location.pathname)" in main and "import('./app/share/boot')" in main
+    assert main.index("import('./app/share/boot')") < main.index("bootstrapApplication(App")
+    nav = (root / "app/nav-url.ts").read_text()
+    assert "return '/s/' + seg(token);" in nav and app_links.share("x") == "/s/x"
+    page = (root / "app/share/share-page.ts").read_text()
+    # It asks the public routes only, and shows no person.
+    assert set(__import__("re").findall(r"['`](/api/[a-z]+)", page)) == {"/api/public"}
+    assert "created_by" not in page

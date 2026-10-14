@@ -232,3 +232,14 @@ export function enter(v: URLSearchParams, room: RoomId): URLSearchParams {
   out.set('ws', room);
   return out;
 }
+
+/** A shared link's own page, /s/<token> (backend/shares.py, share/share-page.ts). Not a room:
+ *  the app is not started there at all (main.ts), so a visitor with the link, signed in or
+ *  not, gets that one page. backend/app_links.py share() writes the same. */
+const SHARE_PATH = /^\/s\/([A-Za-z0-9_-]{16,128})\/?$/;
+export function shareToken(pathname: string): string | null {
+  return SHARE_PATH.exec(pathname)?.[1] ?? null;
+}
+export function shareHref(token: string): string {
+  return '/s/' + seg(token);
+}

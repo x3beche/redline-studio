@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject,
+  AfterViewInit, Component, ElementRef, Injector, OnDestroy, computed, effect, inject,
   signal, untracked, viewChild,
 } from '@angular/core';
 import { Toast } from '../toast';
@@ -28,6 +28,9 @@ import { viewHash } from './view-hash';
 /** The viewer, with three.js under it, is two megabytes: a chunk of its own,
  *  asked for the moment this module runs, so the shell paints without it. */
 const OCP = import('./ocp');
+/** The menus' "Share…" (share/share-dialog.ts): three dots joined, 24 units. */
+const SHARE_ICON = 'M15.5 5.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0 M3.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0 '
+  + 'M15.5 18.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0 M8.2 10.8l7.6-4 M8.2 13.2l7.6 4';
 import { Markdown, plain } from '../markdown';
 import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
@@ -46,6 +49,7 @@ import { Prefs } from '../preferences';
 import { startFold, whenSettled } from '../fold';
 import { Confirm } from '../confirm';
 import { ContextMenu, MenuEntry } from '../context-menu';
+import { openShare } from '../share/share-api';
 import { navBadge, navHref, navParams } from '../nav';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
@@ -75,6 +79,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   picked = inject(Selection);
   /** The role here: what the note buttons may do (backend/access.py). */
   auth = inject(Auth);
+  private injector = inject(Injector);
   private asks = inject(Questions);
   /** The agent's question and replies in the reader's language (reading.ts). */
   reading = inject(Reading);
@@ -2297,6 +2302,8 @@ export class Editor implements AfterViewInit, OnDestroy {
       { label: 'Open', icon: 'cube', kbd: 'Enter', run: () => { this.pickModel(m); this.phoneShut(); } },
       { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: 'cad', model: m.id }) },
       { label: 'Copy path', icon: 'doc', run: () => navigator.clipboard?.writeText(m.id).then(() => this.flash(t('Copied'))) },
+      !!m.built_at && { label: 'Share…', icon: SHARE_ICON,
+                        run: () => openShare({ kind: 'model', id: m.id, title: m.title || m.name }, this.injector) },
       { sep: true },
       edit && { label: 'Move to another folder', icon: 'move', run: () => this.armMove(m, new Event('menu')) },
       this.auth.can('run') && { label: 'Rebuild', icon: 'rotate', run: () => this.rebuild(m, new Event('menu')) },
@@ -2312,6 +2319,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     ContextMenu.open(e, [
       { label: 'Open', icon: 'board', kbd: 'Enter', run: () => { this.openBoard(b); this.phoneShut(); } },
       { label: 'Open in new tab', icon: 'open', run: () => this.newTab({ ws: 'pcb', board: b.id }) },
+      { label: 'Share…', icon: SHARE_ICON, run: () => openShare({ kind: 'board', id: b.id, title: b.title || b.id }, this.injector) },
       { sep: true },
       this.auth.can('edit') && { label: 'Move to another folder', icon: 'move', run: () => this.armMoveBoard(b, new Event('menu')) },
       { sep: true },

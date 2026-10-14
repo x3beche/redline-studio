@@ -241,9 +241,6 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/releases", "run"),
     # talking with the agents
     ("POST", "/api/chat", "draw"),
-    # a spoken line or note, written out for the box it goes in: whoever may
-    # write the line - it costs a model call (backend/voice.py)
-    ("POST", "/api/voice/transcribe", "draw"),
     # the next question, suggested after an answer: for whoever may write
     # the line it suggests - it costs a model call (backend/suggest.py)
     ("POST", "/api/suggest", "draw"),

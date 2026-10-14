@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
+  Component, ElementRef, Injector, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
 import { moneyIn, moneyTip } from '../money';
@@ -29,6 +29,7 @@ import { T, t } from '../i18n';
 import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { PartAdding, PartDesk, PartModal } from './part-desk';
 import { BoardBodies } from './board-bodies';
+import { openShare } from '../share/share-api';
 
 type SideTab = 'parts' | 'rules' | 'health';
 type Pane = 'layout' | 'schematic' | '3d';
@@ -130,6 +131,9 @@ type BoardView = Pane | 'split' | 'focus';
       <!-- The project packed for a fab: Gerbers, BOM, pick-and-place, PDFs, STEP. -->
       <app-tool icon="tcv-ico-release" tip="Release - pack the project for manufacturing"
                 [disabled]="!here()" (press)="releasing.set(true)" />
+      <!-- A read-only link to the board for someone without an account (share/share-dialog.ts). -->
+      <app-tool icon="tcv-ico-share" tip="Share - a read-only link for someone without an account"
+                [disabled]="!here()" (press)="share()" />
       <!-- The board's source, as an IDE shows it, over the view. -->
       <app-tool icon="tcv-ico-code" [tip]="imported() ? 'An imported board has no atopile source'
                        : ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
@@ -577,6 +581,13 @@ export class RoomPcb implements OnDestroy {
   private prefs = inject(Prefs);
   private activity = inject(Activity);
   private http = inject(HttpClient);
+  private injector = inject(Injector);
+
+  /** Share: a read-only link to the board on show, for someone without an account. */
+  share() {
+    const b = this.here();
+    if (b) openShare({ kind: 'board', id: b._id, title: b.title || b._id }, this.injector);
+  }
   /** The flat drawing on screen, the 3D view, and the pad over either
    *  while the view is held. The 3D one by its shape, not its class: its
    *  class would pull three.js out of the deferred chunk. */

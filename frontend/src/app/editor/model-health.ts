@@ -1,9 +1,10 @@
-import { Component, OnDestroy, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, Injector, OnDestroy, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { ModelEntry } from '../api';
 import { T, t } from '../i18n';
 import { Toast } from '../toast';
 import { TasteStrip } from '../rooms/taste-strip';
+import { openShare } from '../share/share-api';
 
 /** The 3D room's Model tab (model-tab.ts), in the board room's "Board
  *  health" look (rooms/board-health.css), kept small: the open model at a
@@ -100,6 +101,7 @@ function day(iso: string): string {
     .mh-line { font-size: 12px; font-weight: 600; color: var(--ink-bright); min-width: 0; overflow: hidden;
                text-overflow: ellipsis; white-space: nowrap; }
     .mh-act { padding: 1px 7px; font-size: 11px; }
+    .mh-acts { display: flex; gap: 4px; }
     .mh-dim { grid-column: 2 / -1; font-size: 11px; color: var(--ink-dim); min-width: 0; overflow: hidden;
               text-overflow: ellipsis; white-space: nowrap; }
     .mh-warn { grid-column: 2 / -1; font-size: 11px; line-height: 1.35; color: var(--warn); overflow-wrap: anywhere;
@@ -160,10 +162,14 @@ function day(iso: string): string {
     <section class="mh-top" [attr.data-tone]="top().tone">
       <i class="bh-light" aria-hidden="true"></i>
       <span class="mh-line" [title]="m.built_at ?? ''">{{ top().text }}</span>
-      @if (canBuild()) {
-        <button class="tcv-btn mh-act" (click)="build.emit()" [disabled]="m.building"
-                [title]="'Runs the model\\'s script again' | t">{{ 'Build again' | t }}</button>
-      } @else { <span></span> }
+      <span class="mh-acts">
+        <button class="tcv-btn mh-act" (click)="share(false)" [disabled]="!m.built_at"
+                [title]="'A read-only link for someone without an account' | t">{{ 'Share' | t }}</button>
+        @if (canBuild()) {
+          <button class="tcv-btn mh-act" (click)="build.emit()" [disabled]="m.building"
+                  [title]="'Runs the model\\'s script again' | t">{{ 'Build again' | t }}</button>
+        }
+      </span>
       @if (figures()) { <span class="mh-dim">{{ figures() }}</span> }
       @for (w of warnings(); track $index) { <span class="mh-warn" [title]="w">{{ w }}</span> }
     </section>
@@ -229,6 +235,8 @@ function day(iso: string): string {
             @if (d.made) {
               <a class="tcv-btn tcv-btn-accent" [href]="pdfUrl()" target="_blank" rel="noopener">{{ 'Open PDF' | t }}</a>
               <a class="tcv-btn" [href]="pdfUrl() + '?download=1'" download>{{ 'Download' | t }}</a>
+              <button class="tcv-btn" (click)="share(true)"
+                      [title]="'A read-only link to the drawing for someone without an account' | t">{{ 'Share' | t }}</button>
             }
             @if (canBuild() && d.state !== 'making') {
               <button class="tcv-btn" (click)="make(!!d.made)" [disabled]="asking()">
@@ -247,6 +255,7 @@ function day(iso: string): string {
 })
 export class ModelHealth implements OnDestroy {
   private http = inject(HttpClient);
+  private injector = inject(Injector);
   /** The open model's catalog entry. */
   entry = input<ModelEntry | null>(null);
   facts = input<ModelFacts | null>(null);
@@ -281,6 +290,14 @@ export class ModelHealth implements OnDestroy {
     const d = this.draw();
     return d?.key ? `/api/models/${d.id}/drawing.png?k=${d.key}` : '';
   });
+
+  /** Share: a read-only link to the model, or to its drawing (share/share-dialog.ts). */
+  share(drawing: boolean) {
+    const m = this.entry();
+    if (!m) return;
+    openShare({ kind: 'model', id: m.id, title: m.title || m.name, drawing: !!this.draw()?.made,
+                start: drawing ? 'drawing' : 'model' }, this.injector);
+  }
 
   constructor() {
     // The releases of the model's project, again when the Releases window closes.

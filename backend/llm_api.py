@@ -79,28 +79,17 @@ async def get_models(provider: str) -> list[dict]:
 class TestIn(BaseModel):
     provider: str = Field(max_length=40)
     model: str = Field(min_length=1, max_length=200)
-    # The job tested, when it needs more than words: "voice" sends a
-    # moment of quiet audio with the question (backend/voice.py).
-    job: str | None = Field(default=None, max_length=40)
 
 
 @router.post("/test")
 async def test(body: TestIn) -> dict:
-    """A one-word answer from the model, to show the key and the model work
-    - for a job whose model must take audio, with audio it has to take."""
+    """A one-word answer from the model, to show the key and the model work."""
     import time
     if body.provider not in llm.PROVIDERS:
         raise HTTPException(400, f"unknown provider {body.provider!r}")
     t0 = time.monotonic()
-    content: str | list = "Reply with exactly: OK"
     try:
-        if body.job and llm.JOBS.get(body.job, {}).get("audio"):
-            from . import voice
-            await voice.takes_audio(body.provider, body.model)
-            content = [{"type": "text", "text": "A connection test: the recording is silence and needs no "
-                                                "transcript. Reply with the single word OK and nothing else."},
-                       voice.audio_part(voice.silence_wav(), "wav")]
-        d = await llm.complete([{"role": "user", "content": content}],
+        d = await llm.complete([{"role": "user", "content": "Reply with exactly: OK"}],
                                provider=body.provider, model=body.model, max_tokens=200,
                                temperature=0, timeout=60)
     except Exception as exc:                           # noqa: BLE001

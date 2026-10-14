@@ -143,6 +143,8 @@ export const GLYPHS: Record<string, Glyph> = {
   schfile: { s: 'M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z M14 3v5h5', a: 'M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z', k: 'M10 12.5l-2 2 2 2 M14 12.5l2 2-2 2' },
   flash: { s: rect(6, 11, 12, 10, 1.5) + ' M3 14h3 M3 18h3 M18 14h3 M18 18h3 M12 2.5v6 M9 5.5l3 3 3-3', a: rect(6, 11, 12, 10, 1.5), kd: circle(9, 14, 1) },
   monitor: { s: WINDOW, a: WINDOW, k: 'M7 9l3 3-3 3 M13 15h4' },
+  share: { s: circle(18, 5.5, 2.75) + ' ' + circle(6, 12, 2.75) + ' ' + circle(18, 18.5, 2.75) + ' M8.4 10.6l7.2-3.7 M8.4 13.4l7.2 3.7',
+           a: circle(18, 5.5, 2.75) + ' ' + circle(6, 12, 2.75) + ' ' + circle(18, 18.5, 2.75) },
 
   // The pen's tools, docked in the toolbar while the view is held.
   'draw-pen': { s: 'M3.5 15.5c2-5.5 4.5-8 6-6s-.5 6.5 2.5 6.5 3.5-6 5.5-8 3 0 3 2' },
@@ -181,7 +183,7 @@ const LIB = ['axes', 'axes0', 'grid', 'perspective', 'transparent', 'blackedges'
 const OURS: Record<string, string> = {
   layout: 'layout', schematic: 'schematic', model: 'model', split: 'split', focus: 'focus', front: 'board-front',
   tracks: 'tracks', back: 'board-back', fit: 'fit', in: 'in', out: 'out', build: 'build', open: 'open',
-  release: 'release', code: 'code', schfile: 'schfile', flash: 'flash', monitor: 'monitor',
+  release: 'release', code: 'code', schfile: 'schfile', flash: 'flash', monitor: 'monitor', share: 'share',
 };
 const DRAW = ['pen', 'line', 'arrow', 'rect', 'ellipse', 'triangle', 'text'];
 /** The viewer's side panel: which of its elements wears which glyph (the
