@@ -835,7 +835,6 @@ type Ask = { text: string; label: string; go: () => void };
                     }
                   }
                   <rl-cc-changed [cid]="c.id" [steps]="m.steps" />
-                  @if (pkgLine(m); as pk) { <div class="tcv-cc-pkgs" [title]="'Tool packages sent with this line' | t">{{ 'Tools sent' | t }}: {{ pk }}</div> }
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
                 }
@@ -2822,6 +2821,7 @@ export class RoomCommandCode implements OnDestroy {
     const status = m.interrupted ? t('interrupted') + ' - ' + t('The server restarted while it was being written.')
       : m.stopped ? t('stopped') : m.error ? t('failed') : t('finished');
     add('Status', status + (m.error && !m.interrupted ? ` - ${m.error}` : ''));
+    add('Tools sent', this.pkgLine(m));         // the tool packages it was sent - here, not under the answer
     return out;
   }
 
