@@ -143,7 +143,10 @@ def test_a_catalog_link_must_point_at_a_product_of_the_workspace():
     with pytest.raises(ValueError, match="no product"):
         run(inv.add(fake, {"name": "x", "quantity": 1, "catalog": {"manufacturer": "dogus", "product": "zz"}}, ME))
     with pytest.raises(ValueError, match="no manufacturer"):
-        run(inv.add(fake, {"name": "x", "quantity": 1, "catalog": {"manufacturer": "nobody"}}, ME))
+        run(inv.add(fake, {"name": "x", "quantity": 1, "catalog": {"manufacturer": "nobody", "product": "p"}}, ME))
+    # A stock line counts one product: a maker alone is not one.
+    with pytest.raises(ValueError, match="say the product"):
+        run(inv.add(fake, {"name": "x", "quantity": 1, "catalog": {"manufacturer": "dogus"}}, ME))
 
 
 def test_export_and_import_round_trip():
@@ -168,7 +171,7 @@ def test_export_and_import_round_trip():
     # A catalog link to nothing here is dropped, not fatal.
     got = run(inv.import_doc(other, {"format": inv.FORMAT, "items": [
         {"name": "Hinge", "quantity": 1, "catalog": {"manufacturer": "gone", "product": "p"}}]}, ME))
-    assert got["added"] == 1 and got["items"][0]["catalog"] is None
+    assert got["added"] == 1 and got["items"][0]["catalog"]["manufacturer"] == "own"
 
 
 # ---------------------------------------------------------------- the API, per workspace
@@ -196,7 +199,7 @@ def test_an_item_from_start_to_finish(db):  # noqa: F811
     assert a.get("/api/inventory/stats").json()["low"] == 1
     assert a.get(f"/api/inventory/{iid}").json()["name"] == "Fan 40mm"
     assert a.post("/api/inventory", json={"name": "x", "quantity": -1}).status_code == 400
-    assert a.post("/api/inventory", json={"quantity": 1}).status_code == 422
+    assert a.post("/api/inventory", json={"quantity": 1}).status_code == 400          # a name, or a product to take it from
     assert a.delete(f"/api/inventory/{iid}").json() == {"deleted": iid}
     assert a.get(f"/api/inventory/{iid}").status_code == 404
 
@@ -325,7 +328,8 @@ def test_the_catalog_routes(db):  # noqa: F811
     assert "no product" in r[2]["error"]
     st = a.get("/api/inventory/stock?manufacturer=dogus").json()
     assert {k: v["quantity"] for k, v in st.items()} == {"p1": 22, "p2": 2}
-    assert set(a.get("/api/inventory/stock").json()) == {"dogus"}
+    # "tmp" had no product to count: it counts one of Own items.
+    assert set(a.get("/api/inventory/stock").json()) == {"dogus", "own"}
     assert a.post("/api/inventory/from-catalog", json={"manufacturer": "dogus", "product": "p1",
                                                        "quantity": -1}).status_code == 400
     # Another space has no such catalog, and sees none of this stock.
@@ -480,3 +484,62 @@ def test_a_catalog_products_pictures_come_with_its_item(db):  # noqa: F811
     listed = {x["id"]: x for x in a.get("/api/inventory").json()}
     assert listed[r["id"]]["images"] == ["https://x/a.jpg", "https://x/b.jpg"]
     assert a.get(f"/api/inventory/{r['id']}").json()["images"][0] == "https://x/a.jpg"
+
+
+# ---------------------------------------------------------------- every line counts a Parts product
+
+def test_a_line_with_nothing_to_point_at_gets_an_own_item():
+    fake = FakeDb()
+    a, _ = run(inv.add(fake, {"name": "PLA grey 1 kg", "quantity": 2, "unit": "roll", "category": "Filament",
+                              "mpn": "PLA-GR", "price": 350, "currency": "TRY", "location": "Cabinet"}, ME))
+    assert a["catalog"]["manufacturer"] == "own" and a["catalog"]["product_name"] == "PLA grey 1 kg"
+    own = list(fake["own_items"].docs.values())
+    assert len(own) == 1 and own[0]["sku"] == "PLA-GR" and own[0]["price"]["amount"] == 350
+    # The product is the Own items source's, read like any catalog product.
+    from backend import catalog_builtin
+    m, p = run(catalog_builtin.find_product(fake, "own", a["catalog"]["product"]))
+    assert m["name"] == "Own items" and p["category"] == "Filament"
+    # The same thing in another unit: a line of its own, on the same product.
+    b, merged = run(inv.add(fake, {"name": "PLA grey 1 kg", "quantity": 500, "unit": "g", "mpn": "PLA-GR"}, ME))
+    assert not merged and b["catalog"]["product"] == a["catalog"]["product"] and len(fake["own_items"].docs) == 1
+    st = run(inv.stock_of(fake, "own"))[ "own"][a["catalog"]["product"]]
+    assert st["quantity"] == 2 and st["unit"] == "roll" and len(st["items"]) == 2
+    # A line is never left counting nothing.
+    with pytest.raises(ValueError, match="stays a catalog product's"):
+        run(inv.patch(fake, a["_id"], {"catalog": None}, ME))
+
+
+def test_lines_from_before_are_given_a_product_once_and_kept_whole():
+    fake = FakeDb()
+    run(fake["inventory"].insert_one({"_id": "old1", "name": "M3 nut", "quantity": 120, "unit": "pcs", "location": "A1",
+                                      "category": "Fasteners", "log": [{"id": "x", "kind": "added", "delta": 120}]}))
+    run(fake["inventory"].insert_one({"_id": "old2", "name": "Hinge", "quantity": 1, "unit": "pcs",
+                                      "catalog": {"manufacturer": "dogus", "product": ""}}))
+    _catalog(fake)
+    done = run(inv.home_unlinked(fake))
+    assert {d["id"] for d in done} == {"old1", "old2"}
+    nut = fake["inventory"].docs["old1"]
+    assert nut["catalog"]["manufacturer"] == "own" and nut["quantity"] == 120 and nut["location"] == "A1"
+    assert nut["log"][0]["id"] == "x" and nut["log"][-1]["fields"] == ["catalog"]
+    # Run again: nothing to do, nothing made twice.
+    assert run(inv.home_unlinked(fake)) == [] and len(fake["own_items"].docs) == 2
+
+
+def test_own_items_take_the_catalog_product_routes(db):  # noqa: F811
+    a = person(db, "a")
+    r = a.post("/api/manufacturers/own/products", json={"name": "Cable 2x0.5 red", "category": "Cable", "sku": "C-205"})
+    assert r.status_code == 200, r.text
+    pid = r.json()["product"]["id"]
+    assert r.json()["manufacturer"]["id"] == "own" and r.json()["manufacturer"]["product_count"] == 1
+    assert a.post("/api/manufacturers/own/products", json={"name": "Other", "sku": "C-205"}).status_code == 409
+    r = a.patch(f"/api/manufacturers/own/products/{pid}", json={"price": "12,50", "currency": "TRY"})
+    assert r.status_code == 200 and r.json()["product"]["price"]["amount"] == 12.5
+    line = a.post("/api/inventory/from-catalog", json={"manufacturer": "own", "product": pid, "quantity": 10,
+                                                      "unit": "m", "location": "Drawer 2"}).json()["item"]
+    assert line["product"]["name"] == "Cable 2x0.5 red" and line["product"]["maker"] == "Own items"
+    got = a.get(f"/api/inventory/product/own/{pid}").json()
+    assert [x["quantity"] for x in got] == [10] and got[0]["log"][0]["kind"] == "added"
+    grid = a.get("/api/manufacturers/products", params={"held": "1"}).json()
+    assert [p["name"] for p in grid["items"]] == ["Cable 2x0.5 red"]
+    assert a.get("/api/manufacturers/products", params={"held": "low"}).json()["items"] == []
+    assert a.post("/api/manufacturers/own/products/delete", json={"ids": [pid]}).json()["deleted"] == 1

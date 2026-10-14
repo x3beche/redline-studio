@@ -46,10 +46,12 @@ SCOPED = frozenset({
     "manufacturers", "manufacturer_jobs", "manufacturer_pages",
     # the catalog's runs of "Re-read all products", each with its report (backend/manufacturers.py)
     "catalog_checks",
-    # what is on hand: items, quantities, where they are (backend/inventory.py)
+    # stock on the Parts page: how many of each product, where they are (backend/inventory.py)
     "inventory",
     # parts and models saved from McMaster-Carr and GrabCAD, with their CAD files (backend/linked.py)
     "linked_parts",
+    # the Parts page's Own items: things no site sells, typed in by hand (backend/catalog_own.py)
+    "own_items",
     # the agent sessions' heartbeats: who holds a note, and whether it is still there (backend/asks.py)
     "agent_sessions",
 })

@@ -23,7 +23,7 @@ Fetching is plain HTTP (httpx): no page's script is ever run. Each request
 is refused unless it is http(s) to a public address - checked again on
 every redirect - so a site cannot point the crawler into this machine's
 network. How it goes out is an order of routes (backend/netroutes.py): the
-Product Catalog's default order of Settings > Proxy & Data, or a maker's
+Parts page's default order of Settings > Proxy & Data, or a maker's
 own. `local` is directly from here, `proxy` the proxy of that page
 (backend/netproxy.py's, metered and logged there like the part lookups),
 `jina` Jina Reader (backend/jina.py), which reads a page in a real browser
@@ -1925,7 +1925,7 @@ def _host(url: str) -> str:
 
 async def create(db, url: str, name: str = "", notes: str = "", route=None, by: dict | None = None) -> dict:
     """A new maker. `route`: its own order of routes, or None (or "default")
-    to follow the Product Catalog's default order."""
+    to follow the Parts page's default order."""
     u = normalise(url if "://" in url else "https://" + url.strip())
     if not u:
         raise ValueError("give the site's address, like https://www.example.com")
@@ -2033,12 +2033,10 @@ def _clashes(products: list[dict], p: dict, but: str | None = None) -> dict | No
     return next((x for x in products if x.get("id") != but and product_key(x) == k), None)
 
 
-async def add_product(db, mid: str, fields: dict, by: dict | None = None) -> dict:
-    doc = await get(db, mid)
-    if not doc:
-        raise LookupError(f"no manufacturer {mid}")
+def new_product(fields: dict, have: list[dict], by: dict | None = None) -> dict:
+    """A product added by hand to a catalog that holds `have`: checked,
+    with its id and who added it (Clash, ValueError)."""
     p = manual_product(fields)
-    have = doc.get("products") or []
     if _clashes(have, p):
         raise Clash(f"\"{p['name']}\" is already in the catalog" + (f" (code {p['sku']})" if p["sku"] else ""))
     if len(have) >= MAX_PRODUCTS:
@@ -2049,6 +2047,15 @@ async def add_product(db, mid: str, fields: dict, by: dict | None = None) -> dic
     hist = remember([], _reading(p, p["added_at"]))
     if hist:
         p["history"] = hist
+    return p
+
+
+async def add_product(db, mid: str, fields: dict, by: dict | None = None) -> dict:
+    doc = await get(db, mid)
+    if not doc:
+        raise LookupError(f"no manufacturer {mid}")
+    have = doc.get("products") or []
+    p = new_product(fields, have, by)
     await db[COLL].update_one({"_id": mid}, {"$set": {"products": have + [p], "updated_at": _now()}})
     return p
 
@@ -2063,6 +2070,16 @@ async def edit_product(db, mid: str, pid: str, fields: dict, by: dict | None = N
     old = next((x for x in have if x.get("id") == pid), None)
     if not old:
         raise LookupError(f"no product {pid}")
+    p = revised_product(old, have, fields, by)
+    await db[COLL].update_one({"_id": mid}, {"$set": {"products": [p if x.get("id") == pid else x for x in have],
+                                                      "updated_at": _now()}})
+    return p
+
+
+def revised_product(old: dict, have: list[dict], fields: dict, by: dict | None = None) -> dict:
+    """`old` as changed by hand (the fields given; None leaves one as it
+    is), in a catalog that holds `have`."""
+    pid = old.get("id")
     f = {k: v for k, v in fields.items() if v is not None}
     was = old.get("price") or {}
     if any(k in f for k in ("price", "currency", "vat")):
@@ -2098,8 +2115,6 @@ async def edit_product(db, mid: str, pid: str, fields: dict, by: dict | None = N
     then = _reading(old, "")
     if now and (not then or any(now.get(k) != then.get(k) for k in ("amount", "currency", "vat", "stock", "qty"))):
         p["history"] = remember(old.get("history"), now)
-    await db[COLL].update_one({"_id": mid}, {"$set": {"products": [p if x.get("id") == pid else x for x in have],
-                                                      "updated_at": _now()}})
     return p
 
 
@@ -3027,7 +3042,7 @@ class MakerIn(BaseModel):
     url: str = Field(min_length=3, max_length=500)
     name: str = Field(default="", max_length=120)
     notes: str = Field(default="", max_length=4000)
-    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Parts page's.
     route: list[str] | str | None = None
     explore: bool = True
     only: bool = False              # the address is one page to read, not a site to explore
@@ -3039,19 +3054,19 @@ class MakerPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=4000)
     summary: str | None = Field(default=None, max_length=3000)
     url: str | None = Field(default=None, min_length=3, max_length=500)
-    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Parts page's.
     route: list[str] | str | None = None
 
 
 class ExploreIn(BaseModel):
-    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Parts page's.
     route: list[str] | str | None = None
 
 
 class ReadPageIn(BaseModel):
     urls: list[str] = Field(min_length=1, max_length=ONLY_MAX)
     follow: bool = False
-    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Parts page's.
     route: list[str] | str | None = None
 
 
@@ -3213,15 +3228,29 @@ def grid_item(d: dict, p: dict) -> dict:
 @router.get("/products")
 async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str = "", min: float | None = None,
                        max: float | None = None, stock: str = "", sort: str = "new", page: int = 1, size: int = 60,
-                       check: str = ""):
+                       check: str = "", held: str = ""):
     """The products of every maker, for the catalog's grid: filtered,
     sorted, a page of them - and what the filters can choose from, and
-    how many need checking (`check`: only those)."""
+    how many need checking (`check`: only those). `held`: only what is on
+    hand in the inventory ("1"), or on hand at or below its minimum ("low")
+    - from every source then, the built-in ones too."""
+    from . import catalog_own
+    from . import inventory as inv
     db = _db()
-    # A built-in source's products only when it is asked for: the overview is the workspace's own sites.
-    docs = [await catalog_builtin.maker(db, maker)] if catalog_builtin.is_builtin(maker) else await listing(db)
+    # A built-in source's products only when it is asked for: the overview is the workspace's own sites and its
+    # own items - or, for what is on hand, every source.
+    if catalog_builtin.is_builtin(maker):
+        docs = [await catalog_builtin.maker(db, maker)]
+    elif held in ("1", "low"):
+        docs = [*await catalog_builtin.makers(db), *await listing(db)]
+    else:
+        docs = [await catalog_builtin.maker(db, catalog_own.MID), *await listing(db)]
     rows = all_products(docs, q[:200], cat[:120], maker[:40], seller[:200], min, max, stock,
                         sort if sort in SORTS else "new", check in ("1", "true", "yes"))
+    if held in ("1", "low"):
+        have = await inv.stock_of(db)
+        rows = [(d, p) for d, p in rows if (s := (have.get(d["_id"]) or {}).get(str(p.get("id"))))
+                and (s["low"] if held == "low" else s["quantity"] > 0)]
     size = max_(1, min_(size, 200))
     page = max_(1, page)
     every = [(d, p) for d in docs for p in d.get("products") or []]
@@ -3471,6 +3500,8 @@ async def api_read_page(mid: str, body: ReadPageIn):
 
 
 async def _maker_out(db, mid: str) -> dict:
+    if catalog_builtin.is_builtin(mid):
+        return out(await catalog_builtin.maker(db, mid))
     doc = await get(db, mid)
     if not doc:
         _404(mid)
@@ -3490,8 +3521,10 @@ def _product_call(exc: Exception):
 async def api_product_add(mid: str, body: ProductIn):
     """A product added by hand; kept through a full exploration."""
     db = _db()
+    src = catalog_builtin.writable(mid)
     try:
-        p = await add_product(db, mid, body.model_dump(), actors.current())
+        p = await (src.add(db, body.model_dump(), actors.current()) if src
+                   else add_product(db, mid, body.model_dump(), actors.current()))
     except (LookupError, Clash, ValueError) as exc:
         _product_call(exc)
     return {"product": p, "manufacturer": await _maker_out(db, mid)}
@@ -3500,8 +3533,9 @@ async def api_product_add(mid: str, body: ProductIn):
 @router.post("/{mid}/products/delete")
 async def api_products_delete(mid: str, body: ProductIds):
     db = _db()
+    src = catalog_builtin.writable(mid)
     try:
-        n = await delete_products(db, mid, body.ids)
+        n = await (src.delete(db, body.ids) if src else delete_products(db, mid, body.ids))
     except LookupError as exc:
         _product_call(exc)
     return {"deleted": n, "manufacturer": await _maker_out(db, mid)}
@@ -3510,8 +3544,10 @@ async def api_products_delete(mid: str, body: ProductIds):
 @router.patch("/{mid}/products/{pid}")
 async def api_product_edit(mid: str, pid: str, body: ProductPatch):
     db = _db()
+    src = catalog_builtin.writable(mid)
     try:
-        p = await edit_product(db, mid, pid, body.model_dump(), actors.current())
+        p = await (src.edit(db, pid, body.model_dump(), actors.current()) if src
+                   else edit_product(db, mid, pid, body.model_dump(), actors.current()))
     except (LookupError, Clash, ValueError) as exc:
         _product_call(exc)
     return {"product": p, "manufacturer": await _maker_out(db, mid)}
@@ -3543,8 +3579,9 @@ async def api_product_correct(mid: str, pid: str, body: CorrectIn):
 @router.delete("/{mid}/products/{pid}")
 async def api_product_delete(mid: str, pid: str):
     db = _db()
+    src = catalog_builtin.writable(mid)
     try:
-        n = await delete_products(db, mid, [pid])
+        n = await (src.delete(db, [pid]) if src else delete_products(db, mid, [pid]))
     except LookupError as exc:
         _product_call(exc)
     if not n:

@@ -1,4 +1,4 @@
-"""The Product Catalog's built-in sources: sellers every workspace has from
+"""The Parts page's built-in sources: sellers every workspace has from
 the start, read by the system rather than explored from a site.
 
 A built-in source is registered here once - its id, name, site, how its
@@ -12,8 +12,16 @@ they come from.
 LCSC is the first: the parts drawer (backend/catalog_lcsc.py). McMaster-Carr
 and GrabCAD are search-and-link sources (backend/linked.py: found through a
 web search, saved by the person with the CAD files they downloaded; view
-"linked"). JLCMC and other component sources are added the same way: a
-module that calls `register` at import, and its name in `_MODULES`.
+"linked"). Own items (backend/catalog_own.py) is the workspace's own
+things that no site sells - filament, its own screws - typed in by hand: a
+source that takes writes (`add`, `edit`, `delete`), so the catalog's
+product routes reach it. JLCMC and other component sources are added the
+same way: a module that calls `register` at import, and its name in
+`_MODULES`.
+
+`find_product` is the one way to a product by its maker's id and its own,
+whichever kind of maker it is: what the inventory links each stock line to
+(backend/inventory.py) and what a card sent in Chat reads (backend/dm.py).
 """
 
 from __future__ import annotations
@@ -37,6 +45,10 @@ class Source:
     view: str
     # Its products as catalog products, for the asking workspace.
     products: Callable[[object], Awaitable[list[dict]]]
+    # A source a person writes to (Own items): a product added, changed, dropped - as a site's by hand.
+    add: Callable[..., Awaitable[dict]] | None = None
+    edit: Callable[..., Awaitable[dict]] | None = None
+    delete: Callable[..., Awaitable[int]] | None = None
 
 
 SOURCES: dict[str, Source] = {}
@@ -49,6 +61,12 @@ def register(src: Source) -> Source:
 
 def is_builtin(mid: str) -> bool:
     return mid in SOURCES
+
+
+def writable(mid: str) -> Source | None:
+    """The source a person adds products to by hand, else None."""
+    src = SOURCES.get(mid)
+    return src if src and src.add else None
 
 
 async def maker(db, mid: str) -> dict:
@@ -71,7 +89,23 @@ async def makers(db) -> list[dict]:
     return [await maker(db, mid) for mid in SOURCES]
 
 
+async def maker_doc(db, mid: str) -> dict | None:
+    """A maker with its products, by its id: a built-in source or one of the workspace's sites."""
+    if mid in SOURCES:
+        return await maker(db, mid)
+    return await db["manufacturers"].find_one({"_id": mid})
+
+
+async def find_product(db, mid: str, pid: str) -> tuple[dict, dict] | None:
+    """(maker, product) by their ids, or None."""
+    if not mid or not pid:
+        return None
+    m = await maker_doc(db, mid)
+    p = next((x for x in (m or {}).get("products") or [] if str(x.get("id")) == str(pid)), None)
+    return (m, p) if p else None
+
+
 # The modules that register a source.
-_MODULES = ("catalog_lcsc", "mcmaster", "grabcad")
+_MODULES = ("catalog_lcsc", "mcmaster", "grabcad", "catalog_own")
 for _m in _MODULES:
     import_module(f"{__package__}.{_m}")

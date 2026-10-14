@@ -505,7 +505,7 @@ def test_a_manufacturer_from_start_to_finish(db, web, monkeypatch):  # noqa: F81
         {"id": "p2", "name": "Teflon Rulman", "category": "Rulman", "specs": {}}]}}))
     # The built-in sources come first, for every workspace and empty or not (backend/catalog_builtin.py).
     every = a.get("/api/manufacturers").json()
-    assert [x["id"] for x in every if x.get("builtin")] == ["lcsc", "mcmaster", "grabcad"] and every[0]["id"] == "lcsc"
+    assert [x["id"] for x in every if x.get("builtin")] == ["lcsc", "mcmaster", "grabcad", "own"] and every[0]["id"] == "lcsc"
     listed = [x for x in every if not x.get("builtin")]
     assert [x["id"] for x in listed] == [mid] and listed[0]["product_count"] == 2 and "products" not in listed[0]
     assert [x["id"] for x in a.get("/api/manufacturers?q=injection").json()] == [mid]
@@ -517,7 +517,7 @@ def test_a_manufacturer_from_start_to_finish(db, web, monkeypatch):  # noqa: F81
     assert len(a.get(f"/api/manufacturers/{mid}").json()["products"]) == 2
     # another space sees none of it - only the built-in sources, empty
     assert [(x["id"], x["product_count"]) for x in b.get("/api/manufacturers").json()] == \
-        [("lcsc", 0), ("mcmaster", 0), ("grabcad", 0)]
+        [("lcsc", 0), ("mcmaster", 0), ("grabcad", 0), ("own", 0)]
     assert b.get(f"/api/manufacturers/{mid}").status_code == 404
     assert b.post(f"/api/manufacturers/{mid}/explore", json={}).status_code == 404
     assert b.get("/api/manufacturers/search?q=mentese").json() == []
@@ -1057,7 +1057,7 @@ def test_prices_by_hand_and_the_grid(db, web, monkeypatch):  # noqa: F811
     g = a.get("/api/manufacturers/products?size=2&page=2&sort=name").json()
     assert g["page"] == 2 and len(g["items"]) == 2 and g["total"] == 4
     assert ["Filament", 1] in g["categories"] and g["price"]["min"] == 12.5 and set(g["price"]["currencies"]) == {"TRY", "USD"}
-    assert {m["id"] for m in g["makers"]} == {mid, other}
+    assert {m["id"] for m in g["makers"]} == {mid, other, "own"}     # and Own items, the overview's too
 
 
 ILERI = """<html><head><title>SFU 1204 Mil - ileri3d</title></head><body>

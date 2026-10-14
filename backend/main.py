@@ -142,7 +142,7 @@ app.include_router(taste_check.router)
 # Manufacturers: makers' catalogs, explored from their sites (backend/manufacturers.py).
 from . import manufacturers as manufacturers_api  # noqa: E402
 app.include_router(manufacturers_api.router)
-# Inventory: what is on hand, how many and where (backend/inventory.py).
+# Stock on the Parts page: how many of each product are on hand, and where (backend/inventory.py).
 from . import inventory as inventory_api  # noqa: E402
 app.include_router(inventory_api.router)
 # McMaster-Carr and GrabCAD: parts and models found through a web search, never

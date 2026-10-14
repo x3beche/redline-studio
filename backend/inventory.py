@@ -1,14 +1,27 @@
-"""Inventory ("Envanter"): what is on hand - each thing kept, how many,
-and where it is.
+"""Stock ("Envanter"): how many of each Parts product are on
+hand, and where.
 
-An item is a name, a quantity in a unit (pcs, m, kg, roll, box... or any
-short word), where it lies (a shelf, a bin, a box - free text), a
-category, its part numbers (the maker's MPN, an LCSC number like C25744),
-its maker, links to what the app already knows - a Product Catalog
-product (backend/manufacturers.py: a manufacturer's id and the product's
-id), the LCSC part (the PCB room's parts drawer), the board or model it
-is for - an optional minimum (below it the item is low), an optional unit
-price, notes and tags, who added it and who changed it last.
+What a thing is lives in Parts (backend/manufacturers.py,
+and its built-in sources - the LCSC drawer, McMaster-Carr, GrabCAD, Own
+items: backend/catalog_builtin.py): its name, maker, part number, price,
+specs, pages, datasheet and 3D. A stock line (an "item" here, the
+`inventory` collection) is the counting of one of them: `catalog`
+{manufacturer, product} names the product, and the line keeps a quantity
+in a unit (pcs, m, kg, roll, box... or any short word), where it lies (a
+shelf, a bin, a box - free text), an optional minimum (at or below it the
+line is low), notes, and who added and changed it. The name, part numbers,
+category and maker it also keeps are a copy taken from the product when it
+was linked - for searching and for the lines from before - and the page
+shows the product's own. A product may have several lines (in two units,
+or two places); `stock_of` adds them up.
+
+Every line points at a product. One added without one - "200 M3 nuts on
+shelf A" from the Chat, a pasted list, a file - gets one first (`_home`):
+the LCSC drawer's part when it names one the drawer holds, else a product
+of Own items (backend/catalog_own.py) made from its words, or the one of
+the same code or name already there. Lines kept before this rule are given
+theirs by `home_unlinked` (tools/inventory_home.py), which changes nothing
+else of them.
 
 Each item keeps a short log of what happened to it: added, each quantity
 change (+/- with the reason and who - "used 4 for the fan board"), merges
@@ -30,7 +43,7 @@ Every item has a type - filament, screws, nuts, an electronic component
 (with its kind: resistor, IC...), a module, cable... (backend/inventory_types.py).
 A person may set it; else it is worked out from the item's own words each
 time it is read, so items kept before types existed have one too. The
-Inventory groups by it, and the Chat can search by it.
+catalog's stock view groups by it, and the Chat can search by it.
 """
 
 from __future__ import annotations
@@ -45,7 +58,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from . import access, actors
+from . import access, actors, catalog_builtin
 from . import inventory_types as kinds
 
 router = APIRouter(prefix="/api/inventory")
@@ -181,7 +194,7 @@ def clean(raw: dict, partial: bool = False) -> dict:
                 out[k] = str(v or "").strip()[:n]
             else:
                 out[k] = re.sub(r"\s+", " ", str(v or "").strip())[:n]
-    if "name" in out and not out["name"]:
+    if "name" in out and not out["name"] and not (raw.get("catalog") and not partial):
         raise ValueError("an item needs a name")
     if "quantity" in raw or not partial:
         out["quantity"] = number(raw.get("quantity", 0) if not partial else raw.get("quantity"), "the quantity")
@@ -196,7 +209,7 @@ def clean(raw: dict, partial: bool = False) -> dict:
 
 
 def _catalog_ref(raw: Any) -> dict | None:
-    """A Product Catalog product named by its manufacturer's id and its own
+    """A Parts product named by its manufacturer's id and its own
     (checked against the catalog by `link_catalog`)."""
     if not raw:
         return None
@@ -206,6 +219,8 @@ def _catalog_ref(raw: Any) -> dict | None:
     pid = str(raw.get("product") or raw.get("product_id") or "").strip()[:80]
     if not mid:
         return None
+    if not pid:
+        raise ValueError("a stock line counts one catalog product: say the product, not only its maker")
     keep = {"manufacturer": mid, "product": pid}
     for k in ("manufacturer_name", "product_name", "url", "sku"):
         if raw.get(k):
@@ -215,21 +230,19 @@ def _catalog_ref(raw: Any) -> dict | None:
 
 async def link_catalog(db, ref: dict | None) -> dict | None:
     """The catalog link with the names it points at, read from the Product
-    Catalog of this workspace; a ValueError when there is no such product."""
+    Catalog of this workspace - a site's or a built-in source's product; a
+    ValueError when there is no such product."""
     if not ref:
         return None
-    m = await db["manufacturers"].find_one({"_id": ref["manufacturer"]})
+    m = await catalog_builtin.maker_doc(db, ref["manufacturer"])
     if not m:
-        raise ValueError(f"there is no manufacturer {ref['manufacturer']!r} in the Product Catalog")
-    out = {"manufacturer": m["_id"], "manufacturer_name": m.get("name") or m["_id"], "product": ref.get("product") or ""}
-    if out["product"]:
-        p = next((x for x in m.get("products") or [] if x.get("id") == out["product"]), None)
-        if not p:
-            raise ValueError(f"{m.get('name') or m['_id']} has no product {out['product']!r} in its catalog")
-        out.update(product_name=p.get("name") or "", url=p.get("url") or "", sku=p.get("sku") or "",
-                   category=p.get("category") or "")
-    else:
-        out["url"] = m.get("url") or ""
+        raise ValueError(f"there is no manufacturer {ref['manufacturer']!r} in Parts")
+    p = next((x for x in m.get("products") or [] if str(x.get("id")) == ref["product"]), None)
+    if not p:
+        raise ValueError(f"{m.get('name') or m['_id']} has no product {ref['product']!r} in its catalog")
+    out = {"manufacturer": m["_id"], "manufacturer_name": m.get("name") or m["_id"], "product": str(p["id"]),
+           "product_name": p.get("name") or "", "url": p.get("url") or "", "sku": p.get("sku") or "",
+           "category": p.get("category") or ""}
     return {k: v for k, v in out.items() if v not in (None, "")} | {"product": out["product"]}
 
 
@@ -371,7 +384,7 @@ def _words(ref: str) -> list[str]:
 
 
 async def resolve_catalog(db, maker: str, product: str) -> tuple[dict, dict]:
-    """A Product Catalog product named the way a person says it: the
+    """A Parts product named the way a person says it: the
     manufacturer by its id or words of its name or site, the product by its
     id or words of its name, code or specs. A ValueError names the
     candidates when the words fit several or none."""
@@ -379,9 +392,9 @@ async def resolve_catalog(db, maker: str, product: str) -> tuple[dict, dict]:
     maker, product = str(maker or "").strip(), str(product or "").strip()
     if not maker or not product:
         raise ValueError("say the manufacturer and the product")
-    m = await db["manufacturers"].find_one({"_id": maker})
+    m = await catalog_builtin.maker_doc(db, maker)
     if not m:
-        every = [d async for d in db["manufacturers"].find({})]
+        every = [*await catalog_builtin.makers(db), *[d async for d in db["manufacturers"].find({})]]
         w = _words(maker)
         hits = [d for d in every if w and all(x in fold(f"{d['_id']} {d.get('name')} {d.get('domain')} {d.get('url')}")
                                               for x in w)]
@@ -390,7 +403,7 @@ async def resolve_catalog(db, maker: str, product: str) -> tuple[dict, dict]:
             raise ValueError(f"{len(hits) or 'no'} manufacturer(s) match {maker!r}" + (f": {names}" if names else ""))
         m = hits[0]
     prods = m.get("products") or []
-    p = next((x for x in prods if x.get("id") == product), None)
+    p = next((x for x in prods if str(x.get("id")) == product), None)
     if not p:
         w = _words(product)
         hits = [x for x in prods if w and all(y in _phay(x) for y in w)]
@@ -413,7 +426,7 @@ async def from_catalog(db, maker: str, product: str, quantity: Any = 1, unit: st
     m, p = await resolve_catalog(db, maker, product)
     raw = {"name": p.get("name") or p.get("id"), "quantity": quantity, "unit": unit, "location": location,
            "catalog": {"manufacturer": m["_id"], "product": p["id"]}, "notes": note}
-    return await add(db, raw, by, note or "taken from the Product Catalog", rows=rows)
+    return await add(db, raw, by, note or "taken from Parts", rows=rows)
 
 
 def stats(rows: list[dict]) -> dict:
@@ -449,15 +462,55 @@ async def _fields(db, raw: dict, partial: bool = False) -> dict:
         pcat = cat.pop("category", "")
         # A product from the catalog lends what the item does not say.
         if not partial:
-            f["manufacturer"] = f.get("manufacturer") or cat.get("manufacturer_name") or ""
-            f["mpn"] = f.get("mpn") or cat.get("sku") or ""
+            f["manufacturer"] = f.get("manufacturer") or (cat.get("manufacturer_name") if cat["manufacturer"] not in
+                                                          ("own", "lcsc") else "") or ""
+            f["mpn"] = f.get("mpn") or (cat.get("sku") if cat["manufacturer"] != "lcsc" else "") or ""
+            f["lcsc"] = f.get("lcsc") or (cat["product"] if cat["manufacturer"] == "lcsc" else "")
             f["category"] = f.get("category") or pcat or ""
+            f["name"] = f.get("name") or cat.get("product_name") or cat["product"]
+    return f
+
+
+def own_fields(f: dict) -> dict:
+    """What an item says of what it is, as an Own items product's fields."""
+    specs = {k: v for k, v in (("Maker", f.get("manufacturer")), ("MPN", f.get("mpn")), ("LCSC", f.get("lcsc"))) if v}
+    out = {"name": f.get("name") or "", "category": f.get("category") or "", "sku": f.get("mpn") or f.get("lcsc") or "",
+           "specs": specs}
+    if f.get("price") is not None:
+        out.update(price=f["price"], currency=f.get("currency") or "")
+    return out
+
+
+async def _home(db, f: dict, by: dict | None) -> dict:
+    """`f` with a catalog product to count, when it names none: the LCSC
+    drawer's part it names, else an Own items product made from its words
+    (or the one of the same code or name) - see the module's words."""
+    if linked_to(f):
+        return f
+    from . import catalog_own, lcsc
+    link = None
+    if f.get("lcsc"):
+        try:
+            if await lcsc.holds(db, f["lcsc"]):
+                link = await link_catalog(db, {"manufacturer": "lcsc", "product": f["lcsc"]})
+        except Exception:                               # noqa: BLE001 - the drawer is only one place to look
+            link = None
+    if not link:
+        from .manufacturers import Clash
+        try:
+            p = await catalog_own.ensure(db, own_fields(f), _who(by))
+        except Clash as exc:                            # the code is there under another name: that one
+            raise ValueError(str(exc)) from exc
+        link = await link_catalog(db, {"manufacturer": catalog_own.MID, "product": p["id"]})
+    f = dict(f)
+    f["catalog"] = link
+    f["catalog"].pop("category", None)
     return f
 
 
 async def create(db, raw: dict, by: dict | None = None, reason: str = "") -> dict:
     """A new item, as it was given (no merging - see `add`)."""
-    return await _insert(db, await _fields(db, raw), by, reason)
+    return await _insert(db, await _home(db, await _fields(db, raw), by), by, reason)
 
 
 async def _insert(db, f: dict, by: dict | None, reason: str) -> dict:
@@ -477,7 +530,7 @@ async def add(db, raw: dict, by: dict | None = None, reason: str = "", merge: bo
     f = await _fields(db, raw)
     have = await find_same(db, f, rows) if merge else None
     if not have:
-        return await _insert(db, f, by, reason), False
+        return await _insert(db, await _home(db, f, by), by, reason), False
     who, now = _who(by), _now()
     after = round(float(have.get("quantity") or 0) + f["quantity"], 6)
     if after > MAX_QTY:
@@ -518,6 +571,8 @@ async def patch(db, iid: str, raw: dict, by: dict | None = None, reason: str = "
     if not have:
         return None
     f = await _fields(db, raw, partial=True)
+    if "catalog" in f and not f["catalog"]:
+        raise ValueError("a stock line stays a catalog product's: link it to another product rather than to none")
     changed = {k: v for k, v in f.items() if have.get(k) != v}
     if not changed:
         return have
@@ -566,6 +621,24 @@ async def adjust(db, iid: str, delta: Any, reason: str = "", by: dict | None = N
     sets = {"quantity": after, "updated_by": who, "updated_at": now, "log": _log(have, line)}
     await db[COLL].update_one({"_id": iid}, {"$set": sets})
     return {**have, **sets}
+
+
+async def home_unlinked(db, by: dict | None = None) -> list[dict]:
+    """Every line that counts no catalog product given one (`_home`), its
+    quantity, place and log kept, a line in its log saying so; lines that
+    have one are left as they are, so running it again changes nothing.
+    What was done: [{id, name, catalog}]."""
+    who, done = by or {"id": "system", "name": "Workbench"}, []
+    for d in await everything(db):
+        if linked_to(d):
+            continue
+        f = await _home(db, {k: d.get(k) for k in (*TEXT, "price", "currency") if k in d} | {"catalog": None}, who)
+        now = _now()
+        line = _line(now, who, "edited", fields=["catalog"], reason="linked to its catalog product",
+                     changes={"catalog": [_short(d.get("catalog")), _short(f["catalog"])]})
+        await db[COLL].update_one({"_id": d["_id"]}, {"$set": {"catalog": f["catalog"], "log": _log(d, line)}})
+        done.append({"id": d["_id"], "name": d.get("name"), "catalog": f["catalog"]})
+    return done
 
 
 def may_delete(doc: dict) -> bool:
@@ -624,10 +697,12 @@ async def import_doc(db, data: dict, by: dict | None = None) -> dict:
 def out(d: dict, full: bool = True, pictures: dict | None = None) -> dict:
     """An item as the API gives it: its fields, its type (the person's or
     worked out - `type_auto`; `type_set` is the person's own, "" for none),
-    what its type's card shows (`facts`), the pictures it can be shown
-    with - its catalog product's (`images`) and whether the LCSC part's
-    photo is on disk (`photo`) or can be fetched (`photo_known`) - and,
-    `full`, its log, newest first."""
+    what its type's card shows (`facts`), its catalog product as it is now
+    (`product`: its name, maker, code, page and price; the item's `name`
+    is the product's), the pictures it can be shown with - its catalog
+    product's (`images`) and whether the LCSC part's photo is on disk
+    (`photo`) or can be fetched (`photo_known`) - and, `full`, its log,
+    newest first. `pictures`: what `pictures` read for these items."""
     o = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "log")}
     o["id"] = d["_id"]
     info = kinds.lcsc_info(d.get("lcsc") or "")
@@ -636,7 +711,11 @@ def out(d: dict, full: bool = True, pictures: dict | None = None) -> dict:
     o["type_set"] = d.get("type") or ""
     o["facts"] = kinds.facts(d, t, s, info)
     link = linked_to(d)
-    o["images"] = (pictures or {}).get(link, []) if link else []
+    got = (pictures or {}).get(link) if link else None
+    o["images"] = (got or {}).get("images", [])
+    o["product"] = (got or {}).get("product")
+    if o["product"] and o["product"].get("name"):
+        o["name"] = o["product"]["name"]
     o["photo"] = bool(info and info.get("photo"))
     o["photo_known"] = bool(info and (info.get("photo") or info.get("has_photo")))
     o["low"] = is_low(d)
@@ -649,7 +728,7 @@ def out(d: dict, full: bool = True, pictures: dict | None = None) -> dict:
 
 
 class ItemIn(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
+    name: str = Field("", max_length=160)          # may be left out for a line of a catalog product: its name
     quantity: float | str = 0
     unit: str = "pcs"
     location: str = ""
@@ -732,22 +811,33 @@ def _400(exc: ValueError):
     raise HTTPException(400, str(exc)) from exc
 
 
-async def pictures(db, rows: list[dict]) -> dict[tuple[str, str], list[str]]:
-    """The pictures of the catalog products these items link to, in one
-    read of the makers they name: {(maker, product): [urls]}."""
+def product_brief(m: dict, p: dict) -> dict:
+    """A catalog product as a stock line shows it."""
+    return {k: v for k, v in (("name", p.get("name")), ("maker", m.get("name") or m.get("_id")), ("sku", p.get("sku")),
+                               ("category", p.get("category")), ("url", p.get("url")), ("price", p.get("price")),
+                               ("builtin", bool(m.get("builtin")))) if v not in (None, "")}
+
+
+async def pictures(db, rows: list[dict]) -> dict[tuple[str, str], dict]:
+    """The catalog products these items count, in one read of each maker
+    they name: {(maker, product): {product, images}} - the pictures the
+    page can show (an LCSC part's footprint is a mask, not a picture)."""
     want: dict[str, set[str]] = {}
     for d in rows:
         link = linked_to(d)
         if link:
             want.setdefault(link[0], set()).add(link[1])
-    got: dict[tuple[str, str], list[str]] = {}
-    if not want:
-        return got
-    async for m in db["manufacturers"].find({"_id": {"$in": list(want)}}, {"products": 1}):
-        for p in m.get("products") or []:
-            if p.get("id") in want.get(m["_id"], ()):
-                urls = [u for u in dict.fromkeys([p.get("image"), *(p.get("images") or [])]) if u]
-                got[(m["_id"], p["id"])] = urls[:12]
+    got: dict[tuple[str, str], dict] = {}
+    for mid, pids in want.items():
+        try:
+            m = await catalog_builtin.maker_doc(db, mid)
+        except Exception:                               # noqa: BLE001 - a maker that cannot be read shows no product
+            m = None
+        for p in (m or {}).get("products") or []:
+            if str(p.get("id")) in pids:
+                urls = [u for u in dict.fromkeys([p.get("image"), *(p.get("images") or [])])
+                        if u and not str(u).endswith("footprint.svg")]
+                got[(mid, str(p["id"]))] = {"product": product_brief(m, p), "images": urls[:12]}
     return got
 
 
@@ -806,9 +896,19 @@ async def api_bulk(body: BulkIn):
     return {"results": [{"item": out(r["item"], full=False), "merged": r["merged"]} if "item" in r else r for r in got]}
 
 
+@router.get("/product/{mid}/{pid}")
+async def api_of_product(mid: str, pid: str):
+    """The stock lines of one catalog product, each in full with its log -
+    the product's stock section in the catalog."""
+    db = _db()
+    rows = [d for d in await everything(db) if linked_to(d) == (mid, pid)]
+    pics = await pictures(db, rows)
+    return [out(d, pictures=pics) for d in rows]
+
+
 @router.get("/stock")
 async def api_stock(manufacturer: str = ""):
-    """What is on hand of each catalog product - the Product Catalog's
+    """What is on hand of each catalog product - the Parts page's
     table asks once for a whole catalog."""
     got = await stock_of(_db(), manufacturer)
     return got.get(manufacturer, {}) if manufacturer else got

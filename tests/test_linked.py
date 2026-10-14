@@ -205,11 +205,11 @@ def test_saved_parts_from_start_to_finish(db, grid, fake_search):  # noqa: F811
     assert [(f["name"], folders[f["folder"]]) for f in kept] == [("mcmaster_91290A115.step", "McMaster-Carr")]
     # the catalog lists it as McMaster-Carr's product, for every workspace even when empty
     every = a.get("/api/manufacturers").json()
-    assert [x["id"] for x in every if x.get("builtin")] == ["lcsc", "mcmaster", "grabcad"]
+    assert [x["id"] for x in every if x.get("builtin")] == ["lcsc", "mcmaster", "grabcad", "own"]
     m = a.get("/api/manufacturers/mcmaster").json()
     assert m["view"] == "linked" and m["products"][0]["id"] == "91290A115" and m["products"][0]["specs"]["CAD"]
     assert [(x["id"], x["product_count"]) for x in b.get("/api/manufacturers").json() if x.get("builtin")] == \
-        [("lcsc", 0), ("mcmaster", 0), ("grabcad", 0)]
+        [("lcsc", 0), ("mcmaster", 0), ("grabcad", 0), ("own", 0)]
     # another workspace cannot reach it
     assert b.get("/api/linked/mcmaster/parts").json() == []
     assert b.patch("/api/linked/mcmaster/parts/91290A115", json={"notes": "x"}).status_code == 404
