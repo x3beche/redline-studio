@@ -26,3 +26,22 @@
   .pfl-top { grid-template-columns: minmax(0, 1fr); }
   .pfl-pic { min-height: 140px; }
 }
+.pfl-cad { align-self: flex-start; margin: 0; }
+/* in the product's detail (manufacturers.ts): a plain section filling its column - a header with a hairline,
+   the picture beside a drop zone that grows into the room left when there are no files yet */
+.pfl[data-compact] { height: 100%; gap: 8px; }
+.pfl-sh { align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.pfl-sh h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.pfl[data-compact] .pfl-main { flex: 1 1 auto; min-height: 0; }
+.pfl[data-compact] .pfl-top { grid-template-columns: 150px minmax(0, 1fr); }
+.pfl[data-compact] .pfl-pic { min-height: 112px; border: 0; }
+.pfl[data-compact] .pfl-drop { padding: 10px 8px; }
+.pfl[data-compact] .pfl-files td:nth-child(3) { display: none; }
+/* what is there first - what the model measured, the files -, the picture and the drop zone filling the foot */
+.pfl[data-compact] .pfl-meas { order: 1; }
+.pfl[data-compact] .st-table-wrap { order: 2; }
+.pfl[data-compact] .pfl-cad { order: 3; }
+.pfl[data-compact] .pfl-top { order: 4; flex: 1 1 auto; min-height: 120px; }
+.pfl-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pfl[data-compact] .pfl-top[data-nocad] { grid-template-columns: minmax(0, 1fr); }
+.pfl-top[data-nocad] .pfl-pic { display: none; }

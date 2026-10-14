@@ -72,20 +72,21 @@ export class ProductFilesState {
   host: { style: 'display: block' },
   styleUrls: ['../settings.css', './manufacturers.css', './linked.css', './product-files.css'],
   template: `
-<section class="pfl" [attr.aria-label]="'Files' | t">
-  <div class="pfl-head">
-    <span class="mf-label">{{ 'Files' | t }}</span>
+<section class="pfl" [attr.aria-label]="'Files' | t" [attr.data-compact]="compact() ? 1 : null">
+  <div class="pfl-head" [class.pfl-sh]="compact()">
+    @if (compact()) { <h3>{{ '3D model and files' | t }}</h3> } @else { <span class="mf-label">{{ 'Files' | t }}</span> }
     @if (v(); as x) {
       <span class="st-sub">@if (x.files.length) { {{ fmt(x.files.length === 1 ? '{n} file' : '{n} files', { n: x.files.length }) }} } @else { {{ 'none yet' | t }} }
         @if (x.lcsc_3d) { · {{ 'its own 3D model comes from LCSC; a file here is an extra' | t }} }</span>
     } @else if (err()) { <span class="st-sub" data-tone="danger">{{ err() }}</span> } @else { <span class="st-sub">…</span> }
   </div>
   @if (v(); as x) {
-    <div class="pfl-top" [attr.data-solo]="!can() ? 1 : null">
+   <div class="pfl-main">
+    <div class="pfl-top" [attr.data-solo]="!can() ? 1 : null" [attr.data-nocad]="compact() && !x.cad && can() ? 1 : null">
       <div class="ln-pic pfl-pic">
         @if (pic(); as src) { <img class="tcv-fm-solid" [src]="src" alt=""> }
         @else { <svg class="ln-cube" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9" /></svg>
-                <span class="dim">{{ (x.cad ? 'drawing its picture…' : 'no 3D model yet') | t }}</span> }
+                <span class="dim">{{ (x.cad ? 'drawing its picture…' : x.lcsc_3d ? 'its LCSC 3D model is above' : 'no 3D model yet') | t }}</span> }
         @if (x.cad) { <span class="pfl-badge" [title]="x.cad.name">3D · {{ x.cad.kind === 'step' ? 'STEP' : ('mesh' | t) }}</span> }
       </div>
       @if (can()) {
@@ -94,7 +95,7 @@ export class ProductFilesState {
                (drop)="$event.preventDefault(); dropping.set(false); upload($any($event).dataTransfer?.files)">
           <input type="file" multiple [accept]="x.accept" hidden (change)="upload($any($event.target).files); $any($event.target).value = ''">
           <b>{{ (busy() ? 'Keeping it…' : (x.cad ? 'Drop more files here' : 'Drop its STEP, datasheet or pictures here')) | t }}</b>
-          <span>{{ 'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.' | t }}</span>
+          <span [title]="'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.' | t">{{ (compact() ? 'STEP, STL, 3MF, OBJ, PDF, pictures, ZIP' : 'STEP, STP, STL, 3MF or OBJ becomes its 3D model and is measured; a PDF its datasheet; a picture its picture. A ZIP is unpacked. Or click to choose.') | t }}</span>
           @if (busy()) { <span class="pfl-prog mono">{{ busy() }}</span> }
         </label>
       }
@@ -136,8 +137,9 @@ export class ProductFilesState {
           </tr>
         }
       </tbody></table></div>
-      @if (x.cad) { <p class="ln-agent dim">{{ 'The CAD rooms use it as a model of its own:' | t }} <code>revisions.py product to-model {{ x.maker }}:{{ x.product }} --folder …</code></p> }
+      @if (x.cad) { <button class="st-more pfl-cad" (click)="copyCad(x)" [title]="('The CAD rooms use it as a model of its own:' | t) + ' revisions.py product to-model ' + x.maker + ':' + x.product + ' --folder …'">{{ 'Use in CAD - copy the command' | t }}</button> }
     }
+   </div>
   }
 </section>`,
 })
@@ -148,6 +150,8 @@ export class ProductFilesPanel implements OnDestroy {
   private state = inject(ProductFilesState);
   readonly maker = input.required<string>();
   readonly product = input.required<string>();
+  /** In a narrow column (the product's detail): the picture above the drop zone, the drop zone short. */
+  readonly compact = input(false);
   v = signal<ProductFiles | null>(null);
   err = signal('');
   busy = signal('');
@@ -233,6 +237,11 @@ export class ProductFilesPanel implements OnDestroy {
     this.busy.set('');
     this.state.load();
     this.read(mid, pid, 1);
+  }
+  /** The CAD rooms' command for its model, copied: an agent makes it a model of a project. */
+  copyCad(x: ProductFiles) {
+    const cmd = `revisions.py product to-model ${x.maker}:${x.product} --folder `;
+    try { navigator.clipboard.writeText(cmd).then(() => Toast.show(fmt('{c} copied', { c: cmd })), () => {}); } catch { /* no clipboard */ }
   }
   async main(f: ProductFile) {
     try {

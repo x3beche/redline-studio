@@ -199,3 +199,18 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
 .mf-table .mf-ponhand { width: 84px; white-space: nowrap; }
 .mf-table .mf-ponhand .mf-onhand-btn { margin-left: 0; }
 .mf-gbar > .mf-gheld { flex: 0 1 150px; min-width: 120px; }
+
+/* the stock panel in a product's detail (manufacturers.ts): filling its column - the fields in two rows, the log
+   growing to the foot, without who */
+.inv-panel[data-compact] { height: 100%; padding-top: 0; border-top: 0; }
+.inv-panel[data-compact] .inv-phead { justify-content: flex-end; }
+.inv-panel[data-compact] .inv-phead > .mf-label { display: none; }
+.inv-panel[data-compact] .inv-phead > .inv-pmore { margin: 0; }
+.inv-panel[data-compact] .inv-phead:not(:has(button)) { display: none; }
+.inv-panel[data-compact] > .inv-line { flex: 1 1 auto; min-height: 0; }
+.inv-panel[data-compact] > .inv-line > .inv-logwrap { flex: 1 1 auto; max-height: none; min-height: 80px; }
+.inv-panel[data-compact] .inv-pfields { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) auto; }
+.inv-panel[data-compact] .inv-pfields .inv-pnotes { grid-column: 1 / -1; grid-row: 2; }
+.inv-panel[data-compact] .inv-pfields .inv-pdel { grid-column: 4; grid-row: 1; }
+.inv-panel[data-compact] .inv-adjust { flex-basis: 100%; }
+.inv-panel[data-compact] .inv-log th:nth-child(6), .inv-panel[data-compact] .inv-log td:nth-child(6) { display: none; }

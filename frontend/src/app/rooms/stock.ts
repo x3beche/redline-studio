@@ -242,7 +242,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
   host: { style: 'display: block' },
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   template: `
-<section class="inv inv-panel" [attr.aria-label]="'Stock' | t">
+<section class="inv inv-panel" [attr.aria-label]="'Stock' | t" [attr.data-compact]="compact() ? 1 : null">
   <div class="inv-phead">
     <span class="mf-label">{{ 'Stock' | t }}</span>
     @if (lines().length > 1) { <span class="st-sub">{{ fmt('{n} lines - in different units or places', { n: lines().length }) }}</span> }
@@ -321,6 +321,8 @@ export class StockPanel {
   /** The product: its maker's (or source's) id and its own. */
   readonly maker = input.required<string>();
   readonly product = input.required<string>();
+  /** In a narrow column (the product's detail): the fields in two rows, the log without who. */
+  readonly compact = input(false);
   can = computed(() => this.auth.can('draw'));
   lines = signal<Item[]>([]);
   loaded = signal(false);

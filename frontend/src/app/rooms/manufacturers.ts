@@ -318,6 +318,7 @@ const I = {
   rows: 'M4 6h16 M4 12h16 M4 18h16',
   drawer: 'M4 4h16v16H4z M4 12h16 M10 8h4 M10 16h4',
   cube: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
+  maker: 'M3 20V10l5 3V10l5 3V6h3l1 4h1l1-6h2v16z',
 };
 const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '',
                                     price: '', currency: 'TRY', vat: '', stock: '', stock_qty: '' };
@@ -946,82 +947,119 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
      section (its container-type would hold a fixed box to the middle column) ================= -->
   @if (detail(); as d) {
     <div class="mf-modal tcv-m-veil" animate.leave="tcv-leave" (click)="closeDetail()">
-      <div class="mf-detail tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()">
-        <button class="tcv-cc-ib mf-x" (click)="closeDetail()" [title]="'Close' | t">
-          <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
-        <div class="mf-dgal">
-          <div class="mf-dimg">@if (bigImg(); as src) { <img [class.tcv-fm-solid]="src.includes('/thumb?v=')" [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
-            @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
-          @if (gallery().length > 1) {
-            <div class="mf-thumbs">@for (u of gallery(); track u) {
-              <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+      <div class="mf-pd tcv-m-box" role="dialog" aria-modal="true" [attr.aria-label]="d.name" (click)="$event.stopPropagation()"
+           (keydown.escape)="src() ? src.set(false) : closeDetail()">
+        <!-- the LCSC part card's head (part-card.ts): what it is in one line, its buttons, its figures -->
+        <header class="mf-pd-head">
+          <div class="mf-pd-top">
+            <div class="mf-pd-id">
+              <div class="mf-pd-title"><b class="mf-pd-name" [title]="d.name">{{ d.name }}</b>
+                @if (pfiles.model(d.maker.id, d.id); as h) { <i class="pdw-badge pdw-badge-3d mf-pd-3d" [title]="pfiles.tip(h)">3D</i> }</div>
+              <div class="mf-pd-line">
+                <span class="mf-pd-seller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">{{ sellerName(d) }}</span>
+                @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <i class="mf-pd-sep"></i><span>{{ d.maker.name }}</span> }
+                @if (d.sku) { <i class="mf-pd-sep"></i><span class="mono mf-pd-copy" [title]="'Copy' | t" (click)="copyText(d.sku)">{{ d.sku }}</span> }
+                @if (d.category) { <i class="mf-pd-sep"></i><span>{{ d.category }}</span> }
+                @if (d.source === 'manual') { <i class="mf-pd-sep"></i><span>{{ 'by hand' | t }}</span> } @else if (d.edited) { <i class="mf-pd-sep"></i><span>{{ 'edited' | t }}</span> }
+                <i class="mf-pd-sep"></i><span [title]="datesTip(d)">{{ fmt('page read {r}', { r: ago(d.read_at) }) }}</span>
+                <button class="mf-pd-link" (click)="src.set(!src())" [attr.aria-expanded]="src()">{{ 'where it was read' | t }}@if (doubts(d).length) { <span class="mf-doubt">{{ 'check' | t }}</span> }</button>
+              </div>
+              <!-- the figures that matter, as the LCSC card says its own: label and value, side by side -->
+              <dl class="mf-pd-figs">
+                <div><dt>{{ 'Price' | t }}</dt><dd [title]="d.price ? moneyTip(d.price.amount, d.price.currency) : ''">
+                  @if (d.price) { <b class="mf-pd-price">{{ moneyIn(d.price.amount, d.price.currency) }}</b>
+                    @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ moneyIn(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
+                    <small>{{ (d.price.vat === 'excl' ? '+VAT' : d.price.vat === 'incl' ? 'VAT included' : '') | t }}@if (d.price.manual) { {{ 'corrected' | t }} }</small>
+                  } @else { <span class="dim">{{ 'no price on its page' | t }}</span> }</dd></div>
+                <div><dt>{{ 'At the seller' | t }}</dt><dd [attr.data-s]="d.stock">
+                  @if (d.stock) { <b>{{ d.stock === 'in' ? (d.stock_qty != null ? fmt('{n} left', { n: d.stock_qty }) : ('in stock' | t)) : ('out of stock' | t) }}</b> }
+                  @else { <span class="dim">{{ 'not said' | t }}</span> }</dd></div>
+                <div><dt>{{ 'On hand' | t }}</dt><dd [attr.data-low]="onHand(d.maker.id, d.id)?.low ? 1 : null">
+                  @if (onHand(d.maker.id, d.id); as s) { <b>{{ qty(s.quantity) }} {{ s.unit }}</b> } @else { <span class="dim">{{ 'not counted yet' | t }}</span> }</dd></div>
+                <div><dt>{{ 'Size' | t }}</dt><dd>
+                  @if (pfiles.model(d.maker.id, d.id); as h) { <b class="mono" [title]="pfiles.tip(h)">{{ h.box?.length === 3 ? boxOf(h.box!) : ('measuring…' | t) }}</b> }
+                  @else { <span class="dim">{{ 'no 3D model yet' | t }}</span> }</dd></div>
+              </dl>
+            </div>
+            <!-- actions: links and tools as one quiet joined group, deleting apart and quiet, closing at the end -->
+            <div class="mf-pd-acts">
+              <div class="mf-pd-tools" role="toolbar" [attr.aria-label]="'Product' | t">
+                @if (d.url) { <a class="mf-pd-tool" [href]="d.url" target="_blank" rel="noopener noreferrer" [title]="d.url">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.open" /></svg>{{ 'Its page' | t }}</a> }
+                <button class="mf-pd-tool" (click)="closeDetail(); openMaker(d.maker.id)" [title]="'Open the maker' | t">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.maker" /></svg>{{ d.maker.name || ('Maker' | t) }}</button>
+                <!-- To a person in Chat, as a card that opens it (dm.ts). -->
+                <span class="mf-pd-tool mf-pd-send"><rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-dm-sendbtn" /></span>
+                @if (can()) { <button class="mf-pd-tool" (click)="editFromDetail(d)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.edit" /></svg>{{ 'Edit' | t }}</button> }
+              </div>
+              @if (can()) { <button class="mf-pd-icon mf-pd-del" (click)="deleteFromDetail(d)" [title]="'Delete the product' | t" [attr.aria-label]="'Delete the product' | t">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash" /></svg></button> }
+              <button class="mf-pd-icon" (click)="closeDetail()" [title]="'close (Esc)' | t" [attr.aria-label]="'close (Esc)' | t">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.close" /></svg></button>
+            </div>
+          </div>
+          <!-- where the price and the stock were read from, their doubts, and "this is wrong": asked for, never in the way -->
+          @if (src()) {
+            <div class="mf-pd-src tcv-pop-in" role="dialog" [attr.aria-label]="'where it was read' | t">
+              <div class="mf-pd-srcrow"><span class="mf-pd-k">{{ 'Price' | t }}</span><span class="mf-pd-v">{{ srcTip('price', d.price) || ('not read from its page' | t) }}</span>
+                @if (can() && !d.part && (d.price || d.stock)) { <button class="mf-pd-link" (click)="openFix('price', d)" [attr.aria-expanded]="fix()?.what === 'price'">{{ 'The price is wrong' | t }}</button> }</div>
+              <div class="mf-pd-srcrow"><span class="mf-pd-k">{{ 'Stock' | t }}</span><span class="mf-pd-v">{{ srcTip('stock', d.stock_read) || ('not read from its page' | t) }}</span>
+                @if (can() && !d.part && (d.price || d.stock)) { <button class="mf-pd-link" (click)="openFix('stock', d)" [attr.aria-expanded]="fix()?.what === 'stock'">{{ 'The stock is wrong' | t }}</button> }</div>
+              <div class="mf-pd-srcrow mf-pd-dim">{{ datesTip(d).split('\n').join(' · ') }}</div>
+              <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'price', meta: d.price }" />
+              <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'stock', meta: d.stock_read }" />
+            </div>
           }
-        </div>
-        <div class="mf-dinfo">
-          <span class="mf-dseller"><img class="mf-fav" [src]="fav(d)" alt="" referrerpolicy="no-referrer" (error)="$any($event.target).style.visibility = 'hidden'">
-            <span>{{ sellerName(d) }}</span>
-            @if (d.maker.name && d.maker.domain !== d.seller?.domain) { <span class="dim">· {{ d.maker.name }}</span> }
-            <button class="st-more" (click)="closeDetail(); openMaker(d.maker.id)">{{ 'Open the maker' | t }}</button></span>
-          <h2 class="mf-dname">{{ d.name }}</h2>
-          <div class="mf-dmeta">
-            @if (d.sku) { <span class="mono">{{ fmt('Code {c}', { c: d.sku }) }}</span> }
-            @if (d.category) { <span class="mf-chip">{{ d.category }}</span> }
-            @if (d.source === 'manual') { <span class="st-tag">{{ 'by hand' | t }}</span> } @else if (d.edited) { <span class="st-tag">{{ 'edited' | t }}</span> }
-            <ng-container *ngTemplateOutlet="onHandT; context: { $implicit: d }" />
-            <ng-container *ngTemplateOutlet="filesT; context: { $implicit: d, mid: d.maker.id }" />
+        </header>
+        <!-- the body: three columns down to the box's foot, sections under plain headers, the parts that can grow filling it -->
+        <div class="mf-pd-body">
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec mf-pd-grow">
+              <div class="mf-pd-sh"><h3>{{ 'Pictures' | t }}</h3>@if (gallery().length > 1) { <span class="st-sub">{{ gallery().length }}</span> }</div>
+              <div class="mf-pd-img" [attr.data-solid]="bigImg()?.includes('/thumb?v=') ? 1 : null">@if (bigImg(); as src) { <img [class.tcv-fm-solid]="src.includes('/thumb?v=')" [src]="src" referrerpolicy="no-referrer" alt="" (error)="broke(src)"> }
+                @else { <svg class="mf-noimg" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.photo" /></svg> }</div>
+              @if (gallery().length > 1) {
+                <div class="mf-thumbs mf-pd-thumbs">@for (u of gallery(); track u) {
+                  <button [class.on]="u === bigImg()" (click)="shot.set(u)"><img [src]="u" loading="lazy" referrerpolicy="no-referrer" alt="" (error)="broke(u)"></button> }</div>
+              }
+            </section>
+            <section class="mf-pd-sec">
+              <div class="mf-pd-sh"><h3>{{ 'Price and stock, as read' | t }}</h3><span class="st-sub">{{ d.history?.length || '' }}</span></div>
+              @if (d.history?.length) {
+                @if (spark(d); as sp) {
+                  <div class="mf-pd-spark"><svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sp.line" /></svg>
+                    <span class="mono">{{ moneyIn(sp.max, sp.cur) }}</span><span class="mono">{{ moneyIn(sp.min, sp.cur) }}</span></div>
+                }
+                <table class="mf-pd-hist">
+                  <tbody>@for (h of histRows(d).slice(0, 6); track h.at) {
+                    <tr><td class="dim">{{ ago(h.at) }}</td>
+                      <td class="r mono" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}</td>
+                      <td class="dim">{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
+                      <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
+                  }</tbody>
+                </table>
+              } @else { <p class="mf-pd-none">{{ 'Read once a price or a stock is on its page.' | t }}</p> }
+            </section>
           </div>
-          <div class="mf-dprice">
-            @if (d.price) {
-              <b>{{ moneyIn(d.price.amount, d.price.currency) }}</b>
-              @if (moneyAlt(d.price.amount, d.price.currency); as alt) { <small class="dim" [title]="moneyTip(d.price.amount, d.price.currency)">{{ alt }}</small> }
-              @if (d.price.vat === 'excl') { <span class="mf-vat">{{ '+VAT' | t }}</span> } @else if (d.price.vat === 'incl') { <span class="mf-vat">{{ 'VAT included' | t }}</span> }
-              @if (d.list_price && d.list_price.amount > d.price.amount) { <s>{{ moneyIn(d.list_price.amount, d.list_price.currency || d.price.currency) }}</s> }
-              @if (d.price.gross) { <small class="dim">{{ fmt('{p} with VAT', { p: moneyIn(d.price.gross, d.price.currency) }) }}</small> }
-            } @else { <span class="dim">{{ 'No price on its page' | t }}</span> }
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec">
+              <div class="mf-pd-sh"><h3>{{ 'Specs' | t }}</h3>@if (specList(d).length) { <span class="st-sub">{{ specList(d).length }}</span> }</div>
+              @if (d.description) { <p class="mf-pd-desc">{{ d.description }}</p> }
+              @if (specList(d).length) {
+                <dl class="mf-pd-specs">@for (s of specList(d); track s[0]) { <div><dt [title]="s[0]">{{ s[0] }}</dt><dd [title]="s[1]">{{ s[1] }}</dd></div> }</dl>
+              } @else { <p class="mf-pd-none">{{ 'Its page gave no specs.' | t }}</p> }
+            </section>
+            <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts) -->
+            <wb-product-files class="mf-pd-sec mf-pd-grow" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
           </div>
-          <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'price', meta: d.price }" />
-          <div class="mf-dstock">
-            @if (d.stock) { <span class="mf-stock mf-stock-inline" [attr.data-s]="d.stock">{{ stockName(d) }}</span>
-              @if (d.stock_text) { <span class="dim">"{{ d.stock_text }}"</span> } }
-            @else { <span class="dim">{{ 'The page did not say whether it is in stock.' | t }}</span> }
-            @if (d.price?.at || d.read_at) { <span class="dim">· {{ fmt('read {w}', { w: ago(d.read_at || d.price?.at) }) }}</span> }
+          <div class="mf-pd-col">
+            <section class="mf-pd-sec mf-pd-grow">
+              <div class="mf-pd-sh"><h3>{{ 'Stock' | t }}</h3></div>
+              <!-- how many are on hand, where, the log (stock.ts) -->
+              <wb-stock-panel class="mf-pd-fill" [maker]="d.maker.id" [product]="d.id" [compact]="true" />
+            </section>
           </div>
-          <ng-container *ngTemplateOutlet="readT; context: { $implicit: d, what: 'stock', meta: d.stock_read }" />
-          <dl class="mf-dates">
-            <div><dt>{{ 'Added to the catalog' | t }}</dt><dd>{{ stamp(d.added_at) }}</dd></div>
-            <div><dt>{{ 'Price read' | t }}</dt><dd>{{ stamp(d.price?.at) }}</dd></div>
-            <div><dt>{{ 'Page read' | t }}</dt><dd>{{ stamp(d.read_at) }}</dd></div>
-            <div><dt>{{ "Seller's update" | t }}</dt><dd>{{ d.updated ? stamp(d.updated) : ('not given' | t) }}</dd></div>
-          </dl>
-          <div class="mf-dacts">
-            @if (d.url) { <a class="tcv-btn tcv-btn-accent" [href]="d.url" target="_blank" rel="noopener noreferrer">{{ 'Open its page' | t }}</a> }
-            <!-- To a person in Chat, as a card that opens it (dm.ts). -->
-            <rl-dm-send-btn kind="product" [id]="d.maker.id + ':' + d.id" [label]="d.name" cls="tcv-btn tcv-dm-sendbtn" />
-            @if (can()) {
-              <button class="tcv-btn" (click)="editFromDetail(d)">{{ 'Edit' | t }}</button>
-              <button class="tcv-btn tst-del" (click)="deleteFromDetail(d)">{{ 'Delete' | t }}</button>
-            }
-          </div>
-          <!-- how many are on hand, where, the log (stock.ts) -->
-          <wb-stock-panel [maker]="d.maker.id" [product]="d.id" />
-          <!-- its 3D model (measured), datasheets, drawings, pictures (product-files.ts) -->
-          <wb-product-files class="mf-dfiles" [maker]="d.maker.id" [product]="d.id" />
-          @if (d.description) { <p class="mf-ddesc">{{ d.description }}</p> }
-          @if (specList(d).length) {
-            <table class="mf-dspecs"><tbody>@for (s of specList(d); track s[0]) { <tr><th>{{ s[0] }}</th><td>{{ s[1] }}</td></tr> }</tbody></table>
-          }
-          @if (d.history?.length) {
-            <span class="mf-label">{{ 'Price and stock, as read' | t }}</span>
-            <table class="st-table mf-dhist">
-              <thead><tr><th>{{ 'Date' | t }}</th><th class="r">{{ 'Price' | t }}</th><th>{{ 'Stock' | t }}</th><th class="r">{{ 'Change' | t }}</th></tr></thead>
-              <tbody>@for (h of histRows(d); track h.at) {
-                <tr><td>{{ stamp(h.at) }}@if (h.seen) { <span class="dim"> – {{ stamp(h.seen) }}</span> }</td>
-                  <td class="r" [title]="h.amount != null ? moneyTip(h.amount, h.currency || d.price?.currency) : ''">{{ h.amount != null ? moneyIn(h.amount, h.currency || d.price?.currency) : '–' }}@if (h.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> }</td>
-                  <td>{{ h.stock ? (h.stock === 'in' ? (h.qty != null ? fmt('{n} left', { n: h.qty }) : t('In stock')) : t('Out of stock')) : '–' }}</td>
-                  <td class="r mono" [attr.data-up]="h.change > 0 ? 1 : null" [attr.data-down]="h.change < 0 ? 1 : null">{{ h.change ? (h.change > 0 ? '+' : '') + h.change.toFixed(1) + '%' : '' }}</td></tr>
-              }</tbody>
-            </table>
-          }
         </div>
       </div>
     </div>
@@ -1099,15 +1137,6 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 <!-- Where a price or a stock was read (the words around it, or who corrected it), why it may be wrong, and "Wrong" -->
 <ng-template #readT let-d let-what="what" let-meta="meta">
   @if (meta || (what === 'price' ? d.price : d.stock)) {
-    <div class="mf-dsrc">
-      @if (meta?.manual) {
-        <span class="mf-fixed">{{ fmt('corrected by {p} {w}', { p: meta.by?.name || t('someone'), w: ago(meta.manual_at) }) }}</span>
-        @if (pageWas(what, meta); as w) { <span class="dim">· {{ fmt('the page said {v}', { v: w }) }}</span> }
-      } @else if (meta?.snippet) {
-        <span class="dim">{{ 'read from' | t }}</span> <q class="mf-snip" [title]="meta.snippet">{{ meta.snippet }}</q> <span class="dim">({{ srcName(meta.source) | t }})</span>
-      } @else if (meta?.source) { <span class="dim">{{ srcName(meta.source) | t }}</span> }
-      @if (can() && !d.part) { <button class="st-more mf-wrong" (click)="openFix(what, d)" [attr.aria-expanded]="fix()?.what === what">{{ 'Wrong' | t }}</button> }
-    </div>
     @if (meta?.doubt?.length) {
       <ul class="mf-doubts">@for (x of meta.doubt; track $index) { <li>{{ doubtLine(x, d.price?.currency) }}</li> }</ul>
     }
@@ -1691,7 +1720,7 @@ export class RoomMfr implements OnDestroy {
     this.detail.set(p);
     this.shot.set(null);
   }
-  closeDetail() { this.detail.set(null); this.fix.set(null); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
+  closeDetail() { this.detail.set(null); this.fix.set(null); this.src.set(false); if (this.stockFor() && this.stockFor() !== '*') this.stockFor.set(null); }
 
   // ---- what a price or a stock was read from, its doubts, "Wrong", and "Re-read all products"
 
@@ -1901,6 +1930,39 @@ export class RoomMfr implements OnDestroy {
     return r ? this.fmt('read {w}', { w: this.ago(r) }) : p.added_at ? this.fmt('added {w}', { w: this.ago(p.added_at) }) : '';
   }
   specList(p: Product) { return Object.entries(p.specs ?? {}); }
+  /** The detail's "where it was read": the price's and the stock's evidence, open on asking. */
+  src = signal(false);
+  /** Where a price or a stock was read from - or who corrected it. */
+  srcTip(what: 'price' | 'stock', meta?: ReadMeta | null): string {
+    if (!meta) return '';
+    if (meta.manual) {
+      const was = this.pageWas(what, meta);
+      return this.fmt('corrected by {p} {w}', { p: meta.by?.name || t('someone'), w: this.ago(meta.manual_at) })
+        + (was ? ' · ' + this.fmt('the page said {v}', { v: was }) : '');
+    }
+    if (meta.snippet) return t('read from') + ' "' + meta.snippet + '" (' + t(this.srcName(meta.source)) + ')';
+    return meta.source ? t(this.srcName(meta.source)) : '';
+  }
+  /** Every date of a product in one tooltip. */
+  datesTip(d: Product): string {
+    return [[t('Added to the catalog'), this.stamp(d.added_at)], [t('Price read'), this.stamp(d.price?.at)], [t('Page read'), this.stamp(d.read_at)],
+            [t("Seller's update"), d.updated ? this.stamp(d.updated) : t('not given')]].map(([a, b]) => a + ': ' + b).join('\n');
+  }
+  /** "40 × 40 × 12.13 mm". */
+  boxOf(b: number[]): string { return b.map(x => String(Math.round(x * 100) / 100)).join(' × ') + ' mm'; }
+  /** The price readings as a line, oldest left: its path, its area and its range. */
+  spark(p: Product): { line: string; area: string; min: number; max: number; cur: string } | null {
+    const cur = p.price?.currency;
+    const h = (p.history ?? []).filter(x => x.amount != null && (!cur || !x.currency || x.currency === cur));
+    if (h.length < 2) return null;
+    const v = h.map(x => x.amount as number), min = Math.min(...v), max = Math.max(...v), span = max - min || 1;
+    const pts = v.map((y, i) => [i / (v.length - 1) * 200, 40 - (y - min) / span * 36]);
+    const line = pts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
+    return { line, area: line + ' L200 44 L0 44 Z', min, max, cur: cur || h[0].currency || 'TRY' };
+  }
+  copyText(v: string) {
+    try { navigator.clipboard.writeText(v).then(() => Toast.show(this.fmt('{c} copied', { c: v })), () => {}); } catch { /* no clipboard */ }
+  }
   /** The readings newest first, each with how much the price moved from the one before. */
   histRows(p: Product) {
     const h = p.history ?? [];
