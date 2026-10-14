@@ -2188,9 +2188,9 @@ body {
 
 .brand-name {
   font-family: 'Switzer', 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -.01em;
+  letter-spacing: -.015em;
   color: var(--ink);
 }
 /* Hashes, ids and figures read as data, not prose. */
