@@ -19,7 +19,8 @@
   --tcv-tv-row-h: var(--tcv-tv-row, 24px);
   --tcv-tv-f: var(--tcv-tv-fs, 12px);
   --tcv-tv-g: var(--tcv-tv-isz, clamp(12px, calc(var(--tcv-isz, 18px) * .8), 18px));
-  /* The tabs over the content, the tab's own tools at the row's right end. */
+  /* The tabs over the content, the tab's own tools at the row's right end:
+     one row, filled - the tabs share out what the tools leave. */
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto minmax(0, 1fr);
@@ -29,37 +30,43 @@
 .tcv_cad_tree > .tcv_cad_tree_toggles { grid-area: 1 / 2 / 2 / 3; }
 .tcv_cad_tree > .tcv_box_content { grid-area: 2 / 1 / 3 / 3; }
 
-/* ---- the tabs: text, the open one underlined in the accent ---- */
+/* ---- the tabs: each name whole, the row's width shared out between them,
+   the open one in the bright ink, bold ---- */
 :is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav {
   display: flex;
-  gap: 14px;
+  gap: 0;
   min-width: 0;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 2px 0 4px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--line);
+  /* Narrower than every tab name: the row scrolls sideways, no name is cut. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav::-webkit-scrollbar { display: none; }
 .tcv_cad_tree > .tcv_cad_tree_toggles { border-bottom: 1px solid var(--line); }
-:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav > span { flex: 0 1 auto !important; display: flex; min-width: 0; }
+:is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav > span { flex: 1 1 auto !important; display: flex; }
 :is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab {
-  width: auto !important;
+  width: 100% !important;
   height: auto;
-  min-width: 0;
-  padding: 0 1px;
+  padding: 0 3px;
+  text-align: center;
   border: 0 !important;
-  border-bottom: 2px solid transparent !important;
-  margin-bottom: -1px;
   border-radius: 0;
   background: none !important;
   color: var(--ink-dim);
   font-weight: 400 !important;
+  text-overflow: clip !important;
+  overflow: visible;
   cursor: pointer;
-  transition: color .12s, border-color .12s;
+  transition: color .12s;
 }
 :is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab:hover { color: var(--ink); }
 :is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab.tcv_tab-selected {
-  color: var(--ink);
-  border-bottom-color: var(--accent) !important;
+  color: var(--ink-bright);
+  font-weight: 600 !important;
 }
 :is(.tcv_cad_tree, .tcv-frame-side) .tcv_tabnav .tcv_tab:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 /* The PCB and Firmware rooms' tabs share the strip, not the 3D one's tools. */
@@ -69,16 +76,16 @@
 .tcv_cad_tree .tcv_cad_tree_toggles {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 0;
   margin: 0;
-  padding: 0 6px 0 4px;
+  padding: 0 4px 0 2px;
 }
 /* The viewer shows a tab's tools with an inline display: block. */
 .tcv_cad_tree:not([data-motion="1"], [data-model="1"]) .tcv_cad_tree_toggles:not([style*="none"]) { display: flex !important; }
 .tcv_cad_tree .tcv_cad_tree_toggles > .tcv_tooltip { display: flex; }
 .tcv_cad_tree .tcv_small_btn {
-  width: calc(var(--tcv-tv-g) + 8px) !important;
-  height: calc(var(--tcv-tv-g) + 8px) !important;
+  width: calc(var(--tcv-tv-g) + 6px) !important;
+  height: calc(var(--tcv-tv-g) + 6px) !important;
   padding: 0;
   border: 0;
   border-radius: 4px;
@@ -338,16 +345,31 @@
 /* The checkboxes are the app's (.tcv-check, added by tree-panel.ts): here
    only where they sit. */
 .tcv_cad_tree .tcv_check.tcv-check { margin: 0 6px 0 0; vertical-align: -3px; }
-.tcv_cad_tree .tcv_clip_checks { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.tcv_cad_tree .tcv_clip_checks > div { display: flex; gap: 16px; }
+.tcv_cad_tree .tcv_clip_checks { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tcv_cad_tree .tcv_clip_checks > div { display: contents; }
 .tcv_cad_tree .tcv_clip_checks .tcv_tooltip { display: inline-flex; align-items: center; cursor: pointer; }
 .tcv_cad_tree .tcv_clip_checks .tcv_label { margin: 0; }
 .tcv_cad_tree .tcv_studio_4k_row { align-items: center; margin-top: 0; }
 
-/* A clip plane: its name and normal on one line, the slider and figure under it. */
-.tcv_cad_tree .tcv_slider_group { margin-bottom: 8px; }
-.tcv_cad_tree .tcv_slider_group > div:first-child { align-items: center; min-height: 24px; }
-.tcv_cad_tree .tcv_slider_group .tcv_label { font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-size: 11px !important; }
+/* A clip plane, one row: its plane button (in the axis colour), the axis it
+   cuts along (clip-reverse.ts; the exact normal is its tooltip), the slider,
+   the figure and the reverse switch. The viewer's two rows are unwrapped
+   and its N=(...) line stays out of sight. */
+.tcv_cad_tree .tcv_slider_group { display: flex; align-items: center; gap: 6px; min-height: 30px; margin: 0; }
+.tcv_cad_tree .tcv_slider_group > div { display: contents; }
+.tcv_cad_tree .tcv_slider_group [class*="tcv_lbl_norm_plane"] { display: none; }
+.tcv_cad_tree .tcv_slider_group .tcv-clipaxis {
+  order: 1;
+  flex: none;
+  width: 12px;
+  color: var(--ink-dim);
+  font: 600 11px 'IBM Plex Mono', ui-monospace, monospace;
+  text-align: center;
+  cursor: default;
+}
+.tcv_cad_tree .tcv_slider_group .tcv_clip_slider { order: 2; flex: 1 1 auto; width: auto; min-width: 0; }
+.tcv_cad_tree .tcv_slider_group .tcv_clip_input { order: 3; flex: none; width: 46px; }
+.tcv_cad_tree .tcv_slider_group .tcv-clipflip { order: 4; }
 .tcv_cad_tree .tcv_plane {
   width: calc(var(--tcv-tv-g) + 6px);
   height: calc(var(--tcv-tv-g) + 6px);

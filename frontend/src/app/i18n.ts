@@ -2232,6 +2232,10 @@ const TR: Record<string, string> = {
   'add a key below and its usage shows here.': 'aşağıya bir anahtar ekle, kullanımı burada görünür.',
   // 3D viewer, Clip tab (editor/clip-wheel.ts)
   'Wheel step': 'Tekerlek adımı',
+  'Step': 'Adım',
+  'Intersection': 'Kesişim', 'Cut away only where all the planes overlap': 'Yalnızca bütün düzlemlerin örtüştüğü yeri kes',
+  'Planes': 'Düzlemler', 'Show the clip planes': 'Kesit düzlemlerini göster',
+  'Part colour': 'Parça rengi', 'Fill the cut faces in each part\'s own colour, not the plane\'s': 'Kesit yüzlerini düzlemin değil, her parçanın kendi rengiyle doldur',
   'Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.': 'Kesit kaydırıcısının üzerinde fare tekerleği düzlemi bu kadar kaydırır. Shift: ×10.',
   // 3D viewer, moving parts (editor/motions.ts)
   'Motion': 'Hareket',

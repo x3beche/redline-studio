@@ -100,7 +100,8 @@ export class ClipWheel {
     if (!el) return;
     const tip = t('Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.');
     el.title = tip;
-    el.querySelector('.tcv-clipstep-label')!.textContent = t('Wheel step');
+    // The row is narrow: the short word, the whole name in its tooltip.
+    el.querySelector('.tcv-clipstep-label')!.textContent = t('Step');
     el.querySelector('.tcv-clipstep-presets')!.setAttribute('aria-label', t('Wheel step'));
     el.querySelector('input')!.setAttribute('aria-label', t('Wheel step') + ' (mm)');
   }

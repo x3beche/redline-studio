@@ -25,6 +25,13 @@ const TOGGLES: Record<string, string> = {
   tcv_studio_reset: 'Reset the studio',
 };
 
+/** The Clip tab's switches, by the viewer's class: a short name, what it does. */
+const CLIP_CHECKS: [string, string, string][] = [
+  ['tcv_clip_intersection', 'Intersection', 'Cut away only where all the planes overlap'],
+  ['tcv_clip_plane_helpers', 'Planes', 'Show the clip planes'],
+  ['tcv_clip_caps', 'Part colour', 'Fill the cut faces in each part\'s own colour, not the plane\'s'],
+];
+
 /** "Screw M2 ×6": the part's name and how many of it the model holds. */
 const COUNT = /^(.*\S)\s*[×x](\d+)$/;
 
@@ -115,5 +122,15 @@ export class TreePanel {
     for (const c of this.root.querySelectorAll<HTMLElement>('.tcv_cad_tree .tv-node-content')) this.titles(c);
     // The Clip and Studio tabs' checkboxes are the app's checkbox.
     for (const c of this.root.querySelectorAll<HTMLInputElement>('.tcv_cad_tree input.tcv_check[type="checkbox"]')) c.classList.add('tcv-check');
+    // The Clip tab's three switches, named short enough to share one line.
+    for (const [cls, name, tip] of CLIP_CHECKS) {
+      const box = this.root.querySelector<HTMLInputElement>(`.tcv_cad_tree .${cls}`);
+      const wrap = box?.parentElement;
+      const label = wrap?.querySelector('.tcv_label');
+      if (!wrap || !label) continue;
+      wrap.removeAttribute('data-tooltip');
+      wrap.title = t(tip);
+      label.textContent = t(name);
+    }
   }
 }

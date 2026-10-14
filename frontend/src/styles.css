@@ -2219,33 +2219,35 @@ body {
 }
 
 /* The Clip tab's wheel step (editor/clip-wheel.ts): what one notch of the
-   mouse wheel over a plane slider moves it by. A label and a field on one
-   line, the presets as a flat segmented strip under it, a rule below. */
+   mouse wheel over a plane slider moves it by. One line: the label, the
+   presets as a flat segmented strip, the field for a step of one's own;
+   a rule below. The step in use reads in the brighter ink, bold. */
 .tcv-clipstep {
-  padding: 4px 0 8px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+  margin-bottom: 6px;
   border-bottom: 1px solid var(--line);
   font-size: 11px;
   cursor: default;
 }
-.tcv-clipstep-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 5px;
-}
+.tcv-clipstep-head { display: contents; }
 .tcv-clipstep-label {
-  font-size: 10.5px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
   color: var(--ink-dim);
-  text-transform: uppercase;
-  letter-spacing: .04em;
   white-space: nowrap;
 }
 .tcv-clipstep-field {
+  order: 2;
+  flex: none;
   display: inline-flex;
   align-items: center;
-  height: 20px;
+  height: 22px;
   box-sizing: border-box;
   padding-right: 5px;
   border: 1px solid var(--line);
@@ -2254,7 +2256,8 @@ body {
 }
 .tcv-clipstep-field:focus-within { border-color: var(--accent); }
 .tcv-clipstep-field input {
-  width: 42px;
+  width: 30px !important;
+  min-width: 0;
   padding: 0 3px 0 5px;
   border: 0;
   outline: none;
@@ -2265,6 +2268,8 @@ body {
 }
 .tcv-clipstep-unit { color: var(--ink-dim); font-size: 10.5px; }
 .tcv-clipstep-presets {
+  order: 1;
+  flex: 1 1 auto;
   display: flex;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -2272,8 +2277,8 @@ body {
 }
 .tcv-clipstep-presets button {
   flex: 1 1 0;
-  min-width: 0;
-  height: 20px;
+  min-width: 24px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-right: 1px solid var(--line);
@@ -2286,7 +2291,7 @@ body {
 }
 .tcv-clipstep-presets button:last-child { border-right: 0; }
 .tcv-clipstep-presets button:hover { color: var(--ink); background: var(--hover); }
-.tcv-clipstep-presets button[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-clipstep-presets button[data-on="1"] { color: var(--ink-bright); font-weight: 600; }
 .tcv-clipstep-presets button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 
 /* The model's moving parts (editor/motions.ts): the Motion tab of the
@@ -2353,29 +2358,32 @@ body {
 /* Out of sight until it is in the tab's panel. */
 .tcv-model-host:not(.tcv-model > *) { display: none !important; }
 
-/* The reverse switch on each clip plane's N=(...) row (clip-reverse.ts):
-   the same flat, outlined chip as the wheel step's presets, lit while the
-   plane faces the other way. */
-.tcv-clipflip-row { display: flex; align-items: center; gap: 4px; }
+/* The reverse switch at the end of each clip plane's row (clip-reverse.ts):
+   a bare glyph like the panel's other tools, which turns round and reads
+   in the brighter ink while the plane faces the other way. */
 .tcv-clipflip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
   width: 22px;
-  height: 18px;
-  margin-left: auto;
+  height: 22px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--ink-dim);
   cursor: pointer;
-  transition: color .12s, background .12s, border-color .12s;
+  transition: color .12s, background .12s;
 }
+.tcv-clipflip svg { transition: transform .15s ease-out; }
 .tcv-clipflip:hover { color: var(--ink); background: var(--hover); }
-.tcv-clipflip[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
-.tcv-clipflip:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tcv-clipflip[data-on="1"] { color: var(--ink-bright); }
+.tcv-clipflip[data-on="1"] svg { transform: rotate(180deg); }
+.tcv-clipflip:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+@media (prefers-reduced-motion: reduce) {
+  .tcv-clipflip, .tcv-clipflip svg { transition: none; }
+}
 
 /* A build has no percentage to report - the model script runs to its own
    clock - so the bar slides rather than fills. Honest about not knowing how

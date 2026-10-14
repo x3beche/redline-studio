@@ -46,8 +46,18 @@ const GLYPH =
   'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
   '<path d="M2.5 5.5h10M10 3l2.5 2.5L10 8"/><path d="M13.5 10.5h-10M6 8l-2.5 2.5L6 13"/></svg>';
 
+/** The axis a plane cuts along: the one its normal leans on most. A plane
+ *  set to the view direction leans on one too; its exact normal is the
+ *  letter's tooltip. */
+export function axisOf(n: readonly number[] | null | undefined): string {
+  if (!n || n.length < 3) return '';
+  const a = n.slice(0, 3).map(Math.abs);
+  return 'XYZ'[a.indexOf(Math.max(...a))];
+}
+
 export class ClipReverse {
   private btns: (HTMLButtonElement | null)[] = [null, null, null];
+  private axes: (HTMLElement | null)[] = [null, null, null];
 
   constructor(private root: HTMLElement, private viewer: () => any) {
     // Whoever changes a normal - this switch, applyView, the viewer's own
@@ -74,6 +84,10 @@ export class ClipReverse {
       row.classList.add('tcv-clipflip-row');
       row.appendChild(b);
       this.btns[i] = b;
+      const ax = document.createElement('span');
+      ax.className = 'tcv-clipaxis';
+      lbl.after(ax);
+      this.axes[i] = ax;
     }
     this.relabel();
     this.paint();
@@ -99,15 +113,22 @@ export class ClipReverse {
     this.paint();
   }
 
-  /** Each switch is lit while its plane faces away from the default. */
+  /** Each switch is lit while its plane faces away from the default; the
+   *  letter before the slider names the plane's axis. */
   paint() {
     const v = this.viewer();
     this.btns.forEach((b, i) => {
       if (!b) return;
-      let on = false;
-      try { on = isReversed(i, v?.getClipNormal?.(i)); } catch { /* not rendered yet */ }
+      let n: number[] | null = null;
+      try { n = v?.getClipNormal?.(i) ?? null; } catch { /* not rendered yet */ }
+      const on = isReversed(i, n);
       b.dataset['on'] = on ? '1' : '0';
       b.setAttribute('aria-pressed', String(on));
+      const ax = this.axes[i];
+      if (ax) {
+        ax.textContent = axisOf(n ?? DEFAULT_NORMALS[i]);
+        ax.title = this.root.querySelector(`.tcv_lbl_norm_plane${i + 1}`)?.textContent?.trim() ?? '';
+      }
     });
   }
 }
