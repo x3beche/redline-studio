@@ -4668,6 +4668,7 @@ const TR: Record<string, string> = {
   'Nothing here': 'Burada bir şey yok',
   'No task matches this filter.': 'Bu filtreye uyan görev yok.',
   'No scheduled tasks yet': 'Henüz zamanlanmış görev yok',
+  'Search tasks': 'Görevlerde ara', 'New task': 'Yeni görev',
   'A task runs a report or a refresh by itself, on a schedule, and sends you the result. Start from a template, or press New.': 'Bir görev, bir raporu ya da yenilemeyi takvime göre kendiliğinden çalıştırır ve sonucu sana gönderir. Bir şablondan başla ya da Yeni\'ye bas.',
   'Your role may not make this one': 'Rolün bunu oluşturmaya yetmiyor',
   'Pick a task': 'Bir görev seç',

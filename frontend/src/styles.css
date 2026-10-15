@@ -3645,7 +3645,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-notes-item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 7px 12px; text-align: left;
   background: none; border: 0; border-left: 2px solid transparent; cursor: pointer; }
 .tcv-notes-item:hover { background: var(--hover); }
-.tcv-notes-item[data-on] { background: var(--surface); border-left-color: var(--accent); }
+/* The open one is told by ink and weight alone (no fill, no edge line). */
+.tcv-notes-item[data-on] .tcv-notes-item-title { color: var(--ink-bright); font-weight: 700; }
 .tcv-notes-item-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .tcv-notes-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12.5px; font-weight: 600; color: var(--ink); }

@@ -84,337 +84,363 @@ const I = {
   imports: [T, UiSelect, Skeleton, EmptyState, Markdown],
   styleUrls: ['./scheduled.css'],
   template: `
-<div class="sk-room">
-  <!-- One row: the count, the filter, the scheduler's switch, templates and New. -->
-  <div class="sk-bar">
-    <span class="sk-title">{{ 'Scheduled tasks' | t }}@if (tasks(); as ts) {<small>{{ ts.length }}</small>}</span>
-    <div class="sk-seg" role="group" [attr.aria-label]="'Show' | t">
-      @for (f of filters; track f.id) {
-        <button type="button" [attr.data-on]="filter() === f.id ? 1 : null" (click)="filter.set(f.id)">{{ f.label | t }}<em>{{ count(f.id) }}</em></button>
+<div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
+  <!-- LEFT, as in Parts: find, make, the tasks, and the templates to start from. -->
+  <aside class="tcv-notes-side">
+    <div class="tcv-notes-find">
+      <input class="tcv-notes-search" [placeholder]="'Search tasks' | t" [value]="q()"
+             (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()">
+    </div>
+    @if (canMake()) {
+      <div class="sk-side-acts">
+        <button type="button" class="tcv-btn" (click)="newMenu($event)">{{ 'New task' | t }}</button>
+        <button type="button" class="tcv-btn" (click)="templateMenu($event)">{{ 'Templates' | t }}</button>
+      </div>
+    }
+    <div class="tcv-notes-list">
+      <button type="button" class="tcv-notes-item" [attr.data-on]="draft() ? null : 1" (click)="home()">
+        <span class="tcv-notes-item-top">
+          <span class="tcv-notes-item-title">{{ 'Overview' | t }}</span>
+          <span class="tcv-notes-item-when">{{ tasks()?.length ?? 0 }} · {{ count('on') }} {{ 'on' | t }}</span>
+        </span>
+      </button>
+      @if (found().length) {
+        <div class="tcv-notes-group">{{ 'Tasks' | t }}</div>
+        @for (x of found(); track x.id) {
+          <button type="button" class="tcv-notes-item" [attr.data-on]="draft()?.id === x.id ? 1 : null" (click)="open(x.id)">
+            <span class="tcv-notes-item-top">
+              <span class="tcv-notes-item-title" [class.sk-dimname]="!x.enabled">{{ x.name }}</span>
+              <span class="tcv-notes-item-when">{{ x.enabled ? inn(x.next_run) : ('paused' | t) }}</span>
+            </span>
+            <span class="tcv-notes-item-snip">{{ words(x.schedule) }}
+              @if (x.last; as l) { · <span class="sk-tone" [attr.data-tone]="tone(l.status)">{{ statusWord(l.status) | t }}</span> }</span>
+          </button>
+        }
+      } @else if (q()) { <wb-empty compact icon="search" text="Nothing matches." /> }
+      @if (templates().length) {
+        <div class="tcv-notes-group">{{ 'Start from a template' | t }}</div>
+        @for (tp of templates(); track tp.id) {
+          <button type="button" class="tcv-notes-item" [disabled]="!tp.allowed || !canMake()" (click)="fromTemplate(tp)"
+                  [title]="(tp.allowed ? tp.about : 'Your role may not make this one') | t">
+            <span class="tcv-notes-item-top"><span class="tcv-notes-item-title">{{ tp.name | t }}</span></span>
+            <span class="tcv-notes-item-snip">{{ tp.about | t }}</span>
+          </button>
+        }
       }
     </div>
-    <span class="sk-fill"></span>
-    @if (settings(); as s) {
-      <button type="button" class="sk-switchrow" [disabled]="!canSettings()" (click)="toggleScheduler()"
-              [title]="(canSettings() ? (s.on ? 'Switch every scheduled task off, at once' : 'Let the scheduled tasks run again') : 'Only an owner or admin switches the scheduler') | t">
-        <span class="tcv-switch" [attr.data-on]="s.on ? 1 : null" aria-hidden="true"></span>
-        @if (s.on) { {{ 'Scheduler on' | t }} · {{ s.max_parallel }} {{ 'at once' | t }} }
-        @else { <span class="sk-off">{{ (s.env_off ? 'Scheduler off (server setting)' : 'Scheduler off') | t }}</span> }
-      </button>
-    }
-    <button type="button" class="sk-btn" (click)="templateMenu($event)" [disabled]="!canMake()" [title]="'Start from a template' | t">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.tpl"/></svg>{{ 'Templates' | t }}</button>
-    <button type="button" class="sk-btn" data-tone="accent" (click)="newMenu($event)" [disabled]="!canMake()"
-            [title]="(canMake() ? 'A new scheduled task' : 'Viewers cannot make tasks') | t">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.plus"/></svg>{{ 'New' | t }}</button>
+  </aside>
+
+  <!-- RIGHT, as in Parts: the overview (head row, filters, the table), or the open task. -->
+  <section class="tcv-notes-main sk-main">
+    @if (!draft()) {
+      <div class="sk-bar">
+      <span class="sk-title">{{ 'Scheduled tasks' | t }}@if (tasks(); as ts) {<small>{{ ts.length }}</small>}</span>
+      <div class="sk-seg" role="group" [attr.aria-label]="'Show' | t">
+        @for (f of filters; track f.id) {
+          <button type="button" [attr.data-on]="filter() === f.id ? 1 : null" (click)="filter.set(f.id)">{{ f.label | t }}<em>{{ count(f.id) }}</em></button>
+        }
+      </div>
+      <span class="sk-fill"></span>
+      @if (settings(); as s) {
+        <button type="button" class="sk-switchrow" [disabled]="!canSettings()" (click)="toggleScheduler()"
+                [title]="(canSettings() ? (s.on ? 'Switch every scheduled task off, at once' : 'Let the scheduled tasks run again') : 'Only an owner or admin switches the scheduler') | t">
+          <span class="tcv-switch" [attr.data-on]="s.on ? 1 : null" aria-hidden="true"></span>
+          @if (s.on) { {{ 'Scheduler on' | t }} · {{ s.max_parallel }} {{ 'at once' | t }} }
+          @else { <span class="sk-off">{{ (s.env_off ? 'Scheduler off (server setting)' : 'Scheduler off') | t }}</span> }
+        </button>
+      }
+      <button type="button" class="sk-btn" (click)="templateMenu($event)" [disabled]="!canMake()" [title]="'Start from a template' | t">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.tpl"/></svg>{{ 'Templates' | t }}</button>
+      <button type="button" class="sk-btn" data-tone="accent" (click)="newMenu($event)" [disabled]="!canMake()"
+              [title]="(canMake() ? 'A new scheduled task' : 'Viewers cannot make tasks') | t">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.plus"/></svg>{{ 'New' | t }}</button>
+    </div>
+      <div class="sk-table" [attr.aria-label]="'Scheduled tasks' | t">
+        @if (tasks(); as ts) {
+          <div class="sk-thead" aria-hidden="true">
+            <span>{{ 'Task' | t }}</span><span>{{ 'Schedule' | t }}</span><span class="sk-hide-sm">{{ 'Next' | t }}</span>
+            <span class="sk-hide-sm">{{ 'Last run' | t }}</span><span></span>
+          </div>
+          @if (ts.length) {
+            @for (x of shown(); track x.id) {
+              <div class="sk-row" role="button" tabindex="0" [attr.data-on]="x.id === sel() ? 1 : null" [attr.data-off]="x.enabled ? null : 1"
+                   [attr.aria-current]="x.id === sel() ? 'true' : null" (click)="open(x.id)" (keydown.enter)="open(x.id)">
+                <div class="sk-cell"><span class="sk-name">{{ x.name }}</span><span class="sk-sub">{{ x.type_label | t }}</span></div>
+                <div class="sk-cell"><span>{{ words(x.schedule) }}</span><span class="sk-sub">{{ x.tz }}</span></div>
+                <div class="sk-cell sk-hide-sm"><span class="sk-when" [title]="exact(x.next_run)">{{ x.enabled ? inn(x.next_run) : ('paused' | t) }}</span>
+                  <span class="sk-sub">{{ x.enabled ? short(x.next_run, x.tz) : '' }}</span></div>
+                <div class="sk-cell sk-hide-sm">
+                  @if (x.open; as o) {
+                    <span class="sk-tone" data-tone="live">{{ statusWord(o.status) | t }}</span><span class="sk-sub">{{ o.waiting || o.doing || '' }}</span>
+                  } @else if (x.last; as l) {
+                    <span class="sk-tone" [attr.data-tone]="tone(l.status)" [title]="l.summary || ''">{{ statusWord(l.status) | t }} · {{ ago(l.at) }}</span>
+                    <span class="sk-sub" [title]="l.summary || ''">{{ l.summary || '' }}</span>
+                  } @else { <span class="sk-tone" data-tone="dim">{{ 'never run' | t }}</span> }
+                </div>
+                <div class="sk-sw">
+                  <button type="button" [disabled]="!mayChange(x)" (click)="$event.stopPropagation(); flip(x)"
+                          [title]="(x.enabled ? 'On - click to pause' : 'Paused - click to switch on') | t" [attr.aria-pressed]="x.enabled">
+                    <span class="tcv-switch" [attr.data-on]="x.enabled ? 1 : null" aria-hidden="true"></span></button>
+                </div>
+              </div>
+            } @empty {
+              <wb-empty compact icon="doc" heading="Nothing here" text="No task matches this filter." />
+            }
+          } @else {
+            <wb-empty icon="doc" heading="No scheduled tasks yet"
+                      text="A task runs a report or a refresh by itself, on a schedule, and sends you the result. Start from a template, or press New.">
+              @if (canMake()) { <button type="button" class="tcv-btn" (click)="newMenu($event)">{{ 'New task' | t }}</button> }
+            </wb-empty>
+          }
+        } @else if (err()) { <p class="sk-err" style="padding: 12px">{{ err() }}</p> }
+        @else { <wb-skel kind="rows" [count]="8" [h]="40" /> }
   </div>
-
-  <!-- Nothing open: the list takes the whole width (as Files and Parts do);
-       the detail column comes in when a task is opened or being made. -->
-  <div class="sk-split" [attr.data-one]="draft() ? null : 1">
-    <!-- LEFT: every task, one row each. -->
-    <section class="sk-list" [attr.aria-label]="'Scheduled tasks' | t">
-      @if (tasks(); as ts) {
-        <div class="sk-thead" aria-hidden="true">
-          <span>{{ 'Task' | t }}</span><span>{{ 'Schedule' | t }}</span><span class="sk-hide-sm">{{ 'Next' | t }}</span>
-          <span class="sk-hide-sm">{{ 'Last run' | t }}</span><span></span>
-        </div>
-        @if (ts.length) {
-          @for (x of shown(); track x.id) {
-            <div class="sk-row" role="button" tabindex="0" [attr.data-on]="x.id === sel() ? 1 : null" [attr.data-off]="x.enabled ? null : 1"
-                 [attr.aria-current]="x.id === sel() ? 'true' : null" (click)="open(x.id)" (keydown.enter)="open(x.id)">
-              <div class="sk-cell"><span class="sk-name">{{ x.name }}</span><span class="sk-sub">{{ x.type_label | t }}</span></div>
-              <div class="sk-cell"><span>{{ words(x.schedule) }}</span><span class="sk-sub">{{ x.tz }}</span></div>
-              <div class="sk-cell sk-hide-sm"><span class="sk-when" [title]="exact(x.next_run)">{{ x.enabled ? inn(x.next_run) : ('paused' | t) }}</span>
-                <span class="sk-sub">{{ x.enabled ? short(x.next_run, x.tz) : '' }}</span></div>
-              <div class="sk-cell sk-hide-sm">
-                @if (x.open; as o) {
-                  <span class="sk-tone" data-tone="live">{{ statusWord(o.status) | t }}</span><span class="sk-sub">{{ o.waiting || o.doing || '' }}</span>
-                } @else if (x.last; as l) {
-                  <span class="sk-tone" [attr.data-tone]="tone(l.status)" [title]="l.summary || ''">{{ statusWord(l.status) | t }} · {{ ago(l.at) }}</span>
-                  <span class="sk-sub" [title]="l.summary || ''">{{ l.summary || '' }}</span>
-                } @else { <span class="sk-tone" data-tone="dim">{{ 'never run' | t }}</span> }
+    } @else {
+        @if (draft(); as d) {
+          @if (kindOf(d.type); as k) {
+          <div class="sk-head">
+            <input class="sk-headname" [value]="d.name" maxlength="80" [attr.aria-label]="'Name' | t" [disabled]="!editable()"
+                   (input)="patch({ name: $any($event.target).value })">
+            <span class="sk-headtype">{{ k.label | t }}</span>
+            @if (dirty()) { <span class="sk-dirty">{{ (d.id ? 'Not saved' : 'New - not made yet') | t }}</span> }
+            @if (dirty() || !d.id) {
+              @if (d.id) { <button type="button" class="sk-btn" (click)="revert()">{{ 'Revert' | t }}</button> }
+              @else { <button type="button" class="sk-btn" (click)="cancelNew()">{{ 'Cancel' | t }}</button> }
+              <button type="button" class="sk-btn" data-tone="accent" (click)="save()" [disabled]="saving() || !editable()">
+                {{ (d.id ? 'Save' : 'Make the task') | t }}</button>
+            }
+            @if (cur(); as c) {
+              <div class="sk-joined">
+                <button type="button" class="sk-btn" (click)="runNow(c)" [disabled]="!!c.open || !mayChange(c) || !settings()?.on || (c.llm && !d.params['accept_cost'])"
+                        [title]="(c.open ? 'A run is waiting or going' : 'Run it now, outside its schedule') | t">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.play"/></svg>{{ 'Run now' | t }}</button>
+                <button type="button" class="sk-btn" (click)="flip(c)" [disabled]="!mayChange(c)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="c.enabled ? I.pause : I.play"/></svg>{{ (c.enabled ? 'Pause' : 'Resume') | t }}</button>
+                <button type="button" class="sk-btn" data-tone="danger" (click)="remove(c)" [disabled]="!mayChange(c) || !auth.can('delete')"
+                        [title]="'Delete the task and its history' | t">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash"/></svg>{{ 'Delete' | t }}</button>
               </div>
-              <div class="sk-sw">
-                <button type="button" [disabled]="!mayChange(x)" (click)="$event.stopPropagation(); flip(x)"
-                        [title]="(x.enabled ? 'On - click to pause' : 'Paused - click to switch on') | t" [attr.aria-pressed]="x.enabled">
-                  <span class="tcv-switch" [attr.data-on]="x.enabled ? 1 : null" aria-hidden="true"></span></button>
-              </div>
-            </div>
-          } @empty {
-            <wb-empty compact icon="doc" heading="Nothing here" text="No task matches this filter." />
-          }
-        } @else {
-          <div class="sk-none">
-            <b>{{ 'No scheduled tasks yet' | t }}</b>
-            <span>{{ 'A task runs a report or a refresh by itself, on a schedule, and sends you the result. Start from a template, or press New.' | t }}</span>
+            }
           </div>
-        }
-        @if (templates().length && ts.length < 12) {
-          <div class="sk-tpls">
-            <h4>{{ 'Start from a template' | t }}</h4>
-            <div class="sk-tplgrid">
-              @for (tp of templates(); track tp.id) {
-                <button type="button" class="sk-tpl" [disabled]="!tp.allowed || !canMake()" (click)="fromTemplate(tp)"
-                        [title]="(tp.allowed ? '' : 'Your role may not make this one') | t">
-                  <b>{{ tp.name | t }}</b><span>{{ tp.about | t }}</span></button>
-              }
-            </div>
-          </div>
-        }
-      } @else if (err()) { <p class="sk-err" style="padding: 12px">{{ err() }}</p> }
-      @else { <wb-skel kind="rows" [count]="8" [h]="40" /> }
-    </section>
-
-    <!-- RIGHT: the open task, or the one being made. -->
-    <section class="sk-detail">
-      @if (draft(); as d) {
-        @if (kindOf(d.type); as k) {
-        <div class="sk-head">
-          <input class="sk-headname" [value]="d.name" maxlength="80" [attr.aria-label]="'Name' | t" [disabled]="!editable()"
-                 (input)="patch({ name: $any($event.target).value })">
-          <span class="sk-headtype">{{ k.label | t }}</span>
-          @if (dirty()) { <span class="sk-dirty">{{ (d.id ? 'Not saved' : 'New - not made yet') | t }}</span> }
-          @if (dirty() || !d.id) {
-            @if (d.id) { <button type="button" class="sk-btn" (click)="revert()">{{ 'Revert' | t }}</button> }
-            @else { <button type="button" class="sk-btn" (click)="cancelNew()">{{ 'Cancel' | t }}</button> }
-            <button type="button" class="sk-btn" data-tone="accent" (click)="save()" [disabled]="saving() || !editable()">
-              {{ (d.id ? 'Save' : 'Make the task') | t }}</button>
-          }
-          @if (cur(); as c) {
-            <div class="sk-joined">
-              <button type="button" class="sk-btn" (click)="runNow(c)" [disabled]="!!c.open || !mayChange(c) || !settings()?.on || (c.llm && !d.params['accept_cost'])"
-                      [title]="(c.open ? 'A run is waiting or going' : 'Run it now, outside its schedule') | t">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.play"/></svg>{{ 'Run now' | t }}</button>
-              <button type="button" class="sk-btn" (click)="flip(c)" [disabled]="!mayChange(c)">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="c.enabled ? I.pause : I.play"/></svg>{{ (c.enabled ? 'Pause' : 'Resume') | t }}</button>
-              <button type="button" class="sk-btn" data-tone="danger" (click)="remove(c)" [disabled]="!mayChange(c) || !auth.can('delete')"
-                      [title]="'Delete the task and its history' | t">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.trash"/></svg>{{ 'Delete' | t }}</button>
-            </div>
-          }
-        </div>
-        @if (saveErr()) { <p class="sk-err" style="padding: 0 14px">{{ saveErr() }}</p> }
-
-        <!-- When: the schedule editor, and the next five times beside it. -->
-        <div class="sk-sec sk-whensec">
-            <h3>{{ 'When' | t }}<span class="sk-aside">{{ d.tz }}</span></h3>
-            <div class="sk-when-grid">
-              <div>
-                <div class="sk-seg" role="group" [attr.aria-label]="'Schedule' | t" style="margin-bottom: 10px">
-                  @for (o of kinds; track o.id) {
-                    <button type="button" [attr.data-on]="d.schedule.kind === o.id ? 1 : null" [disabled]="!editable()" (click)="setKind(o.id)">{{ o.label | t }}</button>
+          @if (saveErr()) { <p class="sk-err" style="padding: 0 14px">{{ saveErr() }}</p> }
+  
+          <!-- When: the schedule editor, and the next five times beside it. -->
+          <div class="sk-sec sk-whensec">
+              <h3>{{ 'When' | t }}<span class="sk-aside">{{ d.tz }}</span></h3>
+              <div class="sk-when-grid">
+                <div>
+                  <div class="sk-seg" role="group" [attr.aria-label]="'Schedule' | t" style="margin-bottom: 10px">
+                    @for (o of kinds; track o.id) {
+                      <button type="button" [attr.data-on]="d.schedule.kind === o.id ? 1 : null" [disabled]="!editable()" (click)="setKind(o.id)">{{ o.label | t }}</button>
+                    }
+                  </div>
+                  <div class="sk-fields">
+                    @switch (d.schedule.kind) {
+                      @case ('weekly') {
+                        <div class="sk-f" data-wide="1"><span class="sk-lab">{{ 'Days' | t }}</span>
+                          <div class="sk-days">
+                            @for (n of [1, 2, 3, 4, 5, 6, 7]; track n) {
+                              <button type="button" [attr.data-on]="(d.schedule.days || []).includes(n) ? 1 : null" [disabled]="!editable()"
+                                      [title]="dayName(n) | t" (click)="toggleDay(n)">{{ dayShort(n) | t }}</button>
+                            }
+                          </div></div>
+                      }
+                      @case ('monthly') {
+                        <div class="sk-f"><span class="sk-lab">{{ 'Day of the month' | t }}</span>
+                          <wb-select size="sm" label="Day of the month" [options]="monthDays()" [value]="'' + (d.schedule.day ?? 1)" [disabled]="!editable()"
+                                     (pick)="setSched({ day: +$event })" /></div>
+                      }
+                      @case ('hours') {
+                        <div class="sk-f"><span class="sk-lab">{{ 'Every' | t }}</span>
+                          <wb-select size="sm" label="Every" [options]="everyOpts()" [value]="'' + (d.schedule.every ?? 1)" [disabled]="!editable()"
+                                     (pick)="setSched({ every: +$event })" /></div>
+                        <div class="sk-f"><label for="sk-min">{{ 'At minute' | t }}</label>
+                          <input id="sk-min" class="sk-in" inputmode="numeric" [value]="'' + (d.schedule.minute ?? 0)" [disabled]="!editable()"
+                                 (input)="setSched({ minute: +$any($event.target).value || 0 })"></div>
+                      }
+                      @case ('cron') {
+                        <div class="sk-f" data-wide="1"><label for="sk-cron">{{ 'Cron (minute hour day month weekday)' | t }}</label>
+                          <input id="sk-cron" class="sk-in" [value]="d.schedule.cron || ''" placeholder="0 9 * * 1" [disabled]="!editable()"
+                                 [attr.data-bad]="previewErr() ? 1 : null" (input)="setSched({ cron: $any($event.target).value })"></div>
+                      }
+                    }
+                    @if (d.schedule.kind !== 'hours' && d.schedule.kind !== 'cron') {
+                      <div class="sk-f"><label for="sk-at">{{ 'At' | t }}</label>
+                        <input id="sk-at" class="sk-in" [value]="d.schedule.at || '09:00'" placeholder="09:00" maxlength="5" [disabled]="!editable()"
+                               [attr.data-bad]="previewErr() ? 1 : null" (input)="setSched({ at: $any($event.target).value })"></div>
+                    }
+                    <div class="sk-f"><span class="sk-lab">{{ 'Time zone' | t }}</span>
+                      <wb-select size="sm" label="Time zone" [options]="zoneOpts()" [value]="d.tz" [disabled]="!editable()" (pick)="patch({ tz: $event })" /></div>
+                  </div>
+                  @if (preview(); as pv) {
+                    <p class="sk-words">{{ words(d.schedule) }}@if (d.schedule.kind !== 'cron') {<small>{{ pv.cron }}</small>}</p>
                   }
+                  @if (previewErr(); as e) { <p class="sk-err">{{ e | t }}</p> }
                 </div>
+                <div>
+                  <div class="sk-next-head">{{ 'Next runs' | t }}</div>
+                  @if (preview(); as pv) {
+                    <ul class="sk-next">
+                      @for (n of pv.next; track n.at) { <li>{{ dayShort(n.dow) | t }} {{ n.local }}<span>{{ inn(n.at) }}</span></li> }
+                    </ul>
+                  } @else if (!previewErr()) { <wb-skel kind="rows" [count]="5" [h]="22" /> }
+                </div>
+              </div>
+            </div>
+  
+  
+          <div class="sk-two">
+            <!-- What it does: the type's own inputs. -->
+            <div class="sk-sec">
+              <h3>{{ 'What it does' | t }}</h3>
+              <p class="sk-about">{{ k.about | t }}</p>
+              @if (k.params.length) {
                 <div class="sk-fields">
-                  @switch (d.schedule.kind) {
-                    @case ('weekly') {
-                      <div class="sk-f" data-wide="1"><span class="sk-lab">{{ 'Days' | t }}</span>
-                        <div class="sk-days">
-                          @for (n of [1, 2, 3, 4, 5, 6, 7]; track n) {
-                            <button type="button" [attr.data-on]="(d.schedule.days || []).includes(n) ? 1 : null" [disabled]="!editable()"
-                                    [title]="dayName(n) | t" (click)="toggleDay(n)">{{ dayShort(n) | t }}</button>
+                  @for (p of k.params; track p.name) {
+                    <div class="sk-f" [attr.data-wide]="p.kind === 'text' || p.kind === 'list' ? 1 : null">
+                      @if (p.kind !== 'bool') { <label [attr.for]="'sk-p-' + p.name">{{ p.label | t }}</label> }
+                      @switch (p.kind) {
+                        @case ('bool') {
+                          <span class="sk-lab">&nbsp;</span>
+                          <div class="sk-checks"><label><input type="checkbox" class="tcv-check" [checked]="!!d.params[p.name]" [disabled]="!editable()"
+                                 (change)="setParam(p.name, $any($event.target).checked)"> {{ p.label | t }}</label></div>
+                        }
+                        @case ('enum') {
+                          <wb-select size="sm" [label]="p.label" [options]="enumOpts(p)" [value]="'' + (d.params[p.name] ?? '')" [disabled]="!editable()"
+                                     (pick)="setParam(p.name, $event)" />
+                        }
+                        @case ('text') {
+                          <textarea class="sk-in" [id]="'sk-p-' + p.name" [value]="'' + (d.params[p.name] ?? '')" [attr.maxlength]="p.max_len"
+                                    [disabled]="!editable()" (input)="setParam(p.name, $any($event.target).value)"></textarea>
+                        }
+                        @case ('list') {
+                          @if (p.choices.length) {
+                            <div class="sk-checks">
+                              @for (c of p.choices; track c) {
+                                <label><input type="checkbox" class="tcv-check" [checked]="listOf(p.name).includes(c)" [disabled]="!editable()"
+                                       (change)="toggleItem(p.name, c)"> {{ kindLabel(c) | t }}</label>
+                              }
+                            </div>
+                          } @else {
+                            <div class="sk-chips">
+                              @for (v of listOf(p.name); track v) {
+                                <span class="sk-chip"><span [title]="v">{{ itemLabel(p, v) }}</span>
+                                  @if (editable()) { <button type="button" (click)="toggleItem(p.name, v)" [attr.aria-label]="'Remove' | t">×</button> }</span>
+                              }
+                              @if (editable() && listOf(p.name).length < p.max_items) {
+                                <wb-select size="sm" [label]="p.label" placeholder="Add" [options]="itemOpts(p)" value=""
+                                           (opened)="loadItems(p.of)" (pick)="toggleItem(p.name, $event)" />
+                              }
+                            </div>
                           }
-                        </div></div>
-                    }
-                    @case ('monthly') {
-                      <div class="sk-f"><span class="sk-lab">{{ 'Day of the month' | t }}</span>
-                        <wb-select size="sm" label="Day of the month" [options]="monthDays()" [value]="'' + (d.schedule.day ?? 1)" [disabled]="!editable()"
-                                   (pick)="setSched({ day: +$event })" /></div>
-                    }
-                    @case ('hours') {
-                      <div class="sk-f"><span class="sk-lab">{{ 'Every' | t }}</span>
-                        <wb-select size="sm" label="Every" [options]="everyOpts()" [value]="'' + (d.schedule.every ?? 1)" [disabled]="!editable()"
-                                   (pick)="setSched({ every: +$event })" /></div>
-                      <div class="sk-f"><label for="sk-min">{{ 'At minute' | t }}</label>
-                        <input id="sk-min" class="sk-in" inputmode="numeric" [value]="'' + (d.schedule.minute ?? 0)" [disabled]="!editable()"
-                               (input)="setSched({ minute: +$any($event.target).value || 0 })"></div>
-                    }
-                    @case ('cron') {
-                      <div class="sk-f" data-wide="1"><label for="sk-cron">{{ 'Cron (minute hour day month weekday)' | t }}</label>
-                        <input id="sk-cron" class="sk-in" [value]="d.schedule.cron || ''" placeholder="0 9 * * 1" [disabled]="!editable()"
-                               [attr.data-bad]="previewErr() ? 1 : null" (input)="setSched({ cron: $any($event.target).value })"></div>
-                    }
-                  }
-                  @if (d.schedule.kind !== 'hours' && d.schedule.kind !== 'cron') {
-                    <div class="sk-f"><label for="sk-at">{{ 'At' | t }}</label>
-                      <input id="sk-at" class="sk-in" [value]="d.schedule.at || '09:00'" placeholder="09:00" maxlength="5" [disabled]="!editable()"
-                             [attr.data-bad]="previewErr() ? 1 : null" (input)="setSched({ at: $any($event.target).value })"></div>
-                  }
-                  <div class="sk-f"><span class="sk-lab">{{ 'Time zone' | t }}</span>
-                    <wb-select size="sm" label="Time zone" [options]="zoneOpts()" [value]="d.tz" [disabled]="!editable()" (pick)="patch({ tz: $event })" /></div>
-                </div>
-                @if (preview(); as pv) {
-                  <p class="sk-words">{{ words(d.schedule) }}@if (d.schedule.kind !== 'cron') {<small>{{ pv.cron }}</small>}</p>
-                }
-                @if (previewErr(); as e) { <p class="sk-err">{{ e | t }}</p> }
-              </div>
-              <div>
-                <div class="sk-next-head">{{ 'Next runs' | t }}</div>
-                @if (preview(); as pv) {
-                  <ul class="sk-next">
-                    @for (n of pv.next; track n.at) { <li>{{ dayShort(n.dow) | t }} {{ n.local }}<span>{{ inn(n.at) }}</span></li> }
-                  </ul>
-                } @else if (!previewErr()) { <wb-skel kind="rows" [count]="5" [h]="22" /> }
-              </div>
-            </div>
-          </div>
-
-
-        <div class="sk-two">
-          <!-- What it does: the type's own inputs. -->
-          <div class="sk-sec">
-            <h3>{{ 'What it does' | t }}</h3>
-            <p class="sk-about">{{ k.about | t }}</p>
-            @if (k.params.length) {
-              <div class="sk-fields">
-                @for (p of k.params; track p.name) {
-                  <div class="sk-f" [attr.data-wide]="p.kind === 'text' || p.kind === 'list' ? 1 : null">
-                    @if (p.kind !== 'bool') { <label [attr.for]="'sk-p-' + p.name">{{ p.label | t }}</label> }
-                    @switch (p.kind) {
-                      @case ('bool') {
-                        <span class="sk-lab">&nbsp;</span>
-                        <div class="sk-checks"><label><input type="checkbox" class="tcv-check" [checked]="!!d.params[p.name]" [disabled]="!editable()"
-                               (change)="setParam(p.name, $any($event.target).checked)"> {{ p.label | t }}</label></div>
-                      }
-                      @case ('enum') {
-                        <wb-select size="sm" [label]="p.label" [options]="enumOpts(p)" [value]="'' + (d.params[p.name] ?? '')" [disabled]="!editable()"
-                                   (pick)="setParam(p.name, $event)" />
-                      }
-                      @case ('text') {
-                        <textarea class="sk-in" [id]="'sk-p-' + p.name" [value]="'' + (d.params[p.name] ?? '')" [attr.maxlength]="p.max_len"
-                                  [disabled]="!editable()" (input)="setParam(p.name, $any($event.target).value)"></textarea>
-                      }
-                      @case ('list') {
-                        @if (p.choices.length) {
-                          <div class="sk-checks">
-                            @for (c of p.choices; track c) {
-                              <label><input type="checkbox" class="tcv-check" [checked]="listOf(p.name).includes(c)" [disabled]="!editable()"
-                                     (change)="toggleItem(p.name, c)"> {{ kindLabel(c) | t }}</label>
-                            }
-                          </div>
-                        } @else {
-                          <div class="sk-chips">
-                            @for (v of listOf(p.name); track v) {
-                              <span class="sk-chip"><span [title]="v">{{ itemLabel(p, v) }}</span>
-                                @if (editable()) { <button type="button" (click)="toggleItem(p.name, v)" [attr.aria-label]="'Remove' | t">×</button> }</span>
-                            }
-                            @if (editable() && listOf(p.name).length < p.max_items) {
-                              <wb-select size="sm" [label]="p.label" placeholder="Add" [options]="itemOpts(p)" value=""
-                                         (opened)="loadItems(p.of)" (pick)="toggleItem(p.name, $event)" />
-                            }
-                          </div>
+                        }
+                        @default {
+                          <input class="sk-in" [id]="'sk-p-' + p.name" [value]="'' + (d.params[p.name] ?? '')" [disabled]="!editable()"
+                                 [attr.inputmode]="p.kind === 'str' ? null : 'decimal'" [attr.maxlength]="p.max_len"
+                                 (input)="setParam(p.name, $any($event.target).value, p.kind)">
                         }
                       }
-                      @default {
-                        <input class="sk-in" [id]="'sk-p-' + p.name" [value]="'' + (d.params[p.name] ?? '')" [disabled]="!editable()"
-                               [attr.inputmode]="p.kind === 'str' ? null : 'decimal'" [attr.maxlength]="p.max_len"
-                               (input)="setParam(p.name, $any($event.target).value, p.kind)">
-                      }
-                    }
-                    @if (p.about && p.kind !== 'bool') { <small>{{ p.about | t }}@if (p.lo !== null && p.hi !== null) { · {{ p.lo }}-{{ p.hi }}}</small> }
+                      @if (p.about && p.kind !== 'bool') { <small>{{ p.about | t }}@if (p.lo !== null && p.hi !== null) { · {{ p.lo }}-{{ p.hi }}}</small> }
+                    </div>
+                  }
+                </div>
+              } @else { <p class="sk-about">{{ 'It takes no inputs.' | t }}</p> }
+              @if (k.llm) {
+                <p class="sk-warn"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.warn"/></svg>
+                  <span>{{ 'Every run of this task spends money on a model. It is made paused; it runs only with the cost accepted, stops when a run passes its cap, and is held to a monthly cap of its own and one for all your tasks.' | t }}
+                    @if (settings(); as s) { {{ 'Your monthly cap' | t }}: {{ money(s.user_month_usd) }}. }</span></p>
+              }
+              @if (!k.allowed) { <p class="sk-err">{{ 'Your role may not run this type of task.' | t }}</p> }
+            </div>
+  
+            <div class="sk-col">
+            <!-- Where the result goes. -->
+            <div class="sk-sec">
+              <h3>{{ 'Where the result goes' | t }}</h3>
+              <div class="sk-checks">
+                <label><input type="checkbox" class="tcv-check" [checked]="d.deliver.inapp" [disabled]="!editable()" (change)="setDeliver({ inapp: !d.deliver.inapp })">
+                  {{ 'In the app' | t }}</label>
+                <label [attr.data-off]="!types()?.telegram ? 1 : null"
+                       [title]="(types()?.telegram ? 'To your linked Telegram chat' : 'Link your Telegram in Settings > Telegram first') | t">
+                  <input type="checkbox" class="tcv-check" [checked]="d.deliver.telegram" [disabled]="!editable() || (!types()?.telegram && !d.deliver.telegram)"
+                         (change)="setDeliver({ telegram: !d.deliver.telegram })"> Telegram</label>
+                <label [title]="'Into Files > In the app > Agents > Scheduled tasks' | t">
+                  <input type="checkbox" class="tcv-check" [checked]="d.deliver.file" [disabled]="!editable()" (change)="setDeliver({ file: !d.deliver.file })">
+                  {{ 'A file' | t }}</label>
+                @if (d.deliver.file && k.table) {
+                  <div class="sk-seg">
+                    <button type="button" [attr.data-on]="d.deliver.format === 'md' ? 1 : null" (click)="setDeliver({ format: 'md' })">Markdown</button>
+                    <button type="button" [attr.data-on]="d.deliver.format === 'csv' ? 1 : null" (click)="setDeliver({ format: 'csv' })">CSV</button>
                   </div>
                 }
               </div>
-            } @else { <p class="sk-about">{{ 'It takes no inputs.' | t }}</p> }
-            @if (k.llm) {
-              <p class="sk-warn"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.warn"/></svg>
-                <span>{{ 'Every run of this task spends money on a model. It is made paused; it runs only with the cost accepted, stops when a run passes its cap, and is held to a monthly cap of its own and one for all your tasks.' | t }}
-                  @if (settings(); as s) { {{ 'Your monthly cap' | t }}: {{ money(s.user_month_usd) }}. }</span></p>
-            }
-            @if (!k.allowed) { <p class="sk-err">{{ 'Your role may not run this type of task.' | t }}</p> }
-          </div>
-
-          <div class="sk-col">
-          <!-- Where the result goes. -->
-          <div class="sk-sec">
-            <h3>{{ 'Where the result goes' | t }}</h3>
-            <div class="sk-checks">
-              <label><input type="checkbox" class="tcv-check" [checked]="d.deliver.inapp" [disabled]="!editable()" (change)="setDeliver({ inapp: !d.deliver.inapp })">
-                {{ 'In the app' | t }}</label>
-              <label [attr.data-off]="!types()?.telegram ? 1 : null"
-                     [title]="(types()?.telegram ? 'To your linked Telegram chat' : 'Link your Telegram in Settings > Telegram first') | t">
-                <input type="checkbox" class="tcv-check" [checked]="d.deliver.telegram" [disabled]="!editable() || (!types()?.telegram && !d.deliver.telegram)"
-                       (change)="setDeliver({ telegram: !d.deliver.telegram })"> Telegram</label>
-              <label [title]="'Into Files > In the app > Agents > Scheduled tasks' | t">
-                <input type="checkbox" class="tcv-check" [checked]="d.deliver.file" [disabled]="!editable()" (change)="setDeliver({ file: !d.deliver.file })">
-                {{ 'A file' | t }}</label>
-              @if (d.deliver.file && k.table) {
-                <div class="sk-seg">
-                  <button type="button" [attr.data-on]="d.deliver.format === 'md' ? 1 : null" (click)="setDeliver({ format: 'md' })">Markdown</button>
-                  <button type="button" [attr.data-on]="d.deliver.format === 'csv' ? 1 : null" (click)="setDeliver({ format: 'csv' })">CSV</button>
-                </div>
-              }
+              <p class="sk-about" style="margin: 8px 0 0">{{ 'Every run is also kept in the history below. There is no e-mail.' | t }}</p>
             </div>
-            <p class="sk-about" style="margin: 8px 0 0">{{ 'Every run is also kept in the history below. There is no e-mail.' | t }}</p>
-          </div>
-          <!-- Its limits. -->
-          <div class="sk-sec">
-            <h3>{{ 'Limits' | t }}</h3>
-            <div class="sk-fields">
-              <div class="sk-f"><label for="sk-to">{{ 'Time limit (s)' | t }}</label>
-                <input id="sk-to" class="sk-in" inputmode="numeric" [value]="'' + d.timeout_s" [disabled]="!editable()" (input)="patch({ timeout_s: +$any($event.target).value || 0 })"></div>
-              <div class="sk-f"><span class="sk-lab">{{ 'Retries' | t }}</span>
-                <wb-select size="sm" label="Retries" [options]="retryOpts" [value]="'' + d.retries" [disabled]="!editable() || !k.rerun_safe"
-                           [tip]="(k.rerun_safe ? 'After 1, 5 and 15 minutes' : 'Not re-run by itself: it costs money') | t" (pick)="patch({ retries: +$event })" /></div>
-              <div class="sk-f"><label for="sk-gr">{{ 'Late start allowed (min)' | t }}</label>
-                <input id="sk-gr" class="sk-in" inputmode="numeric" [value]="'' + d.grace_min" [disabled]="!editable()"
-                       [title]="'A run the server was down for is still made if it is late by less than this; otherwise it is recorded as missed' | t"
-                       (input)="patch({ grace_min: +$any($event.target).value || 0 })"></div>
-              @if (k.llm) {
-                <div class="sk-f"><label for="sk-mc">{{ 'Monthly cap (USD)' | t }}</label>
-                  <input id="sk-mc" class="sk-in" inputmode="decimal" [value]="'' + (d.month_usd ?? 1)" [disabled]="!editable()"
-                         (input)="patch({ month_usd: +$any($event.target).value || 0 })"></div>
-              }
+            <!-- Its limits. -->
+            <div class="sk-sec">
+              <h3>{{ 'Limits' | t }}</h3>
+              <div class="sk-fields">
+                <div class="sk-f"><label for="sk-to">{{ 'Time limit (s)' | t }}</label>
+                  <input id="sk-to" class="sk-in" inputmode="numeric" [value]="'' + d.timeout_s" [disabled]="!editable()" (input)="patch({ timeout_s: +$any($event.target).value || 0 })"></div>
+                <div class="sk-f"><span class="sk-lab">{{ 'Retries' | t }}</span>
+                  <wb-select size="sm" label="Retries" [options]="retryOpts" [value]="'' + d.retries" [disabled]="!editable() || !k.rerun_safe"
+                             [tip]="(k.rerun_safe ? 'After 1, 5 and 15 minutes' : 'Not re-run by itself: it costs money') | t" (pick)="patch({ retries: +$event })" /></div>
+                <div class="sk-f"><label for="sk-gr">{{ 'Late start allowed (min)' | t }}</label>
+                  <input id="sk-gr" class="sk-in" inputmode="numeric" [value]="'' + d.grace_min" [disabled]="!editable()"
+                         [title]="'A run the server was down for is still made if it is late by less than this; otherwise it is recorded as missed' | t"
+                         (input)="patch({ grace_min: +$any($event.target).value || 0 })"></div>
+                @if (k.llm) {
+                  <div class="sk-f"><label for="sk-mc">{{ 'Monthly cap (USD)' | t }}</label>
+                    <input id="sk-mc" class="sk-in" inputmode="decimal" [value]="'' + (d.month_usd ?? 1)" [disabled]="!editable()"
+                           (input)="patch({ month_usd: +$any($event.target).value || 0 })"></div>
+                }
+              </div>
             </div>
           </div>
-        </div>
-        </div>
-
-        <!-- The history. -->
-        @if (cur(); as c) {
-          <div class="sk-sec" style="border-bottom: 0">
-            <h3>{{ 'History' | t }}<span class="sk-aside">{{ 'kept 90 days' | t }}</span></h3>
-            @if (runs(); as rs) {
-              @if (rs.length) {
-                <table class="sk-hist">
-                  <colgroup><col style="width: 178px"><col style="width: 84px"><col style="width: 104px"><col style="width: 64px"><col>
-                    @if (c.llm) { <col style="width: 70px"> }</colgroup>
-                  <thead><tr><th>{{ 'When' | t }}</th><th>{{ 'Started by' | t }}</th><th>{{ 'Result' | t }}</th><th class="r">{{ 'Took' | t }}</th>
-                    <th>{{ 'Summary' | t }}</th>@if (c.llm) { <th class="r">{{ 'Cost' | t }}</th> }</tr></thead>
-                  <tbody>
-                    @for (r of rs; track r.id) {
-                      <tr class="sk-hrow" [attr.data-open]="openRun() === r.id ? 1 : null" (click)="toggleRun(r)">
-                        <td class="mono" [title]="exact(r.slot || r.at)"><span class="sk-caret">›</span>{{ short(r.started_at || r.slot || r.at, c.tz) }}</td>
-                        <td>{{ trigger(r) }}</td>
-                        <td><span class="sk-tone" [attr.data-tone]="tone(r.status)">{{ statusWord(r.status) | t }}</span></td>
-                        <td class="r mono">{{ took(r.ms) }}</td>
-                        <td class="sk-hsum" [title]="r.summary || r.error || ''">{{ r.summary || r.error || r.waiting || r.doing || '' }}</td>
-                        @if (c.llm) { <td class="r mono">{{ r.cost_usd != null ? money(r.cost_usd) : '–' }}</td> }
-                      </tr>
-                      @if (openRun() === r.id) {
-                        <tr><td [attr.colspan]="c.llm ? 6 : 5" class="sk-out">
-                          @if (outputs()[r.id]; as o) {
-                            <p class="sk-outmeta">{{ meta(r) }}</p>
-                            <div class="md" [innerHTML]="o | md"></div>
-                          } @else if (r.has_output) { <wb-skel kind="text" /> }
-                          @else { <p class="sk-outmeta">{{ (r.error || r.summary || 'Nothing was written for this run.') | t }}</p> }
-                        </td></tr>
+          </div>
+  
+          <!-- The history. -->
+          @if (cur(); as c) {
+            <div class="sk-sec" style="border-bottom: 0">
+              <h3>{{ 'History' | t }}<span class="sk-aside">{{ 'kept 90 days' | t }}</span></h3>
+              @if (runs(); as rs) {
+                @if (rs.length) {
+                  <table class="sk-hist">
+                    <colgroup><col style="width: 178px"><col style="width: 84px"><col style="width: 104px"><col style="width: 64px"><col>
+                      @if (c.llm) { <col style="width: 70px"> }</colgroup>
+                    <thead><tr><th>{{ 'When' | t }}</th><th>{{ 'Started by' | t }}</th><th>{{ 'Result' | t }}</th><th class="r">{{ 'Took' | t }}</th>
+                      <th>{{ 'Summary' | t }}</th>@if (c.llm) { <th class="r">{{ 'Cost' | t }}</th> }</tr></thead>
+                    <tbody>
+                      @for (r of rs; track r.id) {
+                        <tr class="sk-hrow" [attr.data-open]="openRun() === r.id ? 1 : null" (click)="toggleRun(r)">
+                          <td class="mono" [title]="exact(r.slot || r.at)"><span class="sk-caret">›</span>{{ short(r.started_at || r.slot || r.at, c.tz) }}</td>
+                          <td>{{ trigger(r) }}</td>
+                          <td><span class="sk-tone" [attr.data-tone]="tone(r.status)">{{ statusWord(r.status) | t }}</span></td>
+                          <td class="r mono">{{ took(r.ms) }}</td>
+                          <td class="sk-hsum" [title]="r.summary || r.error || ''">{{ r.summary || r.error || r.waiting || r.doing || '' }}</td>
+                          @if (c.llm) { <td class="r mono">{{ r.cost_usd != null ? money(r.cost_usd) : '–' }}</td> }
+                        </tr>
+                        @if (openRun() === r.id) {
+                          <tr><td [attr.colspan]="c.llm ? 6 : 5" class="sk-out">
+                            @if (outputs()[r.id]; as o) {
+                              <p class="sk-outmeta">{{ meta(r) }}</p>
+                              <div class="md" [innerHTML]="o | md"></div>
+                            } @else if (r.has_output) { <wb-skel kind="text" /> }
+                            @else { <p class="sk-outmeta">{{ (r.error || r.summary || 'Nothing was written for this run.') | t }}</p> }
+                          </td></tr>
+                        }
                       }
-                    }
-                  </tbody>
-                </table>
-                @if (rs.length >= limit()) { <button type="button" class="sk-btn sk-more" (click)="more()">{{ 'Older runs' | t }}</button> }
-              } @else { <p class="sk-about">{{ (c.enabled ? 'Not run yet. The first run is' : 'Not run yet, and paused.') | t }} @if (c.enabled) { {{ short(c.next_run, c.tz) }} ({{ inn(c.next_run) }}). } </p> }
-            } @else { <wb-skel kind="rows" [count]="4" [h]="28" /> }
-          </div>
+                    </tbody>
+                  </table>
+                  @if (rs.length >= limit()) { <button type="button" class="sk-btn sk-more" (click)="more()">{{ 'Older runs' | t }}</button> }
+                } @else { <p class="sk-about">{{ (c.enabled ? 'Not run yet. The first run is' : 'Not run yet, and paused.') | t }} @if (c.enabled) { {{ short(c.next_run, c.tz) }} ({{ inn(c.next_run) }}). } </p> }
+              } @else { <wb-skel kind="rows" [count]="4" [h]="28" /> }
+            </div>
+          }
+          }
         }
-        }
-      } @else if (tasks()?.length) {
-        <wb-empty icon="doc" heading="Pick a task" text="Its inputs, its schedule with the next runs, where its result goes and its history open here." />
       }
-    </section>
-  </div>
+  </section>
 </div>`,
 })
 export class RoomTasks implements OnDestroy {
@@ -431,6 +457,12 @@ export class RoomTasks implements OnDestroy {
   types = signal<Types | null>(null);
   templates = signal<Template[]>([]);
   err = signal<string | null>(null);
+  q = signal('');
+  /** The side list: every task, matched by name, type or schedule words. */
+  found = computed(() => {
+    const q = this.q().trim().toLowerCase(), ts = this.tasks() ?? [];
+    return q ? ts.filter(x => (x.name + ' ' + x.type_label + ' ' + this.words(x.schedule)).toLowerCase().includes(q)) : ts;
+  });
   filter = signal<'all' | 'on' | 'paused' | 'failing'>('all');
   /** The open task's id (the address's /tasks/<id>). */
   sel = signal<string | null>(navParams().get('task'));
@@ -602,6 +634,17 @@ export class RoomTasks implements OnDestroy {
   }
 
   revert() { const c = this.cur(); if (c) this.take(c); this.saveErr.set(null); }
+  /** Back to the overview: nothing open. */
+  home() {
+    if (this.dirty() && !confirmLeave()) return;
+    this.draft.set(null);
+    this.sel.set(null);
+    this.saveErr.set(null);
+    const u = navUrl();
+    u.searchParams.delete('task');
+    navGo(u, { push: true });
+  }
+
   cancelNew() {
     this.draft.set(null);
     this.saveErr.set(null);
