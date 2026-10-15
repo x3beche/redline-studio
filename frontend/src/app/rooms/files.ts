@@ -19,6 +19,8 @@ import { Skeleton } from '../skeleton';
 import { csvText, saveFile } from './dash';
 import { pdfFirstPage } from './pdf-reader';
 import { MeshThumbs } from './mesh-thumb';
+import { FileMini } from './file-mini';
+import { FILE_THUMBS } from '../files-thumbs-pref';
 import { ContextMenu, MenuEntry } from '../context-menu';
 import { Marquee } from '../marquee';
 import { EmptyState } from '../empty-state';
@@ -73,7 +75,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
 @Component({
   selector: 'app-room-files',
-  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect, Marquee, MiniStack, TimeChart, Donut, BarList, Skeleton],
+  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect, Marquee, MiniStack, TimeChart, Donut, BarList, Skeleton, FileMini],
   styleUrl: './files.css',
   host: { '(document:keydown)': 'globalKey($event)' },
   template: `
@@ -361,7 +363,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                    (click)="clickItem($event, it.key)" (dblclick)="activate(it)" (contextmenu)="openMenu($event, it.key)">
                 <span class="tcv-fm-col-name" role="gridcell">
                   @if (it.folder) { <i class="tcv-fm-kind-ico tcv-fm-dir-ico" [fmIcon]="'folder'"></i> }
-                  @else { <i class="tcv-fm-kind-ico" [attr.data-ico]="iconOf(it.file!)" [fmIcon]="iconOf(it.file!)"></i> }
+                  @else { <wb-fm-mini [file]="it.file!" [icon]="iconOf(it.file!)" /> }
                   <ng-container *ngTemplateOutlet="nameOf; context: { $implicit: it }" />
                   @if (filtering() && it.file) { <em class="tcv-fm-where">{{ pathOf(it.file.folder) }}</em> }
                   @if (it.ro) { <i class="fm-row-lock" [fmIcon]="'lock'" [title]="whereText(it.file || it.folder!) | t"></i> }
@@ -618,7 +620,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
               <tbody>
                 @for (f of trashRows(); track f.id) {
                   <tr>
-                    <td [title]="f.name"><i class="tcv-fm-kind-ico" [fmIcon]="iconOf(f)"></i>{{ f.name }}</td>
+                    <td [title]="f.name"><span class="fm-tv-name"><wb-fm-mini [file]="f" [icon]="iconOf(f)" /><span>{{ f.name }}</span></span></td>
                     <td [title]="f.folder_path || ('My files' | t)">{{ f.folder_path || ('My files' | t) }}</td>
                     <td>{{ f.deleted_by?.name || ('someone' | t) }}</td>
                     <td class="r mono" [title]="long(f.deleted_at)">{{ when(f.deleted_at) }}</td>
@@ -1158,6 +1160,7 @@ export class RoomFiles implements OnDestroy {
   }
 
   thumbOf(f: StoredFile): string {
+    if (!FILE_THUMBS()) return '';                  // Settings > Appearance > Files: icons only
     if (f.preview === 'image' && !this.noPic().has(f.id)) return 'img';
     if (f.preview === 'video' && this.visible().has(f.id)) return 'video';
     if (f.preview === 'pdf' && this.pics()[f.id]) return 'pdf';
@@ -1174,6 +1177,7 @@ export class RoomFiles implements OnDestroy {
 
   /** A tile came into view: work out its picture, if it has one to work out. */
   seen(f: StoredFile) {
+    if (!FILE_THUMBS()) return;
     if (f.preview === 'video') { this.visible.update(s => new Set(s).add(f.id)); return; }
     if (f.preview === 'step' || f.preview === 'mesh') {
       if (!f.has_thumb) this.solids.want(f, this.auth.can('draw'));

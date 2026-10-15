@@ -258,10 +258,12 @@ async def _drop_bytes(db, doc: dict) -> None:
 
 
 async def _drop_thumb(db, sha: str | None) -> None:
-    """A 3D file's picture is kept by content: it goes with the last copy (the trash's count)."""
+    """A 3D file's picture and the lists' small one are kept by content: they go with the last copy (the trash's count)."""
     if sha and not await db[COLL].count_documents({"sha256": sha}, limit=1) \
             and not await db[TRASH].count_documents({"sha256": sha}, limit=1):
         await db[SOLID_THUMBS].delete_many({"sha256": sha})
+        from . import file_minis
+        await file_minis.drop(db, sha)
 
 
 async def _to_trash(db, doc: dict) -> None:

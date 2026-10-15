@@ -42,6 +42,10 @@
 .fm-tv-table th:nth-child(2), .fm-tv-table td:nth-child(2) { width: 20%; }
 .fm-tv-table th:last-child, .fm-tv-table td:last-child { width: 132px; }
 .fm-tv-table td:first-child ::ng-deep svg { width: 13px; height: 13px; margin-right: 6px; vertical-align: -2px; color: var(--ink-dim); }
+/* the name with its small picture (rooms/file-mini.ts) at the start, on one line */
+.fm-tv-name { display: flex; align-items: center; gap: 7px; min-width: 0; --tcv-fm-mini: 20px; }
+.fm-tv-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-tv-table td:first-child .fm-tv-name ::ng-deep svg { margin-right: 0; vertical-align: 0; }
 .fm-tv-table td[data-soon] { color: var(--warn); }
 .fm-tv-acts { display: flex; justify-content: flex-end; align-items: center; gap: 4px; overflow: visible !important; }
 .fm-tv-table th { position: sticky; top: 0; background: var(--tcv-raised); }

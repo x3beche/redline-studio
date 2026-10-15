@@ -18,6 +18,7 @@ import { ICON_PACKS, ICON_PACK_DEFAULT, ICON_PACK_INFO, ICON_SIZES, ICON_SIZE_DE
 import { TREE_DEFAULT, TREE_DENSITIES, TREE_FONTS, TREE_ICONS, TreeDensity, isDefaultTree } from './editor/tree-prefs';
 import { SwitchPreview } from './editor/switch-preview';
 import { GridSettings } from './editor/grid-settings';
+import { FilesThumbsSetting } from './files-thumbs-setting';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
@@ -71,7 +72,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, NgTemplateOutlet, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
+  imports: [T, NgTemplateOutlet, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings, FilesThumbsSetting],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -342,6 +343,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
             </div>
             <!-- The 3D viewer's grid (editor/grid-settings.ts, grid-look.ts). -->
             <app-grid-settings />
+            <app-files-thumbs-setting />
             @for (grp of groups; track grp.name) {
               @if (themeFilter() === 'All' || themeFilter() === grp.name) {
                 <div class="st-card">

@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
-from . import access, actors, filemesh, files, files_virtual, pdftext
+from . import access, actors, file_minis, filemesh, files, files_virtual, pdftext
 
 router = APIRouter()
 
@@ -540,6 +540,42 @@ async def files_thumb(fid: str, request: Request):
         await _db()[files.COLL].update_one({"_id": fid}, {"$set": {"thumb": thumb}})
     return Response(bytes(thumb), media_type="image/webp",
                     headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.get("/api/files/{fid}/mini")
+async def files_mini(fid: str, request: Request, wait: float = 1.5):
+    """The small picture at the start of a row in the Files lists
+    (backend/file_minis.py): a picture's, a PDF's first page, an STL's or a
+    STEP's model. Made the first time it is asked for and kept by the
+    file's content; 202 while it is being made or waits its turn (ask
+    again after Retry-After), 404 for a file that keeps its icon. In My
+    files, In the app and Deleted files alike: whoever may read the file."""
+    doc = await _readable(fid)
+    tag = f'"{file_minis.key_of(doc)}"'
+    if request.headers.get("if-none-match") == tag:
+        return Response(status_code=304, headers={"ETag": tag})
+    state, got = await file_minis.mini(_db(), doc, min(max(wait, 0.0), 5.0))
+    if state == "ready":
+        return Response(got, media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=31536000, immutable", "ETag": tag})
+    if state in ("making", "busy"):
+        later = 8 if file_minis.kind_of(doc) == "step" or state == "busy" else 2
+        return JSONResponse({"state": state}, status_code=202,
+                            headers={"Retry-After": str(later), "Cache-Control": "no-store"})
+    return JSONResponse({"detail": got or "no picture for this file"}, status_code=404,
+                        headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def _readable(fid: str) -> dict:
+    """A file the asker may read, without its bytes: an upload, a read-only
+    folders' entry, or one in the trash (Deleted files)."""
+    if files_virtual.is_virtual(fid):
+        return await _row(fid, {})
+    doc = await _db()[files.COLL].find_one({"_id": fid}, {"thumb": 0}) \
+        or await _db()[files.TRASH].find_one({"_id": fid}, {"thumb": 0})
+    if not doc:
+        raise HTTPException(404, fid)
+    return doc
 
 
 async def _row(fid: str, fields: dict) -> dict:

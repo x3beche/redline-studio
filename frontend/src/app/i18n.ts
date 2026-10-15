@@ -1873,6 +1873,10 @@ const TR: Record<string, string> = {
   'Write the next one - it is sent when the answer ends… (@ to mention)': 'Sıradakini yazın - yanıt bitince gönderilir… (@ ile bahsedin)',
   // Command Code: details on hover
   'Details': 'Ayrıntılar',
+  // Files' thumbnails (files-thumbs-setting.ts, rooms/file-mini.ts)
+  'Thumbnails': 'Küçük resimler',
+  'Small pictures in the Files tab\'s lists and grid: a picture, a PDF\'s first page, an STL or STEP model. Made once on the server and kept.': 'Dosyalar sekmesinin listelerinde ve ızgarasında küçük resimler: bir resim, bir PDF\'in ilk sayfası, bir STL ya da STEP modeli. Sunucuda bir kez yapılır ve saklanır.',
+  'Only the kind\'s icon; nothing is asked of the server.': 'Yalnızca türün simgesi; sunucudan bir şey istenmez.',
   'attachment': 'ek',
   'attachments': 'ek',
   'First token': 'İlk token',
