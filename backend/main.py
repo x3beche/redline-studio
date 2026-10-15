@@ -142,6 +142,9 @@ app.include_router(firmware_api.router)
 # The Files tab: files in folders, read in place (backend/files_api.py).
 from . import files_api  # noqa: E402
 app.include_router(files_api.router)
+# The Android app, handed out by the server itself: /api/public/m/app.apk (backend/mobile_app.py).
+from . import mobile_app  # noqa: E402
+app.include_router(mobile_app.router)
 # The next question, suggested in the empty composer (backend/suggest.py).
 from . import suggest as suggest_api  # noqa: E402
 app.include_router(suggest_api.router)

@@ -24,5 +24,8 @@ frontend/.angular/
 # --- local artifact cache ---
 .cache/
 
+# --- the Android app's builds, handed out at /api/public/m/app.apk (backend/mobile_app.py) ---
+/.mobile/
+
 # Agents' local handover notes, kept on the machine only.
 /agents-knowledge/

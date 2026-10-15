@@ -28,6 +28,7 @@ import { BackupsSettings } from './backups-settings';
 import { Prefs, PrefsTab } from './preferences';
 import { VoiceLang, VoicePrefs } from './rooms/voice-input';
 import { SharesSettings } from './share/shares-settings';
+import { MobileSettings } from './mobile-settings';
 import { hitsIn, matches, queryWords, reveal } from './settings-search';
 
 /** The Settings tab (Prefs, preferences.ts, is what the rest of the app
@@ -72,7 +73,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, NgTemplateOutlet, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings, FilesThumbsSetting],
+  imports: [T, NgTemplateOutlet, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, MobileSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings, FilesThumbsSetting],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -129,11 +130,13 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'accent' : null">{{ (x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' ? 'your account' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' || x.id === 'mobile' || x.id === 'admin' || x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'accent' : null">{{ (x.id === 'profile' || x.id === 'shares' || x.id === 'notifications' ? 'your account' : x.id === 'mobile' ? 'Android' : x.id === 'admin' ? 'accounts' : x.id === 'dashboard' || x.id === 'rustdesk' || x.id === 'backups' ? 'admins' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
           @if (x.id === 'profile' || x.id === 'shares' || x.id === 'notifications') {
             <span>{{ 'only you can change these' | t }}</span>
+          } @else if (x.id === 'mobile') {
+            <span>{{ 'the same account on your phone' | t }}</span>
           } @else if (x.id === 'admin') {
             <span>{{ (auth.state()?.role === 'owner' ? 'owner: everything here' : 'admin: manages user accounts') | t }}</span>
           } @else if (x.id === 'rustdesk' || x.id === 'dashboard' || x.id === 'backups') {
@@ -420,6 +423,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('telegram') { @defer { <app-telegram-settings /> } }
         @case ('tokens') { @defer { <app-tokens-settings /> } }
         @case ('shares') { @defer { <app-shares-settings /> } }
+        @case ('mobile') { @defer { <app-mobile-settings /> } }
         @case ('dashboard') { @if (auth.admin()) { @defer { <app-admin-overview /> } } }
         @case ('admin') { @if (auth.admin()) { @defer { <app-admin-users /> } } }
         @case ('rustdesk') { @if (auth.admin()) { @defer { <app-rustdesk-settings /> } } }
@@ -507,6 +511,9 @@ export class RoomSettings {
       { id: 'notifications', label: 'Notifications', about: 'the bell, toasts, and what comes on Telegram',
         ico: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0',
         blurb: 'What you hear about: in the app under the bell, as a toast, and on Telegram.' },
+      { id: 'mobile', label: 'Mobile app', about: 'the Android app: download, QR code, install',
+        ico: 'M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2',
+        blurb: 'The Workbench app for Android: download it from this server, scan the QR code with the phone, and how to install it.' },
     ] },
     { group: 'This browser', items: [
       { id: 'appearance', label: 'Appearance', about: 'theme', ico: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 3v18M12 8h6M12 12h9M12 16h6',

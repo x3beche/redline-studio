@@ -12,6 +12,8 @@ import { t } from './i18n';
 export const SETTINGS_INDEX: Record<PrefsTab, string[]> = {
   profile: ['Display name', 'Email', 'Colour', 'Password', 'Change password', 'Current password', 'New password',
             'Sessions', 'Sign out other sessions', 'Role'],
+  mobile: ['Workbench for Android', 'Download the APK', 'Server address to enter in the app', 'Install', 'Updating',
+           'Not from the Play Store', 'Upload a new build', 'Version', 'Scan with the phone\'s camera to download'],
   shares: ['Shared', 'Last opened', 'Times opened', 'Until', 'Turn off', 'Show ended links'],
   notifications: ['Notify me when', 'A toast when one comes', 'Telegram', 'An agent asks a question', 'An agent replies',
                   'A note is applied or fails', 'A run starts', 'A scheduled task reports', 'A build fails',
@@ -45,6 +47,7 @@ export const SETTINGS_INDEX: Record<PrefsTab, string[]> = {
  *  for Ctrl+K's lines; `admin` ones only for the owner and the admins. */
 export const SECTION_NAMES: { id: PrefsTab; label: string; admin?: boolean }[] = [
   { id: 'profile', label: 'Profile' }, { id: 'shares', label: 'Shared links' }, { id: 'notifications', label: 'Notifications' },
+  { id: 'mobile', label: 'Mobile app' },
   { id: 'appearance', label: 'Appearance' }, { id: 'language', label: 'Language' }, { id: 'topbar', label: 'Top bar' },
   { id: 'shortcuts', label: 'Keyboard shortcuts' }, { id: 'llm', label: 'LLM settings' }, { id: 'proxy', label: 'Proxy & Data' },
   { id: 'costs', label: 'Costs & currency' }, { id: 'telegram', label: 'Telegram' }, { id: 'tokens', label: 'Agent tokens' },

@@ -1,0 +1,97 @@
+/* Settings > Mobile app (mobile-settings.ts). */
+.mb { max-width: none; container-type: inline-size; }
+
+/* the app: what it is and the download | the address to type | the QR code */
+.mb-top { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; }
+.mb-top > section { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
+.mb-top > section + section { border-left: 1px solid var(--line); }
+.mb-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.mb-name b { font-size: 15px; font-weight: 600; color: var(--ink); }
+.mb-name span { font-size: 11.5px; color: var(--ink-dim); }
+.mb-what { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); max-width: 640px; }
+
+/* label and value pairs between hairlines, as the LCSC part modal has them */
+.mb-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.mb-facts > div { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; min-width: 0; }
+.mb-facts > div:first-child { padding-left: 0; }
+.mb-facts > div + div { border-left: 1px solid var(--line); }
+.mb-facts span { font-size: 10.5px; color: var(--ink-dim); }
+.mb-facts b { font-size: 12.5px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mb-sha { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10.5px; color: var(--ink-dim); }
+.mb-sha > span { flex: none; white-space: nowrap; }
+.mb-sha code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: var(--ink-dim); user-select: all; }
+
+.mb-get { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.mb-download {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink-bright); text-decoration: none;
+  background: var(--accent-deep); border: 1px solid var(--accent); transition: background-color .15s;
+}
+.mb-download:hover { background: var(--accent); }
+.mb-download svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mb-download small { font-weight: 400; opacity: .8; }
+.mb-get .st-sub { line-height: 1.45; }
+
+.mb-sec { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-dim); }
+.mb-field {
+  display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; min-width: 0;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px;
+}
+.mb-field code { flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mb-ico {
+  flex: none; width: 28px; height: 26px; display: grid; place-items: center;
+  color: var(--ink-dim); background: none; border: 0; border-radius: 4px; cursor: pointer;
+}
+.mb-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mb-ico:hover { color: var(--ink); background: var(--hover); }
+.mb-ico.small { width: 22px; height: 20px; }
+.mb-ico.small svg { width: 13px; height: 13px; }
+
+/* the QR code: dark modules on a light tile in every theme, as a camera reads it best */
+.mb-qr { align-items: center; justify-content: center; }
+.mb-qr svg { display: block; width: 168px; height: 168px; border-radius: 6px;
+  background: #fff; /* theme:pigment - a QR code is read as dark on light */ }
+.mb-qr path { fill: #000; /* theme:pigment */ }
+.mb-qr .st-sub { text-align: center; max-width: 180px; }
+
+/* install: the steps in a row */
+.mb-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mb-steps li { display: flex; gap: 10px; padding: 12px 14px; min-width: 0; }
+.mb-steps li + li { border-left: 1px solid var(--line); }
+.mb-n {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; font-weight: 600; color: var(--ink); background: var(--surface-2);
+}
+.mb-step { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mb-step b { font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.mb-step span { font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
+.mb-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.mb-notes p { margin: 0; padding: 9px 14px; font-size: 11px; line-height: 1.5; color: var(--ink-dim); min-width: 0; overflow-wrap: anywhere; }
+.mb-notes p + p { border-left: 1px solid var(--line); }
+.mb-notes b { font-weight: 600; color: var(--ink); }
+.mb-notes code { font-size: 10.5px; color: var(--ink); }
+
+/* a new build (the owner and the admins) */
+.mb-up { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+.mb-up input[type="file"] { max-width: 300px; font-size: 11.5px; color: var(--ink-dim); }
+.mb-up .st-in { width: 110px; }
+.mb-up-out { padding: 0 14px 10px; }
+
+@container (max-width: 980px) {
+  .mb-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .mb-top > .mb-addr { grid-column: 1 / -1; grid-row: 2; border-left: 0; border-top: 1px solid var(--line); }
+  .mb-steps { grid-template-columns: minmax(0, 1fr); }
+  .mb-steps li + li { border-left: 0; border-top: 1px solid var(--line); }
+  .mb-notes { grid-template-columns: minmax(0, 1fr); }
+  .mb-notes p + p { border-left: 0; border-top: 1px solid var(--line); }
+}
+@container (max-width: 560px) {
+  .mb-top { grid-template-columns: minmax(0, 1fr); }
+  .mb-top > section + section { border-left: 0; border-top: 1px solid var(--line); }
+  .mb-top > .mb-addr { grid-row: auto; }
+  .mb-qr { display: none !important; }      /* on the phone itself: the button is the way */
+  .mb-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mb-facts > div:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .mb-facts > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) { .mb-download { transition: none; } }

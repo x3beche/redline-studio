@@ -100,6 +100,9 @@ _RULES: list[tuple[str, str, str]] = [
     # link's maker and the admins (backend/shares.py)
     ("POST", "/api/shares", "view"),
     ("POST", "/api/shares/{}/revoke", "view"),
+    # a new build of the Android app, handed out at /api/public/m/app.apk:
+    # the server's (backend/mobile_app.py)
+    ("POST", "/api/mobile/apk", "settings"),
     # a page telling the server what broke in it (backend/client_errors.py)
     ("POST", "/api/client-errors", "view"),
     # one's own profile (backend/profile.py): anyone signed in, and only
