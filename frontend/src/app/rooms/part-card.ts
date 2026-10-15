@@ -52,6 +52,7 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
              color: var(--ok); border: 1px solid var(--ok); border-radius: 4px; white-space: nowrap; }
     .pc-out { color: var(--ink-dim); border-color: var(--line); }
     .st-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .pc-head .st-tile { background: var(--surface-2); border-color: transparent; }
     .pc-body { display: flex; flex-direction: column; gap: 12px; padding: 12px; background: var(--surface-2); }
     .pc-body .st-card { display: flex; flex-direction: column; }
     .pc-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: stretch; }

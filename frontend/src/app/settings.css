@@ -114,24 +114,17 @@
 .st-hint a, .st-link { color: var(--accent); text-decoration: none; }
 .st-hint a:hover, .st-link:hover { text-decoration: underline; }
 
-/* ---- figures: a dim label over its value, as the LCSC part card says its
-   own - plain pairs between hairlines, no box or ground of their own ------ */
-/* auto-fit, not auto-fill: a row with fewer figures than columns stretches
-   them across the whole width instead of leaving empty columns on the right.
-   Each figure draws the hairline on its left and above it; the row hides the
-   ones at its own edges (overflow, and the -1px), so only those between
-   figures show, and a row that wraps gets a rule between its lines. The row
-   stands out by the cells' padding, so the first label lines up with the text
-   above it. */
-.st-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0;
-  margin-left: -10px; overflow: hidden; }
+/* ---- result tiles: a dim label over a big mono figure ----------- */
+/* auto-fit, not auto-fill: a row with fewer tiles than columns stretches them
+   across the whole card instead of leaving empty columns on the right. */
+.st-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 8px; }
 .st-tiles.six { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
 .st-tiles.tight { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
-.st-tile { min-width: 0; margin: -1px 0 0 -1px; padding: 5px 10px 6px;
-  border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+.st-tile { min-width: 0; padding: 6px 9px 7px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.st-card .st-tile { background: var(--surface-2); border-color: transparent; }
 .st-tile > span { display: block; font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-tile > b {
-  display: block; font-weight: 500; font-size: 14px; line-height: 1.45; color: var(--ink-bright);
+  display: block; font-weight: 500; font-size: 15px; color: var(--ink-bright);
   font-family: 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .st-tile > small { display: block; font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -139,8 +132,8 @@
 .st-tile[data-tone="warn"] > b { color: var(--warn); }
 .st-tile[data-tone="danger"] > b { color: var(--danger); }
 .st-tile[data-tone="dim"] > b { color: var(--ink-dim); }
-.st-tile.hero { grid-column: span 2; }
-.st-tile.hero > b { font-size: 20px; line-height: 1.25; }
+.st-tile.hero { grid-column: span 2; border-color: var(--accent-deep); }
+.st-tile.hero > b { font-size: 22px; line-height: 1.25; }
 .st-meter { height: 4px; margin-top: 5px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .st-meter > i { display: block; height: 100%; background: var(--accent); }
 .st-meter[data-tone="warn"] > i { background: var(--warn); }

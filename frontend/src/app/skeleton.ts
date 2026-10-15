@@ -74,11 +74,9 @@ import { t } from './i18n';
 .wb-sk::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 16%, transparent), transparent);
   animation: tcv-sk-sheen 1.4s ease-in-out .15s infinite; }
-.wb-skel[data-kind="tiles"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--tcv-sk-min, 150px), 1fr)); gap: 0;
-  margin-left: -10px; overflow: hidden; }
-/* As the figures it stands for (settings.css .st-tile): plain, hairlines between. */
-.wb-sk-tile { display: flex; flex-direction: column; justify-content: center; gap: 7px; height: 56px; padding: 0 10px;
-  margin: -1px 0 0 -1px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+.wb-skel[data-kind="tiles"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--tcv-sk-min, 150px), 1fr)); gap: 6px 8px; }
+.wb-sk-tile { display: flex; flex-direction: column; justify-content: center; gap: 7px; height: 64px; padding: 0 9px;
+  background: var(--surface-2); border-radius: 5px; }
 .wb-sk-tile .wb-sk { height: 8px; }
 .wb-sk-tile .wb-sk:last-child:not(.wb-sk-big) { height: 7px; opacity: .35; }
 .wb-sk-tile .wb-sk-big { height: 13px; }
@@ -99,7 +97,7 @@ import { t } from './i18n';
 .wb-sk-pcard { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .wb-sk-phead { display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border-bottom: 1px solid var(--line); }
 .wb-sk-pbody { display: flex; flex-direction: column; gap: 14px; padding: 10px; }
-.wb-sk-ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin-left: -10px; overflow: hidden; }
+.wb-sk-ptiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 8px; }
 .wb-skel[data-kind="mini"] { display: flex; flex-direction: column; gap: 5px; width: 100%; }
 .wb-sk-mrow { display: flex; align-items: center; justify-content: space-between; height: 14px; }
 .wb-sk-mrow .wb-sk { height: 8px; }
