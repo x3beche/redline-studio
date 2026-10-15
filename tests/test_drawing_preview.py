@@ -17,6 +17,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend import access, main, release
+from test_telegram import Coll
 
 SHA = "ab" * 32
 OTHER = "cd" * 32
@@ -33,6 +34,10 @@ class Models:
 class Db:
     def __init__(self, docs):
         self.models = Models(docs)
+        self.colls: dict = {}
+
+    def __getitem__(self, name):
+        return self.colls.setdefault(name, Coll())
 
 
 DB = Db({"p/lid": {"_id": "p/lid", "title": "Lid", "artifacts": {"step": {"sha256": SHA, "bytes": 10}},
@@ -44,7 +49,7 @@ DB = Db({"p/lid": {"_id": "p/lid", "title": "Lid", "artifacts": {"step": {"sha25
 @pytest.fixture
 def kept(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "DRAWINGS", tmp_path)
-    monkeypatch.setattr(release, "_STATE", {})
+    monkeypatch.setattr(DB, "colls", {})
     monkeypatch.setattr(release, "_DUE", {})
 
     async def never(*a, **kw):
@@ -113,13 +118,19 @@ def test_the_status_is_per_model_and_per_step(kept):
     # The other model is untouched by it.
     assert asyncio.run(release.drawing_status(DB, "p/base"))["state"] == "none"
 
-    # Being made: how far, and only for the STEP it is about.
-    release._STATE["p/base"] = {"sha": OTHER, "state": "making", "pct": 48, "stage": "projecting the right view"}
+    # Being made (its job row, from any process): how far, and only for the drawing it is about.
+    jobs = DB[release.JOBS]
+    row = {"state": "making", "pct": 48, "stage": "projecting the right view", "by": "chat", "pid": 1,
+           "host": "elsewhere", "beat": __import__("time").time(), "started_at": "2026-10-12T14:00:00+00:00"}
+    jobs.docs[f"default|p/base|{stem(OTHER)}"] = {"_id": f"default|p/base|{stem(OTHER)}", **row}
     st = asyncio.run(release.drawing_status(DB, "p/base"))
     assert (st["state"], st["pct"], st["stage"]) == ("making", 48, "projecting the right view")
-    release._STATE["p/base"] = {"sha": "ee" * 32, "state": "failed", "error": "old STEP"}
+    assert st["job"]["by"] == "chat" and st["job"]["heartbeat"]
+    jobs.docs.clear()
+    jobs.docs["default|p/base|ee"] = {"_id": "default|p/base|ee", "state": "failed", "error": "old STEP"}
     assert asyncio.run(release.drawing_status(DB, "p/base"))["state"] == "none"
-    release._STATE["p/base"] = {"sha": OTHER, "state": "failed", "error": "out of memory"}
+    jobs.docs[f"default|p/base|{stem(OTHER)}"] = {"_id": f"default|p/base|{stem(OTHER)}", "state": "failed",
+                                                   "error": "out of memory"}
     st = asyncio.run(release.drawing_status(DB, "p/base"))
     assert st["state"] == "failed" and st["failed"]["reason"] == "out of memory"
     release._DUE["p/bare"] = "2026-10-12T14:32:00+00:00"
@@ -128,13 +139,15 @@ def test_the_status_is_per_model_and_per_step(kept):
 
 def test_making_follows_progress_and_keeps_a_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "DRAWINGS", tmp_path)
-    monkeypatch.setattr(release, "_STATE", {})
+    monkeypatch.setattr(DB, "colls", {})
+    monkeypatch.setattr(release, "BEAT_S", 0.01)
     seen = []
 
     async def fake(step, out, *, preview=False, on_progress=None, **kw):
         assert preview
         on_progress(30, "projecting the top view")
-        seen.append(dict(release._STATE["p/lid"]))
+        await asyncio.sleep(0.05)                  # beaten meanwhile, with the progress
+        seen.append(await release.drawing_status(DB, "p/lid"))
         out.with_suffix(".png").write_bytes(b"PNG")
         out.write_bytes(b"%PDF")
 
@@ -143,8 +156,8 @@ def test_making_follows_progress_and_keeps_a_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "drawing", fake)
     monkeypatch.setattr(release.store, "get_artifact", step)
     assert asyncio.run(release.model_drawing(DB, "p/lid")) == b"%PDF"
-    assert seen[0]["state"] == "making" and seen[0]["pct"] == 30
-    assert release._STATE == {}
+    assert seen[0]["state"] == "making" and seen[0]["pct"] == 30 and seen[0]["job"]["by"] == "room"
+    assert DB[release.JOBS].docs == {}             # made: the file says so, no row is left
     assert asyncio.run(release.model_drawing_preview(DB, "p/lid")) == b"PNG"
 
     async def broken(step, out, **kw):
@@ -152,7 +165,7 @@ def test_making_follows_progress_and_keeps_a_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "drawing", broken)
     with pytest.raises(RuntimeError):
         asyncio.run(release.model_drawing(DB, "p/lid", again=True))
-    assert release._STATE["p/lid"]["state"] == "failed"
+    assert [r["state"] for r in DB[release.JOBS].docs.values()] == ["failed"]
     st = asyncio.run(release.drawing_status(DB, "p/lid"))
     assert st["state"] == "ready" and "out of memory" in st["failed"]["reason"]   # the last one stays
 
@@ -208,7 +221,7 @@ def test_the_sheet_preview_and_info(tmp_path):
 
 def test_a_crash_is_tried_once_more(tmp_path, monkeypatch):
     monkeypatch.setattr(release, "DRAWINGS", tmp_path)
-    monkeypatch.setattr(release, "_STATE", {})
+    monkeypatch.setattr(DB, "colls", {})
     tries = []
 
     async def flaky(step, out, **kw):

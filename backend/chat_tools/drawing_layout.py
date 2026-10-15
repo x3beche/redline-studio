@@ -2,14 +2,17 @@
 back to the automatic one (backend/drawlayout.py, as the 3D room's layout
 editor saves it: PUT /api/models/{id}/drawing/layout), and optionally the
 drawing made with it (POST .../drawing?again=1) - with the rights those
-routes need."""
+routes need. The drawing is made by a process of its own
+(_drawing_job.py, as drawing_get's Make now): this tool runs in the
+answer's runner, which ends with the answer."""
 
 from __future__ import annotations
 
 import json
 
-from .. import drawlayout, release
+from .. import chat_undo, drawlayout, release
 from . import Ctx, Result, Tool, ToolError, clip
+from . import _drawing_job as job
 from ._rights import need
 from ._things import find
 
@@ -61,11 +64,14 @@ async def run(ctx: Ctx, args: dict) -> Result:
     started = False
     if action != "get" and args.get("make"):
         need("POST", f"/api/models/{mid}/drawing")
-        try:
-            await release.start_drawing(ctx.db, mid, again=True)
-            started = True
-        except LookupError as exc:
-            raise ToolError(str(exc)) from exc
+        db = chat_undo.inner(ctx.db)
+        now = await release.drawing_status(db, mid)
+        if now["state"] == "no_step":
+            raise ToolError("this model has no STEP to draw from - its script does not export one")
+        # Under way with this layout already (the room's, or another answer's): not twice.
+        if now["state"] != "making" and not (now["state"] == "queued" and (now.get("job") or {}).get("by") == "chat"):
+            await job.start(db, mid, again=True)
+        started = True
     layout = await drawlayout.read(ctx.db, mid)
     try:
         status = await release.drawing_status(ctx.db, mid)

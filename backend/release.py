@@ -27,6 +27,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import tempfile
 import time
 import zipfile
@@ -154,18 +155,151 @@ def _kept(meta: dict, suffix: str = ".pdf", layout: str = "") -> Path:
     return DRAWINGS / f"{_key(meta, layout)}{suffix}"
 
 
-# What each model's drawing is doing, for the 3D room's Model tab: being
-# made (how far, which step), waiting its turn, or the last failure - per
-# model, and only for the STEP it was about. In memory, like draw_later's
-# waits: a restart forgets it, and the files on disk still say what is made.
-_STATE: dict[str, dict] = {}
+# What each model's drawing is doing, for the 3D room's Model tab and the
+# Chat: being made (how far, which step, by whom), waiting its turn, or the
+# last failure - in the database, one row per model and kept drawing (its
+# key: the STEP's fingerprint and the layout's), so every process sees it:
+# the API (the room's Make now, draw_later), the Chat's own drawing
+# processes (chat_tools/_drawing_job.py) and the scheduler. A row is also
+# the claim: only one making of a key at a time, wherever it was asked;
+# a second caller waits for it instead of drawing it twice. The maker
+# beats (`beat`, with the progress) every BEAT_S; a row not heard from in
+# STALE_S - or whose process on this machine is gone - is dead, and the
+# next caller takes it over. A drawing made leaves no row (the file on
+# disk says it is made); a failed one keeps its row until the next try.
+JOBS = "drawing_jobs"
+BEAT_S = 3
+STALE_S = int(os.environ.get("REDLINE_DRAW_STALE_S", "45"))
+WAIT_S = 1.5                                      # how often a waiting caller looks again
+LIVE = ("queued", "making")
+_HOST = socket.gethostname()
 # ... and, for the notification centre (backend/notifications.py, watched by
 # backend/tgbot/notify.py), each drawing finished or failed, kept a while in
-# the database: `_STATE` is gone after a restart, this is not. One row per
-# making: the model, its title, done or failed (and why), whether the
-# background made it (draw_later) or someone asked, how long it took.
+# the database. One row per making: the model, its title, done or failed
+# (and why), whether the background made it (draw_later) or someone asked,
+# how long it took.
 DRAWN = "drawing_events"
 DRAWN_DAYS = 14
+
+
+def _raw(db):
+    """The database itself and the workspace `db` is seen from."""
+    from . import scope
+    scoped = getattr(type(db), "SCOPED", False)
+    return (db.raw, db.workspace) if scoped else (db, scope.DEFAULT)
+
+
+def _jobs(db):
+    raw, ws = _raw(db)
+    return raw[JOBS], ws
+
+
+def _job_id(ws: str, model_id: str, key: str) -> str:
+    return f"{ws}|{model_id}|{key}"
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError, TypeError, ValueError):
+        return True
+    return True
+
+
+def alive(rec: dict | None, now: float | None = None) -> bool:
+    """Whether a job row is under way: queued or making, heard from within
+    STALE_S, and - on this machine - its process still there."""
+    if not rec or rec.get("state") not in LIVE:
+        return False
+    if (now or time.time()) - float(rec.get("beat") or 0) > STALE_S:
+        return False
+    return rec.get("host") != _HOST or not rec.get("pid") or _pid_alive(rec["pid"])
+
+
+async def _job(db, model_id: str, key: str) -> dict | None:
+    coll, ws = _jobs(db)
+    try:
+        return await coll.find_one({"_id": _job_id(ws, model_id, key)})
+    except Exception as exc:                        # noqa: BLE001 - the status then knows only the files
+        print(f"drawing {model_id}: job not read ({exc})", flush=True)
+        return None
+
+
+async def _take(db, model_id: str, key: str, sha: str, state: str, by: str, *, pid: int | None = None,
+                over_queued: bool = True) -> str | None:
+    """Write this caller's row for the key - `making` (the claim) or
+    `queued` - unless a live one is there: its token, or None. Making takes
+    over a queued row (waiting is not a claim); queued never takes over a
+    live one. Atomic: a new row is inserted (two at once - one wins on the
+    _id), an old one replaced only if it is still the row read."""
+    from pymongo.errors import DuplicateKeyError
+    coll, ws = _jobs(db)
+    jid = _job_id(ws, model_id, key)
+    rec = await coll.find_one({"_id": jid})
+    if alive(rec) and not (over_queued and state == "making" and rec.get("state") == "queued"):
+        return None
+    token = secrets.token_hex(8)
+    now = time.time()
+    row = {"workspace_id": ws, "model": model_id, "key": key, "sha": sha, "state": state, "by": by,
+           "token": token, "pid": pid or os.getpid(), "host": _HOST, "pct": 0,
+           "stage": "starting" if state == "making" else "waiting its turn", "started_at": _now(), "beat": now,
+           "error": None, "ended": None}
+    try:
+        if rec is None:
+            await coll.insert_one({"_id": jid, **row})
+            return token
+        res = await coll.update_one({"_id": jid, "token": rec.get("token")}, {"$set": row})
+    except DuplicateKeyError:
+        return None
+    return token if res.matched_count else None
+
+
+async def _put(db, model_id: str, key: str, token: str, fields: dict) -> bool:
+    """Update this caller's row, only while it is still this caller's."""
+    coll, ws = _jobs(db)
+    try:
+        res = await coll.update_one({"_id": _job_id(ws, model_id, key), "token": token}, {"$set": fields})
+        return bool(res.matched_count)
+    except Exception as exc:                        # noqa: BLE001 - a beat missed is not the drawing lost
+        print(f"drawing {model_id}: job not updated ({exc})", flush=True)
+        return False
+
+
+async def _drop(db, model_id: str, key: str, token: str) -> None:
+    coll, ws = _jobs(db)
+    try:
+        await coll.delete_one({"_id": _job_id(ws, model_id, key), "token": token})
+    except Exception as exc:                        # noqa: BLE001 - it goes stale by itself
+        print(f"drawing {model_id}: job not cleared ({exc})", flush=True)
+
+
+async def _beating(db, model_id: str, key: str, token: str, live: dict) -> None:
+    """Beat every BEAT_S with the progress heard since (`live`): the only
+    writes while a drawing is made, however often techdraw.py reports."""
+    while True:
+        await asyncio.sleep(BEAT_S)
+        await _put(db, model_id, key, token, {"beat": time.time(), "pct": live.get("pct", 0),
+                                              "stage": live.get("stage", "")})
+
+
+async def queue(db, model_id: str, by: str, *, pid: int | None = None) -> tuple[str, str] | None:
+    """Say a model's drawing is waiting to be made (`by`: room, chat, auto;
+    `pid`: the process that will make it) - unless one is under way. The
+    row's (key, token), or None. Not a claim: whoever makes the drawing
+    first takes the row over."""
+    try:
+        doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "drawing_layout.spec": 1})
+        meta = ((doc or {}).get("artifacts") or {}).get("step")
+        if not meta:
+            return None
+        key = _key(meta, _layout_key(doc))
+        token = await _take(db, model_id, key, meta["sha256"], "queued", by, pid=pid)
+        return (key, token) if token else None
+    except Exception as exc:                        # noqa: BLE001 - only the "waiting" is not shown
+        print(f"drawing {model_id}: not queued ({exc})", flush=True)
+        return None
 
 
 async def _drawn(db, model_id: str, title: str | None, ok: bool, *, error: str | None = None,
@@ -173,33 +307,36 @@ async def _drawn(db, model_id: str, title: str | None, ok: bool, *, error: str |
     """A drawing's outcome, for the watcher. Never raises: the drawing is
     made whether or not anyone hears of it."""
     try:
-        from . import scope
-        scoped = getattr(type(db), "SCOPED", False)
-        raw = db.raw if scoped else db
+        raw, ws = _raw(db)
         await raw[DRAWN].insert_one({
-            "workspace_id": db.workspace if scoped else scope.DEFAULT, "model": model_id,
+            "workspace_id": ws, "model": model_id,
             "title": title, "state": "done" if ok else "failed", "error": (error or "")[:300] or None,
             "auto": auto, "secs": round(secs, 1) if secs is not None else None,
             "at": datetime.now(timezone.utc)})
     except Exception as exc:                        # noqa: BLE001 - only the notification is lost
         print(f"drawing {model_id}: not recorded ({exc})", flush=True)
-# When draw_later makes each model's drawing.
+# When draw_later makes each model's drawing (the API's own: draw_later lives there).
 _DUE: dict[str, str] = {}
-# One making of a kept drawing at a time: a click while the background
-# makes the same one waits for it rather than making it twice.
+# One making of a kept drawing at a time inside a process too (two models
+# with the same STEP share a kept drawing).
 _MAKING: dict[str, asyncio.Lock] = {}
 # Drawings asked for with POST, running in the background.
 _STARTED: set[asyncio.Task] = set()
 
 
-async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False, auto: bool = False) -> bytes:
+async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False, auto: bool = False,
+                        by: str | None = None) -> bytes:
     """A model's technical drawing on its own, for the 3D room: made once
     per STEP (kept by the STEP's fingerprint), with its PNG preview.
     `again` makes it anew even if it is kept. With the model's layout, if
     it has one (backend/drawlayout.py) - kept apart by it. `auto`: the
-    background makes it (draw_later), nobody waits for it. Each one made
-    or failed here is recorded (`_drawn`)."""
+    background makes it (draw_later), nobody waits for it. `by` says who
+    asked (room, chat, auto). One making per drawing across every process:
+    the job row is claimed first; if it is being made elsewhere, this waits
+    for that one (and gives its drawing, or its failure). Each one made or
+    failed here is recorded (`_drawn`)."""
     asked = time.time()
+    by = by or ("auto" if auto else "room")
     doc = await db.models.find_one({"_id": model_id}, {"artifacts": 1, "title": 1, "sha256": 1, "drawing_layout": 1})
     if not doc:
         raise KeyError(model_id)
@@ -208,20 +345,37 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
         raise LookupError("this model has no STEP to draw from - its script does not export one")
     DRAWINGS.mkdir(parents=True, exist_ok=True)
     spec = drawlayout.for_drawing(doc.get("drawing_layout"))
-    kept = _kept(meta, layout=drawlayout.digest((doc.get("drawing_layout") or {}).get("spec")))
+    lay = drawlayout.digest((doc.get("drawing_layout") or {}).get("spec"))
+    kept, key, sha = _kept(meta, layout=lay), _key(meta, lay), meta["sha256"]
     if kept.exists() and not again:
         return kept.read_bytes()
+
+    def fresh() -> bool:
+        """Made while this waited (by the background, another click, the Chat)."""
+        return kept.exists() and (not again or kept.stat().st_mtime >= asked)
     async with _MAKING.setdefault(kept.name, asyncio.Lock()):
-        # Made while this waited (by the background, or another click).
-        if kept.exists() and (not again or kept.stat().st_mtime >= asked):
-            return kept.read_bytes()
-        sha = meta["sha256"]
-        live = {"sha": sha, "state": "making", "pct": 0, "stage": "starting", "started_at": _now()}
-        _STATE[model_id] = live
+        while True:
+            if fresh():
+                return kept.read_bytes()
+            token = await _take(db, model_id, key, sha, "making", by)
+            if token:
+                break
+            # Being made by someone else: wait for it rather than make it twice.
+            rec = await _job(db, model_id, key)
+            while alive(rec):
+                await asyncio.sleep(WAIT_S)
+                rec = await _job(db, model_id, key)
+            if fresh():
+                return kept.read_bytes()
+            if rec and rec.get("state") == "failed" and float(rec.get("ended") or 0) >= asked:
+                raise RuntimeError(rec.get("error") or "the drawing failed")
+            # Gone without a drawing (its process died): take it over.
         _DUE.pop(model_id, None)
+        live: dict = {"pct": 0, "stage": "starting"}
 
         def heard(pct: int, stage: str) -> None:
             live.update(pct=pct, stage=stage)
+        beat = asyncio.get_running_loop().create_task(_beating(db, model_id, key, token, live))
         try:
             step = await store.get_artifact(db, model_id, "step")
             # A crash in the projection (exit 139) now and then does not
@@ -234,13 +388,19 @@ async def model_drawing(db, model_id: str, tag: str = "", *, again: bool = False
                     break
         except Exception as exc:                    # noqa: BLE001 - said on the tab, then raised
             why = str(exc) or type(exc).__name__
+        except BaseException:                       # cancelled: the row goes, nothing is being made
+            beat.cancel()
+            await asyncio.shield(_drop(db, model_id, key, token))
+            raise
+        finally:
+            beat.cancel()
         title = doc.get("title") or model_id.split("/")[-1]
         if why:
-            _STATE[model_id] = {"sha": sha, "state": "failed", "error": why, "failed_at": _now()}
+            await _put(db, model_id, key, token, {"state": "failed", "error": why[:300], "failed_at": _now(),
+                                                  "ended": time.time(), "beat": time.time()})
             await _drawn(db, model_id, title, False, error=why, auto=auto, secs=time.time() - asked)
             raise RuntimeError(why)
-        if _STATE.get(model_id) is live:
-            _STATE.pop(model_id, None)
+        await _drop(db, model_id, key, token)
         await _drawn(db, model_id, title, True, auto=auto, secs=time.time() - asked)
         return kept.read_bytes()
 
@@ -331,11 +491,13 @@ def _iso(t: float) -> str:
 
 
 async def drawing_status(db, model_id: str) -> dict:
-    """Where a model's drawing is, for the 3D room's Model tab - never
-    making one. state: no_step, none, scheduled (draw_later's time in
-    scheduled_at), queued, making (pct, stage), ready, failed; with what
-    is made (when, its size, the sheet) and the last failure, if any, for
-    the model's current STEP only."""
+    """Where a model's drawing is, for the 3D room's Model tab and the
+    Chat - never making one. state: no_step, none, scheduled (draw_later's
+    time in scheduled_at), queued, making (pct, stage), ready, failed; with
+    what is made (when, its size, the sheet), the job under way (`job`: who
+    asked - room, chat, auto -, its process, when it was last heard from),
+    and the last failure, if any, for the model's current drawing only.
+    The job is read from the database, so one started by any process shows."""
     doc = await db.models.find_one({"_id": model_id}, {"artifacts.step": 1, "built": 1, "drawing_layout": 1})
     if not doc:
         raise KeyError(model_id)
@@ -358,13 +520,13 @@ async def drawing_status(db, model_id: str) -> dict:
         st = kept.stat()
         out["made"] = {"at": _iso(st.st_mtime), "pdf_bytes": st.st_size, "preview": png.exists(),
                        **_sheet(_kept(meta, ".json", lay))}
-    live = _STATE.get(model_id)
-    if live and live.get("sha") in (None, sha):
-        if live["state"] == "failed":
-            out["failed"] = {"reason": live.get("error"), "at": live.get("failed_at")}
-        else:
-            out.update(state=live["state"], pct=live.get("pct"), stage=live.get("stage"),
-                       started_at=live.get("started_at"))
+    rec = await _job(db, model_id, out["key"])
+    if alive(rec):
+        out.update(state=rec["state"], pct=rec.get("pct"), stage=rec.get("stage"), started_at=rec.get("started_at"))
+        out["job"] = {"by": rec.get("by"), "pid": rec.get("pid"), "host": rec.get("host"),
+                      "started_at": rec.get("started_at"), "heartbeat": _iso(float(rec.get("beat") or 0))}
+    elif rec and rec.get("state") == "failed":
+        out["failed"] = {"reason": rec.get("error"), "at": rec.get("failed_at"), "by": rec.get("by")}
     if "state" not in out:
         out["state"] = ("ready" if "made" in out else "failed" if "failed" in out
                         else "scheduled" if out["scheduled_at"] else "none")
@@ -374,7 +536,7 @@ async def drawing_status(db, model_id: str) -> dict:
 async def start_drawing(db, model_id: str, again: bool = False) -> dict:
     """Make a model's drawing in the background (anew with `again`); its
     progress is drawing_status's. Nothing new is started while one is
-    being made."""
+    being made - by the room, the Chat or the background, in any process."""
     now = await drawing_status(db, model_id)
     if now["state"] == "no_step":
         raise LookupError("this model has no STEP to draw from - its script does not export one")
@@ -384,13 +546,17 @@ async def start_drawing(db, model_id: str, again: bool = False) -> dict:
 
     async def go() -> None:
         try:
-            await model_drawing(db, model_id, again=again)
-        except Exception as exc:                    # noqa: BLE001 - kept in _STATE for the tab
+            await model_drawing(db, model_id, again=again, by="room")
+        except Exception as exc:                    # noqa: BLE001 - kept in the job row for the tab
             print(f"drawing {model_id}: {exc}", flush=True)
     task = asyncio.get_running_loop().create_task(go())
     _STARTED.add(task)
     task.add_done_callback(_STARTED.discard)
     await asyncio.sleep(0)                          # under way before the answer
+    for _ in range(20):                             # ... and its row written (a few reads of the database)
+        if task.done() or alive(await _job(db, model_id, now["key"])):
+            break
+        await asyncio.sleep(0.05)
     return await drawing_status(db, model_id)
 
 
@@ -398,8 +564,9 @@ async def start_drawing(db, model_id: str, again: bool = False) -> dict:
 # room's Technical drawing opens at once. Not right away: a model is often
 # built several times in a row, and its imports' builds bring it round
 # again - each build starts the wait over, and only the last one is drawn.
-# One at a time, in the background; lost on a restart, when the drawing is
-# simply made on the next click as before.
+# One at a time, in the background; the wait is lost on a restart, when the
+# drawing is simply made on the next click as before. It claims the drawing
+# like any other making, so one under way elsewhere is not made twice.
 DRAW_AFTER_BUILD_S = int(os.environ.get("REDLINE_DRAW_AFTER_S", "600"))
 _DRAW_LATER: dict[str, asyncio.Task] = {}
 _DRAW_ONE = asyncio.Semaphore(1)
@@ -413,20 +580,27 @@ def draw_later(db, model_id: str) -> None:
     _DUE[model_id] = _iso(time.time() + DRAW_AFTER_BUILD_S)
 
     async def go() -> None:
+        waiting, beat = None, None
         try:
             await asyncio.sleep(DRAW_AFTER_BUILD_S)
             _DUE.pop(model_id, None)
-            if model_id not in _STATE or _STATE[model_id].get("state") == "failed":
-                _STATE[model_id] = {"sha": None, "state": "queued"}
+            waiting = await queue(db, model_id, "auto")
+            if waiting:
+                beat = asyncio.get_running_loop().create_task(
+                    _beating(db, model_id, waiting[0], waiting[1], {"stage": "waiting its turn"}))
             async with _DRAW_ONE:
+                if beat:
+                    beat.cancel()
                 await model_drawing(db, model_id, auto=True)
         except asyncio.CancelledError:
             raise
         except Exception as exc:                    # noqa: BLE001 - a click makes it again
             print(f"drawing after build {model_id}: {exc}", flush=True)
         finally:
-            if _STATE.get(model_id, {}).get("state") == "queued":
-                _STATE.pop(model_id, None)
+            if beat:
+                beat.cancel()
+            if waiting:                             # still queued (made by someone else, or no drawing): gone
+                await asyncio.shield(_drop(db, model_id, waiting[0], waiting[1]))
             if _DRAW_LATER.get(model_id) is task:
                 _DRAW_LATER.pop(model_id, None)
                 _DUE.pop(model_id, None)

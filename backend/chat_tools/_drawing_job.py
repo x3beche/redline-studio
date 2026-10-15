@@ -1,51 +1,28 @@
 """A 3D model's technical drawing made by a process of its own, for the
-Chat's drawing_get "Make now" (chat_tools/drawing_get.py).
+Chat's drawing_get "Make now" and drawing_layout's make
+(chat_tools/drawing_get.py, drawing_layout.py).
 
 The Chat's tools run in the answer's runner (backend/ccgen.py), which ends
 with the answer - and a drawing takes minutes (release.draw_timeout). So
 the drawing is made the way builds are kept alive (backend/buildjobs.py):
 a process of its own session, `python -m backend.chat_tools._drawing_job
 <workspace> <model> [again]`, running release.model_drawing - the very
-work the 3D room's Make now starts. While it runs, a marker beside the
-kept drawings (`<key>.chat`) says so; drawing_get reads it, so a second
-Make now from the Chat is not started meanwhile."""
+work the 3D room's Make now starts. What it is doing is release's job row
+in the database (release.JOBS): queued (by "chat", with this process's
+pid) as soon as it is started, then claimed and beaten while it is made -
+so the room shows it being made, and neither the room nor the Chat starts
+the same drawing a second time meanwhile."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def marker(key: str) -> Path:
-    from .. import release
-    return release.DRAWINGS / f"{key}.chat"
-
-
-def failed(key: str) -> dict | None:
-    """How the Chat's last drawing of this key failed ({reason, at}), while no drawing is made."""
-    try:
-        return json.loads(marker(key).with_suffix(".chat-failed").read_text())
-    except (OSError, ValueError):
-        return None
-
-
-def running(key: str) -> dict | None:
-    """The Chat's drawing of this key under way: {pid, model, started_at}, or None."""
-    path = marker(key)
-    try:
-        got = json.loads(path.read_text())
-        os.kill(int(got["pid"]), 0)
-        return got
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
 
 
 def _popen(workspace: str, model_id: str, again: bool) -> int:
@@ -61,32 +38,30 @@ def _popen(workspace: str, model_id: str, again: bool) -> int:
 
 
 async def spawn(workspace: str, model_id: str, again: bool) -> int:
-    """Start it. Its own function so a test can stand in."""
+    """Start the process. Its own function so a test can stand in."""
     return await asyncio.to_thread(_popen, workspace, model_id, again)
+
+
+async def start(db, model_id: str, again: bool) -> int:
+    """Start the drawing in a process of its own and say at once that it is
+    waiting to be made (its row, by "chat"), before the process is up."""
+    from .. import release
+    pid = await spawn(getattr(db, "workspace", "default"), model_id, again)
+    await release.queue(db, model_id, "chat", pid=pid)
+    return pid
 
 
 async def _main(workspace: str, model_id: str, again: bool) -> int:
     from .. import main, release, scope
     scope.WORKSPACE.set(workspace)
     db = scope.ScopedDb(main.db().raw, workspace)
-    now = await release.drawing_status(db, model_id)
-    path = marker(now.get("key") or model_id.replace("/", "_"))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.with_suffix(".chat-failed").unlink(missing_ok=True)
-    path.write_text(json.dumps({"pid": os.getpid(), "model": model_id,
-                                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
     try:
-        await release.model_drawing(db, model_id, again=again)
+        await release.model_drawing(db, model_id, again=again, by="chat")
         print(f"drawing {model_id}: made", flush=True)
         return 0
-    except Exception as exc:                        # noqa: BLE001 - said by drawing_get, kept in the log
-        why = str(exc)[:300] or type(exc).__name__
-        path.with_suffix(".chat-failed").write_text(json.dumps({"reason": why, "at": time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
-        print(f"drawing {model_id}: {why}", flush=True)
+    except Exception as exc:                        # noqa: BLE001 - in the job row (drawing_status), and the log
+        print(f"drawing {model_id}: {str(exc)[:300] or type(exc).__name__}", flush=True)
         return 1
-    finally:
-        path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

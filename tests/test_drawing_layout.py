@@ -93,7 +93,8 @@ def ws(monkeypatch, tmp_path):
     monkeypatch.setattr(actors, "current", lambda: ME)
     monkeypatch.setattr(access, "current", lambda: state["role"])
     monkeypatch.setattr(release, "DRAWINGS", tmp_path)
-    monkeypatch.setattr(release, "_STATE", {})
+    from test_telegram import Coll
+    fake.colls[release.JOBS] = Coll()           # the job rows: claimed, beaten, cleared
     return db, fake, state
 
 
@@ -213,6 +214,33 @@ def test_the_chat_tool_reads_sets_and_resets(ws):
     assert "automatically" in call({"model": "p/lid"}).text
     with pytest.raises(ToolError):
         call({"model": "p/lid", "action": "set", "spec": SPEC})
+
+
+def test_the_chat_tools_make_runs_in_a_process_of_its_own(ws, monkeypatch):
+    """make=true starts the drawing the way drawing_get's Make now does - a
+    detached process (chat_tools/_drawing_job.py), shown waiting at once -
+    not a task in the answer's runner, which ends with the answer."""
+    from backend.chat_tools import _drawing_job
+    db, fake, state = ws
+    spawned = []
+
+    async def spawn(ws_, mid, again):
+        spawned.append((ws_, mid, again))
+        return 1
+
+    async def never(*a, **kw):
+        raise AssertionError("made inside the answer's runner")
+    monkeypatch.setattr(_drawing_job, "spawn", spawn)
+    monkeypatch.setattr(release, "start_drawing", never)
+    monkeypatch.setattr(release, "model_drawing", never)
+    tool = chat_tools.tools()["drawing_layout"]
+    got = run_tool(tool.run(Ctx(db=db, actor=ME), {"model": "p/lid", "action": "set", "spec": SPEC, "make": True}))
+    assert spawned == [("default", "p/lid", True)] and "being made" in got.text
+    st = asyncio.run(release.drawing_status(db, "p/lid"))
+    assert st["state"] == "queued" and st["job"]["by"] == "chat" and st["key"].endswith(st["layout"]["key"])
+    # Asked again while it is under way: not a second one.
+    run_tool(tool.run(Ctx(db=db, actor=ME), {"model": "p/lid", "action": "set", "spec": SPEC, "make": True}))
+    assert len(spawned) == 1
 
 
 @pytest.mark.skipif(not shutil.which("docker"), reason="needs docker and the redline-draw image")

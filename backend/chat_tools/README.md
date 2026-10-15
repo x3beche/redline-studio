@@ -115,8 +115,9 @@ through the workspace, and the list of them when the name fits nothing).
 - `drawing_layout` (change, off; package `cad`): a 3D model's technical
   drawing layout read, set (the whole spec, checked by backend/drawlayout.py)
   or put back to automatic, as the layout editor's PUT does, and with
-  `make` the drawing made again with it.
-- The rooms' buttons (`_drawing_job.py` is drawing_get's helper). Each starts the
+  `make` the drawing made again with it (in a process of its own,
+  `_drawing_job.py`, as drawing_get's Make now).
+- The rooms' buttons (`_drawing_job.py` is drawing_get's and drawing_layout's helper). Each starts the
   very function the room's route starts, with that route's right (`_rights.py`):
   - `model_build` (change, off; `cad`): the 3D room's Rebuild - main.py
     `_start_build`, the build a process of its own (buildjobs.py); one build
@@ -128,9 +129,11 @@ through the workspace, and the list of them when the name fits nothing).
     with the PDF, its preview and app_links' 3D place. `make_now` is Make now
     (Make again when made): release.model_drawing in a process of its own
     (`python -m backend.chat_tools._drawing_job <ws> <model> [again]`; the
-    answer's runner ends with the answer), with a marker `<key>.chat` beside
-    the kept drawings so it is not started twice. What the API holds only in
-    memory (the room making one now, the drawing after a build) is not seen.
+    answer's runner ends with the answer), shown queued by "chat" at once.
+    A drawing under way is release's job row in the database (`drawing_jobs`,
+    one claim per model and kept drawing), so one the room, the Chat or the
+    background started shows here, and Make now does not start it twice.
+    Only draw_later's wait before it starts (scheduled) is the API's own.
   - `board_route` (change, off; `pcb`): `both` is the PCB room's Build (the
     `run` job), `place`/`route` the `layout` job (KiCad places, the router
     follows) - main.py `_as_job` detached; Freerouting only: a board set to

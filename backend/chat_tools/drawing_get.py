@@ -12,9 +12,10 @@ before a drawing does. Making it is not undone (it is drawn again from the
 STEP; nothing written changes), and it asks first: it takes minutes of the
 machine.
 
-What the API keeps in its own memory - a drawing the room is making right
-now, the one it makes by itself a while after a build - is not seen from
-here: the files on disk (made, and the Chat's own making) are."""
+A drawing under way is release's job row in the database, whoever started
+it (the room, the Chat, the background after a build): it is shown being
+made here, and Make now does not start it a second time. Only draw_later's
+wait before it starts (scheduled) is the API's own."""
 
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from ._things import find
 
 SAYS = {"ready": "Drawing of {title}: made", "making": "Drawing of {title}: being made",
         "failed": "Drawing of {title}: failed", "no_step": "{title} has no STEP to draw from"}
+BY = {"room": "the 3D room", "chat": "the Chat", "auto": "the background, after a build"}
 SAID = {"no_step": "no STEP to draw from", "none": "not made yet", "scheduled": "made by itself after the build",
         "queued": "waiting its turn", "making": "being made", "ready": "made", "failed": "failed"}
 
@@ -51,23 +53,29 @@ async def run(ctx: Ctx, args: dict) -> Result:
             raise ToolError(f"{title} has no STEP to draw from - its script does not export one")
         if d.get("building"):
             raise ToolError(f"{title} is being built right now - make its drawing once the build is done")
-        if key and job.running(key):
+        under = st.get("job") or {}
+        if st["state"] == "making" or (st["state"] == "queued" and under.get("by") == "chat"):
             started = "already"
         else:
-            await job.spawn(getattr(db, "workspace", "default"), mid, again=bool(st.get("made")))
+            await job.start(db, mid, again=bool(st.get("made")))
             started = "again" if st.get("made") else "now"
-    mine = job.running(key) if key else None
-    state = "making" if mine else st["state"]
+            st = await release.drawing_status(db, mid)
+    under = st.get("job") or {}
+    state = st["state"]
     made = st.get("made") or {}
     v = {"title": title, "model": mid, "state": state, "key": key}
     lines = [f"Technical drawing of {title} ({mid}): {SAID.get(state, state)}."]
     if started == "already":
-        lines.append("Make now was not pressed again: the Chat's making of it is still under way.")
+        lines.append("Make now was not pressed again: it is already being made.")
     elif started:
         lines.append(("Making it again" if started == "again" else "Making it now")
                      + " in the background (minutes for a large model); ask again for how far it is.")
-    if mine and not started:
-        lines.append(f"The Chat started making it at {mine.get('started_at')}; it is still under way.")
+    if under and state in ("making", "queued"):
+        v.update(by=str(under.get("by") or ""), pct=int(st.get("pct") or 0))
+        lines.append(f"{'Being made' if state == 'making' else 'Waiting to be made'}"
+                     + (f" ({st.get('pct') or 0}%, {st.get('stage')})" if state == "making" else "")
+                     + f", started by {BY.get(under.get('by'), under.get('by') or 'someone')}"
+                     + f" at {under.get('started_at')}; last heard from {under.get('heartbeat')}.")
     if made:
         v.update(made=str(made.get("at") or "")[:16].replace("T", " "), pdf=1, pdf_bytes=made.get("pdf_bytes") or 0,
                  preview=1 if made.get("preview") else 0, sheet=str(made.get("sheet") or ""),
@@ -84,7 +92,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
     lay = st.get("layout") or {}
     if lay.get("custom"):
         lines.append(f"It uses the model's own sheet layout (v{lay.get('version')}); drawing_layout reads it.")
-    gone = st.get("failed") or (job.failed(key) if key and not made and not mine else None)
+    gone = st.get("failed")
     if gone:
         v["error"] = str(gone.get("reason") or "")[:80]
         lines.append(f"The last attempt failed{(' at ' + str(gone.get('at'))) if gone.get('at') else ''}: "

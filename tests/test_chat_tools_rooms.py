@@ -173,12 +173,16 @@ def test_the_drawing_status_with_its_links_and_make_now(ws, monkeypatch, tmp_pat
     async def st(d, mid):
         return dict(status)
     monkeypatch.setattr(release, "drawing_status", st)
-    spawned = []
+    spawned, queued = [], []
 
     async def spawn(ws_, mid, again):
         spawned.append((ws_, mid, again))
         return 4242
     monkeypatch.setattr(_drawing_job, "spawn", spawn)
+
+    async def queue(d, mid, by, pid=None):
+        queued.append((mid, by, pid))
+    monkeypatch.setattr(release, "queue", queue)
     got = call(db, "drawing_get", {"model": "lid"})
     assert got.say == "Drawing of {title}: made" and got.vars["sheet"] == "A3" and got.vars["views"] == 3
     assert "/api/models/box/parts/lid/drawing.pdf" in got.text and "/3d/box/parts/lid" in got.text
@@ -186,10 +190,18 @@ def test_the_drawing_status_with_its_links_and_make_now(ws, monkeypatch, tmp_pat
     # Make now on a made drawing is Make again, in a process of its own.
     again = call(db, "drawing_get", {"model": "lid", "make_now": True})
     assert spawned == [("default", "box/parts/lid", True)] and again.say == "Started the drawing of {title}"
-    # Under way: not started twice.
-    (tmp_path / "k1.chat").write_text(json.dumps({"pid": __import__("os").getpid(), "model": "box/parts/lid"}))
+    assert queued == [("box/parts/lid", "chat", 4242)]          # shown waiting before its process is up
+    # Under way - started anywhere (here, the room): not started twice.
+    status.update(state="making", pct=40, stage="projecting the top view",
+                  job={"by": "room", "started_at": "2026-10-14T10:00:00", "heartbeat": "2026-10-14T10:01:00"})
     twice = call(db, "drawing_get", {"model": "lid", "make_now": True})
     assert len(spawned) == 1 and twice.vars["state"] == "making" and "not pressed again" in twice.text
+    assert twice.vars["by"] == "room" and "40%" in twice.text and "the 3D room" in twice.text
+    # The Chat's own, still waiting for its process: not twice either.
+    status.update(state="queued", job={"by": "chat", "started_at": "t", "heartbeat": "t"})
+    call(db, "drawing_get", {"model": "lid", "make_now": True})
+    assert len(spawned) == 1
+    status.pop("job")
     status.update(state="no_step", made=None, key=None)
     with pytest.raises(ToolError, match="no STEP"):
         call(db, "drawing_get", {"model": "lid", "make_now": True})
