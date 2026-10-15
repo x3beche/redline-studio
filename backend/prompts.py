@@ -161,6 +161,13 @@ PROMPTS: tuple[Prompt, ...] = (
            source="voice.PROMPT", slots={"nothing": "what the model writes when it hears no speech: (no speech)"},
            required=("nothing",),
            runtime=("The language expected: Turkish, English or either", "The recording")),
+    Prompt("file_ocr", "Read a file's text (OCR)", "file_ocr",
+           "System line when the words on a picture or a scanned page are read, a page at a time "
+           "(backend/ocrtext.py).",
+           lambda: _mod("ocrtext").PROMPT, group="Files", source="ocrtext.PROMPT",
+           slots={"lang": "the language to write the words in, as a phrase"},
+           required=("lang",),
+           runtime=("The pages' pictures, each with the line that names its page",)),
     Prompt("scheduled_ask", "Scheduled question", "chat",
            "System line of a scheduled task that asks the Chat a question (backend/sched/kinds.py).",
            lambda: _mod("sched.kinds").ASK_SYSTEM, group="Scheduled", source="sched.kinds.ASK_SYSTEM",

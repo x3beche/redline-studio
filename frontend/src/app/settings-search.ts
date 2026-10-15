@@ -29,7 +29,7 @@ export const SETTINGS_INDEX: Record<PrefsTab, string[]> = {
   llm: ['API keys', 'API key', 'Add a key', 'Which model does what', 'Usage', 'Spend by job', 'Spend by model',
         'Latest calls', 'OpenRouter account', 'Card summaries', 'English translation', 'Tool pages', 'Tool finder',
         'Reading translation', 'Chat room', 'Part category', 'Taste extraction', 'Manufacturer exploration',
-        'Next-question suggestion', 'Chat example questions', 'Voice to text'],
+        'Next-question suggestion', 'Chat example questions', 'Read a file\'s text (OCR)', 'Voice to text'],
   proxy: ['Route order', 'Proxy', 'Connection', 'Username', 'Password', 'Port', 'Rotation', 'Where it comes out', 'Exits',
           'Health check', 'Lookups', 'Price per GB', 'Jina AI', 'McMaster-Carr'],
   costs: ['Where a month goes', 'LLM plans against the API', 'Display currency', 'Billed in', 'Exchange rates', 'Budgets',

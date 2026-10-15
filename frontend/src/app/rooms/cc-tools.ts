@@ -70,6 +70,7 @@ export const TOOL_ICON: Record<string, string> = {
   wiki_search: SEARCH, wiki_read: NOTE, wiki_write: PEN,
   analytics_read: CHART, memory_read: NOTE, memory_write: PEN,
   price_history: CHART, stock_low: SHELF, files_search: SEARCH, files_restore: FILE, taste_propose: SWATCH,
+  file_ocr: SHEET,
   manufacturer_explore: FACTORY, dm_read: CHAT, dm_send: CHAT, settings_read: WRENCH,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }

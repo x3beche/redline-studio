@@ -2452,6 +2452,22 @@ async def cmd_files(args):
         out = Path(args.out or (meta or {}).get("name") or args.target)
         out.write_bytes(data)
         print(f"wrote {out} ({len(data)} bytes)" + (f" - a {meta['kind']}" if meta else ""))
+    elif args.what == "text":
+        # A photographed or scanned page has no text layer, so no other
+        # command reads a word of it: a model that sees the pages writes the
+        # words out (backend/ocrtext.py, the server's - the words are kept by
+        # the file's content once read, and the first read takes a while). The
+        # import also puts the module in the agent kit, which follows what this
+        # command line imports (backend/agent_kit.py modules()).
+        from backend import ocrtext
+        if not args.target:
+            sys.exit("files text needs a file id (files list)")
+        q = f"?lang={urllib.parse.quote(args.lang)}" if args.lang else ""
+        got = _json.loads(call(f"/api/files/{args.target}/text{q}"))
+        if got.get("state"):
+            print(f"still being read ({got['state']}) - ask again in {ocrtext.RETRY_AFTER} s")
+        else:
+            print(got["text"])
     elif args.what == "to-model":
         # A STEP/mesh from the Files tab copied into a project folder as a
         # model of its own - it stays whole if the file is deleted from Files.
@@ -2904,8 +2920,10 @@ def main() -> None:
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
     s.add_argument("what", nargs="?", default="list",
-                   choices=["list", "get", "put", "to-model", "mkdir", "mv", "save-mine"],
-                   help="list (the default), get <id> [-o PATH], put <path>, mkdir <path>, "
+                   choices=["list", "get", "text", "put", "to-model", "mkdir", "mv", "save-mine"],
+                   help="list (the default), get <id> [-o PATH], text <id> [--lang L] (the words on a page that "
+                        "has no text layer: a photograph or a scan, read by a model that sees it), put <path>, "
+                        "mkdir <path>, "
                         "save-mine <id> [--folder PATH] [--name NAME] (a copy into the person's My files, "
                         "only when they ask), "
                         "mv <id|folder path> <folder path>, "
@@ -2922,6 +2940,7 @@ def main() -> None:
                                     "to-model: the catalog folder it goes in")
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.add_argument("--name", help="save-mine: the copy's name (default: the file's)")
+    s.add_argument("--lang", help="text: write the words in this language ('tr', 'en'; default: the page's own)")
     s.set_defaults(fn=cmd_files)
     s = sub.add_parser("linked", help="bought and downloaded parts: McMaster-Carr and GrabCAD, saved in the "
                                       "Parts page with their STEP (backend/linked.py)")

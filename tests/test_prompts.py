@@ -40,7 +40,7 @@ def test_every_prompt_sent_to_a_model_is_listed_with_its_default():
     for pid in ("chat_system", "chat_steps", "chat_tools", "chat_title", "chat_retitle", "suggest", "chat_ideas",
                 "summary_tr", "summary_en", "translate", "reading", "router", "part_category", "taste_extract",
                 "taste_folder", "taste_look", "taste_text_only", "taste_check", "manufacturer",
-                "manufacturer_only", "voice", "scheduled_ask", "llm_test"):
+                "manufacturer_only", "voice", "file_ocr", "scheduled_ask", "llm_test"):
         assert pid in got, pid
         p = got[pid]
         assert p["default"].strip() and p["where"] and p["state"] == "default" and p["override"] is None

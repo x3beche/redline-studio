@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
-from . import access, actors, file_minis, filemesh, files, files_virtual, pdftext
+from . import access, actors, file_minis, filemesh, files, files_virtual, ocrtext, pdftext
 
 router = APIRouter()
 
@@ -770,6 +770,27 @@ async def files_pdf_page(fid: str, n: int, dpi: float = 150):
     longer side would pass 4000 px)."""
     doc, data = await _pdf_of(fid)
     return await pdf_page_response(data, n, dpi, doc.get("name") or fid)
+
+
+@router.get("/api/files/{fid}/text")
+async def files_text(fid: str, wait: float = 1.5, lang: str = ""):
+    """The words of a file: a PDF's pages that carry text from PDFium itself,
+    and the pages that are only pictures of text - a scan, a photograph, a
+    screenshot - written out by a model that sees them (OCR,
+    backend/ocrtext.py). Read once and kept by the file's content; 202 while
+    it is being read or waits its turn (ask again after Retry-After), 404
+    with why for a file whose words cannot be read. In My files, In the app
+    and Deleted files alike: whoever may read the file. `lang` asks for the
+    words in that language (empty: the language on the page)."""
+    doc = await _readable(fid)
+    state, got = await ocrtext.words(_db(), doc, min(max(wait, 0.0), 5.0), (lang or "").strip().lower()[:8])
+    if state == "ready":
+        return {"id": fid, "name": doc.get("name"), "text": got, "chars": len(got)}
+    if state in ("making", "busy"):
+        return JSONResponse({"state": state}, status_code=202,
+                            headers={"Retry-After": str(ocrtext.RETRY_AFTER), "Cache-Control": "no-store"})
+    return JSONResponse({"detail": got or "no words could be read from this file"}, status_code=404,
+                        headers={"Cache-Control": "private, max-age=3600"})
 
 
 class CopyIn(BaseModel):

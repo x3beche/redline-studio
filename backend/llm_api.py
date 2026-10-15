@@ -100,6 +100,11 @@ async def test(body: TestIn) -> dict:
             content = [{"type": "text", "text": "A connection test: the recording is silence and needs no "
                                                 "transcript. Reply with the single word OK and nothing else."},
                        voice.audio_part(voice.silence_wav(), "wav")]
+        elif body.job and llm.JOBS.get(body.job, {}).get("vision"):
+            from . import ocrtext
+            content = [{"type": "text", "text": "A connection test: a small grey square, with nothing written on "
+                                                "it. Reply with the single word OK and nothing else."},
+                       {"type": "image_url", "image_url": {"url": ocrtext.test_picture()}}]
         d = await llm.complete([{"role": "user", "content": content}],
                                provider=body.provider, model=body.model, max_tokens=200,
                                temperature=0, timeout=60)

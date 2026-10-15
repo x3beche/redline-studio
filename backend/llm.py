@@ -120,6 +120,17 @@ JOBS = {
     "voice": {"label": "Voice to text",
               "about": "a spoken chat message or note, written out word for word in the language spoken",
               "default": ("openrouter", "google/gemini-3.1-flash-lite"), "audio": True},
+    # The words on a picture or a scanned page (backend/ocrtext.py): the second
+    # job not on CHEAP, because the cheap model reads no images - the Chat's
+    # tools, file_read and datasheet_read all read a text layer and give up on
+    # a scan. Gemini 3.1 Flash-Lite is the one already used for the other job
+    # that needs a modality CHEAP has not (voice, whose speech it was tried
+    # on); OpenRouter's list says it takes images, and a page of about
+    # 1600 px is roughly a thousand tokens of input. `vision`: its model must
+    # read images, and its Test sends one.
+    "file_ocr": {"label": "Read a file's text (OCR)",
+                 "about": "the words on a picture or a scanned page",
+                 "default": ("openrouter", "google/gemini-3.1-flash-lite"), "vision": True},
 }
 
 # The example questions' settings: how often they are written again (the
@@ -139,7 +150,8 @@ CTX_MIN, CTX_MAX = 500, 1_000_000
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
          "part-category": "part_category", "suggest": "suggest", "taste": "taste",
-         "manufacturer": "manufacturer", "chat-suggestions": "chat_suggestions", "voice": "voice"}
+         "manufacturer": "manufacturer", "chat-suggestions": "chat_suggestions", "voice": "voice",
+         "file-ocr": "file_ocr"}
 KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 
@@ -315,6 +327,8 @@ def public() -> dict:
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
         if info.get("audio"):
             jobs[j]["audio"] = True                    # its model must take audio; its Test sends some
+        if info.get("vision"):
+            jobs[j]["vision"] = True                   # its model must read images; its Test sends one
         if info.get("switch"):
             jobs[j].update(job_switch(j), switch=True, delay_range=[DELAY_MIN, DELAY_MAX])
             if "ctx" in info:

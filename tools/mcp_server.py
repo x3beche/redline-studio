@@ -120,6 +120,15 @@ TOOLS: dict[str, tuple] = {
         ["file"], lambda a: ["files", "save-mine", a["file"]]
         + (["--folder", a["folder"]] if a.get("folder") else [])
         + (["--name", a["name"]] if a.get("name") else [])),
+    "files_text": (
+        "The words on a file that has no text layer - a photograph of a document, a scanned page, a screenshot - "
+        "read by a model that looks at the pages (OCR, the server's file_ocr job) and given back as text. A PDF's "
+        "pages that do carry text are read straight from it, so only its pages that are pictures cost this. The "
+        "words are kept by the file's content: the first read takes a while (up to a minute for a few pages), and "
+        "an answer saying it is still being read means asking again in a moment, for nothing.",
+        {"file": _s("the file's id (files list), or a v: id from Files' In the app"),
+         "lang": _s("write the words in this language ('tr', 'en'; default: the language on the page)")},
+        ["file"], lambda a: ["files", "text", a["file"]] + (["--lang", a["lang"]] if a.get("lang") else [])),
     "chat": (
         "Read the room's thread (in the Chat tab), and pick up what the person said. "
         "Each room (tab) has its own thread; with a room, only that one. A picture the person "

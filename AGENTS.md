@@ -821,6 +821,7 @@ and open the file with the Read tool to look at it before you answer.
 .venv/bin/python tools/revisions.py files put ldo.pdf --folder datasheets/power   # into a folder (made if missing)
 .venv/bin/python tools/revisions.py files mkdir datasheets/power         # a folder, and its parents
 .venv/bin/python tools/revisions.py files mv <file-id|folder path> <folder path|/>
+.venv/bin/python tools/revisions.py files text <file-id>   # the words on a scanned or photographed page (OCR)
 ```
 
 Files sit in folders the person makes (`file_folders`); a file from before
@@ -862,6 +863,14 @@ leaves out - tables, pinout diagrams, a mechanical drawing's dimensions:
 - `pdf text` prints each page under `===== page n / N =====` (at most 50
   pages a call; `--pages 1-3`, `2`, `1,4,7-9`, `5-`). A page with little
   or no text is marked - it is drawn or scanned: look at it.
+- A page that is **only a picture** - a scan, a photograph of a document, a
+  screenshot - has no text layer for anyone to read: `files text <file-id>`
+  has a model that sees the pages write their words out (OCR; the file_ocr
+  job, Settings > LLM settings) and prints them page by page. The words are
+  kept by the file's content, so reading the same file again costs nothing;
+  the first read takes a moment and may answer "still being read - ask again
+  in 8 s". One model call for the pictures, so use it when the page really is
+  a picture (a `pdf text` page marked as such), not on every PDF.
 - `pdf page` writes `/tmp/<name>-p<n>.png` (36-300 dpi, the longer side
   at most 4000 px) and prints the path: **open it with the Read tool**.
   200 dpi reads small dimension text.
@@ -869,8 +878,9 @@ leaves out - tables, pinout diagrams, a mechanical drawing's dimensions:
   if it never was. A file id must be a PDF (415 otherwise). Never guess a
   dimension a datasheet gives: read the drawing.
 - The routes: `GET /api/files/<id>/pdf?pages=1-3` -> `{count, pages: [{n, text}]}`,
-  `GET /api/files/<id>/pdf/page/<n>.png?dpi=150`, and the same for a part:
-  `GET /api/parts/<C>/datasheet/text`, `.../datasheet/page/<n>.png`.
+  `GET /api/files/<id>/pdf/page/<n>.png?dpi=150`, `GET /api/files/<id>/text`
+  -> `{id, name, text, chars}` (202 while it is being read), and the same for a
+  part: `GET /api/parts/<C>/datasheet/text`, `.../datasheet/page/<n>.png`.
 
 ## Only `queued` items are work
 
@@ -910,7 +920,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py after <id> --model <new>  # ...on the model the work went into
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
-.venv/bin/python tools/revisions.py files [get <id>|put <file>|mkdir|mv]  # the Files tab
+.venv/bin/python tools/revisions.py files [get <id>|text <id>|put <file>|mkdir|mv]  # the Files tab
 .venv/bin/python tools/revisions.py pdf text|page <file-id|C...|file.pdf> ...  # read a PDF
 .venv/bin/python tools/revisions.py component list|show|deps|pin|refresh ...  # components
 .venv/bin/python tools/revisions.py fw files|get|put|pins|build|diff <fw> ...   # firmware

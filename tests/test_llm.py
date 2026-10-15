@@ -11,11 +11,13 @@ def fresh(monkeypatch):
 
 def test_a_job_uses_its_default_until_one_is_chosen():
     # Every job starts on the one cheap model; anything dearer is a choice.
-    # Voice to text cannot (that model takes no audio): it starts on the
-    # cheap one that writes Turkish and English out well (backend/voice.py).
+    # The two that cannot - the cheap model takes no audio and reads no
+    # images - start on Gemini 3.1 Flash Lite, which does both: voice to
+    # text, whose Turkish and English write-out voice.py checked, and the
+    # words on a picture or a scanned page (backend/ocrtext.py).
     assert llm.CHEAP == ("commandcode", "Qwen/Qwen3.8-Flash")
     for job in llm.JOBS:
-        if llm.JOBS[job].get("audio"):
+        if llm.JOBS[job].get("audio") or llm.JOBS[job].get("vision"):
             assert llm.route(job) == ("openrouter", "google/gemini-3.1-flash-lite"), job
             continue
         assert llm.route(job) == llm.CHEAP, job

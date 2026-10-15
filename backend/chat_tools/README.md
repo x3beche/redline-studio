@@ -162,6 +162,15 @@ through the workspace, and the list of them when the name fits nothing).
   Documents; its description is the writing guide. The step carries the
   file; the Chat opens it, and any `/api/files/<id>` link, in its viewer
   (frontend/src/app/rooms/file-modal.ts).
+- `file_ocr` (read, on; package `files`): the words on a file that has no
+  text layer - a photograph of a document, a page off a scanner, a
+  screenshot, a scan of a drawing - written out by a model that sees the
+  pages (the `file_ocr` job, backend/ocrtext.py, Settings > LLM settings).
+  A PDF has the pages that carry text read straight from it, so only the
+  pages that are pictures cost a call. The words are kept by the file's
+  content: the first call waits for the read (up to a minute for a few
+  pages), and one still going says to ask again in a moment. What the model
+  read is marked `--- page N ---`.
 - `room_note` (change, off by default): a queued note, as a ```task
   block's "Send to queue" files one (tasks.py `_file`).
 - The rooms' queues (General: they span the 3D, PCB and Firmware rooms):
