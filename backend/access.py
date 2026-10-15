@@ -223,6 +223,11 @@ _RULES: list[tuple[str, str, str]] = [
     # Undo and redo of what a tool changed: each also needs the rights the change needed (chat_undo.py).
     ("POST", "/api/cc/chats/{}/changes/(undo|{}/redo)", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
+    # one's own note templates (backend/note_templates.py): like a note; the
+    # routes keep each to whoever saved it
+    ("POST", "/api/note-templates", "draw"),
+    ("PATCH", "/api/note-templates/{}", "draw"),
+    ("DELETE", "/api/note-templates/{}", "draw"),
     # custom themes (backend/themes.py): anyone may make one in their own
     # space; the routes keep changing or deleting one to its maker or the
     # space's person

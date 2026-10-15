@@ -17,6 +17,7 @@ import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
 import { FilesApi } from './files-model';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { LogWindow } from './log-window';
+import { NoteTplPicker, nextHole, putTemplate } from './note-tpl';
 
 /** The longest line a room thread takes (backend/main.py CHAT_MAX). */
 const CHAT_MAX = 20_000;
@@ -147,7 +148,7 @@ export function sender(it: ThreadItem): string {
   selector: 'app-room-thread',
   // Its header, lines and composer are the conversation column's own rows.
   host: { style: 'display: contents' },
-  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick, AttachChips, MentionPics, SuggestChip, MicButton],
+  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick, AttachChips, MentionPics, SuggestChip, MicButton, NoteTplPicker],
   template: `
 <header class="tcv-cc-bar">
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
@@ -352,6 +353,8 @@ export function sender(it: ThreadItem): string {
         <ng-container *ngTemplateOutlet="ico(); context: { $implicit: CLIP }" /></button>
       <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
       <rl-mic [v]="voice" />
+      <!-- Starting texts for the requests written most (rooms/note-tpl.ts), this room's first. -->
+      <wb-note-tpl [room]="room()" [text]="saying()" up (pick)="useTemplate($event)" />
       <span class="tcv-cc-hint"><kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }}@if (voice.prefs.on()) { · <kbd>Alt M</kbd> {{ 'speak' | t }}}</span>
       <rl-suggest-chip [sg]="sg" />
       <span class="grow"></span>
@@ -616,6 +619,16 @@ export class RoomThread {
   key(e: KeyboardEvent) {
     if (this.sg.key(e)) return;                   // the suggested next question (rooms/suggest.ts)
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.say(); }
+    // A template's holes: Tab selects the next one.
+    else if (e.key === 'Tab' && !e.shiftKey && this.box() && nextHole(this.box()!.nativeElement)) e.preventDefault();
+  }
+
+  /** A template picked: into the box, its first hole selected. */
+  useTemplate(text: string) {
+    const el = this.box()?.nativeElement;
+    if (!el) return;
+    this.saying.set(putTemplate(el, text));
+    this.grow();
   }
 
   grow() {

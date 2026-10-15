@@ -66,6 +66,8 @@ SCOPED = frozenset({
     "datasheets", "datasheet_pages",
     # each project's wiki: its pages and every version of them (backend/wiki.py)
     "wiki_pages", "wiki_versions",
+    # one's own note templates, each person's in the space it was saved in (backend/note_templates.py)
+    "note_templates",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

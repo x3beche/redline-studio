@@ -18,6 +18,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { NOTE_TEMPLATES, NoteTemplate } from './note-templates';
 import { MicButton, VoiceInput, VoicePrefs, withWords } from './voice-input';
 import { UiSelect } from '../ui-select';
+import { NoteTplPicker, nextHole, putTemplate } from './note-tpl';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -115,7 +116,7 @@ function group(iso: string): string {
  *  the one open when it is one with an agent, else the last one chosen. */
 @Component({
   selector: 'app-note-compose',
-  imports: [T, MicButton, UiSelect],
+  imports: [T, MicButton, UiSelect, NoteTplPicker],
   // One row whatever it holds: the hint gives way, the buttons never wrap.
   styles: [`
     .tcv-note-hint { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -130,6 +131,8 @@ function group(iso: string): string {
   <div class="tcv-note-compose-bar">
     <span class="tcv-note-hint">{{ hint() | t }}</span>
     <span class="grow"></span>
+    <!-- Starting texts for the requests written most (rooms/note-tpl.ts), this room's first. -->
+    <wb-note-tpl [room]="here()" [text]="text()" up align="right" (pick)="useTemplate($event)" />
     <rl-mic [v]="voice" />
     @if (voiced() && text().trim() && voice.state() === 'idle') {
       <wb-select size="sm" label="Send to" [options]="roomOpts()" [value]="toRoom()" (pick)="pickRoom($event)"
@@ -167,6 +170,8 @@ export class NoteCompose {
     const here = this.picked.room();
     return this.override() ?? (VOICE_ROOMS.includes(here) ? here : readRoom() ?? 'cad');
   });
+  /** The room open behind the box: its templates come first. */
+  here = computed(() => this.picked.room());
   roomOpts = computed(() => { LANG(); return VOICE_ROOMS.map(r => ({ value: r, label: t('{x} agent').replace('{x}', t(ROOM_NAMES[r])) })); });
   /** Set by the owner: called with the note once it is kept. */
   kept: (n: Note) => void = () => {};
@@ -188,6 +193,14 @@ export class NoteCompose {
 
   key(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.keep(); }
+    // A template's holes: Tab selects the next one.
+    else if (e.key === 'Tab' && !e.shiftKey && nextHole(this.box().nativeElement)) e.preventDefault();
+  }
+
+  /** A template picked: into the box, its first hole selected. */
+  useTemplate(text: string) {
+    this.text.set(putTemplate(this.box().nativeElement, text));
+    this.grow();
   }
 
   pickRoom(r: string) {
@@ -265,7 +278,7 @@ export class QuickNote {
       e.preventDefault();
       this.last.set(null);
       this.api.quick.set(!this.api.quick());
-    } else if (e.key === 'Escape' && this.api.quick()) {
+    } else if (e.key === 'Escape' && this.api.quick() && !document.querySelector('.wb-ntpl-pop')) {
       this.api.quick.set(false);
     }
   }
@@ -285,7 +298,7 @@ const NOTE_ICONS = {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [EmptyState, Skeleton, T, NoteDoc, Marquee, SelectionBar, NgTemplateOutlet],
+  imports: [EmptyState, Skeleton, T, NoteDoc, Marquee, SelectionBar, NgTemplateOutlet, NoteTplPicker],
   host: { '(document:keydown)': 'key($event)' },
   styles: [`
 .tcv-notes-row[data-picked] { background: color-mix(in srgb, var(--marquee) 14%, transparent); border-left-color: var(--marquee); }
@@ -422,6 +435,7 @@ const NOTE_ICONS = {
             @if (saving()) { <span class="tcv-note-meta">{{ 'saving…' | t }}</span> }
             @if (copied()) { <span class="tcv-note-meta">{{ 'Copied' | t }}</span> }
             @if (editing()) {
+              <wb-note-tpl [room]="open()?.context?.room ?? ''" [text]="draft()" align="right" label (pick)="useTemplate($event)" />
               <button class="tcv-btn tcv-note-btn" (click)="done()" [title]="'Saved as you type · Esc or Ctrl+Enter when done' | t">{{ 'Done' | t }}</button>
             } @else if (auth.can('draw')) {
               <button class="tcv-btn tcv-note-btn" (click)="edit(open()!)">{{ 'Edit' | t }}</button>
@@ -582,6 +596,14 @@ export class RoomNotes implements OnDestroy {
     const start = () => { this.newNote(); this.template = text; this.draft.set(text); };
     // From under an empty new note: a fresh editor, with the cursor at the end, not the old one's selection.
     if (this.creating()) { this.done(); setTimeout(start); } else start();
+  }
+
+  /** A short template from the picker while writing (rooms/note-tpl.ts): the
+   *  whole of a new, empty note - not kept until something in it changes, as
+   *  a template from the page above - or a paragraph after what is there. */
+  useTemplate(text: string) {
+    if (this.creating() && !this.editingId && !this.draft().trim()) { this.template = text; this.draft.set(text); return; }
+    this.typed(this.draft().replace(/\s+$/, '') + '\n\n' + text);
   }
 
   typed(text: string) {

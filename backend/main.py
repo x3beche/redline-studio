@@ -184,6 +184,9 @@ app.include_router(voice.router)
 # Shared links: a model, board or drawing, read-only, for someone without an account (backend/shares.py).
 from . import shares as shares_api  # noqa: E402
 app.include_router(shares_api.router)
+# One's own note templates, offered beside the built-in ones in the composers (backend/note_templates.py).
+from . import note_templates  # noqa: E402
+app.include_router(note_templates.router)
 
 
 def _raw_db():
