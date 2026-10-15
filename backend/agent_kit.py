@@ -159,7 +159,10 @@ hold; these are the differences.
   enough (in milliseconds, e.g. 3600000).
 - Never print, echo or write `REDLINE_TOKEN`; `.env` files are not yours
   to read.
-- Keep your scratch files in `./work/`; edits elsewhere ask the person.
+- Keep your scratch files in `./work/`.
+- **You work inside this folder and nowhere else.** OpenCode refuses a path
+  outside it, so do not try: everything of the person's you need (their
+  files, their boards, their notes) comes to you through the server.
 """
 
 MCP_JSON = {"mcpServers": {"redline": {"command": ".venv/bin/python", "args": ["tools/mcp_server.py"]}}}
@@ -187,7 +190,13 @@ SETTINGS_JSON = {
 _RUN = (".venv/bin/python tools/revisions.py", ".venv/bin/python tools/render.py",
         ".venv/bin/python tools/mcp_server.py")
 _LOOK = ("ls", "pwd", "cat", "head", "tail", "wc", "file", "stat", "du", "echo", "grep", "rg",
-         "find", "sort", "uniq", "cut", "diff", "date", "which", "tree", "jq", "cd")
+         "find", "sort", "uniq", "cut", "diff", "date", "which", "tree", "jq", "cd",
+         # Reading a stretch of a file, or a column of one: the agent asked for
+         # `sed -n` the first time it looked into the kit's own backend/ and was
+         # stopped mid-turn (its turn waits on the prompt, so the queue stalls).
+         "sed", "awk", "nl", "tr", "column", "xxd", "od", "hexdump",
+         "basename", "dirname", "realpath", "readlink", "seq", "comm", "join",
+         "paste", "printf", "expr")
 OPENCODE_JSON = {
     "$schema": "https://opencode.ai/config.json",
     "instructions": ["CLAUDE.md", "OPENCODE.md"],
@@ -196,8 +205,12 @@ OPENCODE_JSON = {
     "permission": {
         "read": {"*": "allow", "*.env": "deny", "*.env.*": "deny"},
         "glob": "allow", "grep": "allow", "list": "allow", "task": "allow",
-        "external_directory": "allow",
-        "edit": {"*": "ask", "work/*": "allow", "kit/work/*": "allow", "*/kit/work/*": "allow"},
+        # The folder the agent runs in, and nothing outside it: it reads and
+        # writes in there - the seed runs OpenCode with `--auto`, so it never
+        # stops to ask - and a path outside is refused (a deny is not
+        # auto-approved, which is why this is a deny and not an ask).
+        "external_directory": "deny",
+        "edit": {"*": "allow", "work/*": "allow", "kit/work/*": "allow", "*/kit/work/*": "allow"},
         "bash": {"*": "ask",
                  **{f"{c} *": "allow" for c in _RUN},
                  **{f"REDLINE_AGENT=* {c} *": "allow" for c in _RUN},

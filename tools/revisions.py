@@ -553,8 +553,10 @@ def _keep_by_api(codes: list[str], refresh: bool) -> None:
 
 
 def datasheet_out(code: str, out: str | None) -> Path:
-    """Where `part datasheet` writes: -o, or /tmp/<C>-datasheet.pdf."""
-    return Path(out).expanduser() if out else Path("/tmp") / f"{code}-datasheet.pdf"
+    """Where `part datasheet` writes: -o, or the temporary folder's
+    <C>-datasheet.pdf (inside the agent's own folder when the seed runs it,
+    which sets TMPDIR there)."""
+    return Path(out).expanduser() if out else Path(tempfile.gettempdir()) / f"{code}-datasheet.pdf"
 
 
 def _datasheet_by_api(code: str, fresh: bool) -> dict:
@@ -1054,12 +1056,14 @@ def _ranges(ns: list[int]) -> str:
 
 
 def pdf_page_out(src: str, kind: str, n: int, out: str | None) -> Path:
-    """Where `pdf page` writes: -o, or /tmp/<name>-p<n>.png."""
+    """Where `pdf page` writes: -o, or the temporary folder's
+    <name>-p<n>.png (inside the agent's own folder when the seed runs it,
+    which sets TMPDIR there)."""
     if out:
         return Path(out).expanduser()
     name = Path(src).stem if kind == "local" else src
     name = "".join(c if c.isalnum() or c in "._-" else "_" for c in name)[:80] or "pdf"
-    return Path("/tmp") / f"{name}-p{n}.png"
+    return Path(tempfile.gettempdir()) / f"{name}-p{n}.png"
 
 
 def cmd_pdf(args):
@@ -1665,7 +1669,7 @@ async def cmd_taste(args):
             sys.exit(f"no palette {args.kind}")
         print(taste.block(doc, 10 ** 6, product=product, note=note or "", override=on))
         if doc.get("references"):
-            out = Path(args.out or f"/tmp/taste-{doc['_id']}")
+            out = Path(args.out) if args.out else Path(tempfile.gettempdir()) / f"taste-{doc['_id']}"
             paths = await _write_refs(db, doc, out)
             print(f"\nreference renders ({len(paths)}) - open each with the Read tool before designing:")
             for path in paths:
@@ -1710,7 +1714,8 @@ async def cmd_taste_check(args):
     doc = await taste.get(db, args.palette)
     if not doc:
         sys.exit(f"no palette {args.palette}")
-    out = Path(args.out or f"/tmp/taste-check-{doc['_id']}-{re.sub(r'[^\w-]', '_', args.model)}")
+    out = (Path(args.out) if args.out
+           else Path(tempfile.gettempdir()) / f"taste-check-{doc['_id']}-{re.sub(r'[^\w-]', '_', args.model)}")
     refs = await _write_refs(db, doc, out / "reference")
     views = []
     for r in doc.get("references") or []:

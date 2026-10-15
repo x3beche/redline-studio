@@ -197,8 +197,12 @@ def test_the_kit_runs_with_opencode_too():
                                      "command": [".venv/bin/python", "tools/mcp_server.py"]}
     assert set(cfg["instructions"]) == {"CLAUDE.md", "OPENCODE.md"}
     perm = cfg["permission"]
-    assert perm["read"]["*.env"] == "deny" and perm["edit"]["*"] == "ask"
+    assert perm["read"]["*.env"] == "deny" and perm["edit"]["*"] == "allow"
     assert perm["edit"]["work/*"] == perm["edit"]["kit/work/*"] == "allow"
+    # The seed runs OpenCode with --auto, which approves what is asked for but
+    # not what is denied: the folder it works in is open, everything outside
+    # it is refused.
+    assert perm["external_directory"] == "deny"
     bash = perm["bash"]
     assert bash["*"] == "ask" and bash[".venv/bin/python tools/revisions.py *"] == "allow"
     assert bash["REDLINE_AGENT=* .venv/bin/python tools/revisions.py *"] == "allow"
