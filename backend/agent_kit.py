@@ -20,7 +20,13 @@ What is in it:
 - written here: a CLAUDE.md on working remotely, .mcp.json,
   .claude/settings.json (the commands it may run without asking),
   requirements.txt (light: no build123d - builds and kept parts run on the
-  server, tools/revisions.py _on_the_server) and VERSION.
+  server, tools/revisions.py _on_the_server) and VERSION;
+- the same for OpenCode (the seed's `--runner opencode`): opencode.json
+  (the MCP server, the same permissions, CLAUDE.md and OPENCODE.md as
+  instructions), .opencode/agents/*.md made from .claude/agents/*.md, and
+  .opencode/plugins/redline-wait.js (tools/opencode/), which runs
+  `revisions.py wait` whenever the main agent goes idle, OpenCode having no
+  background shell.
 
 The tarball is the same bytes for the same files (sorted, no times, no
 owners), so its hash is its version and the seed fetches it only when it
@@ -35,6 +41,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import tarfile
 import threading
 import time
@@ -90,7 +97,11 @@ them goes to the server with the token in your environment.
 
 Read **AGENTS.md** now, then start the main-agent loop it describes
 ("First thing to do", "One main agent, one agent per room", "Never stop
-between revisions"). The room agents are in `.claude/agents/`.
+between revisions"). The room agents are in `.claude/agents/` (for
+OpenCode the same ones are in `.opencode/agents/`; read OPENCODE.md too).
+Where AGENTS.md says the Agent tool, use your sub-agent tool (OpenCode:
+`task`); where it says the Read tool, your file-reading tool - it shows
+a PNG as a picture.
 
 What is different from AGENTS.md here:
 
@@ -113,7 +124,42 @@ What is different from AGENTS.md here:
 - This folder is replaced when the kit is updated: never keep anything you
   need in it except under `./work/`.
 - The person keeps you running for as long as they develop. Stay in the
-  loop: start `revisions.py wait` in the background and end your turn.
+  loop: start `revisions.py wait` in the background and end your turn
+  (in OpenCode just end your turn: OPENCODE.md).
+"""
+
+OPENCODE_MD = """\
+# Running in OpenCode
+
+You are run by OpenCode, not Claude Code. AGENTS.md and CLAUDE.md still
+hold; these are the differences.
+
+- **The watcher runs for you.** OpenCode's shell has no background mode,
+  so never run `revisions.py wait` yourself: it would hold your turn
+  and be cut off by the shell's time limit. When you have nothing left
+  to do, end your turn. The kit's plugin (.opencode/plugins/redline-wait.js)
+  then runs `revisions.py wait`, and when it returns - a queued note, a
+  line in the thread, an answer - you get what it printed as the next
+  message. Start every turn from that message: the thread first, then the
+  queue, as AGENTS.md says.
+- **Room agents** are the subagents `redline-3d`, `redline-pcb` and
+  `redline-firmware` (.opencode/agents/). Hand a note over with the `task`
+  tool, `subagent_type` set to the room's agent, the prompt giving the
+  revision id. Pass `background: true` when the tool offers it (the seed
+  turns it on): the room agent works while you go on, and its report comes
+  back as a message when it is done - do not poll it. Without it the task
+  call returns when the room agent is done; review then as AGENTS.md says.
+- **Drawings**: `revisions.py show <id>` prints where it wrote the drawing;
+  open that PNG with the `read` tool - it comes to you as a picture. If it
+  does not (the model cannot see images), say so in the thread and do not
+  guess where the red marks are.
+- **Long commands**: `build`, `ask` (it waits for the person's answer)
+  and `board run` take minutes. The seed raises the shell's time limit to
+  an hour; when you run one, also pass the shell tool a `timeout` long
+  enough (in milliseconds, e.g. 3600000).
+- Never print, echo or write `REDLINE_TOKEN`; `.env` files are not yours
+  to read.
+- Keep your scratch files in `./work/`; edits elsewhere ask the person.
 """
 
 MCP_JSON = {"mcpServers": {"redline": {"command": ".venv/bin/python", "args": ["tools/mcp_server.py"]}}}
@@ -133,6 +179,54 @@ SETTINGS_JSON = {
     },
     "enableAllProjectMcpServers": True,
 }
+
+
+# OpenCode: the same server, permissions in its own words (the last rule that
+# matches wins; edits are matched as paths from the git checkout around the
+# kit, which in the seed is the seed's own, hence the kit/work forms).
+_RUN = (".venv/bin/python tools/revisions.py", ".venv/bin/python tools/render.py",
+        ".venv/bin/python tools/mcp_server.py")
+_LOOK = ("ls", "pwd", "cat", "head", "tail", "wc", "file", "stat", "du", "echo", "grep", "rg",
+         "find", "sort", "uniq", "cut", "diff", "date", "which", "tree", "jq", "cd")
+OPENCODE_JSON = {
+    "$schema": "https://opencode.ai/config.json",
+    "instructions": ["CLAUDE.md", "OPENCODE.md"],
+    "mcp": {"redline": {"type": "local", "command": [".venv/bin/python", "tools/mcp_server.py"],
+                        "enabled": True, "timeout": 20000}},
+    "permission": {
+        "read": {"*": "allow", "*.env": "deny", "*.env.*": "deny"},
+        "glob": "allow", "grep": "allow", "list": "allow", "task": "allow",
+        "external_directory": "allow",
+        "edit": {"*": "ask", "work/*": "allow", "kit/work/*": "allow", "*/kit/work/*": "allow"},
+        "bash": {"*": "ask",
+                 **{f"{c} *": "allow" for c in _RUN},
+                 **{f"REDLINE_AGENT=* {c} *": "allow" for c in _RUN},
+                 # Looking around asks nobody, as Claude Code's read-only commands.
+                 **{p: "allow" for c in _LOOK for p in (c, f"{c} *")},
+                 "mkdir work*": "allow", "mkdir -p work*": "allow",
+                 "find * -delete*": "ask", "find * -exec*": "ask",
+                 "*REDLINE_TOKEN*": "deny", "env": "deny", "env *": "deny", "printenv*": "deny",
+                 "*.env": "deny", "*.env *": "deny"},
+        "webfetch": "ask",
+    },
+}
+
+ROOM_AGENTS = (".claude/agents/redline-3d.md", ".claude/agents/redline-pcb.md",
+               ".claude/agents/redline-firmware.md")
+# Copied into the kit under another name.
+RENAMED = {"tools/opencode/redline-wait.js": ".opencode/plugins/redline-wait.js"}
+
+
+def opencode_agent(text: str) -> str:
+    """A room agent of .claude/agents/ as an OpenCode subagent: the same
+    instructions, `mode: subagent`, no `model` (Claude's `sonnet` means
+    nothing there; the subagent then runs on the main agent's model unless
+    the seed's room_model names one), the Read tool called by its name
+    there."""
+    _, front, body = text.split("---\n", 2)
+    keep = [ln for ln in front.splitlines() if ln.startswith("description:")]
+    body = re.sub(r"\b([Tt]he)(\s+)Read(\s+)tool\b", r"\1\2`read`\3tool", body)
+    return "---\n" + "\n".join(keep + ["mode: subagent"]) + "\n---\n" + body
 
 
 def _modfile(mod: str) -> Path | None:
@@ -203,6 +297,12 @@ def files() -> list[str]:
     return sorted(set(out))
 
 
+def _sources() -> list[str]:
+    """Every checkout file the kit is made from: its own, the renamed ones
+    and the room agents the OpenCode ones are made from."""
+    return sorted(set(files()) | set(RENAMED) | {p for p in ROOM_AGENTS if (ROOT / p).is_file()})
+
+
 def _generated() -> dict[str, bytes]:
     return {
         "CLAUDE.md": CLAUDE_MD.encode(),
@@ -210,6 +310,11 @@ def _generated() -> dict[str, bytes]:
         ".claude/settings.json": (json.dumps(SETTINGS_JSON, indent=2) + "\n").encode(),
         "requirements.txt": REQUIREMENTS.encode(),
         "work/.keep": b"",
+        "OPENCODE.md": OPENCODE_MD.encode(),
+        "opencode.json": (json.dumps(OPENCODE_JSON, indent=2) + "\n").encode(),
+        **{dest: (ROOT / src).read_bytes() for src, dest in RENAMED.items()},
+        **{".opencode/agents/" + Path(p).name: opencode_agent((ROOT / p).read_text(encoding="utf-8")).encode()
+           for p in ROOM_AGENTS if (ROOT / p).is_file()},
     }
 
 
@@ -235,7 +340,7 @@ def build() -> tuple[str, bytes]:
         if _CACHE and time.monotonic() - _CACHE["at"] < FRESH_S:
             return _CACHE["version"], _CACHE["blob"]
     paths = files()
-    sig = _signature(paths)
+    sig = _signature(_sources())
     with _LOCK:
         if _CACHE.get("sig") == sig:
             _CACHE["at"] = time.monotonic()

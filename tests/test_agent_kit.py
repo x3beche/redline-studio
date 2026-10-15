@@ -182,3 +182,42 @@ def test_every_module_in_the_kit_imports_from_the_kit_alone(tmp_path):
         "sys.exit(1 if bad else 0)\n")
     r = subprocess.run([sys.executable, "-c", code], cwd=kit, capture_output=True, text=True, timeout=180)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_kit_runs_with_opencode_too():
+    """The seed's `--runner opencode`: opencode.json with the same MCP server
+    and permissions as Claude Code's settings, the room agents as OpenCode
+    subagents made from .claude/agents/, the watcher plugin, OPENCODE.md -
+    and what Claude Code gets is still there."""
+    import json
+    _, blob = agent_kit.build()
+    files = {n.removeprefix("redline-agent-kit/"): b for n, b in kit_names(blob).items()}
+    cfg = json.loads(files["opencode.json"])
+    assert cfg["mcp"]["redline"] == {**cfg["mcp"]["redline"], "type": "local", "enabled": True,
+                                     "command": [".venv/bin/python", "tools/mcp_server.py"]}
+    assert set(cfg["instructions"]) == {"CLAUDE.md", "OPENCODE.md"}
+    perm = cfg["permission"]
+    assert perm["read"]["*.env"] == "deny" and perm["edit"]["*"] == "ask"
+    assert perm["edit"]["work/*"] == perm["edit"]["kit/work/*"] == "allow"
+    bash = perm["bash"]
+    assert bash["*"] == "ask" and bash[".venv/bin/python tools/revisions.py *"] == "allow"
+    assert bash["REDLINE_AGENT=* .venv/bin/python tools/revisions.py *"] == "allow"
+    # The last rule that matches wins in OpenCode: the token's denials come last.
+    assert list(bash)[-6:] == ["*REDLINE_TOKEN*", "env", "env *", "printenv*", "*.env", "*.env *"]
+    assert all(bash[k] == "deny" for k in list(bash)[-6:])
+    for room in ("redline-3d", "redline-pcb", "redline-firmware"):
+        text = files[f".opencode/agents/{room}.md"].decode()
+        front = text.split("---\n")[1]
+        assert "mode: subagent" in front and "description:" in front, room
+        assert "model:" not in front and "name:" not in front, room
+        assert "Read tool" not in " ".join(text.split()), room
+        # The same instructions as Claude Code's.
+        claude = files[f".claude/agents/{room}.md"].decode().split("---\n", 2)[2]
+        assert text.split("---\n", 2)[2].replace("`read`", "Read") == claude, room
+    plugin = files[".opencode/plugins/redline-wait.js"].decode()
+    assert "session.idle" in plugin and '"tools/revisions.py", "wait"' in plugin
+    assert b"never run `revisions.py wait` yourself" in files["OPENCODE.md"]
+    # Claude Code's own files, unchanged.
+    assert json.loads(files[".mcp.json"]) == agent_kit.MCP_JSON
+    assert json.loads(files[".claude/settings.json"]) == agent_kit.SETTINGS_JSON
+    assert b"model: sonnet" in files[".claude/agents/redline-3d.md"]

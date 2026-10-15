@@ -11,16 +11,32 @@ export interface AgentStatus {
 }
 
 export type SeedOs = 'unix' | 'windows';
+/** What runs the agent: Claude Code (the seed's default) or OpenCode. */
+export type SeedRunner = 'claude' | 'opencode';
+export interface SeedOpts { runner?: SeedRunner; service?: boolean }
 
 /** The one line that starts an agent on someone's own computer, from the
  *  seed's README: clone it, run its start script with this server's address
- *  and the token. Without a token, a placeholder the person fills in. */
-export function seedLine(seed: string, api: string, os: SeedOs, token?: string | null): string {
+ *  and the token. Without a token, a placeholder the person fills in.
+ *  OpenCode adds the seed's runner option; the service one has it start by
+ *  itself after every reboot (a user service, a logon task on Windows). */
+export function seedLine(seed: string, api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
   const tok = token || '<your-token>';
   const dir = seed.replace(/\/+$/, '').split('/').pop() || 'redline-agent-seed';
+  const oc = opts.runner === 'opencode';
   return os === 'windows'
     ? `git clone ${seed}; cd ${dir}; powershell -ExecutionPolicy Bypass -File start.ps1 -Api ${api} -Token ${tok}`
-    : `git clone ${seed}; cd ${dir} && ./start.sh --api ${api} --token ${tok}`;
+      + (oc ? ' -Runner opencode' : '') + (opts.service ? ' -Service' : '')
+    : `git clone ${seed}; cd ${dir} && ./start.sh --api ${api} --token ${tok}`
+      + (oc ? ' --runner opencode' : '') + (opts.service ? ' --service' : '');
+}
+
+/** The runner and the service choice, remembered in this browser. */
+export function seedPref(key: 'runner' | 'service'): string | null {
+  try { return localStorage.getItem('wb.seed.' + key); } catch { return null; }
+}
+export function setSeedPref(key: 'runner' | 'service', v: string) {
+  try { localStorage.setItem('wb.seed.' + key, v); } catch { /* private window */ }
 }
 
 /** "last seen 40 s ago", "12 min ago", ... */

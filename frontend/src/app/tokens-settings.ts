@@ -1,12 +1,13 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { Auth } from './auth';
 import { LANG, T, t } from './i18n';
 import { when } from './llm-settings';
 import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
-import { Agents, SeedOs, seedLine, seenAgo } from './agent-status';
+import { Agents, SeedOs, SeedRunner, seedLine, seedPref, seenAgo, setSeedPref } from './agent-status';
 import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
 import { CountUp } from './count';
@@ -41,7 +42,7 @@ interface Detail {
  *  for (backend/main.py, /api/agent-tokens*). */
 @Component({
   selector: 'app-tokens-settings',
-  imports: [Skeleton, CountUp, T, TimeChart, BarList, Spark, UiSelect],
+  imports: [Skeleton, CountUp, T, TimeChart, BarList, Spark, UiSelect, NgTemplateOutlet],
   styleUrls: ['./settings.css', './tokens-settings.css'],
   template: `
 <div class="st-page">
@@ -70,8 +71,12 @@ interface Detail {
             <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
             <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
           </span></h4>
+        <div class="tk-opts">
+          <ng-container *ngTemplateOutlet="seedOpts" />
+        </div>
         <code class="tk-code">{{ line(made()?.token) }}</code>
-        <p>{{ 'Needs git, Python 3.12 or newer and Claude Code, signed in. On Windows the line runs the agent in WSL. The token is kept in .env in that folder, readable only by you - never commit it or paste it anywhere else.' | t }}</p>
+        <ng-container *ngTemplateOutlet="seedHints" />
+        <p>{{ prereq() }}</p>
         <div class="st-row">
           <button class="tcv-btn" [class.tcv-btn-accent]="!!made()" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : made() ? 'Copy the line, with the token' : 'Copy the line') | t }}</button>
         </div>
@@ -79,7 +84,7 @@ interface Detail {
       <section>
         <h4><span>3</span>{{ 'Keep it running' | t }}</h4>
         <p>{{ 'The agent is what does the work on the notes you queue: keep it running on your computer the whole time you develop. If it stops, notes wait in the queue until it is back.' | t }}</p>
-        <p class="mono tk-cmds">./start.sh &nbsp;{{ 'start again, updated' | t }}<br>./start.sh --stop &nbsp;{{ 'stop it' | t }}<br>tmux attach -t redline-agent &nbsp;{{ 'watch it' | t }}</p>
+        <p class="mono tk-cmds">./start.sh &nbsp;{{ 'start again, updated' | t }}<br>./start.sh attach &nbsp;{{ 'watch it' | t }}<br>./start.sh status &nbsp;{{ 'is it running' | t }}<br>./start.sh stop &nbsp;{{ 'stop it' | t }}</p>
       </section>
     </div>
   </div>
@@ -116,9 +121,11 @@ interface Detail {
               <span class="st-sub">{{ 'Copy it now - you will not see it again. Run this line on the computer the agent will work on, and keep it running:' | t }}</span>
             </div>
             <code class="tk-code">{{ line(m.token) }}</code>
+            <ng-container *ngTemplateOutlet="seedHints" />
             <div class="st-row">
               <button class="tcv-btn tcv-btn-accent" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : 'Copy the line') | t }}</button>
-              <span class="st-seg tk-os">
+              <ng-container *ngTemplateOutlet="seedOpts" />
+              <span class="st-seg">
                 <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
                 <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
               </span>
@@ -248,7 +255,26 @@ interface Detail {
       </div>
     </div>
   }
-</div>`,
+</div>
+
+<!-- The seed's options, beside the platform: what runs the agent, and
+     whether it starts by itself after a reboot. -->
+<ng-template #seedOpts>
+  <span class="st-seg">
+    <button type="button" [class.on]="runner() === 'claude'" (click)="setRunner('claude')">Claude Code</button>
+    <button type="button" [class.on]="runner() === 'opencode'" (click)="setRunner('opencode')">OpenCode</button>
+  </span>
+  <label class="tcv-check-row tk-svc"><input type="checkbox" class="tcv-check" [checked]="service()"
+    (change)="setService($any($event.target).checked)">{{ 'Run as a service (start automatically after reboot)' | t }}</label>
+</ng-template>
+<ng-template #seedHints>
+  @if (runner() === 'opencode') {
+    <p class="tk-hint">{{ 'Install OpenCode (opencode.ai), run opencode auth login and pick a model that can read images: the red marks on notes are pictures.' | t }}</p>
+  }
+  @if (!service()) {
+    <p class="tk-hint">{{ 'Without the service, run ./start.sh again after each reboot (it runs in tmux; ./start.sh attach to watch).' | t }}</p>
+  }
+</ng-template>`,
 })
 export class TokensSettingsPanel implements OnDestroy {
   private http = inject(HttpClient);
@@ -257,6 +283,8 @@ export class TokensSettingsPanel implements OnDestroy {
   private unwatch = this.agents.watch();
   os = signal<SeedOs>(/Win/i.test(navigator.platform || navigator.userAgent) ? 'windows' : 'unix');
   seed = computed(() => this.agents.status()?.seed ?? 'https://github.com/x3beche/redline-agent-seed');
+  runner = signal<SeedRunner>(seedPref('runner') === 'opencode' ? 'opencode' : 'claude');
+  service = signal(seedPref('service') === '1');
   readonly may = this.auth.can('tokens');
   readonly myRole = this.auth.state()?.role ?? 'owner';
   /** The roles an agent may carry, no higher than one's own. */
@@ -302,7 +330,18 @@ export class TokensSettingsPanel implements OnDestroy {
   ngOnDestroy() { this.unwatch(); }
 
   /** The seed's one line for this server, with the token when there is one. */
-  line(token?: string | null) { return seedLine(this.seed(), this.origin, this.os(), token); }
+  line(token?: string | null) {
+    return seedLine(this.seed(), this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+  }
+
+  setRunner(r: SeedRunner) { this.runner.set(r); setSeedPref('runner', r); }
+  setService(on: boolean) { this.service.set(on); setSeedPref('service', on ? '1' : '0'); }
+
+  /** What has to be installed, named after the runner chosen above. */
+  prereq() {
+    return t('Needs git, Python 3.12 or newer and {r}, signed in. On Windows the line runs the agent in WSL. The token is kept in .env in that folder, readable only by you - never commit it or paste it anywhere else.')
+      .replace('{r}', this.runner() === 'opencode' ? 'OpenCode' : 'Claude Code');
+  }
 
   copyLine() {
     navigator.clipboard?.writeText(this.line(this.made()?.token)).then(() => this.copied.set('line'),

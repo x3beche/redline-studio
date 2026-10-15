@@ -36,7 +36,7 @@ So set `REDLINE_AGENT` in every command a sub-agent runs. The full rule is
 in backend/asks.py.
 
 If something is queued, write the drawing to disk with `show` and **open that
-file with the Read tool**. The comment alone is not enough: when the user says
+file with the Read tool** (OpenCode's `read`). The comment alone is not enough: when the user says
 "these areas", only the red marks say which areas.
 
 ## One main agent, one agent per room
@@ -50,8 +50,8 @@ does not apply notes itself. It keeps the queue moving:
 2. `revisions.py chat` first, when something was said: the person comes
    before the queue. Answer with `say`.
 3. `revisions.py queue`, then hand each note to its room's agent with the
-   Agent tool - `redline-3d`, `redline-pcb` or `redline-firmware`
-   (`.claude/agents/`). Give it the
+   Agent tool (OpenCode: `task`) - `redline-3d`, `redline-pcb` or
+   `redline-firmware` (`.claude/agents/`, for OpenCode `.opencode/agents/`). Give it the
    revision id and nothing it can read for itself. `revisions.py kind
    <id>` says which room a note is from.
 4. Rooms run **in parallel**, one note per room at a time: every room has
@@ -104,6 +104,10 @@ inside your turn - the turn ends, and the command brings you back.
 It exits 0 when there is work and 2 when it timed out. Without `--timeout` it
 waits as long as the session lasts, which is what you want: finish, start the
 watcher, and the next request picks you up on its own.
+
+Run by OpenCode (the seed's `--runner opencode`), whose shell has no
+background mode, you do not start it: end your turn, and the kit's plugin
+runs `wait` and brings you its output (the kit's OPENCODE.md).
 
 ### Never block your own turn
 
@@ -269,7 +273,8 @@ the server (`GET /api/agent/kit`, for agent tokens only;
 `backend/agent_kit.py`): these commands, the library modules of
 `backend/` they import (never the server's own - the app, sign-in,
 tokens, chat), this file, `TOOLS.md` and `.claude/agents/`, plus a
-CLAUDE.md on working remotely. Through the server, `build` runs there
+CLAUDE.md on working remotely and the same for OpenCode (`opencode.json`,
+`.opencode/agents/`, OPENCODE.md and the `wait` plugin). Through the server, `build` runs there
 and `part keep` fetches and seats parts there (`REDLINE_BUILD=local` /
 `REDLINE_PARTS=local` keep them local), so the kit needs neither
 build123d nor OpenCascade; `render.py` uses the server's own address for
