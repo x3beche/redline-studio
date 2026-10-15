@@ -533,9 +533,12 @@
     <!-- The open model as a component: what it uses, who uses it, and a
          rebuild a change elsewhere set off, with its error if it broke. -->
     @if (activeModel() && !ide() && !frozen()) {
-      <!-- The lower right corner of the view, as the PCB room's 3D card; it grows upwards. -->
+      <!-- The lower right corner of the view, as the PCB room's 3D card; it grows upwards.
+           The canvas stops short of the log bar under it (the viewer's gutter and
+           its own edge, 22 px), so the card goes 10 px into that strip: 12 px from
+           the log bar, as from the right edge. -->
       <div class="pointer-events-none absolute z-20"
-           [style.right.px]="viewRight() + 8" [style.bottom.px]="viewBottom() + 8">
+           [style.right.px]="viewRight() + 8" [style.bottom.px]="viewBottom() - 10">
         <app-links-card [id]="activeModel()" [stamp]="linkStamp()" (pinned)="loadCatalog()" />
       </div>
     }

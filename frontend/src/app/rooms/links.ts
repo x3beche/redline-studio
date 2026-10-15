@@ -102,7 +102,7 @@ export class PinnedByList {
     </div>
     @if (d.link; as l) {
       @if (l.state === 'queued' || l.state === 'building') {
-        <p class="px-2 pt-1.5 leading-snug" style="color: var(--accent)">
+        <p class="px-2 py-1.5 leading-snug" style="color: var(--accent)">
           {{ l.state === 'building' ? 'Rebuilding' : 'Updating' }} because
           <b>{{ l.because?.title }}</b>@if (l.because?.version) { v{{ l.because?.version }} }
           {{ l.because?.pin === 'pinned' ? 'was pinned' : l.because?.pin === 'follow' ? 'follows its latest again' : 'changed' }}
