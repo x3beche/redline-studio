@@ -26,7 +26,7 @@ import { CcTabUsage } from './cc-usage';
           [attr.data-on]="inMore() ? 1 : null" [attr.aria-current]="inMore() ? 'page' : null"
           aria-haspopup="menu" [attr.aria-expanded]="open()"
           [title]="inMore() ? ('More tabs' | t) + ' · ' + (here()?.label ?? '' | t) : ('More tabs' | t)"
-          (click)="toggle()">{{ 'More' | t }} <span class="tb-more-dots" aria-hidden="true">⋯</span>@if (chatUnread(); as n) {<span class="tcv-tab-unread">{{ n }}</span>}</button>
+          (click)="toggle()"><span class="tb-name" [attr.data-text]="'More' | t">{{ 'More' | t }}</span>&ngsp;<span class="tb-more-dots" aria-hidden="true">⋯</span>@if (chatUnread(); as n) {<span class="tcv-tab-unread">{{ n }}</span>}</button>
 }
 @if (open()) {
   <div class="tb-menu" animate.leave="tcv-leave" [style.--tcv-origin]="at().right != null ? 'top right' : 'top left'" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">

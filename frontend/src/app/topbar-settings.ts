@@ -18,7 +18,6 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
       scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent;
       padding: 8px 8px 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px 5px 0 0; }
     .tb-prev .tcv-tab { flex: none; cursor: default; }
-    .tb-prev .tcv-tab[data-on="1"] { z-index: auto; }
     .tb-prev-floor { height: 10px; margin-top: -1px; background: var(--surface); border: 1px solid var(--line);
       border-top-color: var(--line); border-radius: 0 0 5px 5px; }
     .tb-prev-gap { flex: 1 1 24px; min-width: 24px; align-self: stretch; margin-bottom: 6px;
@@ -82,17 +81,17 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
           @for (e of preview(); track e.id) {
             @if (e.id === gap) { <span class="tb-prev-gap"></span> }
             @else if (e.id === more) {
-              @if (hiddenCount()) { <span class="tcv-tab" [attr.data-on]="openIsHidden() ? 1 : null">{{ 'More' | t }} ⋯</span> }
+              @if (hiddenCount()) { <span class="tcv-tab" [attr.data-on]="openIsHidden() ? 1 : null"><span class="tb-name" [attr.data-text]="'More' | t">{{ 'More' | t }}</span> ⋯</span> }
             }
             @else if (e.ws) {
               <span class="tcv-tab" [class.tb-iconic]="bar.display() === 'icon'" [attr.data-on]="room() === e.id ? 1 : null">
                 @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
-                {{ bar.text(e.ws) | t }}
+                @if (bar.text(e.ws); as s) { <span class="tb-name" [attr.data-text]="s | t">{{ s | t }}</span> }
                 @if (e.id === 'commandcode') { <app-cc-tab-usage /> }
               </span>
             }
           }
-          <span class="tcv-tab tb-prev-end" [attr.data-on]="room() === 'settings' ? 1 : null">⚙@if (bar.display() !== 'icon') { {{ 'Settings' | t }} }</span>
+          <span class="tcv-tab tb-prev-end" [attr.data-on]="room() === 'settings' ? 1 : null">⚙@if (bar.display() !== 'icon') {&ngsp;<span class="tb-name" [attr.data-text]="'Settings' | t">{{ 'Settings' | t }}</span> }</span>
         </div>
         <div class="tb-prev-floor"></div>
       </div>

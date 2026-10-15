@@ -79,7 +79,9 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
               [attr.aria-label]="bar.text(b.ws) ? null : (b.ws.label | t)"
               [title]="bar.text(b.ws) ? bar.title(b.ws) : (b.ws.label | t) + ' - ' + bar.title(b.ws)">
         @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="bar.icon(b.id)"/></svg> }
-        {{ bar.text(b.ws) | t }}
+        <!-- The name, and under it its bold copy, unseen: the tab is as wide
+             open as closed, so the bar's fit (topbar.ts) holds either way. -->
+        @if (bar.text(b.ws); as s) { <span class="tb-name" [attr.data-text]="s | t">{{ s | t }}</span> }
         @if (!b.ws.ready) { <span class="tcv-tab-soon">soon</span> }
         <!-- How many tools there are, quietly, beside the name. -->
         @if (b.id === 'tools' && bar.text(b.ws)) { @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> } }
@@ -131,7 +133,7 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [attr.aria-label]="w.label | t"
-              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name"> {{ w.label | t }}</span>}</a>
+              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name">&ngsp;<span class="tb-name" [attr.data-text]="w.label | t">{{ w.label | t }}</span></span>}</a>
     }
     <!-- Who is signed in, over the right-hand column; nothing in local mode.
          Its width is measured (--layout-user-w) so the tabs keep clear of it

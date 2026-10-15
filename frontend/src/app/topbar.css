@@ -20,6 +20,16 @@ app-topbar-more { display: contents; }
 
 .tb-more-dots { margin-left: 2px; letter-spacing: 0; }
 
+/* A tab's name, bold when its room is open. Under it, unseen and of no
+   height, the same name in bold: the tab is as wide closed as open, so
+   nothing beside it moves and the bar's fit (topbar.ts) measures one width. */
+.tb-name { display: inline-flex; flex-direction: column; }
+.tb-name::after {
+  content: attr(data-text) / ""; height: 0; overflow: hidden; visibility: hidden;
+  font-weight: 600; user-select: none; pointer-events: none;
+}
+.tcv-tab[data-on="1"] .tb-name { font-weight: 600; }
+
 /* The menu: fixed to the screen under its button. */
 .tb-menu {
   position: fixed; z-index: 460; min-width: 210px; max-width: calc(100vw - 16px);
@@ -33,7 +43,7 @@ app-topbar-more { display: contents; }
   background: none; color: var(--ink); font-size: 12px; text-align: left; white-space: nowrap; cursor: pointer;
 }
 .tb-menu-item:hover, .tb-menu-item:focus-visible { background: var(--hover); outline: none; }
-.tb-menu-item[data-on] { background: var(--accent-deep); color: var(--ink-bright); }
+.tb-menu-item[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tb-menu-item em { margin-left: auto; padding-left: 12px; font-style: normal; font-size: 10px; opacity: .85; }
 .tb-menu-head {
   padding: 6px 8px 2px; margin-top: 2px; border-top: 1px solid var(--line);

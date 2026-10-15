@@ -1835,8 +1835,9 @@
   --tcv-scrollbar-active: var(--scroll-active);
 }
 
-/* The shell's tabs. Flat until chosen: a row of raised buttons reads as a
-   toolbar, and these are rooms, not actions. */
+/* The shell's tabs. Flat, open or not: a row of raised buttons reads as a
+   toolbar, and these are rooms, not actions. The open one is told by its
+   ink and its weight alone (topbar.css, .tb-name) - no box, no fill, no line. */
 .tcv-tab {
   padding: 5px 11px 7px;
   font-size: 12px;
@@ -1844,30 +1845,12 @@
   letter-spacing: .02em;
   color: var(--ink-dim);
   border: 1px solid transparent;
-  border-radius: 6px 6px 0 0;
+  border-radius: 6px;
   cursor: pointer;
-  /* The open tab is not a button above the panel, it is the top edge of
-     it: the row overlaps the panel's border by a pixel and the open tab
-     paints over that pixel, so the two read as one shape. */
-  margin-bottom: -1px;
-  transition: color .12s, background .12s, border-color .12s;
+  transition: color .12s, background .12s;
 }
 .tcv-tab:hover { color: var(--ink); background: var(--hover); }
-.tcv-tab[data-on="1"] {
-  color: var(--ink);
-  background: var(--surface);
-  border-color: var(--line);
-  /* Its own colour, not the line's: this pixel is where the tab opens into
-     the panel. It only works in front of the panel, though - the panel
-     comes later in the document and was painting its top border straight
-     over it, which is why the open tab still read as a closed pill. */
-  border-bottom-color: var(--surface);
-  /* In front of whatever it opens into. The stage needed one; a room
-     covers the viewer's own chrome and sits at 300, so the tab has to
-     clear that too or the room's top border paints the seam back in. */
-  position: relative;
-  z-index: 400;
-}
+.tcv-tab[data-on="1"] { color: var(--ink-bright); }
 /* The three that are not built say so on the tab, not only on the page. */
 .tcv-tab-soon {
   margin-left: 6px;
