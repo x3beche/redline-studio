@@ -11,45 +11,29 @@ export interface AgentStatus {
 }
 
 export type SeedOs = 'unix' | 'windows';
-/** What runs the agent: Claude Code (the seed's default) or OpenCode. */
-export type SeedRunner = 'claude' | 'opencode';
-export interface SeedOpts { runner?: SeedRunner; service?: boolean }
 
 /** The one line that starts an agent on someone's own computer: this server's
  *  own installer (backend/installsh.py, GET /api/public/install.sh), which
  *  fetches the seed and hands it the token. The server's address is already in
- *  the script, so the token is all the person types. Without a token, a
- *  placeholder they fill in. OpenCode adds the seed's runner option; the
- *  service one has it start by itself after every reboot (a user service, a
- *  logon task on Windows). */
-export function seedLine(api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
+ *  the script, and everything else - the runner, the model, the tmux session,
+ *  the service - is asked by that script on the person's own computer, so the
+ *  token is the one thing they type. Without a token, a placeholder. */
+export function seedLine(api: string, os: SeedOs, token?: string | null): string {
   const tok = token || '<your-token>';
   const base = api.replace(/\/+$/, '');
-  const more = (opts.runner === 'opencode' ? ' --runner opencode' : '') + (opts.service ? ' --service' : '');
   return os === 'windows'
-    ? `wsl bash -c "curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}${more}"`
-    : `curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}${more}`;
+    ? `wsl bash -c "curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}"`
+    : `curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}`;
 }
 
 /** The same without the installer: clone the seed by hand and run it - for
  *  someone who would rather read the script than pipe it into a shell. */
-export function seedFullLine(seed: string, api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
+export function seedFullLine(seed: string, api: string, os: SeedOs, token?: string | null): string {
   const tok = token || '<your-token>';
   const dir = seed.replace(/\/+$/, '').split('/').pop() || 'redline-agent-seed';
-  const oc = opts.runner === 'opencode';
   return os === 'windows'
     ? `git clone ${seed}; cd ${dir}; powershell -ExecutionPolicy Bypass -File start.ps1 -Api ${api} -Token ${tok}`
-      + (oc ? ' -Runner opencode' : '') + (opts.service ? ' -Service' : '')
-    : `git clone ${seed}; cd ${dir} && ./start.sh --api ${api} --token ${tok}`
-      + (oc ? ' --runner opencode' : '') + (opts.service ? ' --service' : '');
-}
-
-/** The runner and the service choice, remembered in this browser. */
-export function seedPref(key: 'runner' | 'service'): string | null {
-  try { return localStorage.getItem('wb.seed.' + key); } catch { return null; }
-}
-export function setSeedPref(key: 'runner' | 'service', v: string) {
-  try { localStorage.setItem('wb.seed.' + key, v); } catch { /* private window */ }
+    : `git clone ${seed}; cd ${dir} && ./start.sh --api ${api} --token ${tok}`;
 }
 
 /** "last seen 40 s ago", "12 min ago", ... */

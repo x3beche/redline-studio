@@ -63,8 +63,16 @@
 .tk-setup p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); }
 .tk-setup .tk-cmds { font-size: 11px; line-height: 1.7; color: var(--ink); }
 .tk-os { margin-left: auto; }
-.tk-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.tk-svc { font-size: 12px; color: var(--ink); }
+/* The line, and the one thing to do with it: copy it, from the corner. */
+.tk-cmd { position: relative; }
+.tk-cmd .tk-code { padding-right: 34px; }
+.tk-icon { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; color: var(--ink-dim); background: none; border: 1px solid transparent;
+  border-radius: 4px; cursor: pointer; transition: color .12s, background .12s; }
+.tk-icon:hover { color: var(--ink-bright); background: var(--hover); }
+.tk-icon:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--line); }
+.tk-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
 .tk-hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); }
 .tk-state { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); }
 .tk-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--line); vertical-align: middle; }

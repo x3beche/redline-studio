@@ -7,7 +7,7 @@ import { LANG, T, t } from './i18n';
 import { when } from './llm-settings';
 import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
-import { Agents, SeedOs, SeedRunner, seedFullLine, seedLine, seedPref, seenAgo, setSeedPref } from './agent-status';
+import { Agents, SeedOs, seedFullLine, seedLine, seenAgo } from './agent-status';
 import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
 import { CountUp } from './count';
@@ -71,16 +71,9 @@ interface Detail {
             <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
             <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
           </span></h4>
-        <div class="tk-opts">
-          <ng-container *ngTemplateOutlet="seedOpts" />
-        </div>
-        <code class="tk-code">{{ line(made()?.token) }}</code>
-        <ng-container *ngTemplateOutlet="seedHints" />
-        <p>{{ prereq() }}</p>
-        <ng-container *ngTemplateOutlet="seedFull" />
-        <div class="st-row">
-          <button class="tcv-btn" [class.tcv-btn-accent]="!!made()" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : made() ? 'Copy the line, with the token' : 'Copy the line') | t }}</button>
-        </div>
+        <ng-container *ngTemplateOutlet="tkCmd" />
+        <p class="tk-hint">{{ 'The script asks the rest on your computer: which runner to use (Claude Code or OpenCode), which model (one that reads images - the red marks on notes are pictures) and whether it starts by itself after a reboot.' | t }}</p>
+        <p>{{ 'Needs git, Python 3.12 or newer, and Claude Code or OpenCode installed and signed in. On Windows the line runs the agent in WSL. The token is kept in .env in that folder, readable only by you - never commit it or paste it anywhere else.' | t }}</p>
       </section>
       <section>
         <h4><span>3</span>{{ 'Keep it running' | t }}</h4>
@@ -119,20 +112,9 @@ interface Detail {
             <div class="tk-once-top">
               <b>{{ 'Token for' | t }} {{ m.name }}</b>
               <span class="st-badge" data-tone="warn">{{ 'shown once' | t }}</span>
-              <span class="st-sub">{{ 'Copy it now - you will not see it again. Run this line on the computer the agent will work on, and keep it running:' | t }}</span>
+              <span class="st-sub">{{ 'The line above carries it now: copy it from there before you leave this page - it is not shown again.' | t }}</span>
             </div>
-            <code class="tk-code">{{ line(m.token) }}</code>
-            <ng-container *ngTemplateOutlet="seedHints" />
-            <ng-container *ngTemplateOutlet="seedFull" />
             <div class="st-row">
-              <button class="tcv-btn tcv-btn-accent" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : 'Copy the line') | t }}</button>
-              <ng-container *ngTemplateOutlet="seedOpts" />
-              <span class="st-seg">
-                <button type="button" [class.on]="os() === 'unix'" (click)="os.set('unix')">macOS · Linux</button>
-                <button type="button" [class.on]="os() === 'windows'" (click)="os.set('windows')">Windows</button>
-              </span>
-              <button class="tcv-btn" (click)="copy(m.token, true)" [title]="'for an agent you run yourself, in a full checkout' | t">{{ (copied() === 'lines' ? 'Copied' : 'Copy the lines') | t }}</button>
-              <button class="tcv-btn" (click)="copy(m.token, false)">{{ (copied() === 'token' ? 'Copied' : 'Copy the token only') | t }}</button>
               <button class="tcv-btn tk-right" (click)="made.set(null)">{{ 'Done' | t }}</button>
             </div>
           </div>
@@ -259,35 +241,16 @@ interface Detail {
   }
 </div>
 
-<!-- The seed's options, beside the platform: what runs the agent, and
-     whether it starts by itself after a reboot. -->
-<ng-template #seedOpts>
-  <span class="st-seg">
-    <button type="button" [class.on]="runner() === 'claude'" (click)="setRunner('claude')">Claude Code</button>
-    <button type="button" [class.on]="runner() === 'opencode'" (click)="setRunner('opencode')">OpenCode</button>
-  </span>
-  <label class="tcv-check-row tk-svc"><input type="checkbox" class="tcv-check" [checked]="service()"
-    (change)="setService($any($event.target).checked)">{{ 'Run as a service (start automatically after reboot)' | t }}</label>
-</ng-template>
-<ng-template #seedHints>
-  @if (runner() === 'opencode') {
-    <p class="tk-hint">{{ 'Install OpenCode (opencode.ai), run opencode auth login and pick a model that can read images: the red marks on notes are pictures.' | t }}</p>
-  }
-  @if (!service()) {
-    <p class="tk-hint">{{ 'Without the service, run ./start.sh again after each reboot (it runs in tmux; ./start.sh attach to watch).' | t }}</p>
-  }
-</ng-template>
-<!-- The same line without the installer: clone the seed by hand and run it. -->
-<ng-template #seedFull>
-  <div class="st-row">
-    <button class="tcv-btn tk-btn" (click)="full.set(!full())">{{ (full() ? 'Hide it' : 'Or clone it yourself') | t }}</button>
-    @if (full()) {
-      <button class="tcv-btn tk-btn" (click)="copyFull()">{{ (copied() === 'full' ? 'Copied' : 'Copy the full line') | t }}</button>
-    }
+<!-- The line, and the one thing to do with it: copy it. Which runner, which
+     model, the session's name and the service are asked by the script, on the
+     person's own computer, where those answers live. -->
+<ng-template #tkCmd>
+  <div class="tk-cmd">
+    <button class="tk-icon" (click)="copyShown()" [title]="(copied() ? 'Copied' : 'Copy') | t">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="COPY" /></svg></button>
+    <code class="tk-code">{{ full() ? fullLine(made()?.token) : line(made()?.token) }}</code>
   </div>
-  @if (full()) {
-    <code class="tk-code">{{ fullLine(made()?.token) }}</code>
-  }
+  <button class="tcv-btn tk-btn" (click)="full.set(!full())">{{ (full() ? 'Hide the full line' : 'Or clone it yourself') | t }}</button>
 </ng-template>`,
 })
 export class TokensSettingsPanel implements OnDestroy {
@@ -297,8 +260,6 @@ export class TokensSettingsPanel implements OnDestroy {
   private unwatch = this.agents.watch();
   os = signal<SeedOs>(/Win/i.test(navigator.platform || navigator.userAgent) ? 'windows' : 'unix');
   seed = computed(() => this.agents.status()?.seed ?? 'https://github.com/x3beche/redline-agent-seed');
-  runner = signal<SeedRunner>(seedPref('runner') === 'opencode' ? 'opencode' : 'claude');
-  service = signal(seedPref('service') === '1');
   readonly may = this.auth.can('tokens');
   readonly myRole = this.auth.state()?.role ?? 'owner';
   /** The roles an agent may carry, no higher than one's own. */
@@ -313,6 +274,8 @@ export class TokensSettingsPanel implements OnDestroy {
   readonly expiries: { days: number | null; label: string }[] = [
     { days: null, label: 'Never' }, { days: 7, label: '7 days' }, { days: 30, label: '30 days' }, { days: 90, label: '90 days' }];
   readonly origin = location.origin;
+  /** The copy mark, as the Chat's own (commandcode.ts). */
+  readonly COPY = 'M9 9h11v11H9z M15 9V4H4v11h5';
   readonly f = fmt;
   readonly money = money;
 
@@ -323,7 +286,9 @@ export class TokensSettingsPanel implements OnDestroy {
   room = signal('');
   expiry = signal<number | null>(null);
   made = signal<{ name: string; token: string } | null>(null);
-  copied = signal<'lines' | 'token' | 'line' | 'full' | null>(null);
+  copied = signal<'line' | 'full' | null>(null);
+  /** Whether the full (clone-it-yourself) line is shown instead of the installer one. */
+  full = signal(false);
   error = signal('');
   busy = signal(false);
   open = signal<string | null>(null);
@@ -343,34 +308,26 @@ export class TokensSettingsPanel implements OnDestroy {
 
   ngOnDestroy() { this.unwatch(); }
 
-  /** The seed's one line for this server, with the token when there is one. */
+  /** The one line for this server, with the token when there is one: this
+   *  server's own installer of the seed (backend/installsh.py). Which runner,
+   *  which model, the session and the service are asked by that script on the
+   *  person's own computer, where those answers live. */
   line(token?: string | null) {
-    return seedLine(this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+    return seedLine(this.origin, this.os(), token);
   }
 
-  /** The same without the installer: clone the seed by hand and run it. */
+  /** The same without the installer: clone the seed by hand and run it, for
+   *  someone who would rather read the script than pipe it into a shell. */
   fullLine(token?: string | null) {
-    return seedFullLine(this.seed(), this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+    return seedFullLine(this.seed(), this.origin, this.os(), token);
   }
 
-  copyFull() {
-    navigator.clipboard?.writeText(this.fullLine(this.made()?.token)).then(() => this.copied.set('full'),
-      () => this.error.set(t('The browser would not copy - select the line instead.')));
-  }
-
-  setRunner(r: SeedRunner) { this.runner.set(r); setSeedPref('runner', r); }
-  setService(on: boolean) { this.service.set(on); setSeedPref('service', on ? '1' : '0'); }
-  full = signal(false);
-
-  /** What has to be installed, named after the runner chosen above. */
-  prereq() {
-    return t('Needs git, Python 3.12 or newer and {r}, signed in. On Windows the line runs the agent in WSL. The token is kept in .env in that folder, readable only by you - never commit it or paste it anywhere else.')
-      .replace('{r}', this.runner() === 'opencode' ? 'OpenCode' : 'Claude Code');
-  }
-
-  copyLine() {
-    navigator.clipboard?.writeText(this.line(this.made()?.token)).then(() => this.copied.set('line'),
-      () => this.error.set(t('The browser would not copy - select the line instead.')));
+  /** Copy what is on screen: the line, or the full one while it is shown. */
+  copyShown() {
+    const full = this.full();
+    navigator.clipboard?.writeText(full ? this.fullLine(this.made()?.token) : this.line(this.made()?.token))
+      .then(() => this.copied.set(full ? 'full' : 'line'),
+            () => this.error.set(t('The browser would not copy - select the line instead.')));
   }
 
   seen(s: number | null) { return seenAgo(s); }
@@ -435,12 +392,6 @@ export class TokensSettingsPanel implements OnDestroy {
       next: d => { if (this.open() === x.id) this.detail.set(d); },
       error: e => this.detailErr.set(this.say(e)),
     });
-  }
-
-  copy(token: string, lines: boolean) {
-    const text = lines ? `REDLINE_TRANSPORT=api\nREDLINE_API=${this.origin}\nREDLINE_TOKEN=${token}\n` : token;
-    navigator.clipboard?.writeText(text).then(() => this.copied.set(lines ? 'lines' : 'token'),
-      () => this.error.set(t('The browser would not copy - select the lines instead.')));
   }
 
   /** What the requests were, in the words of access.py's actions. */
