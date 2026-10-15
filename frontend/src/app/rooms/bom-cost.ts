@@ -195,7 +195,7 @@ const STATE_TONE: Record<StockState, string> = {
 .bc-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .bc-qty { display: inline-flex; gap: 3px; align-items: center; margin-left: auto; flex-wrap: wrap; }
 .bc-qty .tcv-chip { padding: 0 6px; }
-.bc .tcv-chip[data-on] { background: var(--accent-deep); border-color: var(--accent); color: var(--ink-bright); }
+.bc .tcv-chip[data-on] { color: var(--ink-bright); font-weight: 600; }
 .bc-custom { width: 58px; height: 20px; padding: 0 4px; font-size: 11px; color: var(--ink);
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
 .bc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 5px; }

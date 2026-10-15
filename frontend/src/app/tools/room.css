@@ -15,7 +15,7 @@
   color: var(--ink-dim); background: transparent;
 }
 .tcv-tools-chip:hover { color: var(--ink); background: var(--hover); }
-.tcv-tools-chip[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent-deep); }
+.tcv-tools-chip[data-on="1"] { color: var(--ink-bright); font-weight: 600; }
 .tcv-tools-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
 .tcv-tools-group {
   display: block; padding: 10px 12px 3px; font-size: 10.5px; letter-spacing: .05em;

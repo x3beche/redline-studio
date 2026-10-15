@@ -178,7 +178,7 @@ function motor(): Group {
                      border: 0; cursor: pointer; }
     .sp-seg button + button { border-left: 1px solid var(--line); }
     .sp-seg button:hover { color: var(--ink); background: var(--hover); }
-    .sp-seg button.on { color: var(--ink-bright); background: var(--accent-deep); }
+    .sp-seg button.on { color: var(--ink-bright); font-weight: 600; }
     .sp-foot .tcv-btn { display: inline-flex; align-items: center; gap: 5px; }
     .sp-foot svg { width: 12px; height: 12px; }
     .sp-gap { flex: 1; }

@@ -87,7 +87,7 @@ export function reveal(stage: HTMLElement, label: string) {
     el.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
     const was = { w: el.style.fontWeight, c: el.style.color };
     el.style.fontWeight = '650';
-    el.style.color = 'var(--accent)';
+    el.style.color = 'var(--ink-bright)';
     el.setAttribute('data-found', '');
     setTimeout(() => { el.style.fontWeight = was.w; el.style.color = was.c; el.removeAttribute('data-found'); }, 2400);
   };

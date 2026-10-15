@@ -83,7 +83,7 @@ function kindOf(name: string): string {
                color: var(--ink-dim); background: none; border: 0; border-right: 1px solid var(--line); border-top: 2px solid transparent; cursor: pointer; }
     .dmc-tab > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dmc-tab:hover { color: var(--ink); background: var(--hover); }
-    .dmc-tab[data-on] { color: var(--ink-bright); background: var(--surface-2); border-top-color: var(--accent); }
+    .dmc-tab[data-on] { color: var(--ink-bright); font-weight: 600; }
     .dmc-x { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; color: var(--ink-dim); }
     .dmc-x:hover { color: var(--ink); background: var(--pressed); }
     .dmc-bar { flex: none; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--line); }

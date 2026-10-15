@@ -92,7 +92,7 @@
   border: 1px solid transparent; border-radius: 4px; cursor: pointer; white-space: nowrap;
 }
 .tst-ib:hover { color: var(--ink); border-color: var(--line); }
-.tst-ib[data-on] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tst-ib[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tst-edit {
   width: 100%; resize: vertical; padding: 5px 7px; font: inherit; font-size: 12.5px; line-height: 1.45; color: var(--ink);
   background: var(--surface-2); border: 1px solid var(--accent); border-radius: 5px; outline: none;

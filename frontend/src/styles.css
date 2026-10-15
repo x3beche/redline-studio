@@ -2153,7 +2153,7 @@ body {
   transition: color .12s, background .12s, border-color .12s;
 }
 .tcv-sheet-tab:hover { color: var(--ink); background: var(--hover); }
-.tcv-sheet-tab[data-on="1"] { color: var(--ink); background: var(--surface); border-color: var(--line); }
+.tcv-sheet-tab[data-on="1"] { color: var(--ink-bright); font-weight: 600; }
 .tcv-sheet-tab:disabled { opacity: .4; cursor: not-allowed; }
 .tcv-sheet-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tcv-sheet-count { font-size: 10px; color: var(--ink-dim); }
@@ -3006,7 +3006,7 @@ a.tcv-ico { text-decoration: none; }
   transition: background-color .12s, color .12s; }
 .tcv-logp-seg button + button { border-left: 1px solid var(--line); }
 .tcv-logp-seg button:hover { color: var(--ink); background: var(--hover); }
-.tcv-logp-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-logp-seg button[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tcv-logp-seg em { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; font-style: normal; opacity: .7; }
 .tcv-logp-search { display: flex; align-items: center; gap: 5px; flex: 0 1 200px; min-width: 110px; height: 24px; padding: 0 7px;
   color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; cursor: text; }
@@ -3272,7 +3272,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 }
 .tcv-dash-seg button:last-child { border-right: 0; }
 .tcv-dash-seg button:hover { color: var(--ink); background: var(--hover); }
-.tcv-dash-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-dash-seg button[data-on] { color: var(--ink-bright); font-weight: 600; }
 /* The range buttons keep their width; when the bar is short this gives way. */
 .tcv-dash-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-dim); }
 .tcv-dash-body { padding: 4px 12px 16px; }
@@ -3612,7 +3612,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   border-bottom: 1px solid var(--line); }
 .tcv-code-tab { flex: none; display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; font-size: 12px;
   color: var(--ink-dim); border-right: 1px solid var(--line); cursor: pointer; }
-.tcv-code-tab[data-on] { color: var(--ink); background: var(--surface); box-shadow: inset 0 2px 0 var(--accent); }
+.tcv-code-tab[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tcv-code-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 .tcv-code-x { width: 18px; height: 18px; font-size: 14px; line-height: 1; color: var(--ink-dim); background: none;
   border: 0; border-radius: 3px; cursor: pointer; }
@@ -4078,7 +4078,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   border: 0; cursor: pointer; }
 .tcv-cc-seg button + button { border-left: 1px solid var(--line); }
 .tcv-cc-seg button:hover { color: var(--ink); background: var(--hover); }
-.tcv-cc-seg button.on { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-cc-seg button.on { color: var(--ink-bright); font-weight: 600; }
 .tcv-cc-seg-full { display: flex; }
 .tcv-cc-seg-full button { flex: 1 1 auto; min-width: 0; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; }
 /* A search field with its magnifier. */
@@ -4107,9 +4107,9 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-tabrow { display: flex; align-items: center; gap: 2px; min-height: 28px; }
 .tcv-cc-tabs { display: flex; gap: 12px; align-self: stretch; }
 .tcv-cc-tabs button { padding: 0 1px; font-size: 11.5px; color: var(--ink-dim); background: none; border: 0;
-  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+  cursor: pointer; white-space: nowrap; }
 .tcv-cc-tabs button:hover { color: var(--ink); }
-.tcv-cc-tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+.tcv-cc-tabs button.on { color: var(--ink-bright); font-weight: 600; }
 .tcv-cc-ib.tcv-cc-sm { min-width: 26px; height: 26px; padding: 0 5px; }
 /* "Select" at the end of the tabs: a small outlined button with its words,
    the accent while selecting (then it says Done). */
@@ -5143,7 +5143,7 @@ rl-task-block { display: block; }
   color: var(--ink-dim); background: none; border: 0; cursor: pointer; }
 .tcv-fm-seg button + button { border-left: 1px solid var(--line); }
 .tcv-fm-seg button:hover { color: var(--ink); background: var(--hover); }
-.tcv-fm-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-fm-seg button[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tcv-fm-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 24px; text-align: center; font-size: 12.5px; color: var(--ink-dim); pointer-events: none; }
 .tcv-fm-spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
@@ -5426,7 +5426,7 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
 .tcv-fv-sheets { flex: none; display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .tcv-fv-sheets button { padding: 5px 12px; font-size: 12px; color: var(--ink-dim); background: none; border: 1px solid transparent;
   border-bottom: 0; border-radius: 5px 5px 0 0; cursor: pointer; }
-.tcv-fv-sheets button[data-on] { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+.tcv-fv-sheets button[data-on] { color: var(--ink-bright); font-weight: 600; }
 
 /* the PDF reader */
 .tcv-pdf { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -5525,7 +5525,7 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
 .tcv-engine button { padding: 3px 8px; font-size: 11px; line-height: 1.2; color: var(--ink-dim); background: var(--surface-2); border: 0; cursor: pointer; white-space: nowrap; }
 .tcv-engine button + button { border-left: 1px solid var(--line); }
 .tcv-engine button:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
-.tcv-engine button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-engine button[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tcv-engine button:disabled { cursor: default; }
 .tcv-engine button:disabled:not([data-on]) { opacity: .55; }
 
@@ -5636,7 +5636,7 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-guide-agent .tcv-seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .tcv-guide-agent .tcv-seg button { padding: 2px 10px; font-size: 11px; color: var(--ink-dim); background: none; }
 .tcv-guide-agent .tcv-seg button + button { border-left: 1px solid var(--line); }
-.tcv-guide-agent .tcv-seg button.on { color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tcv-guide-agent .tcv-seg button.on { color: var(--ink-bright); font-weight: 600; }
 .tcv-guide-agent-acts { flex-direction: column; align-items: stretch; }
 .tcv-guide-agent-acts .tcv-btn { align-self: stretch; }
 /* Narrower than five readable columns: steps one under another, each a
@@ -5859,7 +5859,7 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-dm-kinds button { height: 22px; padding: 0 8px; font-size: 11px; color: var(--ink-dim); background: none;
   border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
 .tcv-dm-kinds button:hover { color: var(--ink); background: var(--hover); }
-.tcv-dm-kinds button.on { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tcv-dm-kinds button.on { color: var(--ink-bright); font-weight: 600; }
 .tcv-dm-err { color: var(--danger); }
 /* "Send to..." (dm.ts DmSend): the confirm card, wider, with the people to pick. */
 .tcv-dm-scrim { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center;

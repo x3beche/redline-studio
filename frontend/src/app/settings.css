@@ -143,7 +143,7 @@
 .st-seg button { padding: 3px 9px; font-size: 11px; white-space: nowrap; color: var(--ink-dim); background: var(--surface-2); border: 0; cursor: pointer; }
 .st-seg button + button { border-left: 1px solid var(--line); }
 .st-seg button:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
-.st-seg button.on { color: var(--ink-bright); background: var(--accent-deep); }
+.st-seg button.on { color: var(--ink-bright); font-weight: 600; }
 .st-seg button:disabled { cursor: default; }
 .st-seg button:disabled:not(.on) { opacity: .55; }
 .st-seg button small { margin-left: 4px; font-size: 9.5px; opacity: .75; }

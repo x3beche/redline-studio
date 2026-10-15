@@ -37,7 +37,7 @@
 .calc-seg button { padding: 3px 9px; font-size: 11px; color: var(--ink-dim); background: var(--surface); }
 .calc-seg button + button { border-left: 1px solid var(--line); }
 .calc-seg button:hover { background: var(--hover); color: var(--ink); }
-.calc-seg button.on { background: var(--accent-deep); color: var(--ink-bright); }
+.calc-seg button.on { color: var(--ink-bright); font-weight: 600; }
 
 .calc-warn { color: var(--warn); font-size: 11px; margin-top: 6px; }
 .calc-bad { color: var(--danger); font-size: 11px; margin-top: 6px; }
