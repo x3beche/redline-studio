@@ -6,6 +6,7 @@ import { CcWant, Selection } from './selection';
 import { PARTS_LABEL, WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
 import { Prefs } from './preferences';
+import { SECTION_NAMES, SETTINGS_INDEX } from './settings-search';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
 import { AgentThreads } from './rooms/agent-thread';
@@ -358,17 +359,27 @@ export class Palette {
     }
     const ws = words(this.q());
     const local = [...this.actions(), ...this.places()];
+    // Typed: every setting too (settings-search.ts), opened in its section and shown there.
+    const settings = ws.length ? this.settingItems() : [];
     // Nothing typed: Chat first (ask about what is open, a new chat, the
     // last one, the rooms' agent threads), then the tabs, then the room's
     // own actions; themes and languages wait to be asked for.
     if (!ws.length) return [...this.actions().filter(i => !/^(Theme|Language): /.test(i.label)),
                             ...local.filter(i => i.group === 'Rooms')];
     // Ranked by how well they match; actions a small lead, Chat's a tie-break.
-    const ranked = local.map(i => ({ i, s: score(`${i.label} ${t(i.label)} ${i.hint ?? ''}`, ws, `${i.label} ${t(i.label)}`) }))
+    const ranked = [...local, ...settings].map(i => ({ i, s: score(`${i.label} ${t(i.label)} ${i.hint ?? ''}`, ws, `${i.label} ${t(i.label)}`) }))
       .filter(x => x.s > 0).map(x => ({ ...x, s: x.s + (x.i.group === 'Actions' ? 3 : x.i.group === 'Chat' ? 1 : 0) }))
       .sort((a, b) => b.s - a.s).slice(0, 40).map(x => x.i);
     return [...ranked, ...this.found()];
   });
+
+  /** Each setting of Settings as a line: opens its section and shows it there. */
+  private settingItems(): Item[] {
+    const admin = this.auth.admin();
+    return SECTION_NAMES.filter(s => admin || !s.admin).flatMap(s => SETTINGS_INDEX[s.id].map(label => ({
+      group: 'Settings', icon: '⚙', label, hint: s.label,
+      run: () => { this.prefs.find.set(label); this.prefs.open.set(s.id); } })));
+  }
 
   grouped = computed(() => {
     const out: { name: string; items: { item: Item; i: number }[] }[] = [];

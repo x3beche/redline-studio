@@ -21,12 +21,35 @@
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px; text-align: left;
   background: none; border: 0; border-left: 2px solid transparent; cursor: pointer;
 }
-.st-item:hover { background: var(--hover); }
-.st-item[data-on] { background: var(--surface-2); border-left-color: var(--accent); }
-/* A plain line icon, no box: dim at rest, the ink on hover, the accent when open. */
+.st-item:hover .st-item-title { color: var(--ink); }
+/* The open section by weight and ink only: no fill, no edge. */
+.st-item[data-on] .st-item-title { font-weight: 600; }
+/* A plain line icon, no box: dim at rest, the ink on hover and when open. */
 .st-ico { flex: none; width: 17px; height: 17px; color: var(--ink-dim); }
-.st-item:hover .st-ico { color: var(--ink); }
-.st-item[data-on] .st-ico { color: var(--accent); }
+.st-item:hover .st-ico, .st-item[data-on] .st-ico { color: var(--ink); }
+/* Find a setting: one line under the head, the matching settings as
+   plain lines under their section. */
+.st-find {
+  display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-bottom: 1px solid var(--line);
+  color: var(--ink-dim); cursor: text;
+}
+.st-find svg { flex: none; width: 14px; height: 14px; }
+.st-find input {
+  flex: 1; min-width: 0; padding: 2px 0; font-size: 12px; color: var(--ink); background: none; border: 0; outline: none;
+}
+.st-find input::placeholder { color: var(--ink-dim); }
+.st-find input::-webkit-search-cancel-button { display: none; }
+.st-find kbd {
+  flex: none; padding: 0 5px; border: 1px solid var(--line); border-radius: 3px; line-height: 15px;
+  font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim);
+}
+.st-hit {
+  display: block; width: 100%; padding: 3px 10px 3px 39px; text-align: left; background: none; border: 0; cursor: pointer;
+  font-size: 11.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.st-hit:hover { color: var(--ink); }
+.st-hit[data-on] { color: var(--ink); font-weight: 600; }
+.st-find-none { padding: 24px 12px; font-size: 11.5px; color: var(--ink-dim); text-align: center; }
 .st-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .st-item-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .st-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -374,7 +397,7 @@ select.st-in { cursor: pointer; }
   .st-list-scroll { flex: none; display: flex; gap: 2px; padding: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   .st-item { flex: none; width: auto; align-items: center; min-height: 44px; padding: 6px 10px;
     border-left: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; }
-  .st-item[data-on] { border-bottom-color: var(--accent); }
+  .st-hit { flex: none; width: auto; padding: 6px 10px; }
   .st-item-blurb, .st-item-meta { display: none; }
   .st-head { flex-wrap: wrap; padding: 6px 10px; }
   .st-head-blurb { flex-basis: 100%; white-space: normal; }

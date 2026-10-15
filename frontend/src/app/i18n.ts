@@ -4820,6 +4820,12 @@ const TR: Record<string, string> = {
   // Scheduled-task notifications (notifications.ts, telegram-settings.ts)
   'A scheduled task reports': 'Zamanlanmış bir görev rapor veriyor',
   "a task's result, when the task itself sends it to Telegram": 'görev sonucunu Telegram\'a kendisi gönderdiğinde, sonucu',
+  // Find a setting (settings-room.ts, settings-search.ts)
+  'Find a setting': 'Ayar bul',
+  '/ or Ctrl+F': '/ ya da Ctrl+F',
+  'Found': 'Bulunan',
+  'No setting matches.': 'Eşleşen ayar yok.',
+  'Part category': 'Parça kategorisi',
 };
 
 export function t(text: string): string {

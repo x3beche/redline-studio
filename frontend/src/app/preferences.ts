@@ -22,6 +22,9 @@ export class Prefs {
   open = signal<PrefsTab | null>(null);
   /** The section on screen in the Settings tab. */
   tab = signal<PrefsTab>('profile');
+  /** A setting to show once its section is open (settings-search.ts): the
+   *  label as its panel writes it, in English. Ctrl+K sets it with `open`. */
+  find = signal<string | null>(null);
   theme = signal<ThemeId>(currentTheme());
   font = signal<Font>(currentFont());
   /** How the 3D room goes from one model to the next (editor/model-switch.ts). */

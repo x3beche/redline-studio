@@ -1,4 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FONTS, FONT_NAMES, Font, LIGHT_THEMES, THEMES, THEME_NAMES, Theme, ThemeId, isLightTheme } from '../theme';
 import { LANG, LANGS, Lang, T, setLang, t } from './i18n';
 import { Auth } from './auth';
@@ -26,6 +27,7 @@ import { BackupsSettings } from './backups-settings';
 import { Prefs, PrefsTab } from './preferences';
 import { VoiceLang, VoicePrefs } from './rooms/voice-input';
 import { SharesSettings } from './share/shares-settings';
+import { hitsIn, matches, queryWords, reveal } from './settings-search';
 
 /** The Settings tab (Prefs, preferences.ts, is what the rest of the app
  *  reads): its sections and their panels, loaded when the tab is opened. */
@@ -69,7 +71,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
+  imports: [T, NgTemplateOutlet, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, NotificationSettingsPanel, TokensSettingsPanel, SharesSettings, AdminUsersPanel, AdminOverview, RustdeskSettings, BackupsSettings, SwitchPreview, GridSettings],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -78,20 +80,45 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
       <b>{{ 'Settings' | t }}</b>
       <span>{{ 'How Workbench looks here, and what the server uses' | t }}</span>
     </div>
+    <!-- Find a setting (settings-search.ts): sections by their names and
+         by the settings inside them; / or Ctrl+F here, Esc clears. -->
+    <label class="st-find">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-4-4"/></svg>
+      <input #find type="search" [placeholder]="'Find a setting' | t" [attr.aria-label]="'Find a setting' | t" autocomplete="off"
+             [value]="query()" (input)="query.set($any($event.target).value)" (keydown)="findKey($event)">
+      @if (!query()) { <kbd [title]="'/ or Ctrl+F' | t">/</kbd> }
+    </label>
+    <ng-template #row let-x>
+      <svg class="st-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="x.ico"/></svg>
+      <span class="st-item-text">
+        <span class="st-item-top">
+          <span class="st-item-title">{{ x.label | t }}</span>
+          @if (meta(x.id); as m) { <span class="st-item-meta">{{ m }}</span> }
+        </span>
+        <span class="st-item-blurb">{{ x.about | t }}</span>
+      </span>
+    </ng-template>
     <div class="st-list-scroll">
-      @for (g of shownNav(); track g.group) {
-        <div class="st-group"><span>{{ g.group | t }}</span><span>{{ g.items.length }}</span></div>
-        @for (x of g.items; track x.id) {
-          <button class="st-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
-            <svg class="st-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="x.ico"/></svg>
-            <span class="st-item-text">
-              <span class="st-item-top">
-                <span class="st-item-title">{{ x.label | t }}</span>
-                @if (meta(x.id); as m) { <span class="st-item-meta">{{ m }}</span> }
-              </span>
-              <span class="st-item-blurb">{{ x.about | t }}</span>
-            </span>
+      @if (words().length) {
+        <div class="st-group"><span>{{ 'Found' | t }}</span><span>{{ found().length }}</span></div>
+        @for (r of found(); track r.x.id) {
+          <button class="st-item" [attr.data-on]="prefs.tab() === r.x.id ? 1 : null" (click)="pick(r.x.id, null)">
+            <ng-container *ngTemplateOutlet="row; context: { $implicit: r.x }" />
           </button>
+          @for (h of r.hits; track h) {
+            <button class="st-hit" [attr.data-on]="lastHit() === r.x.id + '|' + h ? 1 : null" (click)="pick(r.x.id, h)">{{ h | t }}</button>
+          }
+        } @empty {
+          <div class="st-find-none">{{ 'No setting matches.' | t }}</div>
+        }
+      } @else {
+        @for (g of shownNav(); track g.group) {
+          <div class="st-group"><span>{{ g.group | t }}</span><span>{{ g.items.length }}</span></div>
+          @for (x of g.items; track x.id) {
+            <button class="st-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: x }" />
+            </button>
+          }
         }
       }
     </div>
@@ -118,7 +145,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         </span>
       </header>
     }
-    <div class="st-stage">
+    <div class="st-stage" #stage>
       <!-- Each section's panel is a chunk of its own, loaded when it is first opened. -->
       @switch (prefs.tab()) {
         @case ('appearance') {
@@ -586,4 +613,65 @@ export class RoomSettings {
       .filter(g => g.items.length);
   });
   setLang(l: Lang) { setLang(l); }
+
+  // ---- find a setting (settings-search.ts) ----
+  query = signal('');
+  words = computed(() => queryWords(this.query()));
+  /** The sections that match by name or by a setting inside, each with at
+   *  most five of its matching settings. */
+  found = computed(() => {
+    const ws = this.words();
+    this.lang();
+    return this.shownNav().flatMap(g => g.items)
+      .map(x => ({ x, name: matches(ws, x.label, x.about, x.blurb), hits: hitsIn(x.id, ws).slice(0, 5) }))
+      .filter(r => r.name || r.hits.length)
+      .sort((a, b) => Number(b.name) - Number(a.name));
+  });
+  /** The setting picked last, shown by weight in the list. */
+  lastHit = signal('');
+  private findIn = viewChild<ElementRef<HTMLInputElement>>('find');
+  private stage = viewChild<ElementRef<HTMLElement>>('stage');
+
+  constructor() {
+    // A setting asked for from elsewhere (Ctrl+K): shown once its section is open.
+    effect(() => {
+      const f = this.prefs.find(), st = this.stage();
+      if (!f || !st) return;
+      untracked(() => { this.prefs.find.set(null); reveal(st.nativeElement, f); });
+    });
+    // / or Ctrl+F while Settings is on screen: the search box.
+    const key = (e: KeyboardEvent) => {
+      const box = this.findIn()?.nativeElement;
+      if (!box || !box.offsetParent) return;
+      const el = e.target as HTMLElement;
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable || !!el.closest?.('.monaco-editor');
+      const slash = e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey;
+      const ctrlF = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' && !el.closest?.('.monaco-editor');
+      if (!slash && !ctrlF) return;
+      e.preventDefault();
+      box.focus();
+      box.select();
+    };
+    window.addEventListener('keydown', key);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('keydown', key));
+  }
+
+  /** Open a section and, given one, show the setting in it. */
+  pick(id: PrefsTab, label: string | null) {
+    this.prefs.tab.set(id);
+    this.lastHit.set(label ? id + '|' + label : '');
+    const st = this.stage()?.nativeElement;
+    if (label && st) reveal(st, label);
+  }
+
+  findKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      if (this.query()) this.query.set('');
+      else (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Enter') {
+      const r = this.found()[0];
+      if (r) this.pick(r.x.id, r.name ? null : r.hits[0] ?? null);
+    }
+  }
 }
