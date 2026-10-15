@@ -163,7 +163,17 @@ def test_a_check_left_by_a_gone_process_is_failed_when_read():
 
 
 def test_marking_applied_through_the_api(db, monkeypatch):  # noqa: F811
+    from anyio.from_thread import start_blocking_portal
+    with start_blocking_portal() as loop:
+        _marking_applied_through_the_api(db, monkeypatch, loop)
+
+
+def _marking_applied_through_the_api(db, monkeypatch, loop):
     o = person(db, "o")
+    # The check runs on in the app's loop after the answer, as in the server: so all of these requests share one
+    # loop. A TestClient used outside `with` starts a loop for each request and, when it ends, cancels what was
+    # left running - the check, part way, whenever it had not finished before the POST's loop closed.
+    o.portal = loop
     sdb = scope.ScopedDb(db, scope.DEFAULT)
     _workspace(sdb)
     # Palettes apply and nothing has been checked: refused, saying why.

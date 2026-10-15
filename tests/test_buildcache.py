@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -54,7 +55,17 @@ def export(root: Path, target: str, cache: Path, extra_env: dict | None = None):
     assert out.returncode == 0, out.stdout + out.stderr
     stats = json.loads((root / "assets" / f"{target}.cache.json").read_text())
     viewer = json.loads((root / "assets" / f"{target}.json").read_text())
-    return out.stdout, stats, viewer
+    return said(out.stdout), stats, viewer
+
+
+def said(stdout: str) -> str:
+    """What a build printed, less its timing line (export_model.py): the
+    seconds each phase took, which two runs of the same build don't share -
+    a load of 0.04 s is "0.0s", one of 0.06 s on a busy machine (or the
+    first run of a fresh checkout, compiling) "0.1s"."""
+    out, n = re.subn(r"(?m)^timing: \w+ \d+\.\ds(, \w+ \d+\.\ds)*\n", "", stdout)
+    assert n == 1, stdout
+    return out
 
 
 def runs(tmp_path: Path, name: str) -> int:

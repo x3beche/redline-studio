@@ -170,30 +170,38 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     calcs = [t for t in got["tools"] if t["package"] == "tools"]          # the Basic Tools calculators: off
     assert len(calcs) > 100 and not any(t["on"] for t in calcs)
     on = {t["name"]: t["on"] for t in got["tools"] if t["package"] != "tools"}
-    assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
-                  "datasheet_get": True, "datasheet_read": True, "datasheet_search": True, "board_read": True, "model_read": True, "drawing_layout": False,
-                  "model_build": False, "drawing_get": True, "board_route": False, "board_render": True,
-                  "firmware_read": True, "note_status": True,
-                  "firmware_build": True, "file_read": False, "file_save_to_my_files": True, "taste_read": False, "manufacturer_search": True,
-                  "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
-                  "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
-                  "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
-                  "inventory_edit": False, "inventory_remove": True,
-                  "price_history": True, "stock_low": True, "manufacturer_explore": False, "files_search": True,
-                  "files_restore": True, "taste_propose": True, "dm_read": False, "dm_send": False,
-                  "settings_read": True,
-                  "product_find": True, "product_files_read": True, "product_file_attach": True,
-                  "product_file_detach": True, "product_set_main": True, "product_to_model": True,
-                  "product_files_missing": True, "product_to_my_items": False,
-                  "build_count": True, "shopping_list": True, "stock_consume": True, "model_render": True,
-                  "room_note": False, "queue_list": True, "queue_read": True, "analytics_read": True, "notes_search": True, "note_read": True,
-                  "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
-                  "chat_read": True, "chat_archive": False, "pdf_make": True,
-                  "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
-                  "clock": True, "memory_read": True, "memory_write": True,
-                  "wiki_search": True, "wiki_read": True, "wiki_write": True,
-                  "task_list": True, "task_create": True, "task_run": True}
-    assert [t["package"] for t in got["tools"]][:16] == ["general"] * 6 + ["cad"] * 5 + ["pcb"] * 5     # General, then the tabs
+    # The tools there are, are the modules in backend/chat_tools/: one added since is there with its default,
+    # and these keep theirs - or the person's choice.
+    known = {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
+             "datasheet_get": True, "datasheet_read": True, "datasheet_search": True, "board_read": True, "model_read": True, "drawing_layout": False,
+             "model_build": False, "drawing_get": True, "board_route": False, "board_render": True,
+             "firmware_read": True, "note_status": True,
+             "firmware_build": True, "file_read": False, "file_save_to_my_files": True, "taste_read": False, "manufacturer_search": True,
+             "catalog_read_page": True, "catalog_add_product": True, "catalog_edit_product": False,
+             "catalog_remove_product": True, "catalog_add_maker": False, "mcmaster_save": True, "grabcad_save": True,
+             "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
+             "inventory_edit": False, "inventory_remove": True,
+             "price_history": True, "stock_low": True, "manufacturer_explore": False, "files_search": True,
+             "files_restore": True, "taste_propose": True, "dm_read": False, "dm_send": False,
+             "settings_read": True,
+             "product_find": True, "product_files_read": True, "product_file_attach": True,
+             "product_file_detach": True, "product_set_main": True, "product_to_model": True,
+             "product_files_missing": True, "product_to_my_items": False,
+             "build_count": True, "shopping_list": True, "stock_consume": True, "model_render": True,
+             "room_note": False, "queue_list": True, "queue_read": True, "analytics_read": True, "notes_search": True, "note_read": True,
+             "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
+             "chat_read": True, "chat_archive": False, "pdf_make": True,
+             "web_search": True, "web_read": True, "mcmaster_find": True, "grabcad_find": True,
+             "clock": True, "memory_read": True, "memory_write": True,
+             "wiki_search": True, "wiki_read": True, "wiki_write": True,
+             "task_list": True, "task_create": True, "task_run": True}
+    assert known.keys() <= on.keys(), sorted(known.keys() - on.keys())
+    assert {n: on[n] for n in known} == known
+    tools = chat_tools.tools()
+    assert all(v == tools[n].default for n, v in on.items() if n not in known), {n: v for n, v in on.items() if n not in known}
+    packages = [t["package"] for t in got["tools"]]                     # General, then the tabs, in their order
+    rank = [p.name for p in chat_tools.PACKAGES]
+    assert packages == sorted(packages, key=rank.index) and list(dict.fromkeys(packages))[:3] == ["general", "cad", "pcb"]
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -201,25 +209,7 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
         run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"rm_rf": True})))
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
-    assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search", "drawer_add",
-                                                                "datasheet_get", "datasheet_read", "datasheet_search",
-                                                                "board_read", "model_read", "firmware_build", "manufacturer_search", "rename_chat",
-                                                                "catalog_read_page", "catalog_add_product",
-                                                                "catalog_remove_product", "mcmaster_save", "grabcad_save",
-                                                                "product_find", "product_files_read", "product_file_attach",
-                                                                "product_file_detach", "product_set_main", "product_to_model",
-                                                                "product_files_missing", "build_count", "shopping_list",
-                                                                "stock_consume", "model_render", "file_save_to_my_files",
-                                                                "drawing_get", "board_render", "firmware_read", "note_status",
-                                                                "inventory_search", "inventory_read", "inventory_add",
-                                                                "inventory_adjust", "inventory_remove",
-                                                                "queue_list", "queue_read", "analytics_read", "notes_search", "note_read",
-                                                                "chat_list", "chat_read", "pdf_make", "web_search",
-                                                                "web_read", "mcmaster_find", "grabcad_find", "clock",
-                                                                "memory_read", "memory_write",
-                                                                "wiki_search", "wiki_read", "wiki_write",
-                                                                "price_history", "stock_low", "files_search", "files_restore", "taste_propose",
-                                                                "settings_read", "task_list", "task_create", "task_run"}
+    assert {t["name"] for t in state["rounds"][0]["tools"]} == {n for n, v in on.items() if v}    # what is on
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))

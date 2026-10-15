@@ -115,3 +115,62 @@ def _settings_read_as_on_a_fresh_install(monkeypatch):
     monkeypatch.setattr(netroutes, "_orders", {})
     monkeypatch.setattr(netroutes, "_loaded", True)
     monkeypatch.setattr(netroutes, "_load_error", None)
+
+
+@pytest.fixture(autouse=True)
+def _sign_in_memory_of_its_own():
+    """What backend/auth.py keeps in memory - the sessions and agent tokens
+    looked up in the last minute, failed sign-ins and switches, the tries
+    counted per address, agent token use not yet written out - starts
+    empty for each test and is left empty after it. A test that leaves
+    five failed switches or thirty tries behind (or a tally that the next
+    test's database would get) does not decide how the next one signs in."""
+    from backend import auth
+
+    def clear():
+        for kept in (auth._CACHE, auth._TOKEN_CACHE, auth._FAILS, auth._HITS, auth._USAGE):
+            kept.clear()
+        auth._USAGE_DB = None
+        auth._USAGE_TASK = None
+
+    clear()
+    yield
+    clear()
+
+
+@pytest.fixture(autouse=True)
+def _scrypt_answers_the_same(monkeypatch):
+    """scrypt must give one key for one password and salt. This host's CPU
+    runs at 88-96 °C and once gave two; a sign-in then fails as a bare 401
+    ("that email and password do not match") that no code explains. So a
+    password check that says no is looked at again, and the test fails
+    saying what happened when:
+    - the same check says yes the second time, or
+    - the stored hash was made in this test from this very password
+      (auth.hash_password) - the code under test cannot get that wrong;
+      only a wrong key, computed once, can.
+    Nothing is retried into a pass: either case fails the test."""
+    from backend import auth
+
+    real_hash, real_check = auth.hash_password, auth.check_password
+    made: dict[str, str] = {}
+
+    def hash_password(password: str) -> str:
+        stored = real_hash(password)
+        made[stored] = password
+        return stored
+
+    def check_password(password: str, stored: str) -> bool:
+        if real_check(password, stored):
+            return True
+        if real_check(password, stored):
+            pytest.fail("HARDWARE? hashlib.scrypt gave two different keys for the same password and salt: "
+                        "auth.check_password said no, then yes - not a bug in the code under test", pytrace=False)
+        if made.get(stored) == password:
+            pytest.fail("HARDWARE? the hash auth.hash_password made in this test from this password does not "
+                        f"check against it ({stored[:40]}...): scrypt computed a wrong key once - not a bug in "
+                        "the code under test", pytrace=False)
+        return False
+
+    monkeypatch.setattr(auth, "hash_password", hash_password)
+    monkeypatch.setattr(auth, "check_password", check_password)
