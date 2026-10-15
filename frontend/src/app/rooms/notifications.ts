@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, ViewEncapsulation, computed, effect, inject, signal, untracked } from '@angular/core';
 import { LANG, T, t } from '../i18n';
 import { NC_GROUPS, NcRow, Notice, NotifyStore, ncDays } from '../notifications';
 import { Prefs } from '../preferences';
@@ -10,6 +10,9 @@ import { Prefs } from '../preferences';
 @Component({
   selector: 'app-room-notifications',
   imports: [T, NcRow],
+  // Not encapsulated, like the bell's: the page's bar and list use the same
+  // global rules, and the bell may not be in the top bar to have loaded them.
+  encapsulation: ViewEncapsulation.None,
   styleUrl: '../notifications.css',
   template: `
 <div class="tcv-room nc-page absolute inset-0">

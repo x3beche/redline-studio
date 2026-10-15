@@ -208,10 +208,15 @@ export class NotifyStore {
   }
 }
 
-/** One notification, one line. */
+/** One notification, one line. It brings the notification styles itself
+ *  (not encapsulated, like the bell's): the bell may be hidden from the top
+ *  bar or under More (Settings > Top bar), and /notifications and Settings
+ *  then draw rows with no bell on the page to have loaded them. */
 @Component({
   selector: 'wb-nc-row',
   imports: [T],
+  encapsulation: ViewEncapsulation.None,
+  styleUrl: './notifications.css',
   template: `
 <button type="button" class="nc-row" [attr.data-unread]="n().read ? null : 1" [attr.data-tone]="n().tone"
         [title]="tip()" (click)="pick.emit()">
@@ -225,7 +230,8 @@ export class NcRow {
   n = input.required<Notice>();
   pick = output<void>();
   ico = computed(() => ncIcon(this.n().kind));
-  ctx = computed(() => ncCtx(this.n()));
+  // Markdown marks out (a Chat answer's start); the line's own ellipsis cuts it.
+  ctx = computed(() => ncShort(ncCtx(this.n()), 400));
   ago = computed(() => { LANG(); return ncAgo(this.n().created_at); });
   tip = computed(() => {
     const n = this.n();
