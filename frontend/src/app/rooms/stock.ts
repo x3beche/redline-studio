@@ -15,6 +15,7 @@ import { CURRENCY, convert, moneyIn, moneyTip } from '../money';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
 import { StockChart } from './product-charts';
+import { BulkEdit } from './bulk-edit';
 
 /** Stock on the Parts page: how many of each product are on hand, and where
  *  (backend/inventory.py). What a thing is - its name, maker, code, price,
@@ -124,6 +125,8 @@ export class InventoryApi {
   adjust(id: string, delta: number, reason: string) { return this.http.post<Item>(`/api/inventory/${id}/adjust`, { delta, reason }); }
   remove(id: string) { return this.http.delete(`/api/inventory/${id}`); }
   removeMany(ids: string[]) { return this.http.post<{ deleted: string[] }>('/api/inventory/bulk-delete', { ids }); }
+  /** Every place lines lie, with how many lie there - a place field's suggestions. */
+  locations() { return this.http.get<{ location: string; lines: number }[]>('/api/inventory/locations'); }
   exportFile(ids: string[] = []) { return this.http.get<unknown>(`/api/inventory/export?ids=${encodeURIComponent(ids.join(','))}`); }
   importFile(data: unknown) { return this.http.post<{ added: number; merged: number; skipped: { name: string; error: string }[] }>('/api/inventory/import', data); }
   /** What is on hand of every product, by maker and product, in one read (backend/inventory.py stock_of). */
@@ -273,7 +276,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
       </div>
       <div class="inv-pfields">
         <label><span>{{ 'Unit' | t }}</span><input class="tst-in" list="wb-stock-units" [value]="it.unit" [readonly]="!can()" (change)="save(it, 'unit', $any($event.target).value)"></label>
-        <label><span>{{ 'Location' | t }}</span><input class="tst-in" [value]="it.location" [readonly]="!can()" [placeholder]="'Shelf, bin, box' | t" (change)="save(it, 'location', $any($event.target).value)"></label>
+        <label><span>{{ 'Location' | t }}</span><input class="tst-in" list="wb-stock-places" [value]="it.location" [readonly]="!can()" [placeholder]="'Shelf, bin, box' | t" (change)="save(it, 'location', $any($event.target).value)"></label>
         <label><span>{{ 'Minimum' | t }}</span><input class="tst-in" inputmode="decimal" [value]="it.min_stock ?? ''" [readonly]="!can()" [placeholder]="'none' | t" (change)="saveMin(it, $any($event.target).value)"></label>
         <label class="inv-pnotes"><span>{{ 'Notes' | t }}</span><input class="tst-in" [value]="it.notes" [readonly]="!can()" (change)="save(it, 'notes', $any($event.target).value)"></label>
         @if (can()) { <button class="tcv-cc-ib tcv-cc-danger inv-pdel" (click)="remove(it)" [title]="'Stop counting it: the line and its log go, the product stays' | t">
@@ -308,7 +311,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
       <div class="inv-addrow mf-ctl">
         <input class="tst-in inv-a-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="nf().quantity" (input)="nfSet('quantity', $event)" (keydown.enter)="addLine()" [attr.aria-label]="'Quantity' | t">
         <input class="tst-in inv-a-unit" list="wb-stock-units" [value]="nf().unit" (input)="nfSet('unit', $event)" (keydown.enter)="addLine()" [attr.aria-label]="'Unit' | t">
-        <input class="tst-in" [placeholder]="'Location' | t" [value]="nf().location" (input)="nfSet('location', $event)" (keydown.enter)="addLine()" [attr.aria-label]="'Location' | t">
+        <input class="tst-in" list="wb-stock-places" [placeholder]="'Location' | t" [value]="nf().location" (input)="nfSet('location', $event)" (keydown.enter)="addLine()" [attr.aria-label]="'Location' | t">
         <input class="tst-in" [placeholder]="'Note for the log (optional)' | t" [value]="nf().note" (input)="nfSet('note', $event)" (keydown.enter)="addLine()" [attr.aria-label]="'Note' | t">
         <button class="tcv-btn tcv-btn-accent" (click)="addLine()" [disabled]="busy()">{{ 'Add to stock' | t }}</button>
         @if (lines().length) { <button class="tcv-btn" (click)="adding.set(false)">{{ 'Cancel' | t }}</button> }
@@ -316,6 +319,7 @@ export function parseLine(line: string): { name: string; quantity: number; unit:
     }
   }
   <datalist id="wb-stock-units">@for (u of units; track u) { <option [value]="u"></option> }</datalist>
+  <datalist id="wb-stock-places">@for (p of places(); track p.location) { <option [value]="p.location">{{ p.lines }}</option> }</datalist>
 </section>`,
 })
 export class StockPanel {
@@ -344,7 +348,10 @@ export class StockPanel {
   constructor() {
     effect(() => { const m = this.maker(), p = this.product(); this.state.changed(); untracked(() => this.read(m, p)); });
   }
+  /** The places lines lie already, for the place fields' suggestions. */
+  places = signal<{ location: string; lines: number }[]>([]);
   private read(m: string, p: string) {
+    this.api.locations().subscribe({ next: x => this.places.set(x), error: () => {} });
     this.api.ofProduct(m, p).subscribe({
       next: rows => { if (m === this.maker() && p === this.product()) { this.lines.set(rows); this.loaded.set(true); } },
       error: () => this.loaded.set(true),
@@ -400,7 +407,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'wb-stock-view',
-  imports: [EmptyState, Skeleton, CountUp, T, UiSelect, NgTemplateOutlet, SelectionBar, Marquee],
+  imports: [EmptyState, Skeleton, CountUp, T, UiSelect, NgTemplateOutlet, SelectionBar, Marquee, BulkEdit],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -530,7 +537,13 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
                   <td class="inv-c-type"><span class="mf-chip inv-tchip"><svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(i.type)" /></svg>{{ typeLine(i) }}</span></td>
                   <td class="dim inv-c-maker">{{ makerOf(i) }}</td>
                   <td class="r mono inv-q" [attr.data-low]="i.low ? 1 : null">{{ qty(i.quantity) }} <span class="dim">{{ i.unit }}</span></td>
-                  <td class="give-s">{{ i.location || '–' }}</td>
+                  <td class="give-s inv-loc" (click)="can() && $event.stopPropagation()">
+                    @if (editLoc() === i.id) {
+                      <input class="tst-in inv-locin" list="inv-locs" [value]="i.location" [attr.aria-label]="'Location' | t"
+                             (keydown.enter)="saveLoc(i, $any($event.target).value)" (keydown.escape)="editLoc.set(null)" (blur)="saveLoc(i, $any($event.target).value)">
+                    } @else if (can()) {
+                      <button type="button" class="inv-locbtn" (click)="startLoc(i)" [title]="'Change its place' | t">{{ i.location || '–' }}</button>
+                    } @else { {{ i.location || '–' }} }</td>
                   <td class="mono dim">{{ i.product?.sku || i.mpn || i.lcsc || '–' }}</td>
                   <td class="r mono dim">{{ i.min_stock == null ? '–' : qty(i.min_stock) }}</td>
                   <td class="r mono" [title]="valueTipOf(i)">{{ valueOf(i) }}</td>
@@ -551,6 +564,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
   }
 
   <wb-selbar [count]="picked().size" (clear)="picked.set(none())">
+    @if (can()) { <wb-bulk-edit mode="stock" [ids]="pickedList()" [places]="locations()" (done)="bulkDone()" /> }
     <button class="tcv-btn" (click)="exportItems(selectedItems())">{{ 'Export' | t }}</button>
     @if (can()) { <button class="tcv-btn tst-del" (click)="removeSelected()">{{ 'Delete' | t }}</button> }
   </wb-selbar>
@@ -842,6 +856,24 @@ export class StockView implements OnDestroy {
     });
   }
   removeSelected() { this.removeMany(this.selectedItems()); }
+  pickedList = computed(() => [...this.picked()]);
+  bulkDone() { this.state.touch(); }
+  /** A line's place changed where the table shows it (Enter or leaving the field saves, Escape leaves it). */
+  editLoc = signal<string | null>(null);
+  startLoc(i: Item) {
+    this.editLoc.set(i.id);
+    setTimeout(() => { const el = document.querySelector<HTMLInputElement>('.inv-locin'); el?.focus(); el?.select(); });
+  }
+  saveLoc(i: Item, value: string) {
+    if (this.editLoc() !== i.id) return;
+    this.editLoc.set(null);
+    const v = value.trim();
+    if (v === (i.location ?? '')) return;
+    this.api.patch(i.id, { location: v }).subscribe({
+      next: () => this.state.touch(),
+      error: (e: HttpErrorResponse) => Toast.show(why(e, 'Could not save it.'), { tone: 'danger' }),
+    });
+  }
   exportItems(items: Item[]) {
     this.api.exportFile(items.map(i => i.id)).subscribe({
       next: data => {

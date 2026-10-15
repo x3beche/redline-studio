@@ -16,6 +16,7 @@ import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { Marquee } from '../marquee';
 import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
+import { BulkEdit, BulkProduct } from './bulk-edit';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
 import { EmptyState } from '../empty-state';
@@ -333,7 +334,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar, DatasheetRow,
+  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar, BulkEdit, DatasheetRow,
             PartModal, PartAdding, Cabinet, FootprintThumb, LinkedHead, LinkedCard, LinkedTable, StockPanel, StockView, ProductFilesPanel, ProductGallery, OrphanFiles, PartsTrashView, PriceChart],
   providers: [PartDesk, LinkedDesk],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './stock.css'],
@@ -935,6 +936,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
     }
     <!-- the selection, floating over the grid: the grid's (a box drawn, Ctrl/Shift-clicks) or the maker table's ticks -->
     <wb-selbar [count]="layout() !== 'table' ? gsel().size : 0" (clear)="clearSel()">
+      @if (can() && gselProducts().length) { <wb-bulk-edit mode="products" [products]="gselProducts()" [categories]="allCats()" (done)="bulkDone()" /> }
       <button class="tcv-btn" (click)="selectAllShown()">{{ 'Select all' | t }}</button>
       @if (gselParts().length) {
         <!-- LCSC parts: as a list to send or order from, and their numbers -->
@@ -950,6 +952,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <button class="tcv-btn" (click)="copyNumbers(pickedIds())">{{ 'Copy LCSC numbers' | t }}</button>
           @if (desk.canEdit()) { <button class="tcv-btn tst-del" (click)="dropParts(pickedIds())">{{ 'Remove from the drawer' | t }}</button> }
         } @else {
+          @if (can() && makerBulk().length) { <wb-bulk-edit mode="products" [products]="makerBulk()" [categories]="allCats()" (done)="bulkDone()" /> }
           @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
           <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
         }
@@ -2202,6 +2205,18 @@ export class RoomMfr implements OnDestroy {
   pick(id: string, on: boolean) { this.picked_.update(s => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; }); }
   allPicked = computed(() => { const f = this.found(), s = this.picked_(); return f.length > 0 && f.every(p => s.has(p.id)); });
   pickedIds() { return [...this.picked_()]; }
+  /** The selection as products the bar's Edit can change (bulk-edit.ts): not the LCSC drawer's parts, not saved McMaster or GrabCAD ones. */
+  gselProducts = computed<BulkProduct[]>(() => [...this.gsel()]
+    .map(k => { const i = k.indexOf(':'); return { manufacturer: k.slice(0, i), product: k.slice(i + 1) }; })
+    .filter(p => p.manufacturer !== LCSC_MAKER && !isLinked(p.manufacturer)));
+  makerBulk = computed<BulkProduct[]>(() => {
+    const m = this.maker();
+    return m && m.view !== 'drawer' && !isLinked(m.id) ? [...this.picked_()].map(product => ({ manufacturer: m.id, product })) : [];
+  });
+  /** Every category there is, for the Edit's suggestions. */
+  allCats = computed(() => [...new Set([...(this.grid()?.categories ?? []).map(c => c[0]), ...this.all().flatMap(m => m.categories)])]
+    .sort((a, b) => a.localeCompare(b)));
+  bulkDone() { this.read(); }
   pickAll(on: boolean) { this.picked_.set(on ? new Set(this.found().map(p => p.id)) : new Set()); }
 
   cancelRun() {

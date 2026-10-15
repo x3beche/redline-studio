@@ -217,3 +217,10 @@ tr.inv-grow td { padding-top: 10px; background: var(--surface-2); border-top: 1p
 /* with its chart (product-charts.ts): the chart takes the height, the log keeps to its rows and scrolls */
 .inv-panel[data-compact] .inv-chart { flex: 1 0 190px; min-height: 0; }
 .inv-panel[data-compact] > .inv-line:has(.inv-chart) > .inv-logwrap { flex: 0 1 auto; max-height: 232px; min-height: 0; }
+
+/* a line's place, changed where the table shows it: the text is the button, the field takes its cell */
+.inv-loc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-locbtn { max-width: 100%; padding: 0; overflow: hidden; text-overflow: ellipsis; font: inherit; color: inherit; text-align: left;
+  background: none; border: 0; cursor: text; }
+.inv-locbtn:hover { color: var(--ink-bright); }
+.inv-locin { box-sizing: border-box; width: 100%; height: 24px; padding: 2px 6px; font-size: 12px; }
