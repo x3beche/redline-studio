@@ -83,6 +83,30 @@ def test_it_keeps_the_pdf_in_the_askers_files(env, fake_print):
     assert q.vars["folder"] == "Chat/Documents/Reports/2026"
 
 
+def test_the_header_fields_are_the_models_and_have_their_defaults(env, fake_print):
+    db = cc_chat._db()
+    props = _tool().schema["properties"]
+    for k in ("subject", "number", "revision", "applicability", "prepared", "date", "theme"):
+        assert k in props
+    assert props["theme"]["enum"] == ["document", "simple"]
+    assert "do not ask" in _tool().description and "e-mail" in _tool().description
+    run(_tool().run(Ctx(db=db, actor={**ME, "name": "me@example.com"}), {
+        "title": "Clock brief", "body": "Summary.", "number": " FC-STM001 ", "revision": "0",
+        "applicability": "STM32F4DISCOVERY", "prepared": "Firmware team", "subject": "Clock tree",
+        "date": "9.12.2021"}))
+    doc = fake_print[-1][0]
+    assert (doc.number, doc.revision, doc.applicability, doc.prepared, doc.subject, doc.date) == (
+        "FC-STM001", "0", "STM32F4DISCOVERY", "Firmware team", "Clock tree", "9.12.2021")
+    assert doc.theme == "document" and doc.author == "me" and doc.lang == "en"
+    # Not given: left to pdfdoc's defaults; Turkish text is a Turkish document.
+    run(_tool().run(Ctx(db=db, actor=ME), {"title": "Rapor", "body": "Ölçümler tamamlandı; regülatör ısınıyor.",
+                                           "theme": "simple"}))
+    doc = fake_print[-1][0]
+    assert doc.number == "" and doc.lang == "tr" and doc.theme == "simple" and doc.author == "Me"
+    with pytest.raises(ToolError, match="theme"):
+        run(_tool().run(Ctx(db=db, actor=ME), {"title": "T", "body": "x", "theme": "fancy"}))
+
+
 def test_another_workspace_does_not_see_it(env, fake_print):
     raw, state = env
     state["ws"] = "team2"

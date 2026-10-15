@@ -1,5 +1,7 @@
 """A conversation of the Chat, written out: as Markdown, or as a PDF in
-Workbench's white theme (backend/pdfdoc.py, the printer `pdf_make` uses).
+the document theme (backend/pdfdoc.py, the printer `pdf_make` uses): the
+conversation's title in the header, its first question as the subject, the
+number WB-CX-<the conversation's id>, prepared "Workbench Chat export".
 
 What goes in: the title, the day it was started and the models that
 answered; then every line in order - who wrote it (a person by name, never
@@ -35,10 +37,12 @@ LINE_MAX = 400                         # characters of a step's line, as the pag
 LABELS = {
     "en": {"date": "Date", "models": "Models", "model": "Model", "lines": "Lines", "someone": "someone",
            "purpose": "A conversation in the Chat, exported", "failed": "failed", "denied": "not allowed",
-           "stopped": "stopped", "files": "Files", "error": "Error", "made": "Made"},
+           "stopped": "stopped", "files": "Files", "error": "Error", "made": "Made",
+           "prepared": "Workbench Chat export"},
     "tr": {"date": "Tarih", "models": "Modeller", "model": "Model", "lines": "Satır", "someone": "biri",
            "purpose": "Sohbet'ten dışa aktarılmış bir konuşma", "failed": "başarısız", "denied": "izin verilmedi",
-           "stopped": "durduruldu", "files": "Dosyalar", "error": "Hata", "made": "Yapıldı"},
+           "stopped": "durduruldu", "files": "Dosyalar", "error": "Hata", "made": "Yapıldı",
+           "prepared": "Workbench Sohbet dışa aktarımı"},
 }
 
 router = APIRouter(prefix="/api/cc")
@@ -178,6 +182,22 @@ def title_of(doc: dict) -> str:
     return " ".join(str(doc.get("title") or "").split())[:200] or "Conversation"
 
 
+def subject_of(doc: dict) -> str:
+    """The PDF header's subject: the first line of the first question, as plain words."""
+    for m in doc.get("messages") or []:
+        if isinstance(m, dict) and m.get("role") == "user":
+            for ln in str(m.get("content") or "").splitlines():
+                t = " ".join(re.sub(r"[`*_#>\[\]|]", " ", ln).split())
+                if t:
+                    return t[:160]
+    return ""
+
+
+def number_of(cid: str) -> str:
+    """The export's document number: the conversation's, so every export of it shares it."""
+    return "WB-CX-" + (re.sub(r"[^A-Za-z0-9]", "", str(cid))[:8].upper() or "0")
+
+
 def body(doc: dict, lang: str = "en", given: dict | None = None) -> str:
     """Every line, in order, as Markdown (no title: the PDF prints its own)."""
     lab = LABELS.get(lang, LABELS["en"])
@@ -257,7 +277,8 @@ async def export(db, cid: str, fmt: str, lang: str = "en", given: dict | None = 
         if len(text) > pdfdoc.MAX_MD:
             raise HTTPException(413, "the conversation is too long for a PDF - export it as Markdown")
         pdf = pdfdoc.Doc(title=title, body=text, purpose=lab["purpose"], author="", size=size if size in pdfdoc.SIZES else "A4",
-                         lang=lang, created=made_on, meta=meta)
+                         lang=lang, created=made_on, meta=meta, number=number_of(cid), prepared=lab["prepared"],
+                         subject=subject_of(doc) or lab["purpose"])
         try:
             made = await pdfdoc.make(pdf, db)
         except pdfdoc.RenderError as exc:

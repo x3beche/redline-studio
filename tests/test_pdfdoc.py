@@ -1,4 +1,5 @@
-"""The Chat's PDFs (backend/pdfdoc.py): Markdown in Workbench's white theme.
+"""The Chat's PDFs (backend/pdfdoc.py): Markdown printed as an engineering
+document (the default theme) or in Workbench's plain white one.
 
 What matters: what the model writes is text, never markup of its own (no
 script, no raw HTML, no javascript: link); a picture is only ever a Files
@@ -6,16 +7,19 @@ file or a public address fetched here, re-encoded, and handed to the page
 as a data: URL - nothing private is reached, and the browser fetches
 nothing; tables put their numbers to the right, '- [ ]' are boxes. And,
 where Docker and the Chromium image are there, a real document prints
-with the Workbench mark, the title, the author, its purpose and "Page N of
-M" on its pages.
+with its header - page 1 the big one with every field, the other pages the
+compact one - and a true "Page N of M"; the plain theme with the Workbench
+mark, the title, the author, its purpose and "Page N of M" on its pages.
 """
 
 from __future__ import annotations
 
 import asyncio
 import io
+import re
 import shutil
 import subprocess
+from datetime import datetime, timezone
 
 import pytest
 
@@ -89,6 +93,50 @@ def test_the_page_allows_nothing_from_outside_and_escapes_its_fields():
     assert "&lt;script&gt;x&lt;/script&gt;" in foot and "Why &amp; how" in foot and "p&lt;1&gt;" in foot
     head = pdfdoc.header_html(doc)
     assert pdfdoc.MARK in head and ">Workbench</span>" in head
+
+
+def test_the_document_header_fills_its_defaults_and_never_prints_an_address():
+    when = datetime(2026, 10, 15, 11, 32, tzinfo=timezone.utc)          # 14:32 in Istanbul
+    f = pdfdoc.fields(pdfdoc.Doc(title="Brief", purpose="Why it is", author="ann.k@example.com", created=when))
+    assert f["number"] == "WB-20261015-1432" and f["revision"] == "0" and f["applicability"] == "—"
+    assert f["prepared"] == "Workbench" and f["date"] == "2026-10-15" and f["subject"] == "Why it is"
+    assert f["author"] == "ann.k"                                         # a name that is an address: its name part
+    tr = pdfdoc.fields(pdfdoc.Doc(title="Rapor", lang="tr", created=when, author="Ayşe <ayse@example.com>",
+                                  prepared="Donanım ekibi (hw@example.com)", number="FC-1", revision="B"))
+    assert tr["date"] == "15.10.2026" and tr["subject"] == "Rapor" and tr["author"] == "Ayşe"
+    assert tr["prepared"] == "Donanım ekibi" and (tr["number"], tr["revision"]) == ("FC-1", "B")
+
+
+def test_page_one_has_the_big_header_and_the_others_the_compact_one():
+    doc = pdfdoc.Doc(title="Clock <speed>", number="FC-STM001", revision="2", applicability="STM32F4DISCOVERY",
+                     prepared="Firmware team", subject="Clock tree", author="Ann <ann@example.com>",
+                     date="9.12.2021")
+    big = pdfdoc.first_header_html(doc)
+    for label, value in (("Number", "FC-STM001"), ("Date of Writing", "9.12.2021"), ("Revision", "2"),
+                         ("Applicability", "STM32F4DISCOVERY"), ("Prepared", "Firmware team"),
+                         ("Subject", "Clock tree"), ("Author", "Ann")):
+        assert f'<span class="l">{label}</span>' in big and value in big
+    assert '<span class="pageNumber"></span> of <span class="totalPages"></span>' in big
+    assert "Clock &lt;speed&gt;" in big and pdfdoc.MARK in big and "@" not in big.split("</style>", 1)[1]
+    small = pdfdoc.compact_header_html(doc)
+    assert "Clock &lt;speed&gt;" in small and "<b>FC-STM001</b>" in small and "<b>2</b>" in small
+    assert "Page <b><span class=\"pageNumber\"></span> of <span class=\"totalPages\"></span></b>" in small
+    assert "Applicability" not in small
+    # Chromium fills an element of class "title", "date" or "url" in a template with its own text.
+    for t in (big, small, pdfdoc.doc_footer_html(doc)):
+        assert not re.search(r'class="(title|date|url)"', t)
+    tr = pdfdoc.first_header_html(pdfdoc.Doc(title="Rapor", lang="tr"))
+    for label in ("Numara", "Sayfa", "Yazım tarihi", "Revizyon", "Uygulama alanı", "Hazırlayan", "Konu"):
+        assert f'<span class="l">{label}</span>' in tr
+    assert '<span class="pageNumber"></span> / <span class="totalPages"></span>' in tr
+
+
+def test_the_document_page_puts_the_extra_rows_on_one_line_and_floats_a_right_figure():
+    page = pdfdoc.doc_page_html(pdfdoc.Doc(title="T", meta=[("Models", "m1"), ("Empty", "")]), "<p>x</p>")
+    assert '<p class="doc-meta"><b>Models</b> m1</p>' in page and "Empty" not in page
+    assert "@page :first { margin-top: 64mm; }" in page
+    out = pdfdoc.md_html('![Clock path](files:abc123 "right")', {"files:abc123": "data:image/png;base64,AA=="})
+    assert out.startswith('<figure class="right"><img') and "<figcaption>Clock path</figcaption>" in out
 
 
 def test_sections_follow_the_body():
@@ -204,7 +252,7 @@ SAMPLE = """**Summary.** Option B is 31 % cheaper per board.
 def test_a_document_prints_with_its_header_footer_and_page_count():
     import pypdfium2 as pdfium
     doc = pdfdoc.Doc(title="Fan controller BOM comparison", purpose="Pick the cheaper build for 100 boards",
-                     body=SAMPLE, author="Ann Example", project="fan-ctrl-b")
+                     body=SAMPLE, author="Ann Example", project="fan-ctrl-b", theme="simple")
     made = run(pdfdoc.make(doc))
     assert made.pdf.startswith(b"%PDF") and made.pages == 2 and made.missing == []
     pdf = pdfium.PdfDocument(made.pdf)
@@ -221,6 +269,47 @@ def test_a_document_prints_with_its_header_footer_and_page_count():
         assert "Workbench" in page and "Ann Example" in page and "fan-ctrl-b" in page
         assert f"Page {i} of 2" in page
     assert "$3.31" in one and "Appendix" in two and "Prices as of 12 Oct 2026." in two
+
+
+def _texts(pdf_bytes: bytes) -> list[str]:
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        return [" ".join(pdf[i].get_textpage().get_text_range().split()) for i in range(len(pdf))]
+    finally:
+        pdf.close()
+
+
+@pytest.mark.skipif(not _engine(), reason="no docker or no Chromium image to print with")
+def test_a_document_prints_its_big_header_on_page_one_and_the_compact_one_after():
+    body = SAMPLE + "\n\n\\pagebreak\n\n## Third\n\nThe end.\n"
+    doc = pdfdoc.Doc(title="STM32F4 clock speed with HAL", body=body, number="FC-STM001", revision="0",
+                     applicability="STM32F4DISCOVERY", prepared="Firmware team", subject="Clock tree setup",
+                     author="Ann Example <ann@example.com>", date="9.12.2021")
+    made = run(pdfdoc.make(doc))
+    assert made.pages == 3
+    one, two, three = _texts(made.pdf)
+    for words in ("STM32F4 CLOCK SPEED WITH HAL", "Number", "FC-STM001", "Page", "1 of 3", "Date of Writing",
+                  "9.12.2021", "Revision", "Applicability", "STM32F4DISCOVERY", "Prepared", "Firmware team",
+                  "Subject", "CLOCK TREE SETUP", "Author", "Ann Example", "$3.31"):
+        assert words in one, words
+    for i, page in ((2, two), (3, three)):
+        assert f"Page {i} of 3" in page and "No. FC-STM001" in page and "Rev. 0" in page
+        assert "STM32F4 CLOCK SPEED WITH HAL" in page
+        assert "Date of Writing" not in page and "Applicability" not in page
+    assert "Appendix" in two and "The end." in three
+    assert all("@" not in t for t in (one, two, three))
+
+
+@pytest.mark.skipif(not _engine(), reason="no docker or no Chromium image to print with")
+def test_a_turkish_document_has_turkish_labels():
+    made = run(pdfdoc.make(pdfdoc.Doc(title="Ölçüm raporu", body="Özet.\n\n\\pagebreak\n\nSon.", lang="tr",
+                                      created=datetime(2026, 10, 15, 9, 0, tzinfo=timezone.utc))))
+    one, two = _texts(made.pdf)
+    for words in ("ÖLÇÜM RAPORU", "Numara", "WB-20261015-1200", "Sayfa", "1 / 2", "Yazım tarihi", "15.10.2026",
+                  "Revizyon", "Uygulama alanı", "Hazırlayan", "Workbench", "Konu"):
+        assert words in one, words
+    assert "Sayfa 2 / 2" in two and "Yazım tarihi" not in two
 
 
 @pytest.mark.skipif(not _engine(), reason="no docker or no Chromium image to print with")

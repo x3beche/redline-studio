@@ -138,6 +138,9 @@ def test_pdf_goes_through_the_printer_with_title_date_and_models(env, fake_print
     assert doc.title == "Bracket review" and doc.author == "" and doc.size == "Letter" and doc.lang == "en"
     assert doc.created.isoformat().startswith("2026-10-12T11:00")
     assert ("Models", "claude-haiku-5-5, qwen3.8-flash") in doc.meta and ("Lines", "3") in doc.meta
+    # the document theme's header: the conversation's number, its first question, who made it
+    assert doc.theme == "document" and doc.number == "WB-CX-C1" and doc.prepared == "Workbench Chat export"
+    assert doc.subject == "Render the bracket and make a PDF."
     # the title is printed by the page, not repeated in the body; no address anywhere
     assert not doc.body.startswith("# ") and "### ayse.k" in doc.body and "example.com" not in doc.body
     assert "![bench.jpg](/api/files/pic123?inline=1)" in doc.body
