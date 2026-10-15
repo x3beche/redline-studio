@@ -184,6 +184,9 @@ app.include_router(voice.router)
 # Shared links: a model, board or drawing, read-only, for someone without an account (backend/shares.py).
 from . import shares as shares_api  # noqa: E402
 app.include_router(shares_api.router)
+# A Chat conversation as Markdown or a PDF, kept in Files under Chat/Exports (backend/chat_export.py).
+from . import chat_export  # noqa: E402
+app.include_router(chat_export.router)
 # One's own note templates, offered beside the built-in ones in the composers (backend/note_templates.py).
 from . import note_templates  # noqa: E402
 app.include_router(note_templates.router)

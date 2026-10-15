@@ -410,7 +410,11 @@ const TR: Record<string, string> = {
   'Name it again from the conversation': 'Başlığı sohbetten yeniden yaz',
   'No archived conversations.': 'Arşivlenmiş sohbet yok.',
   'Copy conversation': 'Sohbeti kopyala',
-  'Export as Markdown': 'Markdown olarak indir',
+  'Export as Markdown': 'Markdown olarak dışa aktar',
+  // Chat: a conversation written out, kept in Files under Chat/Exports (commandcode.ts, backend/chat_export.py)
+  'Export as PDF': 'PDF olarak dışa aktar',
+  'Making the PDF…': 'PDF hazırlanıyor…',
+  'Saved in Files under {x}, and downloaded.': 'Dosyalar\'da {x} altına kaydedildi ve indirildi.',
   // Note templates: the picker beside the composers (rooms/note-tpl.ts)
   'Other rooms': 'Diğer odalar',
   'For a room': 'Bir oda için',

@@ -84,6 +84,7 @@ class Doc:
     lang: str = "en"                       # the fixed labels: en | tr
     created: datetime | None = None
     sections: list[dict] = field(default_factory=list)   # [{"title", "body"}], after the body
+    meta: list[tuple[str, str]] = field(default_factory=list)   # more (label, value) rows in the title block
 
 
 # ---------------------------------------------------------------- Markdown -> HTML
@@ -522,6 +523,8 @@ td code, th code { font-size: 7.8pt; padding: 0 2pt; }
 img { max-width: 100%; height: auto; }
 figure { margin: 4pt 0 12pt; text-align: center; break-inside: avoid; page-break-inside: avoid; }
 figure img { max-height: 120mm; object-fit: contain; }
+/* Several pictures in one paragraph (a render's views): side by side, three to a row. */
+p > img:not(:only-child) { width: 32%; margin: 0 1% 4pt 0; vertical-align: top; }
 figcaption { margin-top: 4pt; font-size: 8pt; color: var(--ink-dim); }
 .img-missing { color: var(--ink-faint); font-size: 8.4pt; }
 .pagebreak { break-after: page; page-break-after: always; height: 0; }
@@ -575,6 +578,7 @@ def page_html(doc: Doc, body_html: str) -> str:
         meta.append((lab["author"], doc.author))
     if doc.project:
         meta.append((lab["project"], doc.project))
+    meta += [(str(k), str(v)) for k, v in doc.meta or [] if str(v or "").strip()]
     dl = "".join(f"<div><dt>{_e(k)}</dt><dd>{_e(v)}</dd></div>" for k, v in meta)
     purpose = f'<p class="tb-purpose">{_e(doc.purpose)}</p>' if doc.purpose else ""
     return ("<!doctype html><html lang=\"" + _e(doc.lang) + "\"><head><meta charset=\"utf-8\">"

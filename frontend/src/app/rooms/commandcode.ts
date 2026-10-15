@@ -195,6 +195,11 @@ export class CcApi {
                                    + (tab === 'trash' ? '&trash=1' : ''));
   }
   get(id: string) { return this.http.get<CcChat>(`/api/cc/chats/${id}`); }
+  /** The conversation as Markdown or a PDF, kept in Files under Chat/Exports (backend/chat_export.py). */
+  exportChat(id: string, body: { format: 'md' | 'pdf'; lang: string; lines: Record<string, string> }) {
+    return this.http.post<{ id: string; name: string; bytes: number; folder: string; format: string; pages?: number }>(
+      `/api/cc/chats/${id}/export`, body, { headers: HEADERS });
+  }
   create(provider?: string, model?: string) { return this.http.post<CcChat>('/api/cc/chats', { provider, model }); }
   patch(id: string, p: { title?: string; provider?: string; model?: string; pinned?: boolean; archived?: boolean }) {
     return this.http.patch<CcChat>(`/api/cc/chats/${id}`, p);
@@ -752,7 +757,7 @@ type Ask = { text: string; label: string; go: () => void };
             <button class="tcv-cc-ib tcv-cc-wide" (click)="togglePin(c)" [class.on]="c.pinned" [title]="(c.pinned ? 'Unpin' : 'Pin') | t">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.pin }" /></button>
           }
-          <button class="tcv-cc-ib tcv-cc-wide" (click)="exportChat()" [disabled]="!messages().length" [title]="'Export as Markdown' | t">
+          <button class="tcv-cc-ib tcv-cc-wide" (click)="exportChat()" [disabled]="!messages().length || !!exporting()" [title]="'Export as Markdown' | t">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" /></button>
           <div class="tcv-cc-menuwrap">
             <button class="tcv-cc-ib tcv-cc-more" (click)="menu.set(!menu()); $event.stopPropagation()" [class.on]="menu()" [title]="'More' | t">
@@ -767,8 +772,12 @@ type Ask = { text: string; label: string; go: () => void };
                 }
                 <button (click)="copyChat()" [disabled]="!messages().length"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.copy }" />
                   {{ 'Copy conversation' | t }}</button>
-                <button (click)="exportChat()" [disabled]="!messages().length"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" />
+                <button (click)="exportChat()" [disabled]="!messages().length || !!exporting()"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" />
                   {{ 'Export as Markdown' | t }}</button>
+                @if (auth.can('draw')) {
+                  <button (click)="exportChat('pdf')" [disabled]="!messages().length || !!exporting()"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.download }" />
+                    {{ (exporting() === 'pdf' ? 'Making the PDF…' : 'Export as PDF') | t }}</button>
+                }
                 <!-- What every conversation here is told (rooms/cc-memory.ts). -->
                 <button (click)="memoryOpen.set(true)"><ng-container *ngTemplateOutlet="ico; context: { $implicit: MEMORY_ICO }" />
                   {{ 'Workspace memory' | t }}</button>
@@ -1927,6 +1936,8 @@ export class RoomCommandCode implements OnDestroy {
       draw && { label: c.archived ? 'Unarchive' : 'Archive', icon: c.archived ? I.unarchive : I.archive, run: () => this.toggleArchive(c) },
       { label: 'Export as Markdown', icon: I.download,
         run: () => this.chat()?.id === c.id ? this.exportChat() : this.open(c.id, null, () => this.exportChat()) },
+      draw && { label: 'Export as PDF', icon: I.download,
+        run: () => this.chat()?.id === c.id ? this.exportChat('pdf') : this.open(c.id, null, () => this.exportChat('pdf')) },
       { sep: true },
       this.mayDelete(c) && { label: 'Delete', icon: I.trash, kbd: 'Del', danger: true, run: () => this.deleteChats([c]) },
     ]);
@@ -3127,7 +3138,41 @@ export class RoomCommandCode implements OnDestroy {
 
   copyChat() { this.copy(this.markdown(), 'Conversation copied'); }
 
-  exportChat() {
+  /** Being written out by the server: which format, so the menu's entries wait for it. */
+  exporting = signal<'md' | 'pdf' | null>(null);
+
+  /** The conversation written out by the server (backend/chat_export.py) as
+   *  Markdown or a PDF - the steps in the words shown here - kept in Files
+   *  under Chat/Exports (the Chat's own, as its PDFs are; "Save to My files"
+   *  copies it) and downloaded from there. Without the right to add a file,
+   *  the Markdown is made here and only downloaded. */
+  exportChat(fmt: 'md' | 'pdf' = 'md') {
+    const c = this.chat();
+    if (!c || this.exporting()) return;
+    if (!this.auth.can('draw')) { if (fmt === 'md') this.downloadMarkdown(); return; }
+    const lines: Record<string, string> = {};
+    for (const m of this.messages()) for (const s of m.steps ?? []) if (s.id && Object.keys(lines).length < 2000) lines[s.id] = this.stepLine(s);
+    this.exporting.set(fmt);
+    const wait = fmt === 'pdf' ? Toast.show(t('Making the PDF…'), { ms: 90_000 }) : null;
+    const end = () => { this.exporting.set(null); if (wait != null) Toast.dismiss(wait); };
+    this.api.exportChat(c.id, { format: fmt, lang: LANG(), lines }).subscribe({
+      next: f => {
+        end();
+        const a = document.createElement('a');
+        a.href = `/api/files/${f.id}`;
+        a.download = f.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        Toast.show(t('Saved in Files under {x}, and downloaded.').replace('{x}', f.folder), { tone: 'ok',
+          action: { label: t('Open'), run: () => FileModal.open({ id: f.id, name: f.name, pages: f.pages }) } });
+      },
+      error: e => { end(); this.showToast(this.msg(e) || t('Could not export it.'), undefined, undefined, undefined, 'danger'); },
+    });
+  }
+
+  /** The Markdown made here, downloaded only (for someone who may only look). */
+  private downloadMarkdown() {
     const c = this.chat();
     if (!c) return;
     const blob = new Blob([this.markdown()], { type: 'text/markdown;charset=utf-8' });

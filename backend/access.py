@@ -223,6 +223,9 @@ _RULES: list[tuple[str, str, str]] = [
     # Undo and redo of what a tool changed: each also needs the rights the change needed (chat_undo.py).
     ("POST", "/api/cc/chats/{}/changes/(undo|{}/redo)", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
+    # a conversation written out as Markdown or a PDF, kept in Files under
+    # Chat/Exports (backend/chat_export.py): adding a file is a draw
+    ("POST", "/api/cc/chats/{}/export", "draw"),
     # one's own note templates (backend/note_templates.py): like a note; the
     # routes keep each to whoever saved it
     ("POST", "/api/note-templates", "draw"),
