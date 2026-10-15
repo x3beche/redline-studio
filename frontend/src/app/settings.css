@@ -263,15 +263,17 @@ select.st-in { cursor: pointer; }
   font-size: 11.5px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .st-theme:hover { border-color: var(--ink-dim); }
-.st-theme[data-on] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* The one worn (or picked): its name bold and bright with a tick, no ring. */
 .st-theme-name { display: flex; align-items: center; gap: 6px; }
-.st-theme-name em { margin-left: auto; font-style: normal; font-size: 10px; color: var(--accent); }
+.st-theme[data-on] .st-theme-name { color: var(--ink-bright); font-weight: 700; }
+.st-theme-name em { margin-left: auto; font-style: normal; font-size: 10px; color: var(--ink-bright); }
 .st-switches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 1100px) { .st-switches { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .st-switches { grid-template-columns: minmax(0, 1fr); } }
 .st-switches .st-theme-name b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
 .st-switches .st-theme-name small { margin-left: auto; flex: none; font-size: 10px; color: var(--ink-dim); }
 .st-switches .st-theme-name em { flex: none; }
+.st-switches .st-theme[data-on] .st-theme-name b { font-weight: 700; }
 .st-switch-about { font-size: 11px; line-height: 1.4; color: var(--ink-dim); }
 /* The preview's play button sits on the card, bottom right, beside it in the
    markup: a button cannot hold another. */
@@ -322,7 +324,8 @@ select.st-in { cursor: pointer; }
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
 }
 .st-lang:hover { border-color: var(--ink-dim); }
-.st-lang[data-on] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.st-lang[data-on]::after { content: "✓"; margin-left: auto; font-size: 13px; color: var(--ink-bright); }
+.st-lang[data-on] .st-lang-text b { color: var(--ink-bright); font-weight: 700; }
 .st-lang-code { font: 600 20px 'IBM Plex Mono', ui-monospace, monospace; color: var(--accent); }
 .st-lang-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-lang-text b { font-size: 13px; font-weight: 600; }
@@ -545,7 +548,7 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
 .st-exposure b { color: var(--ink); font-weight: 600; }
 .st-incur { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
 .st-incur > div { padding: 5px 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid transparent; min-width: 0; }
-.st-incur > div[data-on] { border-color: var(--accent-deep); }
+.st-incur > div[data-on] b { color: var(--ink-bright); }
 .st-incur span { display: block; font-size: 10px; color: var(--ink-dim); }
 .st-incur b { display: block; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) {
@@ -564,7 +567,7 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
 .st-trend { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
 .st-trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
 .st-trend-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid transparent; min-width: 0; }
-.st-trend-cell[data-on] { border-color: var(--accent-deep); }
+.st-trend-cell[data-on] .st-trend-top b { color: var(--ink-bright); font-weight: 700; }
 .st-trend-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
 .st-trend-top b { color: var(--ink); }
 .st-trend-top span { font-size: 10.5px; color: var(--ink-dim); }

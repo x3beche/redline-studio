@@ -209,7 +209,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                   @for (s of switches; track s) {
                     <div class="st-switch">
                       <button class="st-theme" [attr.data-on]="prefs.modelSwitch() === s ? 1 : null" (click)="prefs.pickSwitch(s)">
-                        <span class="st-theme-name"><b>{{ switchInfo[s].name | t }}</b>@if (prefs.modelSwitch() === s) { <em>● {{ 'on' | t }}</em> } @else if (s === switchDefault) { <small>{{ 'default' | t }}</small> }</span>
+                        <span class="st-theme-name"><b>{{ switchInfo[s].name | t }}</b>@if (prefs.modelSwitch() === s) { <em>✓ {{ 'on' | t }}</em> } @else if (s === switchDefault) { <small>{{ 'default' | t }}</small> }</span>
                         <span class="st-switch-about">{{ switchInfo[s].about | t }}</span>
                       </button>
                       <button type="button" class="st-switch-play" (click)="previewing.set(s)" [title]="'See this transition on two models' | t">
@@ -356,7 +356,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                       @for (th of grp.themes; track th) {
                         <button class="st-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
                           <span class="st-swatch">@for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }</span>
-                          <span class="st-theme-name">{{ names[th] }}@if (prefs.theme() === th) { <em>● {{ 'on' | t }}</em> }</span>
+                          <span class="st-theme-name">{{ names[th] }}@if (prefs.theme() === th) { <em>✓ {{ 'on' | t }}</em> }</span>
                         </button>
                       }
                     </div>

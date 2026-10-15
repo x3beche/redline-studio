@@ -59,11 +59,11 @@ export function routeLine(order: readonly string[] | null | undefined, tr: (s: s
 .ro { display: grid; gap: 6px; min-width: 0; }
 .ro-chip { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 8px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; opacity: .62; }
-.ro-chip[data-on] { opacity: 1; border-color: var(--accent-deep); }
+.ro-chip[data-on] { opacity: 1; }
 .ro-chip[data-on][data-unready] { border-color: var(--warn); }
 .ro-n { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
   font-size: 10.5px; font-weight: 600; color: var(--ink-dim); border: 1px solid var(--line); }
-.ro-chip[data-on] .ro-n { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent-deep); }
+.ro-chip[data-on] .ro-n { color: var(--ink-bright); font-weight: 700; }
 .ro-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .ro-name b { font-size: 12px; font-weight: 600; color: var(--ink); }
 .ro-name small { font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -76,7 +76,7 @@ export function routeLine(order: readonly string[] | null | undefined, tr: (s: s
 .ro-ib svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ro-sw { margin-left: 4px; min-width: 34px; padding: 2px 7px; font-size: 10.5px; color: var(--ink-dim);
   background: var(--surface); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
-.ro-sw[data-on] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent-deep); }
+.ro-sw[data-on] { color: var(--ink-bright); font-weight: 700; }
 .ro-sw:disabled { cursor: default; }
 .ro-state { flex: none; font-size: 10.5px; color: var(--ink-dim); }
 @media (max-width: 720px) { .ro { grid-template-columns: minmax(0, 1fr) !important; } }

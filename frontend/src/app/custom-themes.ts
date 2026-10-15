@@ -181,7 +181,7 @@ function errText(e: HttpErrorResponse): string {
           <div class="st-theme ct-tile" [attr.data-on]="prefs.theme() === 'custom:' + c.id ? 1 : null">
             <button class="ct-wear" (click)="wear(c)">
               <span class="st-swatch">@for (s of swatch(c); track $index) { <i [style.background]="s"></i> }</span>
-              <span class="st-theme-name"><span class="ct-ellipsis">{{ c.name }}</span>@if (prefs.theme() === 'custom:' + c.id) { <em>● {{ 'on' | t }}</em> }</span>
+              <span class="st-theme-name"><span class="ct-ellipsis">{{ c.name }}</span>@if (prefs.theme() === 'custom:' + c.id) { <em>✓ {{ 'on' | t }}</em> }</span>
             </button>
             <span class="ct-by">@if (!c.mine) { {{ ('by' | t) + ' ' + (c.by?.name ?? '?') }} · }{{ (c.light ? 'Light' : 'Dark') | t }}</span>
             <span class="ct-acts">

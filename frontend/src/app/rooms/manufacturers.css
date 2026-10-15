@@ -59,7 +59,7 @@ td.mf-actcell { position: relative; white-space: nowrap; min-width: 96px; }
 .mf-table .mf-actcell { width: 136px; }
 .mf-pagenote { flex: none; }
 .mf-prow:hover .mf-rowacts, .mf-prow:focus-within .mf-rowacts { display: inline-flex; }
-.mf-prow[data-sel] td { background: var(--pressed); }
+.mf-prow[data-sel] .mf-namebtn { color: var(--ink-bright); font-weight: 700; }
 th.mf-selcol, td.mf-selcol { width: 38px; padding-right: 0; text-overflow: clip; }
 .mf-selcol input { vertical-align: middle; }
 .mf-hand { margin-left: 6px; font-weight: 400; }
@@ -160,7 +160,7 @@ section > .mf-stockform { padding: 6px 10px; border-bottom: 1px solid var(--line
 .mf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; align-content: start; }
 .mf-catalog .mf-grid { padding: 8px 10px; }
 .mf-grid[data-cols] { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
-.mf-card[data-on] { border-color: var(--marquee); box-shadow: 0 0 0 1px var(--marquee); }
+.mf-card[data-on] .mf-card-name { color: var(--ink-bright); font-weight: 700; }
 .mf-card[data-on] .mf-card-img::after { content: '✓'; position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; display: grid;
   place-items: center; font-size: 12px; color: var(--ink-on-accent); background: var(--marquee); border-radius: 4px; }
 .mf-cols { margin-right: 6px; }
@@ -229,7 +229,9 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
 .mf-dimg:has(.mf-noimg) { background: var(--surface-2); }
 .mf-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
 .mf-thumbs button { width: 58px; height: 58px; padding: 0; background: #fff; border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
-.mf-thumbs button.on, .mf-thumbs button:hover { border-color: var(--accent); }
+.mf-thumbs button:hover { border-color: var(--accent); }
+/* The picture shown is told by the others standing back, not by a frame. */
+.mf-thumbs button:not(.on) img { opacity: .55; }
 .mf-thumbs img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
 .mf-dinfo { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-right: 26px; }
 .mf-dseller { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }

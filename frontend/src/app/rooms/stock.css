@@ -99,7 +99,7 @@
 .inv-table { table-layout: auto; }
 .inv-table tbody tr:not(.inv-grow) { cursor: pointer; }
 .inv-table tbody tr:not(.inv-grow):hover td { background: var(--hover); }
-.inv-table tbody tr[data-sel] td { background: var(--pressed); }
+.inv-table tbody tr[data-sel] .inv-name b { color: var(--ink-bright); font-weight: 700; }
 .inv-table td { vertical-align: middle; }
 th.inv-sort { cursor: pointer; user-select: none; white-space: nowrap; }
 th.inv-sort:hover { color: var(--ink); }

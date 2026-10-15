@@ -336,7 +336,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fw-pins tr { cursor: pointer; }
     .fw-pins tbody tr:hover { background: var(--hover); }
-    .fw-pins tr[data-on] { background: var(--accent-deep); }
+    .fw-pins tr[data-on] td { color: var(--ink-bright); font-weight: 600; }
     .fw-gpio { font-family: 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
     .fw-gpio b { color: var(--ink); font-weight: 500; }
     .fw-net { font-family: 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
@@ -358,7 +358,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
                cursor: pointer; min-width: 0; }
     .fw-file.fw-top { padding-left: 8px; }
     .fw-file:hover { background: var(--hover); }
-    .fw-file[data-on] { background: var(--accent-deep); }
+    .fw-file[data-on] { color: var(--ink-bright); font-weight: 600; }
     .fw-file > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fw-gen { flex: none; margin-left: auto; padding: 0 5px; border-radius: 3px; font: 10px/15px system-ui, sans-serif;
               color: var(--accent); background: var(--surface-2); border: 1px solid var(--line); }

@@ -61,7 +61,7 @@ function kindOf(name: string): string {
     .dmc-row { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 8px 3px calc(8px + var(--layout-depth, 0) * 12px);
                font: inherit; font-size: 12px; color: var(--ink); text-align: left; background: none; border: 0; cursor: pointer; }
     .dmc-row:hover { background: var(--hover); }
-    .dmc-row[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+    .dmc-row[data-on] { color: var(--ink-bright); font-weight: 600; }
     .dmc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .dmc-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dmc-row svg { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -94,7 +94,7 @@ function kindOf(name: string): string {
     .dmc-act { flex: none; height: 24px; padding: 0 8px; font-size: 11.5px; color: var(--ink-dim); background: none; border: 1px solid var(--line);
                border-radius: 4px; cursor: pointer; white-space: nowrap; }
     .dmc-act:hover { color: var(--ink); background: var(--hover); }
-    .dmc-act[data-on] { color: var(--accent); border-color: var(--accent); }
+    .dmc-act[data-on] { color: var(--ink-bright); font-weight: 600; }
     .dmc-act:focus-visible, .dmc-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .dmc-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
     .dmc-lines { min-width: 100%; width: max-content; padding: 6px 0; font: 12px/1.55 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }

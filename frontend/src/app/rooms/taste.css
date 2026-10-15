@@ -376,9 +376,9 @@ td.tsh-scol { width: 130px; white-space: nowrap; }
   width: auto; height: auto; padding: 0 7px; font-size: 10.5px; line-height: 16px; border: 1px solid var(--line); border-radius: 8px;
   color: var(--ink-dim); white-space: nowrap;
 }
-.tst-chip .tst-spec[data-on] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tst-chip .tst-spec[data-on] { color: var(--ink-bright); font-weight: 600; }
 .tst-chip .tst-spec:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
-.tst-chip .tst-spec[data-on]:hover:not(:disabled) { color: var(--ink-bright); background: var(--accent-deep); }
+.tst-chip .tst-spec[data-on]:hover:not(:disabled) { color: var(--ink-bright); }
 .tst-chip .tst-spec em { font-style: normal; opacity: .7; }
 .tst-chip .tst-spec:disabled { cursor: default; }
 

@@ -52,7 +52,7 @@
 .dmv-drow { width: 100%; padding: 3px 4px; margin: 0 -4px; font: inherit; color: inherit; text-align: left; background: none; border: 0;
   border-radius: 4px; cursor: pointer; box-sizing: content-box; }
 .dmv-drow:hover { background: var(--hover); }
-.dmv-drow[data-on] { background: var(--accent-deep); }
+.dmv-drow[data-on] { color: var(--ink-bright); font-weight: 600; }
 .dmv-srow { grid-template-columns: 70px minmax(0, 1fr) 80px; }
 .dmv-srow .tsh-dname { font-size: 11px; }
 .dmv-sfig { font: 11px 'IBM Plex Mono', ui-monospace, monospace; text-align: right; color: var(--ink-dim); }
@@ -105,7 +105,7 @@ button.dmv-twist:hover { color: var(--ink); background: var(--hover); }
   font-size: 12px; color: var(--ink); text-align: left; background: none; border: 0; border-radius: 3px; cursor: pointer; }
 .dmv-node:hover:not(:disabled) { background: var(--hover); }
 .dmv-node:disabled { cursor: default; }
-.dmv-node[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.dmv-node[data-on] { color: var(--ink-bright); font-weight: 700; }
 .dmv-node:not([data-leaf]) { font-weight: 600; }
 .dmv-nodeico { flex: none; width: 8px; height: 8px; border: 1.5px solid var(--ink-dim); border-radius: 2px; }
 .dmv-node[data-leaf] .dmv-nodeico { border-radius: 50%; background: var(--series-1); border-color: var(--series-1); }

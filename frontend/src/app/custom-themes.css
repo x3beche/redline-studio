@@ -2,7 +2,7 @@
    built-in ones; the editor is a plain block of fields. */
 
 .ct-push { margin-left: auto; }
-.tcv-btn.on { background: var(--hover); }
+.tcv-btn.on { color: var(--ink-bright); font-weight: 600; }
 
 /* ---- import ---- */
 .ct-import { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
