@@ -142,7 +142,7 @@ def test_page_one_has_the_big_header_and_the_others_the_compact_one():
 def test_the_document_page_puts_the_extra_rows_on_one_line_and_floats_a_right_figure():
     page = pdfdoc.doc_page_html(pdfdoc.Doc(title="T", meta=[("Models", "m1"), ("Empty", "")]), "<p>x</p>")
     assert '<p class="doc-meta"><b>Models</b> m1</p>' in page and "Empty" not in page
-    assert "@page :first { margin-top: 59mm; }" in page and '<div class="frame"></div><main>' in page
+    assert "@page :first { margin-top: __WB_TOP1__; }" in page and '<div class="frame"></div><main>' in page
     assert ".frame { position: fixed;" in page
     out = pdfdoc.md_html('![Clock path](files:abc123 "right")', {"files:abc123": "data:image/png;base64,AA=="})
     assert out.startswith('<figure class="right"><img') and "<figcaption>Clock path</figcaption>" in out
@@ -299,6 +299,61 @@ def _frame_ok(pdf_bytes: bytes) -> list[bool]:
         return out
     finally:
         pdf.close()
+
+
+def _overlaps(pdf_bytes: bytes) -> list[int]:
+    """Per page: how many pairs of text lines on different baselines are drawn
+    over each other (a value over its label), and how many text boxes lie
+    outside the frame (5 mm from the edges)."""
+    import pypdfium2 as pdfium
+    mm = 72 / 25.4
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        out = []
+        for i in range(len(pdf)):
+            page = pdf[i]
+            w, h = page.get_size()
+            tp = page.get_textpage()
+            rects = [tp.get_rect(k) for k in range(tp.count_rects())]
+            bad = sum(1 for l, b, r, t in rects if l < 5 * mm or r > w - 5 * mm or b < 5 * mm or t > h - 5 * mm)
+            for a in range(len(rects)):
+                l, b, r, t = rects[a]
+                for L, B, R, T in rects[a + 1:]:
+                    if min(r, R) - max(l, L) > 1 and min(t, T) - max(b, B) > 1 and abs(b - B) > 1.5:
+                        bad += 1
+            out.append(bad)
+        return out
+    finally:
+        pdf.close()
+
+
+LONG = "Arducam UB0228 Canon EOS → C-Mount lens adaptörü ve 1/2.3 inç sensör için uzatma halkası seti"
+
+
+@pytest.mark.skipif(not _engine(), reason="no docker or no Chromium image to print with")
+@pytest.mark.parametrize("lang", ["en", "tr"])
+def test_long_values_wrap_in_their_cells_and_the_rows_grow(lang):
+    fields = {"number": "FC-STM001-REV-B-DRAFT-2026-10-15-0001", "revision": "B3 draft for review",
+              "date": "15 October 2026 (draft)", "applicability": LONG,
+              "prepared": "Firmware team, embedded systems group, Istanbul office",
+              "subject": "Clock configuration of the STM32F407 with HAL drivers, the PLL from the 8 MHz crystal",
+              "author": "Emir Pehlevan and the whole firmware review board",
+              "project": "iot-fan-controller-second-generation-prototype"}
+    doc = pdfdoc.Doc(title="A very long title about the clock tree of the STM32F407 and the HAL drivers that set it up",
+                     body=SAMPLE, lang=lang, **fields)
+    made = run(pdfdoc.make(doc))
+    assert made.pages == 2
+    assert _overlaps(made.pdf) == [0, 0]
+    assert _frame_ok(made.pdf) == [True, True]
+    one, two = _texts(made.pdf)
+    squash = lambda t: re.sub(r"[\s\-\ufffe\u00ad]", "", t)   # a line broken at a hyphen
+    for k, v in fields.items():                       # every value whole: wrapped, never cut
+        if k == "subject":                            # set in capitals, the document's (i -> İ in Turkish)
+            v = (v.replace("i", "İ") if lang == "tr" else v).upper()
+        assert squash(v) in squash(one), k
+    for k in ("number", "revision", "project"):       # the footer's cells on every page
+        assert squash(fields[k]) in squash(two), k
+    assert "Cost per board" in one and "Appendix" in two
 
 
 def _texts(pdf_bytes: bytes) -> list[str]:

@@ -743,7 +743,7 @@ DOC_CSS = """
 :root { --ink: #000; --ink-dim: #333; --ink-faint: #666; --line: #000; --line-soft: #bbb; --wash: #f2f2f2;
   --accent: #000; }
 body { font-size: 10pt; line-height: 1.5; padding: 0 7mm; }
-@page :first { margin-top: 59mm; }   /* FIRST_TOP */
+@page :first { margin-top: __WB_TOP1__; }   /* measured by the printer (print_pdf `measure`) */
 /* The frame's side rules, on every page (a fixed box repeats on each printed page): from inside the
    header table down into the footer table, on the tables' outer edges - one box with them. */
 .frame { position: fixed; top: 0; height: 300mm; left: 1.5pt; right: .6pt; border-left: .8pt solid #000;
@@ -780,13 +780,13 @@ _DOC_HEAD_CSS = ("<style>{faces}"
                  "border-top:.8pt solid #000;border-left:.8pt solid #000}}"
                  "td{{border:0;border-right:.8pt solid #000;border-bottom:.8pt solid #000;padding:0;"
                  "vertical-align:top;overflow:hidden}}"
-                 ".f{{position:relative;height:9mm}}"
+                 ".f{{height:9mm;padding:2.4pt 5pt 3pt 4pt}}"
                  ".box{{display:flex;flex-direction:column}}"
                  ".box table{{flex:none}}"
                  ".rail{{flex:1;border-left:.8pt solid #000;border-right:.8pt solid #000}}"
-                 ".f .l{{position:absolute;left:4pt;top:2.6pt;font-size:6.6pt;color:#000}}"
-                 ".f .v{{position:absolute;right:5pt;bottom:3pt;left:4pt;text-align:right;font-weight:700;"
-                 "font-size:8.4pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}"
+                 ".f .l{{display:block;font-size:6.6pt;line-height:1.2;color:#000}}"
+                 ".f .v{{display:block;margin-top:1.6pt;text-align:right;font-weight:700;font-size:8.4pt;"
+                 "line-height:1.2;overflow-wrap:anywhere}}"
                  ".logo{{text-align:center;vertical-align:middle}}"
                  ".logo svg,.logo img{{display:block;margin:auto}}"
                  ".logo img{{max-width:86%;max-height:86%;object-fit:contain}}"
@@ -795,11 +795,11 @@ _DOC_HEAD_CSS = ("<style>{faces}"
                  "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}}"
                  ".sub{{height:10.5mm}}"
                  ".sub .v{{font-size:9pt}}"
-                 ".subj .v{{text-transform:uppercase;text-align:left;left:4pt}}"
-                 ".f .v.s{{font-size:7.2pt;line-height:1.12;white-space:normal;bottom:2.4pt;"
-                 "display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}}"
-                 ".c td{{height:8mm;vertical-align:middle;padding:0 5pt;white-space:nowrap;overflow:hidden;"
-                 "text-overflow:ellipsis;font-size:7.6pt}}"
+                 ".subj .v{{text-transform:uppercase;text-align:left}}"
+                 ".f .v.s{{font-size:7.5pt}}"
+                 ".c td{{height:8mm;vertical-align:middle;padding:2pt 5pt;font-size:7.6pt;line-height:1.2;"
+                 "overflow-wrap:anywhere}}"
+                 ".c .t{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}"
                  ".c .logo{{padding:0}}"
                  ".c .t{{font-weight:700;text-transform:uppercase;font-size:8pt}}"
                  ".c b{{font-weight:700}}"
@@ -808,15 +808,19 @@ _DOC_HEAD_CSS = ("<style>{faces}"
 # The frame (header table, side rules, footer table) is FRAME from the paper's edges; the text 7 mm
 # inside it (the body's padding); page 1's top margin is in DOC_CSS (@page :first).
 FRAME = "5mm"
-FIRST_TOP = "59mm"
-DOC_MARGIN = {"top": "20mm", "bottom": "21mm", "left": FRAME, "right": FRAME}
+# The headers' and the footer's rows grow with what is in them, so the margins that hold them are
+# measured by the printer before it prints: each template's table, laid out at the paper's width,
+# plus FRAME above (below) it and GAP to the text. Until then they are these placeholders.
+GAP = "7mm"
+FIRST_TOP = "__WB_TOP1__"
+DOC_MARGIN = {"top": "__WB_TOP__", "bottom": "__WB_BOTTOM__", "left": FRAME, "right": FRAME}
 
 
 def _cell(label: str, value: str, cls: str = "f", span: int = 1, room: int = 0) -> str:
     """A labelled cell: the label small at the top left, the value bold at the
     bottom right; a value longer than `room` characters is set smaller."""
     sp = f' colspan="{span}"' if span > 1 else ""
-    small = " s" if room and len(html.unescape(value)) > room else ""
+    small = " s" if room and len(re.sub(r"<[^>]+>", "", html.unescape(value))) > room else ""
     return (f'<td class="{cls}"{sp}><span class="l">{_e(label)}</span>'
             f'<span class="v{small}">{value}</span></td>')
 
@@ -834,9 +838,9 @@ def first_header_html(doc: Doc) -> str:
             f'<td class="ttl" rowspan="4"><div style="font-size:{_title_size(f["title"])}">{_e(f["title"])}</div></td>'
             + _cell(lab["number"], _e(f["number"]), room=13) + _cell(lab["page"], pages) + "</tr>"
             "<tr>" + _cell(lab["written"], _e(f["date"]), room=15) + _cell(lab["revision"], _e(f["revision"]), room=15)
-            + "</tr><tr>" + _cell(lab["applicability"], _e(f["applicability"]), span=2, room=26) + "</tr>"
-            "<tr>" + _cell(lab["prepared"], _e(f["prepared"]), span=2, room=26) + "</tr>"
-            "<tr>" + _cell(lab["subject"], _e(f["subject"]), "f sub subj", 2)
+            + "</tr><tr>" + _cell(lab["applicability"], _e(f["applicability"]), span=2, room=24) + "</tr>"
+            "<tr>" + _cell(lab["prepared"], _e(f["prepared"]), span=2, room=24) + "</tr>"
+            "<tr>" + _cell(lab["subject"], _e(f["subject"]), "f sub subj", 2, room=60)
             + _cell(lab["author"], _e(f["author"]), "f sub", 2, room=30)
             + "</tr></table><div class=\"rail\"></div></div>")
 
@@ -912,6 +916,26 @@ process.stdin.on('end', async () => {
     const j = JSON.parse(Buffer.concat(parts).toString('utf8'));
     browser = await puppeteer.launch({ headless: 'new',
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none'] });
+    if (j.measure) {
+      // Each template's table laid out at the paper's width: its height, plus the frame's
+      // distance from the edge and the gap to the text, is the margin that holds it.
+      const m = await browser.newPage();
+      await m.setRequestInterception(true);
+      m.on('request', r => { const u = r.url(); (u.startsWith('data:') || u === 'about:blank') ? r.continue() : r.abort(); });
+      await m.setViewport({ width: Math.round(j.measure.width_px), height: 1200 });
+      const sub = {};
+      for (const [k, key] of [['first', '__WB_TOP1__'], ['rest', '__WB_TOP__'], ['foot', '__WB_BOTTOM__']]) {
+        await m.setContent('<style>html,body{margin:0}</style>' + j.measure[k], { waitUntil: 'load', timeout: 60000 });
+        await m.evaluate(() => document.fonts.ready);
+        const h = await m.evaluate(() => { const t = document.querySelector('.h table'); return t ? t.getBoundingClientRect().height : 0; });
+        sub[key] = (h * 25.4 / 96 + j.measure.frame_mm + j.measure.gap_mm).toFixed(2) + 'mm';
+      }
+      await m.close();
+      const fill = s => s.replace(/__WB_(TOP1|TOP|BOTTOM)__/g, x => sub[x]);
+      j.html = fill(j.html);
+      for (const p of j.passes) { p.header = fill(p.header); p.footer = fill(p.footer); }
+      for (const k of Object.keys(j.margin)) j.margin[k] = fill(j.margin[k]);
+    }
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on('request', r => { const u = r.url(); (u.startsWith('data:') || u === 'about:blank') ? r.continue() : r.abort(); });
@@ -947,6 +971,12 @@ def docker_argv(name: str) -> list[str]:
             "--workdir", "/usr/src/app", "--entrypoint", "node", IMAGE, "-e", SCRIPT]
 
 
+def _px(length: str) -> float:
+    """A CSS length in mm or in as CSS px (96 to the inch)."""
+    n = float(length[:-2])
+    return n * 96 / 25.4 if length.endswith("mm") else n * 96
+
+
 def _passes(out: bytes) -> list[bytes]:
     got, i = [], 0
     while i + 10 <= len(out):
@@ -959,14 +989,20 @@ def _passes(out: bytes) -> list[bytes]:
 
 
 async def print_pdf(page: str, header: str, footer: str, size: str = "A4", margin: dict | None = None,
-                    rest: str | None = None) -> bytes:
+                    rest: str | None = None, measure: dict | None = None) -> bytes:
     """The page printed by headless Chromium in its container. With `rest`,
-    page 1 has `header` and pages 2- have `rest` (two prints of one layout, joined)."""
+    page 1 has `header` and pages 2- have `rest` (two prints of one layout, joined).
+    `measure` ({first, rest, foot} templates, frame_mm, gap_mm): the placeholders
+    __WB_TOP1__, __WB_TOP__ and __WB_BOTTOM__ in the page, the templates and the
+    margins become the heights those templates' tables are laid out at, plus
+    frame_mm and gap_mm."""
     passes = ([{"header": header, "footer": footer}] if rest is None else
               [{"header": header, "footer": footer, "ranges": "1"}, {"header": rest, "footer": footer, "ranges": "2-"}])
     width, height = PAPER.get(size, PAPER["A4"])
+    if measure:
+        measure = {**measure, "width_px": _px(width)}
     payload = json.dumps({"html": page, "passes": passes, "margin": margin or MARGIN,
-                          "width": width, "height": height}).encode()
+                          "width": width, "height": height, "measure": measure}).encode()
     name = "redline-pdf-" + secrets.token_hex(4)
     async with _RUNNING:
         try:
@@ -1064,6 +1100,8 @@ async def make(doc: Doc, db=None) -> Made:
     if doc.theme == "simple":
         pdf = await print_pdf(page_html(doc, body), header_html(doc), footer_html(doc), doc.size)
     else:
-        pdf = await print_pdf(doc_page_html(doc, body), first_header_html(doc), doc_footer_html(doc), doc.size,
-                              DOC_MARGIN, rest=compact_header_html(doc))
+        first, rest, foot = first_header_html(doc), compact_header_html(doc), doc_footer_html(doc)
+        pdf = await print_pdf(doc_page_html(doc, body), first, foot, doc.size, dict(DOC_MARGIN), rest=rest,
+                              measure={"first": first, "rest": rest, "foot": foot,
+                                       "frame_mm": float(FRAME[:-2]), "gap_mm": float(GAP[:-2])})
     return Made(pdf=pdf, pages=page_count(pdf), missing=missing)
