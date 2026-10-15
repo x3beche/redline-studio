@@ -1,4 +1,5 @@
 import { ToolsUsage } from './tools-usage';
+import { Compare } from './compare';
 import { navParams } from '../nav';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
@@ -27,7 +28,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [EmptyState, Skeleton, CountUp, BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
+  imports: [Compare, EmptyState, Skeleton, CountUp, BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -199,6 +200,10 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
       </div>
     }
+
+    <!-- COMPARE: this period against the one before it (rooms/compare.ts) -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'compare', title: 'Compare', sub: 'this month, week or chosen days against the period before, of the same length' }" />
+    @if (open('compare')) { <app-compare /> }
 
     <!-- BUDGET: this calendar month (UTC) against the budgets in Settings > Costs, whatever the range -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'budget', title: 'Budget', sub: budgetSub(d) }" />

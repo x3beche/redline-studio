@@ -4826,6 +4826,22 @@ const TR: Record<string, string> = {
   'Found': 'Bulunan',
   'No setting matches.': 'Eşleşen ayar yok.',
   'Part category': 'Parça kategorisi',
+  // Analytics: Compare (rooms/compare.ts)
+  'Days…': 'Günler…',
+  'Compare': 'Karşılaştır',
+  'First day': 'İlk gün',
+  'Could not read the comparison': 'Karşılaştırma okunamadı',
+  'Figure': 'Ölçü',
+  'LLM spend': 'LLM harcaması',
+  'input': 'girdi',
+  'output': 'çıktı',
+  'Running cost': 'İşletme maliyeti',
+  'Compute time': 'İşlem süresi',
+  'Energy': 'Enerji',
+  'Agent questions': 'Ajan soruları',
+  'this month, week or chosen days against the period before, of the same length': 'bu ay, bu hafta ya da seçilen günler, aynı uzunluktaki önceki dönemin karşısında',
+  // Analytics: Compare, the table's head (rooms/compare.ts)
+  'This period': 'Bu dönem',
 };
 
 export function t(text: string): string {
