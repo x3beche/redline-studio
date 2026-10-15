@@ -43,7 +43,6 @@
 .tk-danger:hover:not(:disabled) { border-color: var(--danger); }
 .tk-detail-row > td { max-width: 0; padding: 0; white-space: normal; background: var(--surface-2); }
 .tk-detail { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px 28px; }
-.tk-detail .st-tile { background: var(--surface); }
 .tk-detail .st-chart { background: var(--surface); }
 
 @media (max-width: 768px) {
