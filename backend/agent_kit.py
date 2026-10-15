@@ -77,6 +77,7 @@ pillow>=10
 websockets>=12
 pypdfium2==5.14.0
 cryptography>=43
+python-multipart>=0.0.9
 """
 
 CLAUDE_MD = """\
@@ -163,6 +164,14 @@ def _imports(path: Path, package: str) -> list[str]:
                 out.append(sub if _modfile(sub) else base)
         elif isinstance(n, ast.Import):
             out += [a.name for a in n.names if a.name.startswith("backend")]
+        elif (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "_MODULES" for t in n.targets)
+              and isinstance(n.value, (ast.Tuple, ast.List))):
+            # Siblings loaded by name (`_MODULES = ("catalog_lcsc", ...)` then
+            # import_module(f"{__package__}.{name}"), as catalog_builtin does):
+            # no import statement names them, so they are added here, or the
+            # kit ships without them and `revisions.py files` fails on them.
+            out += [f"{package}.{e.value}" for e in n.value.elts
+                    if isinstance(e, ast.Constant) and isinstance(e.value, str)]
     return out
 
 

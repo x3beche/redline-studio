@@ -148,3 +148,37 @@ def test_last_use_is_written_at_most_once_a_minute(db):
     finally:
         coll.update_one = real
     assert len(writes) == 1
+
+
+def test_every_module_in_the_kit_imports_from_the_kit_alone(tmp_path):
+    """Built and unpacked as a person's computer gets it, every backend
+    module of the kit imports with only the kit on the path. The kit once
+    left out the catalog modules catalog_builtin loads by name (and the
+    form-data package FastAPI needs for an upload route), so `revisions.py
+    files` failed on people's machines."""
+    import io
+    import subprocess
+    import sys
+    import tarfile
+    from backend import agent_kit
+
+    _, blob = agent_kit.build()
+    tarfile.open(fileobj=io.BytesIO(blob)).extractall(tmp_path, filter="data")
+    kit = tmp_path / "redline-agent-kit"
+    assert (kit / "backend" / "catalog_lcsc.py").exists()
+    assert "python-multipart" in (kit / "requirements.txt").read_text()
+    code = (
+        "import importlib, pathlib, sys\n"
+        f"sys.path[:] = [p for p in sys.path if p not in ('', {str(agent_kit.ROOT)!r})]\n"
+        "sys.path.insert(0, '.')\n"
+        "bad = []\n"
+        "for p in sorted(pathlib.Path('backend').rglob('*.py')):\n"
+        "    m = '.'.join(p.with_suffix('').parts).replace('.__init__', '')\n"
+        "    try:\n"
+        "        importlib.import_module(m)\n"
+        "    except Exception as e:\n"
+        "        bad.append(f'{m}: {type(e).__name__}: {e}')\n"
+        "print('\\n'.join(bad))\n"
+        "sys.exit(1 if bad else 0)\n")
+    r = subprocess.run([sys.executable, "-c", code], cwd=kit, capture_output=True, text=True, timeout=180)
+    assert r.returncode == 0, r.stdout + r.stderr
