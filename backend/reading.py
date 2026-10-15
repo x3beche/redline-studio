@@ -94,7 +94,8 @@ def source_hash(parts: list) -> str:
 
 
 def messages(text: str, lang: str) -> list[dict]:
-    return [{"role": "system", "content": PROMPT.format(lang=lang)},
+    from . import prompts
+    return [{"role": "system", "content": prompts.text("reading", lang=lang)},
             {"role": "user", "content": text}]
 
 

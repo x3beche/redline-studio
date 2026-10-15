@@ -34,7 +34,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
-from . import access, actors, cc_chat, llm, scope
+from . import access, actors, cc_chat, llm, prompts, scope
 
 router = APIRouter(prefix="/api/cc/ideas")
 
@@ -88,8 +88,10 @@ def settings() -> dict:
 
 def _sig(conf: dict) -> str:
     """What the kept set was written under: another count, or the titles
-    in or out, is a reason to write it again."""
-    return f"{conf['count']}:{int(conf['chats'])}"
+    in or out, or another wording of the prompt (Settings > LLM settings >
+    Prompts), is a reason to write it again."""
+    mark = prompts.stamp(("chat_ideas",))
+    return f"{conf['count']}:{int(conf['chats'])}" + (f":{mark}" if mark else "")
 
 
 def _key(lang: str) -> str:
@@ -261,7 +263,7 @@ async def generate(db, lang: str, key: str) -> list[dict] | None:
         await raw[COLL].update_one({"_id": key}, {"$set": {"failed_at": now, "error": "the workspace is empty",
                                                            "ws": scope.current()}}, upsert=True)
         return None
-    system = PROMPT.format(n=conf["count"], chars=MAX_CHARS, lang=LANGS.get(lang, "English"))
+    system = prompts.text("chat_ideas", n=conf["count"], chars=MAX_CHARS, lang=LANGS.get(lang, "English"))
     error = None
     items: list[dict] = []
     try:

@@ -66,7 +66,7 @@ import time
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from . import llm
+from . import llm, prompts
 
 router = APIRouter(prefix="/api/voice")
 
@@ -432,7 +432,7 @@ async def transcribe_bytes(b: bytes, *, lang: str = "auto", purpose: str = "chat
         raise NotReady(str(exc)) from exc
     await takes_audio(provider, model)
     messages = [{"role": "user", "content": [
-        {"type": "text", "text": f"{PROMPT}\n\n{HINTS[lang]}"}, audio_part(b, fmt)]}]
+        {"type": "text", "text": f"{prompts.text('voice', nothing=NOTHING)}\n\n{HINTS[lang]}"}, audio_part(b, fmt)]}]
     d = await llm.complete(messages, provider=provider, model=model, max_tokens=MAX_TOKENS,
                            temperature=0, timeout=TIMEOUT)
     if db is not None:

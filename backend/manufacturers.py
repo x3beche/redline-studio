@@ -73,7 +73,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from . import access, actors, llm
+from . import access, actors, llm, prompts
 from . import catalog_facts as cf
 from . import catalog_builtin
 from .taste import CHARS_PER_TOKEN, Stopped, Tracker, _closed, _pid_alive, _seconds
@@ -1852,8 +1852,10 @@ async def extract(db, site: dict, track: Tracker) -> dict:
     failures = []
     for n, chunk in enumerate(parts, 1):
         sid = f"ask:{n}"
-        user = f"Website: {site['domain']}\n\n" + (f"{ONLY_PROMPT}\n\n" if whole else "") + chunk
-        chars = len(EXTRACT_PROMPT) + len(user)
+        # The texts as Settings > LLM settings > Prompts has them (backend/prompts.py).
+        system = prompts.text("manufacturer")
+        user = f"Website: {site['domain']}\n\n" + (f"{prompts.text('manufacturer_only')}\n\n" if whole else "") + chunk
+        chars = len(system) + len(user)
         await track.step(sid, kind="ask", n=n, of=len(parts), provider=prov, model=model, provider_name=pname,
                          prompt_chars=chars, tokens_est=chars // CHARS_PER_TOKEN, max_tokens=EXTRACT_TOKENS,
                          timeout=EXTRACT_TIMEOUT, pages=chunk.count("=== PAGE "), sent_at=_now())
@@ -1864,7 +1866,7 @@ async def extract(db, site: dict, track: Tracker) -> dict:
             await track.step(sid, provider=prov, model=model, provider_name=llm.PROVIDERS.get(prov, {}).get("name", prov),
                              attempt=attempt)
             try:
-                d = await llm.complete([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": user}],
+                d = await llm.complete([{"role": "system", "content": system}, {"role": "user", "content": user}],
                                        job=JOB, max_tokens=EXTRACT_TOKENS, temperature=0.1, timeout=EXTRACT_TIMEOUT)
                 break
             except asyncio.CancelledError:

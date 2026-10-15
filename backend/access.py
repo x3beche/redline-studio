@@ -240,6 +240,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("*", "/api/themes(/{})?", "view"),
     # LLM settings: the keys and the models are the server's settings
     ("PUT", "/api/llm/settings", "settings"),
+    # ...and so are the prompts (backend/prompts.py); reading them and the
+    # Chat's preview is anyone's
+    ("PUT", "/api/llm/prompts/{}", "settings"),
+    ("DELETE", "/api/llm/prompts/{}", "settings"),
     ("POST", "/api/llm/test", "settings"),
     ("PUT", "/api/proxy/settings", "settings"),
     ("PUT", "/api/proxy/routes", "settings"),           # each lookup's order of routes (backend/netroutes.py)

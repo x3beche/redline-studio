@@ -193,7 +193,9 @@ async def load(db) -> dict:
         if not _loaded:
             _load_error = f"{type(exc).__name__}: {str(exc)[:200]}"
         raise
-    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {})}
+    # `prompts`: the owner's wording of the prompts (backend/prompts.py).
+    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {}),
+             "prompts": dict(doc.get("prompts") or {})}
     _loaded, _load_error = True, None
     return _conf
 

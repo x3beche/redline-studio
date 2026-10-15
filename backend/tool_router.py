@@ -117,7 +117,8 @@ async def pick(task: str, catalog: list[dict], limit: int = 3,
         return {"picks": keyword_picks(task, catalog, limit), "method": "keywords",
                 "tools_seen": len(catalog), "reason": "no model key configured"}
     index, seen = index_for(task, catalog)
-    messages = [{"role": "system", "content": SYSTEM},
+    from . import prompts
+    messages = [{"role": "system", "content": prompts.text("router")},
                 {"role": "user", "content": f"Tools:\n{index}\n\nTask:\n{task}\n\nJSON:"}]
     try:
         payload = await summarise._post(messages, max_tokens=ANSWER, job="router")

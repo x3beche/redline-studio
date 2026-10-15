@@ -452,6 +452,70 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
     return text, False
 
 
+# ---------------------------------------------------------------- the system line
+
+def system_parts(head: str, memory: str, tools: dict | None = None, picked=None, on: dict | None = None) -> list[dict]:
+    """The system line an answer is sent, in its parts: the Chat's own
+    texts (Settings > LLM settings > Prompts, backend/prompts.py) and what
+    is filled in as it runs - the workspace memory, the tools sent, the
+    packages left out. `head` is cc_chat.history's system line."""
+    from . import cc_tools, prompts
+    main, steps = prompts.text("chat_system"), prompts.text("chat_steps")
+    if head == main + "\n\n" + steps:
+        parts = [{"kind": "prompt", "id": "chat_system", "text": main},
+                 {"kind": "prompt", "id": "chat_steps", "text": "\n\n" + steps}]
+    else:
+        parts = [{"kind": "prompt", "id": "chat_system", "text": head}]
+    if memory:
+        parts.append({"kind": "runtime", "id": "memory", "text": memory})
+    if tools:
+        lead = prompts.text("chat_tools")
+        note = prompts.tools_note(list(tools.values()))
+        parts.append({"kind": "prompt", "id": "chat_tools", "text": "\n\n" + lead})
+        parts.append({"kind": "runtime", "id": "tool_list", "text": note[len(lead):]})
+        more = cc_tools.note(picked, on or {}) if picked else ""
+        if more:
+            parts.append({"kind": "runtime", "id": "packages", "text": more})
+    return parts
+
+
+def system_line(head: str, memory: str, tools: dict | None = None, picked=None, on: dict | None = None) -> str:
+    """The system line as sent (system_parts, joined)."""
+    return "".join(p["text"] for p in system_parts(head, memory, tools, picked, on))
+
+
+async def preview(db, convo: list[dict], uid: str | None, mode: str = "auto") -> dict:
+    """The system line the conversation's next answer would be sent now,
+    in its parts, with the tools that would go with it - no model is
+    asked. `mode`: "auto" (the packages the line and the conversation
+    point to, as an answer picks them), "all" (every tool that is on) or
+    "none" (no tools)."""
+    import json
+
+    from . import cc_chat, cc_memory, cc_tools, chat_tools, prompts
+    convo = list(convo)
+    if not convo or convo[-1].get("role") != "user":
+        convo.append({"role": "user", "content": ""})        # the next line, its words not known yet
+    on = {} if mode == "none" else {t.name: t for t in await chat_tools.enabled(db, uid)}
+    picked = cc_tools.pick(convo, on) if on else None
+    if picked and mode == "all":
+        groups = {cc_tools.group_of(t) for n, t in on.items() if n not in cc_tools.CORE}
+        picked = cc_tools.Pick(groups=cc_tools._ordered(groups), names=set(on), all=True)
+    tools = {n: t for n, t in on.items() if n in picked.names} if picked else {}
+    if picked and not picked.all:
+        tools[cc_tools.MORE] = cc_tools.more_tool(on, tools, {})
+    memory = await cc_memory.block(db, "memory_write" in tools)
+    head = cc_chat.history(convo, None, tools=set(tools) if tools else None)[0]["content"]
+    parts = system_parts(head, memory, tools, picked, on)
+    text = "".join(p["text"] for p in parts)
+    specs = json.dumps([t.spec() for t in tools.values()], ensure_ascii=False)
+    return {"text": text, "chars": len(text), "tokens": prompts.tokens(text),
+            "parts": [{**p, "chars": len(p["text"]), "tokens": prompts.tokens(p["text"])} for p in parts],
+            "tools": list(tools), "tools_on": len(on), "packages": picked.groups if picked else [],
+            "all": bool(picked and picked.all), "tools_chars": len(specs) if tools else 0,
+            "tools_tokens": prompts.tokens(specs) if tools else 0}
+
+
 # ---------------------------------------------------------------- the runner
 
 async def run(gid: str, db=None) -> dict | None:
@@ -506,14 +570,13 @@ async def run(gid: str, db=None) -> dict | None:
         # The workspace's pinned memory ends the system line (backend/cc_memory.py).
         memory = await cc_memory.block(db, "memory_write" in tools)
         base = cc_chat.history(convo, images)
-        base = [{**base[0], "content": base[0]["content"] + memory}, *base[1:]] if memory else base
+        base = [{**base[0], "content": system_line(base[0]["content"], memory)}, *base[1:]]
         ctx = None
         if tools:
             ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
                                  actor=gen.get("actor") or {}, chat=gen.get("chat") or "")
             withcalls = cc_chat.history(convo, images, tools=set(tools))
-            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + memory + "\n\n" + chat_tools.note(list(tools.values()))
-                     + cc_tools.note(picked, on)},
+            msgs = [{**withcalls[0], "content": system_line(withcalls[0]["content"], memory, tools, picked, on)},
                     *withcalls[1:]]
         else:
             msgs = base
@@ -571,7 +634,10 @@ async def run(gid: str, db=None) -> dict | None:
 
     # The conversation the calls belong to: a provider that routes by it
     # keeps its start in the same cache (llm.SESSION).
-    llm.SESSION.set(gen.get("chat") or None)
+    # ...and a conversation whose prompts were changed in Settings is a
+    # new start (backend/prompts.py session).
+    from . import prompts
+    llm.SESSION.set(prompts.session(gen.get("chat")))
     task = asyncio.create_task(produce())
     stopped = False
     written = (0, 0, 0)

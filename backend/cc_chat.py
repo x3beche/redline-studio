@@ -71,7 +71,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, cc_context, cc_memory, ccgen, files_virtual, llm, scope
+from . import access, actors, cc_context, cc_memory, ccgen, files_virtual, llm, prompts, scope
 
 router = APIRouter(prefix="/api/cc")
 # The workspace's pinned memory, read and edited from the Chat (/api/cc/memory).
@@ -380,7 +380,8 @@ def history(msgs: list[dict], images: list[dict] | None = None, tools: set[str] 
         merged.pop(0)
     if images and merged and merged[-1]["role"] == "user":
         merged[-1]["content"] = [{"type": "text", "text": merged[-1]["content"]}, *images]
-    system = SYSTEM + ("\n\n" + STEPS_NOTE if stepped else "")
+    # The texts as Settings > LLM settings > Prompts has them (backend/prompts.py).
+    system = prompts.text("chat_system") + ("\n\n" + prompts.text("chat_steps") if stepped else "")
     return [{"role": "system", "content": system}] + merged
 
 
@@ -517,7 +518,7 @@ async def make_title(first: str, answer: str = "", whole: str = "") -> tuple[str
         try:
             prompt = whole or first[:2000] + (f"\n\n(The answer began: {answer[:600]})" if answer else "")
             d = await asyncio.wait_for(llm.complete(
-                [{"role": "system", "content": RETITLE_PROMPT if whole else TITLE_PROMPT},
+                [{"role": "system", "content": prompts.text("chat_retitle" if whole else "chat_title")},
                  {"role": "user", "content": prompt}],
                 job="summary", max_tokens=TITLE_TOKENS, temperature=0.2), TITLE_TIMEOUT)
             got = clean_title(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
@@ -951,7 +952,7 @@ async def retitle(cid: str) -> dict:
     prov, model = llm.route("summary")
     try:
         d = await asyncio.wait_for(llm.complete(
-            [{"role": "system", "content": RETITLE_PROMPT}, {"role": "user", "content": whole}],
+            [{"role": "system", "content": prompts.text("chat_retitle")}, {"role": "user", "content": whole}],
             job="summary", max_tokens=TITLE_TOKENS, temperature=0.2), TITLE_TIMEOUT)
     except asyncio.TimeoutError:
         raise HTTPException(504, f"the summary model ({model}) took longer than {TITLE_TIMEOUT:g} s - try again")

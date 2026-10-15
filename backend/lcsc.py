@@ -1660,17 +1660,24 @@ def place_of(doc: dict | None, facts: dict) -> tuple[str, str, str]:
     return rule[0], rule[1], "rules"
 
 
+# {places}: the drawer's groups and branches, one a line (Settings > LLM
+# settings > Prompts may word the rest otherwise; backend/prompts.py).
+CATEGORY_PROMPT = (
+    "You sort electronic parts into a parts drawer. Pick exactly one group and branch from "
+    "this list, spelled exactly as written:\n{places}\n"
+    'Answer with strict JSON only, no prose: {"group": "...", "branch": "..."}'
+)
+
+
 def _category_prompt(lcsc: str, facts: dict, name: str | None) -> list[dict]:
+    from . import prompts
     places = "\n".join(f"- {g} / {b}" for g, b in PLACES)
     part = "\n".join(f"{k}: {v}" for k, v in (
         ("LCSC", lcsc), ("MPN", facts.get("mpn")), ("Manufacturer", facts.get("maker")),
         ("Description", facts.get("description")), ("Category", ", ".join(facts.get("tags") or [])),
         ("Package", facts.get("package") or name), ("Designator prefix", facts.get("prefix"))) if v)
     return [
-        {"role": "system", "content":
-            "You sort electronic parts into a parts drawer. Pick exactly one group and branch from "
-            "this list, spelled exactly as written:\n" + places + "\n"
-            'Answer with strict JSON only, no prose: {"group": "...", "branch": "..."}'},
+        {"role": "system", "content": prompts.text("part_category", places=places)},
         {"role": "user", "content": part},
     ]
 

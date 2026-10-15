@@ -134,8 +134,9 @@ def build_messages(comment: str, png: bytes | None,
     if png:
         url = "data:image/jpeg;base64," + base64.b64encode(shrink_png(png)).decode()
         content.append({"type": "image_url", "image_url": {"url": url}})
+    from . import prompts
     return [{"role": "system",
-             "content": SYSTEM_PROMPT_EN if english else SYSTEM_PROMPT_TR},
+             "content": prompts.text("summary_en" if english else "summary_tr")},
             {"role": "user", "content": content}]
 
 
@@ -241,8 +242,9 @@ async def translate(text: str) -> tuple[str, dict]:
     if not text:
         return "", {}
     budget = min(TRANSLATE_TOKENS_MAX, max(TRANSLATE_TOKENS, len(text) // 2 + 200))
+    from . import prompts
     payload = await _post(
-        [{"role": "system", "content": TRANSLATE_PROMPT},
+        [{"role": "system", "content": prompts.text("translate")},
          {"role": "user", "content": text}], max_tokens=budget, job="translate")
     usage = _report_usage(payload)
     choice = payload["choices"][0]

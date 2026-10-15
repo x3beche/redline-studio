@@ -234,7 +234,8 @@ async def check(db, note: dict, track: taste.Tracker) -> dict:
     await track.phase("asking", provider=prov, model=model)
     await track.step("ask", kind="ask", provider=prov, model=model, images=len(refs) + len(pngs), items=len(items))
     try:
-        d = await llm.complete([{"role": "system", "content": CHECK_PROMPT}, {"role": "user", "content": user}],
+        from . import prompts
+        d = await llm.complete([{"role": "system", "content": prompts.text("taste_check")}, {"role": "user", "content": user}],
                                job=taste.JOB, provider=prov, model=model, max_tokens=CHECK_TOKENS,
                                temperature=0.1, timeout=CHECK_TIMEOUT)
     except asyncio.CancelledError:

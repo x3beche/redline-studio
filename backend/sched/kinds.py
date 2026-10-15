@@ -692,8 +692,9 @@ async def ask_chat(ctx: Ctx, p: dict) -> Outcome:
     tools = {n: mine[n] for n in p["tools"] if n in mine}
     missing = [n for n in p["tools"] if n not in mine]
     tctx = chat_tools.Ctx(db=ctx.db, vision=False, actor={**ctx.owner, "via": "schedule"}, chat="")
-    system = ASK_SYSTEM + (" Answer in Turkish." if ctx.lang == "tr" else "")
-    msgs = [{"role": "system", "content": system + ("\n\n" + chat_tools.note(list(tools.values())) if tools else "")},
+    from .. import prompts
+    system = prompts.text("scheduled_ask") + (" Answer in Turkish." if ctx.lang == "tr" else "")
+    msgs = [{"role": "system", "content": system + ("\n\n" + prompts.tools_note(list(tools.values())) if tools else "")},
             {"role": "user", "content": p["prompt"]}]
     text, used_all, steps = "", {}, []
     stopped = ""

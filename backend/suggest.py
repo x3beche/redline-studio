@@ -32,7 +32,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from . import cc_chat, chat, llm, scope
+from . import cc_chat, chat, llm, prompts, scope
 
 router = APIRouter(prefix="/api/suggest")
 
@@ -202,7 +202,8 @@ async def suggest(db, kind: str, ref: str) -> str | None:
     text, state = "", "failed"
     try:
         d = await asyncio.wait_for(llm.complete(
-            [{"role": "system", "content": PROMPT}, {"role": "user", "content": transcript(turns, s["ctx"])}],
+            [{"role": "system", "content": prompts.text("suggest")},
+             {"role": "user", "content": transcript(turns, s["ctx"])}],
             job=JOB, max_tokens=MAX_TOKENS, temperature=0.3, timeout=TIMEOUT), TIMEOUT + 5)
         text = clean(((d.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
         state = "done" if text else "empty"

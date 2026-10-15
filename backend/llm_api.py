@@ -111,6 +111,72 @@ async def test(body: TestIn) -> dict:
     return {"ok": True, "answer": text[:80], "ms": round((time.monotonic() - t0) * 1000)}
 
 
+# ---------------- the prompts (backend/prompts.py) ----------------
+# Reading them, and what the Chat would be sent, is anyone's; changing one
+# is the server's settings (backend/access.py), audited as the keys are.
+
+@router.get("/prompts")
+async def get_prompts() -> dict:
+    from . import prompts
+    return prompts.public()
+
+
+class PromptIn(BaseModel):
+    text: str = Field(max_length=60_000)
+
+
+@router.put("/prompts/{pid}")
+async def put_prompt(pid: str, body: PromptIn) -> dict:
+    from . import prompts
+    try:
+        entry, warn = await prompts.save(_db(), pid, body.text, actors.current())
+    except KeyError as exc:
+        raise HTTPException(404, f"no prompt {pid!r}") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    what = f"prompt {pid} " + (f"overridden ({entry['chars']} characters)" if entry["override"] else "back to the default")
+    await actors.audit(_db(), "settings", "llm", {"changed": [what], "prompt": pid})
+    return {**entry, "warnings": warn}
+
+
+@router.delete("/prompts/{pid}")
+async def delete_prompt(pid: str) -> dict:
+    from . import prompts
+    try:
+        was = prompts.override(pid)
+        entry = await prompts.reset(_db(), pid)
+    except KeyError as exc:
+        raise HTTPException(404, f"no prompt {pid!r}") from exc
+    if was:
+        await actors.audit(_db(), "settings", "llm", {"changed": [f"prompt {pid} back to the default"], "prompt": pid})
+    return entry
+
+
+@router.get("/prompts/preview")
+async def prompt_preview(chat: str = "", tools: str = "auto", line: str = "") -> dict:
+    """The system line the Chat would send now: for a conversation's next
+    answer (`chat`), or a new conversation's first; with `line` as the
+    next line's words. Nothing is asked of a model."""
+    from . import cc_chat, ccgen, prompts
+    if tools not in ("auto", "all", "none"):
+        raise HTTPException(400, "tools is auto, all or none")
+    convo: list[dict] = []
+    doc: dict = {}
+    if chat:
+        doc = await cc_chat._load(chat)
+        convo = list(doc.get("messages") or [])
+    if line.strip():
+        convo.append({"role": "user", "content": line[:4000]})
+    uid = (actors.current() or {}).get("id")
+    out = await ccgen.preview(cc_chat._db(), convo, uid, tools)
+    try:
+        prov, model = cc_chat._pick(doc, None, None)
+    except Exception:                                  # noqa: BLE001 - the page names no model then
+        prov, model = "", ""
+    return {**out, "chat": chat or None, "title": doc.get("title") or None, "provider": prov, "model": model,
+            "session": prompts.session(chat or None)}
+
+
 # ---------------- usage, for Settings > LLM ----------------
 
 def _buckets(days: int) -> tuple[int, int, int, float]:

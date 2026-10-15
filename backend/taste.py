@@ -1359,8 +1359,10 @@ async def extract(db, kind: str, ref: str, track: Tracker | None = None) -> dict
         notices.append(f"the renders were read by {model}: the Taste extraction model does not read images")
     if kind in ("model", "folder") and not pics:
         notices.insert(0, "extracted from text" + (" and measurements" if seen["measures"] else "") + " only")
-    system = (EXTRACT_PROMPT + (FOLDER_PROMPT if whole else "")
-              + (LOOK_PROMPT if pics else TEXT_ONLY_PROMPT if kind in ("model", "folder") else ""))
+    from . import prompts
+    system = (prompts.text("taste_extract") + ("\n\n" + prompts.text("taste_folder") if whole else "")
+              + ("\n\n" + prompts.text("taste_look") if pics
+                 else "\n\n" + prompts.text("taste_text_only") if kind in ("model", "folder") else ""))
     head = f"Project: {kind} \"{label}\""
     if seen["measures"]:
         head += ("\n\nMeasured from the STEP of each of its own parts (mm; \"x5\" is how many times):\n"

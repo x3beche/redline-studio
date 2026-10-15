@@ -15,6 +15,7 @@ import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
 import { CountUp } from './count';
 import { Skeleton } from './skeleton';
+import { LlmPromptsPanel } from './llm-prompts';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -246,7 +247,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [SecretInput, Skeleton, CountUp, T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
+  imports: [SecretInput, Skeleton, CountUp, T, LlmUsagePanel, LlmPromptsPanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -446,6 +447,9 @@ export class LlmUsagePanel {
     </div>
   </div>
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
+
+  <!-- Every prompt sent to a model, and the owner's wording of it (backend/prompts.py). -->
+  <app-llm-prompts />
 
   <app-llm-usage />
 </div>
