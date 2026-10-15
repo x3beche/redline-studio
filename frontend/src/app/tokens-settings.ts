@@ -7,7 +7,7 @@ import { LANG, T, t } from './i18n';
 import { when } from './llm-settings';
 import { BarList, Row, Spark, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
-import { Agents, SeedOs, SeedRunner, seedLine, seedPref, seenAgo, setSeedPref } from './agent-status';
+import { Agents, SeedOs, SeedRunner, seedFullLine, seedLine, seedPref, seenAgo, setSeedPref } from './agent-status';
 import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
 import { CountUp } from './count';
@@ -77,6 +77,7 @@ interface Detail {
         <code class="tk-code">{{ line(made()?.token) }}</code>
         <ng-container *ngTemplateOutlet="seedHints" />
         <p>{{ prereq() }}</p>
+        <ng-container *ngTemplateOutlet="seedFull" />
         <div class="st-row">
           <button class="tcv-btn" [class.tcv-btn-accent]="!!made()" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : made() ? 'Copy the line, with the token' : 'Copy the line') | t }}</button>
         </div>
@@ -122,6 +123,7 @@ interface Detail {
             </div>
             <code class="tk-code">{{ line(m.token) }}</code>
             <ng-container *ngTemplateOutlet="seedHints" />
+            <ng-container *ngTemplateOutlet="seedFull" />
             <div class="st-row">
               <button class="tcv-btn tcv-btn-accent" (click)="copyLine()">{{ (copied() === 'line' ? 'Copied' : 'Copy the line') | t }}</button>
               <ng-container *ngTemplateOutlet="seedOpts" />
@@ -274,6 +276,18 @@ interface Detail {
   @if (!service()) {
     <p class="tk-hint">{{ 'Without the service, run ./start.sh again after each reboot (it runs in tmux; ./start.sh attach to watch).' | t }}</p>
   }
+</ng-template>
+<!-- The same line without the installer: clone the seed by hand and run it. -->
+<ng-template #seedFull>
+  <div class="st-row">
+    <button class="tcv-btn tk-btn" (click)="full.set(!full())">{{ (full() ? 'Hide it' : 'Or clone it yourself') | t }}</button>
+    @if (full()) {
+      <button class="tcv-btn tk-btn" (click)="copyFull()">{{ (copied() === 'full' ? 'Copied' : 'Copy the full line') | t }}</button>
+    }
+  </div>
+  @if (full()) {
+    <code class="tk-code">{{ fullLine(made()?.token) }}</code>
+  }
 </ng-template>`,
 })
 export class TokensSettingsPanel implements OnDestroy {
@@ -309,7 +323,7 @@ export class TokensSettingsPanel implements OnDestroy {
   room = signal('');
   expiry = signal<number | null>(null);
   made = signal<{ name: string; token: string } | null>(null);
-  copied = signal<'lines' | 'token' | 'line' | null>(null);
+  copied = signal<'lines' | 'token' | 'line' | 'full' | null>(null);
   error = signal('');
   busy = signal(false);
   open = signal<string | null>(null);
@@ -331,11 +345,22 @@ export class TokensSettingsPanel implements OnDestroy {
 
   /** The seed's one line for this server, with the token when there is one. */
   line(token?: string | null) {
-    return seedLine(this.seed(), this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+    return seedLine(this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+  }
+
+  /** The same without the installer: clone the seed by hand and run it. */
+  fullLine(token?: string | null) {
+    return seedFullLine(this.seed(), this.origin, this.os(), token, { runner: this.runner(), service: this.service() });
+  }
+
+  copyFull() {
+    navigator.clipboard?.writeText(this.fullLine(this.made()?.token)).then(() => this.copied.set('full'),
+      () => this.error.set(t('The browser would not copy - select the line instead.')));
   }
 
   setRunner(r: SeedRunner) { this.runner.set(r); setSeedPref('runner', r); }
   setService(on: boolean) { this.service.set(on); setSeedPref('service', on ? '1' : '0'); }
+  full = signal(false);
 
   /** What has to be installed, named after the runner chosen above. */
   prereq() {

@@ -145,6 +145,10 @@ app.include_router(files_api.router)
 # The Android app, handed out by the server itself: /api/public/m/app.apk (backend/mobile_app.py).
 from . import mobile_app  # noqa: E402
 app.include_router(mobile_app.router)
+# The one line that installs an agent, with this server's address in it:
+# /api/public/install.sh (backend/installsh.py).
+from . import installsh  # noqa: E402
+app.include_router(installsh.router)
 # The next question, suggested in the empty composer (backend/suggest.py).
 from . import suggest as suggest_api  # noqa: E402
 app.include_router(suggest_api.router)

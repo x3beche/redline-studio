@@ -15,12 +15,25 @@ export type SeedOs = 'unix' | 'windows';
 export type SeedRunner = 'claude' | 'opencode';
 export interface SeedOpts { runner?: SeedRunner; service?: boolean }
 
-/** The one line that starts an agent on someone's own computer, from the
- *  seed's README: clone it, run its start script with this server's address
- *  and the token. Without a token, a placeholder the person fills in.
- *  OpenCode adds the seed's runner option; the service one has it start by
- *  itself after every reboot (a user service, a logon task on Windows). */
-export function seedLine(seed: string, api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
+/** The one line that starts an agent on someone's own computer: this server's
+ *  own installer (backend/installsh.py, GET /api/public/install.sh), which
+ *  fetches the seed and hands it the token. The server's address is already in
+ *  the script, so the token is all the person types. Without a token, a
+ *  placeholder they fill in. OpenCode adds the seed's runner option; the
+ *  service one has it start by itself after every reboot (a user service, a
+ *  logon task on Windows). */
+export function seedLine(api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
+  const tok = token || '<your-token>';
+  const base = api.replace(/\/+$/, '');
+  const more = (opts.runner === 'opencode' ? ' --runner opencode' : '') + (opts.service ? ' --service' : '');
+  return os === 'windows'
+    ? `wsl bash -c "curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}${more}"`
+    : `curl -fsSL ${base}/api/public/install.sh | bash -s -- --token ${tok}${more}`;
+}
+
+/** The same without the installer: clone the seed by hand and run it - for
+ *  someone who would rather read the script than pipe it into a shell. */
+export function seedFullLine(seed: string, api: string, os: SeedOs, token?: string | null, opts: SeedOpts = {}): string {
   const tok = token || '<your-token>';
   const dir = seed.replace(/\/+$/, '').split('/').pop() || 'redline-agent-seed';
   const oc = opts.runner === 'opencode';

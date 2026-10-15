@@ -1174,10 +1174,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const s = this.agents.status();
     if (s && !s.connected) untracked(() => this.agentStep.set(true));
   });
-  agentLine = computed(() => {
-    const s = this.agents.status();
-    return seedLine(s?.seed ?? 'https://github.com/x3beche/redline-agent-seed', location.origin, this.seedOs());
-  });
+  agentLine = computed(() => seedLine(location.origin, this.seedOs()));
   seen(s: number | null) { return seenAgo(s); }
 
   openTokens() { this.prefs.open.set('tokens'); }
