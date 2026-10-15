@@ -17,6 +17,10 @@ waits a moment and otherwise answers "making" (202): the list never waits.
 
 Reached only through a file the asker can read (files_api.py finds it in
 their workspace first: My files, In the app, or Deleted files).
+
+A picture is also made at a few larger sizes for a preview (PREVIEW_PX,
+`preview` below - the mobile app's viewer), kept in the same collection by
+content and size, and dropped with the row pictures.
 """
 
 from __future__ import annotations
@@ -69,12 +73,12 @@ def kind_of(doc: dict) -> str | None:
     return None
 
 
-def key_of(doc: dict) -> str:
+def key_of(doc: dict, size: str = str(PX)) -> str:
     """The content the picture is of: its hash, or (a room's file without
     one) the entry, its size and when it was made."""
     sha = doc.get("sha256")
     what = sha or f"{doc['_id']}.{doc.get('bytes') or 0}.{doc.get('at') or doc.get('created_at') or ''}"
-    return f"{what}:{PX}:v{VERSION}"
+    return f"{what}:{size}:v{VERSION}"
 
 
 def _slot() -> asyncio.Semaphore:
@@ -253,6 +257,82 @@ async def draw(data: bytes, kind: str) -> bytes:
         return dst.read_bytes()
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- a picture at a size, for a preview
+
+# The sizes a picture is shown at (GET /api/files/{id}/thumb?px=): a phone's
+# preview asks for one of these rather than the original, so a 12 MB photo
+# is not fetched whole to be shown on a small screen. Few sizes, so few are
+# kept; any other asked for is the next one up.
+PREVIEW_PX = (320, 800, 1600)
+PREVIEW_TYPES = {"webp": "image/webp", "jpeg": "image/jpeg"}
+
+
+def preview_px(px: int) -> int:
+    """The kept size a wish for `px` gets: the smallest at least as large, or the largest."""
+    return next((p for p in PREVIEW_PX if p >= px), PREVIEW_PX[-1])
+
+
+def preview_key(doc: dict, px: int, fmt: str) -> str:
+    return key_of(doc, f"p{px}.{fmt}")
+
+
+async def preview(db, doc: dict, px: int, fmt: str = "webp") -> bytes:
+    """A picture made at most `px` (one of PREVIEW_PX) a side, as WebP or
+    JPEG; made once and kept by content beside the row pictures, and
+    dropped with them. ValueError: why there is none (not a picture, too
+    large, unreadable)."""
+    if kind_of(doc) != "image":
+        raise ValueError("no picture is made of this kind of file")
+    if int(doc.get("bytes") or 0) > MAX_BYTES["image"]:
+        raise ValueError(f"larger than {MAX_BYTES['image'] // MB} MB - no picture is made of it")
+    key = preview_key(doc, px, fmt)
+    if (hit := await db[COLL].find_one({"_id": key})) is not None and hit.get("data"):
+        return bytes(hit["data"])
+    async with _slot():
+        if (hit := await db[COLL].find_one({"_id": key})) is not None and hit.get("data"):
+            return bytes(hit["data"])
+        t0 = time.monotonic()
+        try:
+            data = await _read(db, doc)
+        except Exception as exc:                    # noqa: BLE001 - the bytes are not there
+            raise ValueError(f"the file could not be read ({type(exc).__name__})") from exc
+        try:
+            pic = await asyncio.to_thread(sized, data, px, fmt)
+        except Exception as exc:                    # noqa: BLE001 - anything Pillow cannot read
+            raise ValueError(f"the picture could not be read ({type(exc).__name__})") from exc
+        finally:
+            del data
+        await _keep(db, doc, key, f"preview-{px}", pic, took=time.monotonic() - t0)
+        return pic
+
+
+def sized(data: bytes, px: int, fmt: str = "webp") -> bytes:
+    """A picture made at most `px` a side (never larger than it is), turned
+    upright, without its metadata (a photo's place is not passed on)."""
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(data)) as im:
+        im.draft("RGB", (px, px))
+        im = ImageOps.exif_transpose(im)
+        alpha = "A" in im.getbands() or im.mode in ("P", "LA")
+        if fmt == "jpeg":
+            if alpha:
+                im = im.convert("RGBA")
+                flat = Image.new("RGB", im.size, (255, 255, 255))
+                flat.paste(im, mask=im.getchannel("A"))
+                im = flat
+            elif im.mode != "RGB":
+                im = im.convert("RGB")
+        elif im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGBA" if alpha else "RGB")
+        im.thumbnail((px, px), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        if fmt == "jpeg":
+            im.save(out, "JPEG", quality=84, optimize=True, progressive=True)
+        else:
+            im.save(out, "WEBP", quality=82, method=4)
+        return out.getvalue()
 
 
 async def drop(db, sha: str | None) -> None:

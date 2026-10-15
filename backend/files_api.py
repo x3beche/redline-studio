@@ -15,7 +15,7 @@ import tempfile
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
@@ -114,11 +114,25 @@ async def folders_list():
 # ---------------------------------------------------------------- the read-only folders, and how much there is
 
 @router.get("/api/files/virtual")
-async def files_virtual_tree():
+async def files_virtual_tree(under: str | None = None):
     """Projects, Chat and Parts as read-only folders (backend/files_virtual.py):
     {folders, files, links} - the Projects' files themselves, and which of
-    Files the Chat's and Parts' folders refer to."""
-    return await files_virtual.tree(_db())
+    Files the Chat's and Parts' folders refer to. `under` answers one
+    folder only ("" the roots), for a client that reads one at a time (the
+    mobile app): what is directly in it, each folder's `count`, the way to
+    it (`trail`), and the uploads its links refer to (`linked`, as GET
+    /api/files lists them), so it needs no list of every upload."""
+    tree = await files_virtual.tree(_db())
+    if under is None:
+        return tree
+    out = files_virtual.within(tree, under)
+    ids = list(dict.fromkeys(x["file"] for x in out["links"]))
+    out["linked"] = []
+    if ids:
+        tops = await files_virtual.folder_tops(_db())
+        rows = {d["_id"]: d async for d in _db()[files.COLL].find({"_id": {"$in": ids}}, {"thumb": 0})}
+        out["linked"] = [{**file_out(rows[i]), **_owner_of(rows[i], tops)} for i in ids if i in rows]
+    return out
 
 
 @router.get("/api/files/usage")
@@ -385,9 +399,17 @@ async def _virtual_entries(db, roots: list[str]) -> list[tuple[str, dict]]:
 # ---------------------------------------------------------------- the files
 
 @router.get("/api/files")
-async def files_list(q: str = "", kind: str = "", board: str = "", folder: str | None = None):
+async def files_list(response: Response, q: str = "", kind: str = "", board: str = "", folder: str | None = None,
+                     area: str = ""):
+    """The uploads, the app's own (In the app) with `ro` and `where`.
+    `area=own` keeps only one's own (My files), for a client that shows
+    those alone (the mobile app). The answer says which sizes a picture's
+    preview comes in (`X-Thumb-Sizes`, GET /api/files/{id}/thumb?px=)."""
     tops = await files_virtual.folder_tops(_db())
     out = [{**file_out(d), **_owner_of(d, tops)} for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
+    if area == "own":
+        out = [f for f in out if not f.get("where")]
+    response.headers["X-Thumb-Sizes"] = ",".join(map(str, file_minis.PREVIEW_PX))
     # Which 3D files have a picture already, so the grid asks only for those.
     want = {files.solid_key(f["sha256"]) for f in out if _solid(f) and f.get("sha256")}
     if want:
@@ -512,9 +534,15 @@ async def files_info(fid: str):
 
 
 @router.get("/api/files/{fid}/thumb")
-async def files_thumb(fid: str, request: Request):
+async def files_thumb(fid: str, request: Request, px: int | None = Query(None, ge=16, le=4096), fmt: str = "webp"):
     """A small picture of an image, for the grid; made once and kept. A 3D
-    file's is the one a page drew and sent (PUT below), if one has."""
+    file's is the one a page drew and sent (PUT below), if one has. `px`
+    asks for a picture's preview at a size instead (one of
+    file_minis.PREVIEW_PX, the next one up; never larger than the picture),
+    as WebP or `fmt=jpeg` - so a phone shows a photo without fetching the
+    original. Whoever may read the file, in the trash too; kept by content."""
+    if px is not None:
+        return await _preview(fid, request, px, fmt)
     raw = await _row(fid, {"thumb": 1, "kind": 1, "name": 1, "bytes": 1, "sha256": 1, "content_type": 1})
     if _solid({"preview": files.preview_of(raw.get("name", ""), raw.get("kind", ""), raw.get("content_type", ""))}):
         key = files.solid_key(raw.get("sha256") or fid)
@@ -540,6 +568,23 @@ async def files_thumb(fid: str, request: Request):
         await _db()[files.COLL].update_one({"_id": fid}, {"$set": {"thumb": thumb}})
     return Response(bytes(thumb), media_type="image/webp",
                     headers={"Cache-Control": "private, max-age=86400"})
+
+
+async def _preview(fid: str, request: Request, px: int, fmt: str) -> Response:
+    if fmt not in file_minis.PREVIEW_TYPES:
+        raise HTTPException(400, f"fmt is one of {', '.join(file_minis.PREVIEW_TYPES)}")
+    doc = await _readable(fid)
+    size = file_minis.preview_px(px)
+    tag = f'"{file_minis.preview_key(doc, size, fmt)}"'
+    headers = {"Cache-Control": "private, max-age=86400", "ETag": tag, "X-Thumb-Px": str(size),
+               "X-Content-Type-Options": "nosniff"}
+    if request.headers.get("if-none-match") == tag:
+        return Response(status_code=304, headers=headers)
+    try:
+        pic = await file_minis.preview(_db(), doc, size, fmt)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return Response(pic, media_type=file_minis.PREVIEW_TYPES[fmt], headers=headers)
 
 
 @router.get("/api/files/{fid}/mini")

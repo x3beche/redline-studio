@@ -67,7 +67,7 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -595,11 +595,15 @@ async def _trash(db, cid: str) -> bool:
 # ---- conversations ----------------------------------------------------------
 
 @router.get("/chats")
-async def list_chats(q: str = "", archived: str = "0", trash: str = "0") -> list[dict]:
+async def list_chats(q: str = "", archived: str = "0", trash: str = "0", response: Response = None) -> list[dict]:
     """`archived`: 0 (default) leaves the archived ones out, 1 is only
     them, all is both. `trash=1` is the trash instead - archived or not,
-    newest deleted first - and nothing else ever shows a trashed one."""
+    newest deleted first - and nothing else ever shows a trashed one; it
+    says how long the trash keeps one (`X-Trash-Days`), beside each one's
+    `days_left`."""
     in_trash = trash in ("1", "true")
+    if in_trash and response is not None:
+        response.headers["X-Trash-Days"] = str(TRASH_DAYS)
     query: dict = dict(TRASHED if in_trash else LIVE)
     if q:
         query["$or"] = [{"title": {"$regex": re.escape(q), "$options": "i"}},

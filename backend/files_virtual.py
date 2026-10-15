@@ -351,6 +351,34 @@ async def tree(db) -> dict:
             "links": clinks + qlinks + alinks}
 
 
+def within(t: dict, under: str) -> dict:
+    """One read-only folder of a tree, for a client that reads one at a
+    time (the mobile app): {under, trail, folders, files, links} - the
+    folders, files and links directly under it ("" the roots), each folder
+    with how many folders and files it holds itself (`count`), and the way
+    to it from the top (`trail`: [{id, name}], the top first)."""
+    folders = t["folders"]
+    by_id = {f["id"]: f for f in folders}
+    trail, at, seen = [], by_id.get(under), set()
+    while at and at["id"] not in seen and len(trail) < 40:
+        seen.add(at["id"])
+        trail.insert(0, {"id": at["id"], "name": at["name"]})
+        at = by_id.get(at.get("parent") or "")
+    n_dirs: dict[str, int] = {}
+    n_files: dict[str, int] = {}
+    for f in folders:
+        if not f.get("root"):
+            n_dirs[f["parent"]] = n_dirs.get(f["parent"], 0) + 1
+    for f in [*t["files"], *t["links"]]:
+        n_files[f["folder"]] = n_files.get(f["folder"], 0) + 1
+    here = [f for f in folders if (f.get("root") if not under else (not f.get("root") and f["parent"] == under))]
+    return {"under": under, "trail": trail,
+            "folders": [{**f, "count": {"folders": n_dirs.get(f["id"], 0), "files": n_files.get(f["id"], 0)}}
+                        for f in here],
+            "files": [f for f in t["files"] if under and f["folder"] == under],
+            "links": [x for x in t["links"] if under and x["folder"] == under]}
+
+
 async def agents(db, live: dict[str, dict]) -> tuple[list[dict], list[dict]]:
     """A folder per agent, with the files the rooms' agents put in Files
     (revisions.py files put, the MCP server): theirs, read-only here."""
