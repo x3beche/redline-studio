@@ -137,7 +137,9 @@ def test_signed_out_reaches_only_signing_in():
             and path not in ("/api/auth/page-session", "/api/auth/remember")
         # Telegram's webhook: no session; the route checks its secret header.
         # A shared link's own routes: the link is checked by the route (shares.py).
-        assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook")
+        # The Android app and what it is (mobile_app.py): open source, no secret.
+        assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook",
+                                                "/api/public/m/app.apk", "/api/public/m/app.json")
                          or path.startswith("/api/public/s/")), (method, path)
 
 
