@@ -159,7 +159,7 @@
   border: 1.5px solid var(--line); background: none;
 }
 .tsx-step[data-state="done"] .tsx-mark { background: var(--ok); border-color: var(--ok); }
-.tsx-step[data-state="running"] { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent); }
+.tsx-step[data-state="running"] { background: var(--hover); }
 .tsx-step[data-state="running"] .tsx-mark { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--hover); }
 .tsx-step[data-state="failed"] .tsx-mark { background: var(--danger); border-color: var(--danger); }
 .tsx-step[data-state="skipped"] .tsx-mark { border-color: var(--ink-dim); border-style: dashed; }
@@ -195,8 +195,8 @@
 /* the recent runs */
 .tsx-table tbody tr { cursor: pointer; }
 .tsx-table tbody tr:hover td { background: var(--hover); }
-.tsx-table tbody tr[data-on] td { background: var(--surface-2); }
-.tsx-table tbody tr[data-on] td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+/* The open run: ink and weight, no fill and no edge. */
+.tsx-table tbody tr[data-on] td { color: var(--ink-bright); font-weight: 600; }
 .tsx-table .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .tsx-table .st-more { margin: 0; }
 

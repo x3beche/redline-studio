@@ -42,10 +42,10 @@ const payloadUrl = (b: PartBody) => `/api/models/${b.model}/viewer.json?v=${b.mo
                background: linear-gradient(var(--view-top), var(--view-mid) 60%, var(--view-bottom)); }
     .pb-list { display: flex; flex-direction: column; }
     .pb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px;
-              padding: 6px 10px; border-left: 2px solid transparent; cursor: pointer; }
+              padding: 6px 10px 6px 12px; cursor: pointer; }
     .pb-row + .pb-row { border-top: 1px solid var(--line); }
     .pb-row:hover { background: var(--hover); }
-    .pb-row[data-on] { border-left-color: var(--accent); background: var(--surface-2); }
+    .pb-row[data-on] .pb-name { font-weight: 650; color: var(--ink-bright); }
     .pb-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .pb-name { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pb-meta { grid-column: 1; display: flex; flex-wrap: wrap; gap: 0 6px; min-width: 0;

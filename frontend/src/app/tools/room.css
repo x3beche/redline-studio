@@ -24,10 +24,12 @@
 .tcv-tools-grouphead { width: 100%; display: flex; justify-content: space-between; text-align: left; }
 .tcv-tools-grouphead:hover { color: var(--ink); }
 .tcv-tools-empty { padding: 10px 12px; font-size: 12px; color: var(--ink-dim); }
-.tcv-tools-item { display: flex; align-items: stretch; border-left: 2px solid transparent; }
+.tcv-tools-item { display: flex; align-items: stretch; }
 .tcv-tools-item:hover, .tcv-tools-item[data-hot="1"] { background: var(--hover); }
-.tcv-tools-item[data-on="1"] { background: var(--surface-2); border-left-color: var(--accent); }
-.tcv-tools-item { flex-direction: column; padding: 5px 6px 5px 10px; gap: 1px; }
+/* The open tool is told by its name's ink and weight, no fill and no edge. */
+.tcv-tools-item .tcv-menu-name { font-weight: 500; }
+.tcv-tools-item[data-on="1"] .tcv-menu-name { font-weight: 650; color: var(--ink-bright); }
+.tcv-tools-item { flex-direction: column; padding: 5px 6px 5px 12px; gap: 1px; }
 .tcv-tools-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .tcv-tools-open { min-width: 0; padding: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tcv-tools-blurb { cursor: pointer; }

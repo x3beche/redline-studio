@@ -378,8 +378,7 @@ select.st-in { cursor: pointer; }
 }
 .st-x:hover { color: var(--danger); border-color: var(--line); background: var(--hover); }
 .st-fx td { padding: 3px 8px; }
-.st-fx tr.st-fx-on td { background: var(--surface-2); }
-.st-fx tr.st-fx-on td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.st-fx tr.st-fx-on td { color: var(--ink-bright); font-weight: 600; }
 .st-conv { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; }
 .st-conv input.st-in { width: 110px; text-align: right; background: var(--surface); }
 .st-conv select.st-in, .st-conv .st-sel { background: var(--surface); --wb-sel-bg: var(--surface); }

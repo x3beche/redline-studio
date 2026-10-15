@@ -117,11 +117,9 @@ button.dmv-twist:hover { color: var(--ink); background: var(--hover); }
 .dmv-chip b { font-weight: 600; margin-left: 2px; }
 .dmv-muted .dmv-chip { color: var(--ink-dim); }
 .dmv-sideblock { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
-.dmv-panel { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left-width: 3px;
+/* The tone is told by the tags in the head, not by an edge. */
+.dmv-panel { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border: 1px solid var(--line);
   border-radius: 6px; background: var(--surface); }
-.dmv-panel[data-tone="ok"] { border-left-color: var(--ok); }
-.dmv-panel[data-tone="warn"] { border-left-color: var(--warn); }
-.dmv-panel[data-tone="danger"] { border-left-color: var(--danger); }
 .dmv-panelhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .dmv-panelhead b { margin-right: 4px; }
 .dmv-examples { margin: 0; padding-left: 16px; font-size: 11px; line-height: 1.45; color: var(--ink-dim); overflow-wrap: anywhere; }

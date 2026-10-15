@@ -2462,12 +2462,7 @@ body {
    They fill their parent and the grid does the dividing. */
 /* A column: toolbar at its own height, body taking the rest. Subtracting a
    guessed 48 px for the toolbar left a strip of dead space under the log. */
-/* Square where the tab meets it; the rest of the panel keeps its radius. */
-/* The open tab's border runs into the panel below it, so the corner
-   under it is square and every other one is round. Only the first tab
-   sits over this corner. */
-.tcv-stage[data-room] { border-top-left-radius: 6px; }
-.tcv-stage[data-room="cad"] { border-top-left-radius: 0; }
+.tcv-stage[data-room] { border-radius: 6px; }
 
 /* WHERE ANOTHER ROOM GOES
    In the centre column, exactly where the 3D panel is and the same size:
@@ -2489,6 +2484,11 @@ body {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
+  /* A bar or side column with a background of its own runs to the edge:
+     clipped, so it takes the room's round corners instead of squaring them.
+     Clip, not hidden: it makes no scroll container, so sticky heads inside
+     keep working, and the fixed popups are not inside it anyway. */
+  overflow: clip;
 }
 
 
@@ -4172,15 +4172,15 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-check { width: 20px; height: 20px; border-radius: 5px; }
   .tcv-check::after { -webkit-mask-size: 16px; mask-size: 16px; }
 }
-/* Plain rows: title and when, a one-line preview; the open one marked by a
-   hairline of accent at its edge, as the Settings list does. */
+/* Plain rows: title and when, a one-line preview; the open one told by its
+   title's ink and weight alone, no fill and no edge. */
 .tcv-cc-list { padding: 0 0 10px; }
 .tcv-cc-group { padding: 10px 12px 3px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--ink-dim); }
-.tcv-cc-item { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border-left: 2px solid transparent; cursor: pointer; outline: none; }
+.tcv-cc-item { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 12px;
+  cursor: pointer; outline: none; }
 .tcv-cc-item:hover { background: var(--hover); }
-.tcv-cc-item[data-on] { background: var(--surface); border-left-color: var(--accent); }
+.tcv-cc-item[data-on] .tcv-cc-itemtitle { font-weight: 650; color: var(--ink-bright); }
 .tcv-cc-item[data-sel] { background: var(--pressed); }
 .tcv-cc-itemtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .tcv-cc-itemtop { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
@@ -4610,7 +4610,7 @@ a.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
   background: none; border: 0; border-radius: 6px; cursor: pointer; }
 .tcv-cc-hit + .tcv-cc-hit { margin-top: 1px; }
 .tcv-cc-hit:hover { background: var(--hover); }
-.tcv-cc-hit[data-on] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tcv-cc-hit[data-on] .tcv-cc-itemtitle { font-weight: 650; color: var(--ink-bright); }
 .tcv-cc-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tcv-cc-hitsnip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11.5px;
   line-height: 1.45; color: var(--ink-dim); }
@@ -5425,8 +5425,8 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
 .tcv-fv-entries tr[data-dir] td { color: var(--ink-dim); }
 .tcv-fv-num { text-align: right !important; width: 110px; font-variant-numeric: tabular-nums; }
 .tcv-fv-sheets { flex: none; display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
-.tcv-fv-sheets button { padding: 5px 12px; font-size: 12px; color: var(--ink-dim); background: none; border: 1px solid transparent;
-  border-bottom: 0; border-radius: 5px 5px 0 0; cursor: pointer; }
+.tcv-fv-sheets button { padding: 5px 12px; font-size: 12px; color: var(--ink-dim); background: none; border: 0;
+  border-radius: 4px; cursor: pointer; }
 .tcv-fv-sheets button[data-on] { color: var(--ink-bright); font-weight: 600; }
 
 /* the PDF reader */
@@ -5711,9 +5711,9 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-doc li[data-checked="true"] > div { color: var(--ink-dim); text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--ink-dim) 60%, transparent); }
 .tcv-doc li[data-checked="true"] > div strong, .tcv-doc li[data-checked="true"] > div a { color: inherit; }
-/* Quotes read as a callout. */
-.tcv-doc blockquote { margin-inline: 0; padding: .6em .9em; color: var(--ink); background: var(--surface-2);
-  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; }
+/* Quotes read as a quiet box of their own. */
+.tcv-doc blockquote { margin-inline: 0; padding: .6em .9em; color: var(--ink-dim); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; }
 .tcv-doc blockquote > * + * { margin-top: .5em; }
 .tcv-doc code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: .88em; padding: .1em .35em;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }

@@ -316,7 +316,7 @@ td.r > .mf-doubt:first-child { margin: 0 6px 0 0; }
 .mf-wrong { margin: 0 0 0 auto; padding: 0 2px; color: var(--accent); background: none; border: 0; }
 .mf-wrong:hover { text-decoration: underline; background: none; }
 .mf-doubts { margin: -4px 0 0; padding: 6px 10px 6px 24px; font-size: 12px; line-height: 1.45; color: var(--ink);
-  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 4px; }
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; }
 .mf-doubts li::marker { color: var(--warn); }
 .mf-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0; }
 .mf-fix > * { box-sizing: border-box; height: var(--mf-h); }
