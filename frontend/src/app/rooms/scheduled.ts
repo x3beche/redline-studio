@@ -109,15 +109,17 @@ const I = {
       <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.plus"/></svg>{{ 'New' | t }}</button>
   </div>
 
-  <div class="sk-split">
+  <!-- Nothing open: the list takes the whole width (as Files and Parts do);
+       the detail column comes in when a task is opened or being made. -->
+  <div class="sk-split" [attr.data-one]="draft() ? null : 1">
     <!-- LEFT: every task, one row each. -->
     <section class="sk-list" [attr.aria-label]="'Scheduled tasks' | t">
       @if (tasks(); as ts) {
+        <div class="sk-thead" aria-hidden="true">
+          <span>{{ 'Task' | t }}</span><span>{{ 'Schedule' | t }}</span><span class="sk-hide-sm">{{ 'Next' | t }}</span>
+          <span class="sk-hide-sm">{{ 'Last run' | t }}</span><span></span>
+        </div>
         @if (ts.length) {
-          <div class="sk-thead" aria-hidden="true">
-            <span>{{ 'Task' | t }}</span><span>{{ 'Schedule' | t }}</span><span class="sk-hide-sm">{{ 'Next' | t }}</span>
-            <span class="sk-hide-sm">{{ 'Last run' | t }}</span><span></span>
-          </div>
           @for (x of shown(); track x.id) {
             <div class="sk-row" role="button" tabindex="0" [attr.data-on]="x.id === sel() ? 1 : null" [attr.data-off]="x.enabled ? null : 1"
                  [attr.aria-current]="x.id === sel() ? 'true' : null" (click)="open(x.id)" (keydown.enter)="open(x.id)">
@@ -143,8 +145,10 @@ const I = {
             <wb-empty compact icon="doc" heading="Nothing here" text="No task matches this filter." />
           }
         } @else {
-          <wb-empty icon="doc" heading="No scheduled tasks yet"
-                    text="A task runs a report or a refresh by itself, on a schedule, and sends you the result. Start from a template, or press New." />
+          <div class="sk-none">
+            <b>{{ 'No scheduled tasks yet' | t }}</b>
+            <span>{{ 'A task runs a report or a refresh by itself, on a schedule, and sends you the result. Start from a template, or press New.' | t }}</span>
+          </div>
         }
         @if (templates().length && ts.length < 12) {
           <div class="sk-tpls">
