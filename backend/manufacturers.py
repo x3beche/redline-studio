@@ -2148,6 +2148,149 @@ async def drop_products(db, mid: str, ids: list[str]) -> int:
     return len(have) - len(left)
 
 
+# ---- many products changed at once (the selection bar's Edit) -----------------
+
+BULK_MAX = 500
+BULK_FIELDS = ("category", "currency", "vat")
+
+
+def bulk_fields(raw: dict) -> dict:
+    """What a bulk edit sets, checked: a category ("" takes it away), and
+    the currency and VAT of the price a product has; a ValueError says what
+    is wrong."""
+    f: dict = {}
+    if not isinstance(raw, dict):
+        raise ValueError("say what to change")
+    if raw.get("category") is not None:
+        f["category"] = re.sub(r"\s+", " ", str(raw["category"]).strip())[:120]
+    if raw.get("currency"):
+        cur = cf.currency_of(str(raw["currency"]))
+        if not cur:
+            raise ValueError(f"{str(raw['currency'])[:12]!r} is not a currency (TRY, USD, EUR...)")
+        f["currency"] = cur
+    if raw.get("vat") is not None:
+        v = str(raw["vat"]).strip().lower()
+        if v not in ("incl", "excl", ""):
+            raise ValueError("VAT is incl, excl or none")
+        f["vat"] = v
+    if not f:
+        raise ValueError("say what to change: the category, the currency or VAT")
+    return f
+
+
+def _bulk_change(old: dict, f: dict) -> dict:
+    """The part of `f` that changes `old`, as a single edit's fields: the
+    currency and VAT only on a product with a price."""
+    out: dict = {}
+    if "category" in f and (old.get("category") or "") != f["category"]:
+        out["category"] = f["category"]
+    pr = old.get("price") or {}
+    if pr.get("amount") is not None:
+        if "currency" in f and (pr.get("currency") or "") != f["currency"]:
+            out["currency"] = f["currency"]
+        if "vat" in f and (pr.get("vat") or "") != f["vat"]:
+            out["vat"] = f["vat"]                       # "": given but empty - no VAT said (revised_product)
+    return out
+
+
+async def bulk_edit(db, items: list[dict], fields: dict, by: dict | None = None) -> dict:
+    """Products of any makers changed alike - each as its single edit would
+    (revised_product: kept through the next exploration, its price's
+    history), the sites' in one write each. A product of a source not
+    edited here (the LCSC drawer, a saved McMaster or GrabCAD part) or one
+    that clashes is skipped and said. What each was is kept for an undo
+    (backend/bulk_undo.py) and the change goes into the audit trail."""
+    from . import bulk_undo
+    f = bulk_fields(fields)
+    want: dict[str, list[str]] = {}
+    for it in items[:BULK_MAX]:
+        mid, pid = str((it or {}).get("manufacturer") or ""), str((it or {}).get("product") or "")
+        if mid and pid and pid not in want.setdefault(mid, []):
+            want[mid].append(pid)
+    who = by or actors.current()
+    changed, skipped, rows, same = [], [], [], 0
+    for mid, pids in want.items():
+        src = catalog_builtin.writable(mid)
+        doc = None if src or mid in catalog_builtin.SOURCES else await get(db, mid)
+        if not src and not doc:
+            skipped += [{"manufacturer": mid, "product": p, "why": "not edited here"} for p in pids]
+            continue
+        have = await src.products(db) if src else list(doc.get("products") or [])
+        by_id = {x.get("id"): x for x in have}
+        new_list, dirty = list(have), False
+        for pid in pids:
+            old = by_id.get(pid)
+            if not old:
+                skipped.append({"manufacturer": mid, "product": pid, "why": "not in the catalog"})
+                continue
+            ch = _bulk_change(old, f)
+            if not ch:
+                same += 1
+                continue
+            try:
+                p = await src.edit(db, pid, ch, who) if src else revised_product(old, new_list, ch, who)
+            except (Clash, ValueError, LookupError) as exc:
+                skipped.append({"manufacturer": mid, "product": pid, "name": old.get("name"), "why": str(exc)})
+                continue
+            if not src:
+                new_list = [p if x.get("id") == pid else x for x in new_list]
+                dirty = True
+            changed.append({"manufacturer": mid, "product": pid, "name": p.get("name")})
+            rows.append({"manufacturer": mid, "product": pid, "before": old, "stamp": p.get("edited_at")})
+        if dirty:
+            await db[COLL].update_one({"_id": mid}, {"$set": {"products": new_list, "updated_at": _now()}})
+    what = ", ".join(f"{k} {v or 'none'}" for k, v in f.items())
+    undo = await bulk_undo.keep(db, "products", rows, what)
+    if changed:
+        await actors.audit(db, "change", f"parts: {len(changed)} products",
+                           {"set": f, "products": [f"{c['manufacturer']}/{c['product']}" for c in changed][:100],
+                            "undo": undo}, actor=who)
+    return {"changed": changed, "unchanged": same, "skipped": skipped, "undo": undo}
+
+
+async def bulk_undo_edit(db, uid: str) -> dict:
+    """A bulk edit taken back: each product put back as it was, while it is
+    still as the edit left it; one changed or deleted since is left and said."""
+    from . import bulk_undo
+    rec = await bulk_undo.take(db, uid, "products")
+    restored, conflict = [], []
+    makers: dict[str, list[dict]] = {}
+    for r in rec.get("rows") or []:
+        makers.setdefault(r["manufacturer"], []).append(r)
+    for mid, rows in makers.items():
+        src = catalog_builtin.writable(mid)
+        doc = None if src else await get(db, mid)
+        have = await src.products(db) if src else list((doc or {}).get("products") or [])
+        by_id = {x.get("id"): x for x in have}
+        new_list, dirty = list(have), False
+        for r in rows:
+            now = by_id.get(r["product"])
+            name = (r.get("before") or {}).get("name")
+            if not now:
+                conflict.append({"manufacturer": mid, "product": r["product"], "name": name, "why": "deleted since"})
+                continue
+            if now.get("edited_at") != r.get("stamp"):
+                conflict.append({"manufacturer": mid, "product": r["product"], "name": name, "why": "changed since"})
+                continue
+            before = dict(r["before"])
+            if src:
+                from . import catalog_own
+                if mid != catalog_own.MID:
+                    conflict.append({"manufacturer": mid, "product": r["product"], "name": name, "why": "not edited here"})
+                    continue
+                await db[catalog_own.COLL].replace_one({"_id": r["product"]},
+                                                       {**{k: v for k, v in before.items() if k != "id"}, "_id": r["product"]})
+            else:
+                new_list = [before if x.get("id") == r["product"] else x for x in new_list]
+                dirty = True
+            restored.append({"manufacturer": mid, "product": r["product"], "name": name})
+        if dirty:
+            await db[COLL].update_one({"_id": mid}, {"$set": {"products": new_list, "updated_at": _now()}})
+    await actors.audit(db, "change", f"parts: {len(restored)} products put back",
+                       {"undo": uid, "conflict": len(conflict)})
+    return {"restored": restored, "conflict": conflict}
+
+
 def by_hand(p: dict) -> bool:
     """Added or changed by hand - or its price or stock corrected ("Wrong"):
     kept when a full exploration replaces the catalog."""
@@ -3323,6 +3466,35 @@ async def _start(mid: str, route, reuse: str | None = None, only: list[str] | No
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**job_out(jd), "job_id": jd["_id"], "started": started}
+
+
+class BulkEditIn(BaseModel):
+    items: list[dict] = Field(min_length=1, max_length=BULK_MAX)     # [{manufacturer, product}]
+    set: dict                                                        # {category, currency, vat}
+
+
+class BulkUndoIn(BaseModel):
+    undo: str = Field(min_length=1, max_length=40)
+
+
+@router.post("/products/bulk-edit")
+async def api_products_bulk_edit(body: BulkEditIn):
+    """The selected products changed alike (the selection bar's Edit) - one
+    call for any makers; `undo` takes it back (/products/bulk-undo)."""
+    try:
+        return await bulk_edit(_db(), body.items, body.set, actors.current())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/products/bulk-undo")
+async def api_products_bulk_undo(body: BulkUndoIn):
+    try:
+        return await bulk_undo_edit(_db(), body.undo)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
 
 
 @router.post("")

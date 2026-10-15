@@ -83,9 +83,10 @@ async def run(ctx: Ctx, args: dict) -> Result:
         raise ToolError("threshold is a number: lines at or below it count as low too")
     if th is not None and th < 0:
         raise ToolError("threshold cannot be below zero")
-    rows = [d for d in await inv.listing(ctx.db)
+    loc = str(args.get("location") or "").strip()[:inv.TEXT["location"]]
+    rows = [d for d in await inv.listing(ctx.db, location=loc)
             if inv.is_low(d) or (th is not None and float(d.get("quantity") or 0) <= th)]
-    what = "low" + (f" or at most {inv.qty(th)}" if th is not None else "")
+    what = "low" + (f" or at most {inv.qty(th)}" if th is not None else "") + (f" at {loc!r}" if loc else "")
     if not rows:
         return Result(text=f"No stock line is {what}." + ("" if th is not None else
                       " A line is low at or below its minimum; lines without a minimum never are."),
@@ -120,7 +121,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
         out.append(f"... and {shown - SHOW} more lines.")
     head = (f"{len(rows)} stock line(s) {what}, by seller ({len(order)}): {len(items)} with a reorder quantity"
             + (f", {missing} without (what is missing is said)" if missing else "") + ".")
-    v = {"n": len(rows), "sellers": len(order), "reorder": len(items), "missing": missing}
+    v = {"n": len(rows), "sellers": len(order), "reorder": len(items), "missing": missing, **({"location": loc} if loc else {})}
     say = "{n} low in stock, {sellers} sellers"
     text = "\n".join([head, *out])
     if args.get("add"):
@@ -147,13 +148,15 @@ TOOL = Tool(
     description="The stock lines that are low - as the Stock tab's Low filter: at or below their minimum - or, with "
                 "`threshold`, also those at or below that many; grouped by who sells them (the line's Parts "
                 "product's maker or source), each with a reorder quantity worked out from its minimum and what its "
-                "log says was used lately (a line with neither says what is missing instead of a number). Reading "
+                "log says was used lately (a line with neither says what is missing instead of a number), and where "
+                "it lies; `location` keeps to the lines whose place holds those words (\"Drawer 3\"). Reading "
                 "writes nothing. `add`: put the ones with a quantity on a shopping list (shopping_list's own: "
                 "priced across the sellers Parts knows, kept as a file in Files) - only when the person asks; it "
                 "asks them first.",
     schema={"type": "object", "properties": {
         "threshold": {"type": "number", "minimum": 0,
                       "description": "Also count lines at or below this many as low (e.g. 0 for what ran out)"},
+        "location": {"type": "string", "description": "Only lines whose place holds this (\"Drawer 3\", \"shelf A\")"},
         "add": {"type": "boolean", "description": "Put them on a shopping list (asks the person first)"},
         "export": {"type": "string", "enum": ["md", "csv", "pdf"],
                    "description": "With add: the shopping list's file (default md)"}}},

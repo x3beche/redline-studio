@@ -672,6 +672,82 @@ async def remove(db, iid: str) -> bool:
     return bool(getattr(res, "deleted_count", 0))
 
 
+# ---- many lines changed at once (the Stock tab's selection bar) -------------------
+
+BULK_EDIT = ("location", "min_stock")
+
+
+async def bulk_edit(db, ids: list[str], raw: dict, by: dict | None = None) -> dict:
+    """Stock lines given the same place or minimum - each as its single edit
+    (`patch`: an "edited" line in its log with the old and new value). A line
+    gone or counting a product not in Parts is skipped and said. What each
+    was is kept for an undo (backend/bulk_undo.py); the change goes into the
+    audit trail."""
+    from . import bulk_undo
+    if not isinstance(raw, dict) or not any(k in raw for k in BULK_EDIT):
+        raise ValueError("say what to change: the place or the minimum")
+    f = clean({k: raw[k] for k in BULK_EDIT if k in raw}, partial=True)
+    who = by or actors.current()
+    changed, skipped, rows, same = [], [], [], 0
+    for iid in list(dict.fromkeys(str(i) for i in ids))[:MAX_BULK]:
+        have = await get(db, iid)
+        if not have:
+            skipped.append({"id": iid, "why": "not in stock"})
+            continue
+        ch = {k: v for k, v in f.items() if have.get(k) != v and not (v in (None, "") and have.get(k) in (None, ""))}
+        if not ch:
+            same += 1
+            continue
+        try:
+            d = await patch(db, iid, ch, who)
+        except ValueError as exc:
+            skipped.append({"id": iid, "name": have.get("name"), "why": str(exc)})
+            continue
+        changed.append({"id": iid, "name": have.get("name")})
+        rows.append({"id": iid, "before": {k: have.get(k) for k in ch}, "stamp": d["updated_at"]})
+    what = ", ".join(f"{k} {'none' if v in (None, '') else v}" for k, v in f.items())
+    undo = await bulk_undo.keep(db, "stock", rows, what)
+    if changed:
+        await actors.audit(db, "change", f"stock: {len(changed)} lines",
+                           {"set": f, "lines": [c["id"] for c in changed][:100], "undo": undo}, actor=who)
+    return {"changed": changed, "unchanged": same, "skipped": skipped, "undo": undo}
+
+
+async def bulk_undo_edit(db, uid: str, by: dict | None = None) -> dict:
+    """A bulk edit taken back: each line given its place and minimum again
+    (logged as an edit), while it is still as the edit left it."""
+    from . import bulk_undo
+    rec = await bulk_undo.take(db, uid, "stock")
+    restored, conflict = [], []
+    for r in rec.get("rows") or []:
+        have = await get(db, r["id"])
+        if not have:
+            conflict.append({"id": r["id"], "why": "deleted since"})
+            continue
+        if have.get("updated_at") != r.get("stamp"):
+            conflict.append({"id": r["id"], "name": have.get("name"), "why": "changed since"})
+            continue
+        try:
+            await patch(db, r["id"], r.get("before") or {}, by, "undo of a bulk edit")
+        except ValueError as exc:
+            conflict.append({"id": r["id"], "name": have.get("name"), "why": str(exc)})
+            continue
+        restored.append({"id": r["id"], "name": have.get("name")})
+    await actors.audit(db, "change", f"stock: {len(restored)} lines put back", {"undo": uid, "conflict": len(conflict)})
+    return {"restored": restored, "conflict": conflict}
+
+
+def places(rows: list[dict]) -> list[dict]:
+    """Every place a line lies, with how many lines lie there - one place
+    written two ways ("Drawer 3" and "drawer 3 ") is one, as first written."""
+    got: dict[str, dict] = {}
+    for d in rows:
+        loc = re.sub(r"\s+", " ", str(d.get("location") or "").strip())
+        if loc:
+            got.setdefault(fold(loc), {"location": loc, "lines": 0})["lines"] += 1
+    return sorted(got.values(), key=lambda x: fold(x["location"]))
+
+
 # ---- sharing: the inventory as a file --------------------------------------------
 
 KEEP = ("name", "quantity", "unit", "location", "category", "mpn", "lcsc", "manufacturer", "board", "min_stock",
@@ -824,6 +900,15 @@ class IdsIn(BaseModel):
     ids: list[str] = Field(max_length=MAX_BULK)
 
 
+class BulkEditIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=MAX_BULK)
+    set: dict                       # {location, min_stock}: "" / null takes one away
+
+
+class BulkUndoIn(BaseModel):
+    undo: str = Field(min_length=1, max_length=40)
+
+
 def _404(iid: str):
     raise HTTPException(404, f"no inventory item {iid}")
 
@@ -970,6 +1055,33 @@ async def api_bulk_delete(body: IdsIn):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
     gone = [d["_id"] for d in docs if await remove(db, d["_id"])]
     return {"deleted": gone}
+
+
+@router.get("/locations")
+async def api_locations(q: str = ""):
+    """The places lines lie in, for a place field's suggestions: with `q`,
+    those holding its words."""
+    words = fold(q).split()
+    return [x for x in places(await everything(_db())) if all(w in fold(x["location"]) for w in words)]
+
+
+@router.post("/bulk-edit")
+async def api_bulk_edit(body: BulkEditIn):
+    """The selected lines given one place or minimum; `undo` takes it back."""
+    try:
+        return await bulk_edit(_db(), body.ids, body.set, actors.current())
+    except ValueError as exc:
+        _400(exc)
+
+
+@router.post("/bulk-undo")
+async def api_bulk_undo(body: BulkUndoIn):
+    try:
+        return await bulk_undo_edit(_db(), body.undo, actors.current())
+    except LookupError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
 
 
 @router.get("/{iid}")

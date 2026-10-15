@@ -60,6 +60,8 @@ SCOPED = frozenset({
     "cc_changes",
     # products deleted from Parts with their stock lines and files, restorable for a while (backend/parts_trash.py)
     "parts_trash",
+    # what products and stock lines were before a bulk edit, for its undo (backend/bulk_undo.py)
+    "parts_undo",
     # the datasheet library: a part's datasheet read once, its pages' text kept for search (backend/datasheets.py)
     "datasheets", "datasheet_pages",
     # each project's wiki: its pages and every version of them (backend/wiki.py)
