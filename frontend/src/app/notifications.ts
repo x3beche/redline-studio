@@ -77,6 +77,19 @@ export function ncAgo(iso: string, now = Date.now()): string {
 /** What a notification is about, in the reader's language. */
 export function ncCtx(n: Notice): string { return (LANG() === 'tr' && n.ctx_tr) || n.ctx || ''; }
 
+/** A line short enough for a toast: Markdown marks and runs of space
+ *  taken out, cut at a word near `max` characters with an ellipsis. A Chat
+ *  answer's notice carries the answer's start; the toast is a pointer to it,
+ *  the bell's list and /notifications keep the whole line. */
+export function ncShort(s: string, max = 72): string {
+  const flat = s.replace(/```[\s\S]*?```/g, ' ').replace(/[`*_#>~]+/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const at = cut.lastIndexOf(' ');
+  return (at > max * .6 ? cut.slice(0, at) : cut).replace(/[\s,.;:·-]+$/, '') + '…';
+}
+
 /** Rows under Today, Yesterday and Earlier, in their order. */
 export function ncDays(items: Notice[], now = new Date()): { day: string; items: Notice[] }[] {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -148,7 +161,7 @@ export class NotifyStore {
     if (n && !here && this.toasts() && Date.now() - this.lastToast > TOAST_GAP_MS) {
       this.lastToast = Date.now();
       const x = got.latest!;
-      const text = n > 1 ? `${n} ${t('new notifications')}` : t(x.title) + (ncCtx(x) ? ` · ${ncCtx(x)}` : '');
+      const text = n > 1 ? `${n} ${t('new notifications')}` : t(x.title) + (ncCtx(x) ? ` · ${ncShort(ncCtx(x))}` : '');
       Toast.show(text, { tone: x.tone === 'danger' ? 'danger' : 'info',
                          action: x.link && n === 1 ? { label: t('Open'), run: () => void this.open(x) } : undefined });
     }
