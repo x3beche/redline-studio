@@ -46,7 +46,13 @@
 .sk-dimname { color: var(--ink-dim) !important; }
 /* The main panel's rows and rules run from edge to edge: no inner padding. */
 .sk-main { padding: 0; gap: 0; }
-.sk-main > .sk-bar { flex: none; min-height: 44px; padding: 0 14px; }
+.sk-main > .sk-bar { flex: none; height: 44px; min-height: 44px; padding: 0 14px; gap: 10px; }
+/* One height for everything in the head row, all on its middle line. */
+.sk-main > .sk-bar > * { align-self: center; }
+.sk-main > .sk-bar .sk-seg button { height: 26px; padding: 0 10px; display: inline-flex; align-items: center; }
+.sk-main > .sk-bar .sk-btn { height: 28px; padding: 0 11px; }
+.sk-main > .sk-bar .sk-switchrow { height: 28px; }
+.sk-main > .sk-bar .sk-title { font-size: 14px; display: inline-flex; align-items: baseline; }
 .sk-table { flex: 1 1 auto; min-height: 0; }
 .sk-table .sk-thead, .sk-table .sk-row { padding: 0 14px; }
 .sk-table { display: flex; flex-direction: column; }
