@@ -6,6 +6,7 @@ import { Auth } from './auth';
 import { Toast } from './toast';
 import { navHref, navOpen } from './nav';
 import { GLYPHS } from './icon-packs';
+import { TopBar } from './topbar';
 
 /** The notification centre (backend/notifications.py): what happened - an
  *  agent asked, a build failed, a drawing was made, a price dropped - kept
@@ -219,8 +220,9 @@ export class NcRow {
   });
 }
 
-/** The bell beside Settings, and the panel it opens: the latest, by day,
- *  with the kinds to show as tiny toggles and "Mark all read" on one row. */
+/** The bell in the top bar - beside Settings by default, wherever Settings >
+ *  Top bar put it - and the panel it opens: the latest, by day, with the
+ *  kinds to show as tiny toggles and "Mark all read" on one row. */
 @Component({
   selector: 'app-notify-bell',
   imports: [T, NcRow],
@@ -229,11 +231,12 @@ export class NcRow {
   encapsulation: ViewEncapsulation.None,
   styleUrl: './notifications.css',
   template: `
-<button #btn type="button" class="tcv-tab tcv-bell" [class.tb-tight]="tight()" [attr.data-unread]="store.unread() ? 1 : null"
+<button #btn type="button" class="tcv-tab tcv-bell" data-tb="notifications" [class.tb-push]="push()" [class.tcv-tab-end]="end()"
+        [class.tb-tight]="end() && tight()" [attr.data-unread]="store.unread() ? 1 : null"
         [attr.aria-expanded]="open()" aria-haspopup="dialog"
         [attr.aria-label]="label()" [title]="label()" (click)="toggle()">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0"/></svg>
-  @if (store.unread(); as n) { <span class="tcv-bell-n">{{ n > 99 ? '99+' : n }}</span> }
+  @if (bar.bellCount()) { @if (store.unread(); as n) { <span class="tcv-bell-n">{{ n > 99 ? '99+' : n }}</span> } }
 </button>
 @if (open()) {
   <div class="nc-pop tcv-pop-in" animate.leave="tcv-leave" role="dialog" [attr.aria-label]="'Notifications' | t"
@@ -265,8 +268,13 @@ export class NcRow {
 })
 export class NotifyBell implements OnDestroy {
   store = inject(NotifyStore);
-  /** With a tab pushed right in the bar, the bell stands beside it (topbar.ts). */
+  /** Its place in the bar (topbar.ts): the first after the gap, pushed right;
+   *  the last, the end; and, as the end, beside an item pushed right. */
+  push = input(false);
+  end = input(false);
   tight = input(false);
+  /** Whether the count is shown (Settings > Top bar). */
+  bar = inject(TopBar);
   private host = inject(ElementRef).nativeElement as HTMLElement;
   private btn = viewChild<ElementRef<HTMLButtonElement>>('btn');
   open = signal(false);

@@ -505,9 +505,9 @@ console.log(JSON.stringify(cases.map(t => [slug(t), parse(t)])));
         assert p["links"] == want["links"] and p["mentions"] == want["mentions"]
 
 
-def test_the_page_is_reached_from_more_not_a_tab():
+def test_the_page_is_reached_from_more_until_switched_on_as_a_tab():
     ws = Path("frontend/src/app/workspaces.ts").read_text()
     assert re.search(r"id: 'wiki'", ws)
-    bar = Path("frontend/src/app/topbar.ts").read_text()
-    assert re.search(r"MENU_ONLY = new Set<string>\(\['wiki'\]\)", bar)
+    order = Path("frontend/src/app/topbar-order.ts").read_text()
+    assert "OFF_BY_DEFAULT: readonly string[] = ['wiki']" in order
     assert "@case ('wiki') { @defer { <app-room-wiki /> } }" in Path("frontend/src/app/app.ts").read_text()

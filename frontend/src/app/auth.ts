@@ -534,6 +534,7 @@ export class SignIn {
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" animate.leave="tcv-leave" (mouseleave)="open.set(false)">
         <ng-container *ngTemplateOutlet="analyticsItem" />
+        <ng-container *ngTemplateOutlet="barItems" />
       </div>
     }
   }
@@ -561,6 +562,7 @@ export class SignIn {
             <span class="tcv-menu-name">{{ 'Users' | t }}</span>
             <span class="tcv-menu-blurb">{{ 'Accounts: add people, roles, passwords, disable' | t }}</span></button>
         }
+        <ng-container *ngTemplateOutlet="barItems" />
         <!-- The accounts this browser remembers: the one signed in ticked,
              any other a click away, no password (backend/accounts.py). -->
         <div class="tcv-menu-head">{{ 'Accounts' | t }}</div>
@@ -590,6 +592,20 @@ export class SignIn {
     }
   }
 }
+<!-- The bell and Settings, when Settings > Top bar hid them from the bar
+     (app.ts): still a click away here, the unread count beside the bell's. -->
+<ng-template #barItems>
+  @if (bellN() !== null) {
+    <button class="tcv-menu-item" [attr.data-on]="here() === 'notifications' ? 1 : null" (click)="open.set(false); room.emit('notifications')">
+      <span class="tcv-menu-name">{{ 'Notifications' | t }}@if (bellN()) {&ngsp;({{ bellN() }})}</span>
+      <span class="tcv-menu-blurb">{{ (bellN() ? 'unread notifications' : 'Nothing unread') | t }}</span></button>
+  }
+  @if (settingsItem()) {
+    <button class="tcv-menu-item" [attr.data-on]="here() === 'settings' ? 1 : null" (click)="open.set(false); room.emit('settings')">
+      <span class="tcv-menu-name">{{ 'Settings' | t }}</span>
+      <span class="tcv-menu-blurb">{{ 'Theme, language, shortcuts, LLM keys, the top bar' | t }}</span></button>
+  }
+</ng-template>
 <!-- Analytics: first in the menu, a chart beside it so it reads as the
      place for figures, and the last seven days in a few words. -->
 <ng-template #analyticsItem>
@@ -612,6 +628,12 @@ export class UserChip {
   spend = input<{ text: string; title: string; state: string } | null>(null);
   inAnalytics = input(false);
   analytics = output<void>();
+  /** The bell's unread count when the bell is hidden from the bar (null:
+   *  it is in the bar), and whether Settings is hidden; a pick opens the room. */
+  bellN = input<number | null>(null);
+  settingsItem = input(false);
+  here = input<string>('');
+  room = output<'notifications' | 'settings'>();
   open = signal(false);
   busy = signal(false);
 

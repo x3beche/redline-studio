@@ -6,7 +6,8 @@
 app-topbar-more { display: contents; }
 
 /* The first tab after the gap takes the free space, as Notes always did;
-   Settings then stands beside the last tab rather than taking it too. */
+   the end (the last item drawn - Settings by default, styles.css
+   .tcv-tab-end) then stands beside the last tab rather than taking it too. */
 .tcv-tab.tb-push { margin-left: auto; }
 .tcv-tab.tcv-tab-end.tb-tight { margin-left: 0; }
 
@@ -57,6 +58,7 @@ app-topbar-more { display: contents; }
    as they are, and the menu's rows big enough for a thumb. */
 @media (max-width: 768px) {
   .tcv-tab.tb-push { margin-left: 0; }
+  .tcv-mtop header .tcv-tab.tcv-tab-end { margin-left: 0; margin-right: 0; }
   .tcv-mtop app-topbar-more > .tcv-tab { flex: none; min-height: 40px; }
   .tb-menu-item { min-height: 40px; }
   /* Settings as its gear alone: the name is in its tooltip, and the room

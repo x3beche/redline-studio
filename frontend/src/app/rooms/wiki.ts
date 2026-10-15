@@ -17,7 +17,7 @@ import { WikiMention, marked, mentionHref, pageHref, slug } from './wiki-text';
  *  dimensions and limits, where the parts come from, the open questions,
  *  the production notes (backend/wiki.py).
  *
- *  Reached from the top bar's More (topbar.ts MENU_ONLY), at /wiki,
+ *  Reached from the top bar's More (a tab when switched on in Settings > Top bar), at /wiki,
  *  /wiki/<project>, /wiki/<project>/<page>. The list on the left is the
  *  project's pages, the project picked at its top; the page on the right
  *  reads as Markdown and is edited where it stands - a click on its text or

@@ -83,8 +83,9 @@ export const WORKSPACES: Workspace[] = [
     ready: true,
   },
   {
-    // Each project's wiki (rooms/wiki.ts): not a tab - it is always under the top bar's More
-    // (topbar.ts MENU_ONLY), and the 3D, PCB and Firmware rooms link to the open project's.
+    // Each project's wiki (rooms/wiki.ts): off in the top bar by default, so under its More
+    // until switched on in Settings > Top bar (topbar-order.ts OFF_BY_DEFAULT); the 3D, PCB
+    // and Firmware rooms link to the open project's.
     id: 'wiki',
     label: 'Wiki',
     blurb: 'Each project\'s short pages: what was decided and why, dimensions and limits, sourcing, '

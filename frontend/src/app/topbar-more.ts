@@ -7,6 +7,7 @@ import { TopBar } from './topbar';
 import { Workspace } from './workspaces';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
+import { NotifyStore } from './notifications';
 
 /** "More" in the top bar - at the end by default, wherever Settings > Top
  *  bar put it (topbar.ts, MORE): the tabs that did not fit, then the
@@ -22,7 +23,7 @@ import { CcTabUsage } from './cc-usage';
   styleUrl: './topbar.css',
   template: `
 @if (bar.moreNeeded()) {
-  <button #btn type="button" class="tcv-tab tb-more" data-tb-more [class.tb-push]="push()"
+  <button #btn type="button" class="tcv-tab tb-more" data-tb-more [class.tb-push]="push()" [class.tcv-tab-end]="end()" [class.tb-tight]="end() && tight()"
           [attr.data-on]="inMore() ? 1 : null" [attr.aria-current]="inMore() ? 'page' : null"
           aria-haspopup="menu" [attr.aria-expanded]="open()"
           [title]="inMore() ? ('More tabs' | t) + ' · ' + (here()?.label ?? '' | t) : ('More tabs' | t)"
@@ -31,8 +32,6 @@ import { CcTabUsage } from './cc-usage';
 @if (open()) {
   <div class="tb-menu" animate.leave="tcv-leave" [style.--tcv-origin]="at().right != null ? 'top right' : 'top left'" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">
     @for (w of bar.overflow(); track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
-    <!-- Rooms that are never a tab (topbar.ts MENU_ONLY): the wiki. -->
-    @for (w of bar.menuTabs; track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
     @if (bar.hiddenTabs().length) {
       <div class="tb-menu-head">{{ 'Hidden' | t }}</div>
       @for (w of bar.hiddenTabs(); track w.id) { <ng-container *ngTemplateOutlet="row; context: { $implicit: w }" /> }
@@ -48,6 +47,7 @@ import { CcTabUsage } from './cc-usage';
     <svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="bar.icon(w.id)"/></svg>
     <span>{{ w.label | t }}</span>
     @if (w.id === 'commandcode' && threads.total()) { <span class="tcv-tab-unread">{{ threads.total() }}</span> }
+    @if (w.id === 'notifications' && notices.unread()) { <span class="tcv-tab-unread">{{ notices.unread() }}</span> }
     @if (w.id === 'commandcode') { <app-cc-tab-usage /> }
     @if (picked.room() === w.id) { <em>● {{ 'open' | t }}</em> }
   </button>
@@ -57,18 +57,24 @@ export class TopbarMore implements OnDestroy {
   bar = inject(TopBar);
   /** Put directly after the gap: it takes the free space, as a tab there would. */
   push = input(false);
+  /** The last item in the bar: it stands at the right end (topbar.ts, end). */
+  end = input(false);
+  tight = input(false);
   picked = inject(Selection);
-  /** Chat's unread count, on More while Chat is in it (a phone's bar). */
+  /** Chat's unread count, on More while Chat is in it (a phone's bar); and
+   *  the bell's while there was no room for it - not when it was hidden. */
   threads = inject(AgentThreads);
-  chatUnread = computed(() => [...this.bar.overflow(), ...this.bar.hiddenTabs()].some(w => w.id === 'commandcode')
-    ? this.threads.total() : 0);
+  notices = inject(NotifyStore);
+  chatUnread = computed(() => ([...this.bar.overflow(), ...this.bar.hiddenTabs()].some(w => w.id === 'commandcode')
+    ? this.threads.total() : 0)
+    + (this.bar.overflow().some(w => w.id === 'notifications') && this.bar.bellCount() ? this.notices.unread() : 0));
   private prefs = inject(Prefs);
   private host = inject(ElementRef).nativeElement as HTMLElement;
   private btn = viewChild<ElementRef<HTMLElement>>('btn');
 
   open = signal(false);
   at = signal<{ top: number; left: number | null; right: number | null }>({ top: 0, left: null, right: 0 });
-  here = computed(() => [...this.bar.overflow(), ...this.bar.menuTabs, ...this.bar.hiddenTabs()]
+  here = computed(() => [...this.bar.overflow(), ...this.bar.hiddenTabs()]
     .find(w => w.id === this.picked.room()) ?? null);
   inMore = computed(() => !!this.here());
 

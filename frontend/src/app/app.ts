@@ -31,7 +31,7 @@ import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 import { ConfirmHost } from './confirm';
 import { Toasts } from './toast';
-import { NotifyBell } from './notifications';
+import { NotifyBell, NotifyStore } from './notifications';
 import { RoomNotifications } from './rooms/notifications';
 import { DmSend, DmStore } from './dm';
 import { DmViewer } from './rooms/dm-viewer';
@@ -69,10 +69,25 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
       @if (b.more) {
       <!-- More, where Settings > Top bar put it: drawn only when a tab is
            hidden or does not fit (topbar-more.ts). -->
-      <app-topbar-more [push]="b.push" />
+      <app-topbar-more [push]="b.push" [end]="b.end" [tight]="bar.tight()" />
+      } @else if (b.id === 'notifications') {
+      <!-- The notification centre (notifications.ts): the bell, how many are
+           unread, and the latest in a panel under it. -->
+      <app-notify-bell [push]="b.push" [end]="b.end" [tight]="bar.tight()" />
+      } @else if (b.id === 'settings') {
+      <!-- Settings: the theme and the language for this browser, the LLM
+           keys and the proxy for the server - a tab, not a menu item. -->
+      <a [href]="href(b.ws.id)" (click)="tab($event, b.ws.id)" class="tcv-tab tcv-tab-settings" data-tb="settings"
+              [class.tb-push]="b.push" [class.tcv-tab-end]="b.end" [class.tb-tight]="b.end && bar.tight()"
+              [class.tb-iconic]="bar.display() === 'icon'"
+              [attr.data-on]="here() === b.ws.id ? 1 : null"
+              [attr.aria-current]="here() === b.ws.id ? 'page' : null"
+              [attr.aria-label]="b.ws.label | t"
+              [title]="b.ws.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name">&ngsp;<span class="tb-name" [attr.data-text]="b.ws.label | t">{{ b.ws.label | t }}</span></span>}</a>
       } @else {
       <!-- A link, so a middle click or Ctrl+click opens the room in a tab of its own (nav.ts). -->
       <a [href]="href(b.ws.id)" (click)="tab($event, b.ws.id)" class="tcv-tab" [class.tb-push]="b.push" [class.tb-iconic]="!bar.text(b.ws)"
+              [class.tcv-tab-end]="b.end" [class.tb-tight]="b.end && bar.tight()"
               [attr.data-tb]="b.id"
               [attr.data-on]="here() === b.id ? 1 : null"
               [attr.aria-current]="here() === b.id ? 'page' : null"
@@ -122,25 +137,14 @@ const SECTIONS = ['profile', 'shares', 'notifications', 'appearance', 'language'
       </a>
       }
     }
-    <!-- The notification centre (notifications.ts): the bell, how many are
-         unread, and the latest in a panel under it. -->
-    <app-notify-bell [tight]="bar.tight()" />
-    <!-- Settings: the theme and the language for this browser, the LLM
-         keys and the proxy for the server - a tab, not a menu item. -->
-    @if (settingsTab; as w) {
-      <a [href]="href(w.id)" (click)="tab($event, w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end" [class.tb-tight]="bar.tight()"
-              [class.tb-iconic]="bar.display() === 'icon'"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [attr.aria-label]="w.label | t"
-              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name">&ngsp;<span class="tb-name" [attr.data-text]="w.label | t">{{ w.label | t }}</span></span>}</a>
-    }
     <!-- Who is signed in, over the right-hand column; nothing in local mode.
          Its width is measured (--layout-user-w) so the tabs keep clear of it
          when that column is folded to a rail. -->
     <!-- Analytics is the first thing in its menu, with the week in a few words. -->
+    <!-- With the bell or Settings hidden in Settings > Top bar, its menu lists them. -->
     <app-user-chip #chip class="tcv-user-end" [brief]="brief()" [spend]="spend()" [inAnalytics]="here() === 'analyze'"
-                   (analytics)="open('analyze')" />
+                   [bellN]="bar.isHidden('notifications') ? notices.unread() : null" [settingsItem]="bar.isHidden('settings')"
+                   [here]="here()" (analytics)="open('analyze')" (room)="open($event)" />
   </header>
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a
@@ -224,6 +228,9 @@ export class App {
   filesTab = WORKSPACES.find(w => w.id === 'files');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
   settingsTab = WORKSPACES.find(w => w.id === 'settings');
+  /** The unread count, polled (and new ones toasted) whether the bell is in
+   *  the bar, under More or hidden (notifications.ts). */
+  notices = inject(NotifyStore);
   /** A few words from Analytics for its menu entry: the last seven days' LLM
    *  spend and notes, and how long ago the figures were worked out. The
    *  server keeps them cached, so asking once a minute costs nothing. */

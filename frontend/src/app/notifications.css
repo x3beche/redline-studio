@@ -4,10 +4,10 @@
    bold full ink, what was read is dim - no fills, no stripes, no blobs. */
 
 /* ---- the bell ---- */
+/* One more item in the top bar, wherever Settings > Top bar put it: its
+   place (pushed right, the end) is topbar.css's and styles.css's. */
 app-notify-bell { display: contents; }
-.tcv-tab.tcv-bell { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding-left: 8px; padding-right: 8px; }
-.tcv-tab.tcv-bell.tb-tight { margin-left: 0; }
-.tcv-bell + .tcv-tab-end { margin-left: 0; }
+.tcv-tab.tcv-bell { display: inline-flex; align-items: center; gap: 4px; padding-left: 8px; padding-right: 8px; }
 .tcv-bell svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7;
   stroke-linecap: round; stroke-linejoin: round; }
 .tcv-bell[data-unread] { color: var(--ink); }
@@ -89,7 +89,7 @@ wb-nc-row { display: block; min-width: 0; }
 .ns-link:hover { text-decoration: underline; }
 
 @media (max-width: 768px) {
-  .tcv-mtop > header > .tcv-bell { margin-left: 0; flex: none; min-height: 40px; }
+  .tcv-mtop app-notify-bell > .tcv-bell { flex: none; min-height: 40px; }
   .nc-title { max-width: 55%; }
   .nc-page-bar { flex-wrap: wrap; }
   .ns-grid { grid-template-columns: 1fr; }

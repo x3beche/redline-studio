@@ -2,13 +2,14 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { T } from './i18n';
 import { Selection } from './selection';
 import { CcTabUsage } from './cc-usage';
-import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
+import { BELL, CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, SETTINGS, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
 
 /** Settings > Top bar: which tabs the bar shows and in what order, and how
  *  they are drawn (topbar.ts keeps it). Drag a row, or use its arrows -
  *  Alt+↑/↓ on a focused row does the same. More is a row too - where its
- *  button stands - but cannot be hidden. Settings is not in the list to
- *  move: it is always shown, always last. */
+ *  button stands - but cannot be hidden. The notification bell and Settings
+ *  are rows like the tabs: hidden, they stay in the menu under your name,
+ *  under More and in Ctrl+K. */
 @Component({
   selector: 'app-topbar-settings',
   imports: [T, CcTabUsage],
@@ -24,6 +25,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
       border-bottom: 1px dashed var(--line); }
     .tb-prev-end { margin-left: auto; }
     .tb-prev-gap + .tb-prev-end { margin-left: 0; }
+    .tb-prev-n { margin-left: 4px; font: 600 10.5px/1 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
     .tb-rows { display: flex; flex-direction: column; }
     .tb-cc-opts { grid-column: 4 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-bottom: 2px; }
     .tb-cc-hint { flex-basis: 100%; font-size: 10.5px; color: var(--ink-dim); }
@@ -35,9 +37,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
     .tb-row[data-drag] { opacity: .45; }
     .tb-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
     .tb-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
-    .tb-row[data-fixed] { background: var(--surface-2); }
     .tb-handle { cursor: grab; color: var(--ink-dim); font-size: 13px; line-height: 1; text-align: center; user-select: none; }
-    .tb-row[data-fixed] .tb-handle { cursor: default; opacity: .4; }
     .tb-row-ico.tb-row-more { font-size: 15px; letter-spacing: 0; }
     .tb-more-n { justify-self: start; }
     .tb-row > .tcv-switch { justify-self: center; }
@@ -69,7 +69,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
   `],
   template: `
 <div class="st-page">
-  <p class="st-lead">{{ 'Arrange the tabs along the top: their order, which are shown, and how they are drawn. Settings always stays at the far right. A hidden tab - and any that do not fit - is under More, so every room is still a click away.' | t }}</p>
+  <p class="st-lead">{{ 'Arrange the tabs along the top: their order, which are shown, and how they are drawn - the notification bell and Settings too. A hidden tab - and any that do not fit - is under More, so every room is still a click away; a hidden bell or Settings is also in the menu under your name.' | t }}</p>
 
   <!-- What the bar will look like -->
   <div class="st-card">
@@ -81,17 +81,23 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
           @for (e of preview(); track e.id) {
             @if (e.id === gap) { <span class="tb-prev-gap"></span> }
             @else if (e.id === more) {
-              @if (hiddenCount()) { <span class="tcv-tab" [attr.data-on]="openIsHidden() ? 1 : null"><span class="tb-name" [attr.data-text]="'More' | t">{{ 'More' | t }}</span> ⋯</span> }
+              @if (hiddenCount()) { <span class="tcv-tab" [class.tb-prev-end]="e.id === previewEnd()" [attr.data-on]="openIsHidden() ? 1 : null"><span class="tb-name" [attr.data-text]="'More' | t">{{ 'More' | t }}</span> ⋯</span> }
+            }
+            @else if (e.id === bell) {
+              <span class="tcv-tab tb-iconic" [class.tb-prev-end]="e.id === previewEnd()" [attr.data-on]="room() === e.id ? 1 : null">
+                <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg>@if (bar.bellCount()) {<span class="tb-prev-n">3</span>}</span>
+            }
+            @else if (e.id === settings) {
+              <span class="tcv-tab" [class.tb-prev-end]="e.id === previewEnd()" [attr.data-on]="room() === e.id ? 1 : null">⚙@if (bar.display() !== 'icon') {&ngsp;<span class="tb-name" [attr.data-text]="'Settings' | t">{{ 'Settings' | t }}</span> }</span>
             }
             @else if (e.ws) {
-              <span class="tcv-tab" [class.tb-iconic]="bar.display() === 'icon'" [attr.data-on]="room() === e.id ? 1 : null">
+              <span class="tcv-tab" [class.tb-iconic]="bar.display() === 'icon'" [class.tb-prev-end]="e.id === previewEnd()" [attr.data-on]="room() === e.id ? 1 : null">
                 @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
                 @if (bar.text(e.ws); as s) { <span class="tb-name" [attr.data-text]="s | t">{{ s | t }}</span> }
                 @if (e.id === 'commandcode') { <app-cc-tab-usage /> }
               </span>
             }
           }
-          <span class="tcv-tab tb-prev-end" [attr.data-on]="room() === 'settings' ? 1 : null">⚙@if (bar.display() !== 'icon') {&ngsp;<span class="tb-name" [attr.data-text]="'Settings' | t">{{ 'Settings' | t }}</span> }</span>
         </div>
         <div class="tb-prev-floor"></div>
       </div>
@@ -152,6 +158,9 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
             <span>{{ (e.id === gap ? 'the tabs after it stand at the right'
                      : e.id === more ? (hiddenCount() ? 'where the More button stands; it cannot be hidden while a tab is hidden'
                                                       : 'not drawn now - no tab is hidden; it appears here when one is, or when tabs do not fit')
+                     : e.id === bell ? (e.hidden ? 'hidden: unread ones are in the menu under your name, More and Ctrl+K' : 'the bell and its unread count')
+                     : e.id === settings ? (e.hidden ? 'hidden: still in the menu under your name, More and Ctrl+K' : 'the gear; also in the menu under your name when hidden')
+                     : e.id === 'wiki' && e.hidden ? 'off by default - under More; the 3D, PCB and Firmware rooms link to it too'
                      : (e.hidden ? 'under More' : (e.ws ? bar.short(e.ws) : ''))) | t }}</span>
           </span>
           @if (e.id === more) {
@@ -184,16 +193,19 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, Topb
               <span class="tb-cc-hint">{{ 'Command Code usage in the tab - a click on it opens LLM settings. Warn from 75%, danger from 90%; Monthly is spent of spent + left, as Command Code reports.' | t }}</span>
             </div>
           }
+          @if (e.id === bell) {
+            <!-- How many are unread, beside the bell (notifications.ts) -->
+            <div class="tb-cc-opts" (keydown)="$event.stopPropagation()" draggable="false" (dragstart)="$event.preventDefault(); $event.stopPropagation()">
+              <span class="st-sub">{{ 'Count' | t }}</span>
+              <div class="st-seg" role="radiogroup" [attr.aria-label]="'Unread count beside the bell' | t">
+                <button type="button" role="radio" [attr.aria-checked]="bar.bellCount()" [class.on]="bar.bellCount()" (click)="bar.setBellCount(true)">{{ 'On' | t }}</button>
+                <button type="button" role="radio" [attr.aria-checked]="!bar.bellCount()" [class.on]="!bar.bellCount()" (click)="bar.setBellCount(false)">{{ 'Off' | t }}</button>
+              </div>
+              <span class="tb-cc-hint">{{ 'Off: the bell alone, in full ink while something is unread. New ones still show a toast as Settings > Notifications says.' | t }}</span>
+            </div>
+          }
         </div>
       }
-      <div class="tb-row" role="listitem" data-fixed>
-        <span class="tb-handle" aria-hidden="true">⋮⋮</span>
-        <button class="tcv-switch" type="button" role="switch" aria-checked="true" data-on="1" disabled [attr.aria-label]="'Settings' | t"></button>
-        <span class="tb-row-ico" aria-hidden="true">⚙</span>
-        <span class="tb-row-name"><b>{{ 'Settings' | t }}</b><span>{{ 'always shown, always at the far right' | t }}</span></span>
-        <span class="st-badge">{{ 'fixed' | t }}</span>
-        <span></span>
-      </div>
     </div>
   </div>
 </div>`,
@@ -203,6 +215,8 @@ export class TopbarSettingsPanel {
   room = inject(Selection).room;
   readonly gap = GAP;
   readonly more = MORE;
+  readonly bell = BELL;
+  readonly settings = SETTINGS;
   readonly ccStyles = CC_TAB_STYLES;
   readonly ccWindows = CC_TAB_WINDOWS;
   readonly displays = TOPBAR_DISPLAYS;
@@ -214,6 +228,8 @@ export class TopbarSettingsPanel {
   displayLabel = computed(() => TOPBAR_DISPLAYS.find(d => d.id === this.bar.display())?.label ?? '');
   /** The bar as it will stand: the shown items, a gap only between tabs. */
   preview = computed(() => this.bar.entries().filter(e => !e.hidden));
+  /** The last item the preview draws: it stands at the right end. */
+  previewEnd = computed(() => [...this.preview()].reverse().find(e => e.id !== GAP && (e.id !== MORE || this.hiddenCount()))?.id ?? null);
 
   name(id: string): string {
     return id === GAP ? 'Gap' : id === MORE ? 'More' : this.bar.entries().find(e => e.id === id)?.ws?.label ?? id;
