@@ -182,6 +182,10 @@ def test_the_downloads_are_rate_limited(db):
     v = visitor("198.51.100.7")
     codes = [v.get("/api/public/m/app.apk").status_code for _ in range(mobile_app.APK_HITS.limit + 1)]
     assert codes[-1] == 429 and set(codes[:-1]) == {200}
+    assert 1 <= int(v.get("/api/public/m/app.apk").headers["retry-after"]) <= 600
+    # Counted in the database: an API reload (fresh limits in memory) does not start it afresh.
+    mobile_app.APK_HITS.clear()
+    assert v.get("/api/public/m/app.apk").status_code == 429
     assert visitor("198.51.100.8").get("/api/public/m/app.apk").status_code == 200
 
 

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import actors, auth, release, scope, shares, store
+from backend import actors, auth, ratelimit, release, scope, shares, store
 from test_telegram import FakeDb
 
 PW = "a long password 1"
@@ -265,14 +265,15 @@ def test_a_password_is_checked_by_the_server(db):
 
 def test_wrong_passwords_are_limited(db, monkeypatch):
     t = token_of(share(person(db, "u-own"), password="hunter22"))
-    monkeypatch.setattr(shares, "WRONG", shares.Window(3, 900))
+    monkeypatch.setattr(shares, "WRONG", ratelimit.Window("share-wrong", 3, 900))
     v = visitor()
     codes = [v.post(f"/api/public/s/{t}/unlock", json={"password": f"no {i}"}).status_code for i in range(5)]
     assert codes == [403, 403, 403, 429, 429]
-    # Even the right one waits now, from that address.
-    assert v.post(f"/api/public/s/{t}/unlock", json={"password": "hunter22"}).status_code == 429
+    # Even the right one waits now, from that address - and is told how long.
+    r = v.post(f"/api/public/s/{t}/unlock", json={"password": "hunter22"})
+    assert r.status_code == 429 and 1 <= int(r.headers["retry-after"]) <= 900
     # Across addresses, the link has a limit of its own.
-    monkeypatch.setattr(shares, "WRONG_LINK", shares.Window(4, 3600))
+    monkeypatch.setattr(shares, "WRONG_LINK", ratelimit.Window("share-wrong-link", 4, 3600))
     for i in range(4):
         visitor(f"198.51.100.{i}").post(f"/api/public/s/{t}/unlock", json={"password": "no"})
     assert visitor("198.51.100.99").post(f"/api/public/s/{t}/unlock",
@@ -281,13 +282,14 @@ def test_wrong_passwords_are_limited(db, monkeypatch):
 
 def test_wrong_tokens_and_floods_are_limited(db, monkeypatch):
     t = token_of(share(person(db, "u-own")))
-    monkeypatch.setattr(shares, "MISSES", shares.Window(3, 600))
+    monkeypatch.setattr(shares, "MISSES", ratelimit.Window("share-misses", 3, 600))
     v = visitor()
     codes = [v.get("/api/public/s/" + chr(65 + i) * 43).status_code for i in range(5)]
     assert codes == [404, 404, 404, 429, 429]
-    assert v.get(f"/api/public/s/{t}").status_code == 429           # that address waits
+    r = v.get(f"/api/public/s/{t}")
+    assert r.status_code == 429 and 1 <= int(r.headers["retry-after"]) <= 600   # that address waits
     assert visitor("192.0.2.1").get(f"/api/public/s/{t}").status_code == 200
-    monkeypatch.setattr(shares, "HITS", shares.Window(5, 60))
+    monkeypatch.setattr(shares, "HITS", ratelimit.Window("share-hits", 5, 60))
     w = visitor("192.0.2.2")
     assert [w.get(f"/api/public/s/{t}").status_code for _ in range(6)][-1] == 429
 

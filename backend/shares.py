@@ -36,10 +36,10 @@ import gzip
 import hashlib
 import hmac
 import ipaddress
+import logging
 import re
 import secrets
 import time
-from collections import deque
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
@@ -47,7 +47,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from . import actors, auth, scope, store
+from . import actors, auth, ratelimit, scope, store
 
 COLL = "shares"
 FILES = "share_files"                 # GridFS bucket: what "this version" links show
@@ -289,45 +289,14 @@ def _clean(name: str, data: bytes) -> bytes:
 
 # ---------------------------------------------------------------- rate limits
 
-class Window:
-    """At most `limit` events per key in `seconds`, in this process's memory
-    (a reload of the API starts every count afresh, like sign-in's)."""
-
-    def __init__(self, limit: int, seconds: float):
-        self.limit, self.seconds = limit, seconds
-        self.seen: dict[str, deque] = {}
-
-    def _trim(self, key: str, t: float) -> deque:
-        q = self.seen.setdefault(key, deque())
-        while q and q[0] <= t - self.seconds:
-            q.popleft()
-        return q
-
-    def full(self, key: str) -> bool:
-        return len(self._trim(key, time.monotonic())) >= self.limit
-
-    def hit(self, key: str) -> bool:
-        """Count one; False when the key was already at its limit."""
-        t = time.monotonic()
-        q = self._trim(key, t)
-        if len(q) >= self.limit:
-            return False
-        q.append(t)
-        if len(self.seen) > 20000:                    # a flood of addresses: forget the idle ones
-            for k in [k for k, v in self.seen.items() if not v or v[-1] <= t - self.seconds]:
-                self.seen.pop(k, None)
-        return True
-
-    def clear(self) -> None:
-        self.seen.clear()
-
-
 # Requests to the public routes, per address; tokens that are wrong, per
 # address; passwords that are wrong, per link and address, and per link.
-HITS = Window(300, 60)
-MISSES = Window(20, 600)
-WRONG = Window(8, 900)
-WRONG_LINK = Window(40, 3600)
+# Counted in the database (backend/ratelimit.py), so a reload of the API or
+# a second process does not start them afresh.
+HITS = ratelimit.Window("share-hits", 300, 60)
+MISSES = ratelimit.Window("share-misses", 20, 600)
+WRONG = ratelimit.Window("share-wrong", 8, 900)
+WRONG_LINK = ratelimit.Window("share-wrong-link", 40, 3600)
 # One look per visitor and link in this window is one view (and one audit line).
 LOOKED = 1800
 _looked: dict[tuple[str, str], float] = {}
@@ -337,7 +306,18 @@ def client(request: Request) -> str:
     """Who is asking, as an address. Behind the site's own proxy (the
     connection comes from this machine or the private network) it is the
     last address the proxy added to X-Forwarded-For - not the first, which
-    the visitor may write themselves."""
+    the visitor may write themselves.
+
+    The live site: Nginx Proxy Manager sets X-Forwarded-For to
+    $proxy_add_x_forwarded_for (what came in, then the visitor's address)
+    and X-Real-IP, and passes the page's host to the dev server, whose /api
+    proxy hands the headers on unchanged to the API on 127.0.0.1. uvicorn's
+    own proxy-headers step (on by default, trusting 127.0.0.1) has then
+    already made request.client the right-most address that is not a
+    trusted proxy - the one NPM added - so the peer seen here is public and
+    used as it is. The deploy image trusts only private addresses
+    (docker/deploy/api-entrypoint.sh) for the same result: with "*" uvicorn
+    would take the left-most entry, which the visitor writes."""
     peer = request.client.host if request.client else ""
     try:
         local = ipaddress.ip_address(peer).is_private or ipaddress.ip_address(peer).is_loopback
@@ -353,21 +333,57 @@ def client(request: Request) -> str:
     return peer
 
 
-def _refuse(code: int, detail: str) -> HTTPException:
-    return HTTPException(code, detail, headers={**PUBLIC, "Cache-Control": "no-store"})
+# A link's token is in the address it is opened at, so it would be in every
+# access log line the server writes (uvicorn's, and Loki's copy of it). The
+# lines keep the route and hide the token.
+_TOKEN_IN_PATH = re.compile(r"(^|[\s\"])(/api/public/s/|/s/)[^/?#\s\"]+")
+
+
+def redact(text: str) -> str:
+    return _TOKEN_IN_PATH.sub(r"\1\2<token>", text)
+
+
+class HideTokens(logging.Filter):
+    """Takes share tokens out of an access log line (its message and arguments)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and any(isinstance(a, str) and "s/" in a for a in record.args):
+            record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
+        if isinstance(record.msg, str) and "s/" in record.msg:
+            record.msg = redact(record.msg)
+        return True
+
+
+def hide_tokens_in_logs(name: str = "uvicorn.access") -> None:
+    got = logging.getLogger(name)
+    if not any(isinstance(f, HideTokens) for f in got.filters):
+        got.addFilter(HideTokens())
+
+
+hide_tokens_in_logs()
+
+
+def _refuse(code: int, detail: str, retry: int = 0) -> HTTPException:
+    return HTTPException(code, detail, headers={**PUBLIC, "Cache-Control": "no-store",
+                                                **({"Retry-After": str(retry)} if retry else {})})
 
 
 async def _open(request: Request, token: str) -> dict:
     """The share a public request names, while it is open; refused
     otherwise. An unknown token and a malformed one cost the same lookup."""
     who = client(request)
-    if not HITS.hit(who) or MISSES.full(who):
-        raise _refuse(429, "too many requests - wait a minute")
+    db = _db()
+    ok, wait = await HITS.hit(db, who)
+    if ok:
+        blocked, wait = await MISSES.full(db, who)
+        ok = not blocked
+    if not ok:
+        raise _refuse(429, "too many requests - wait a minute", wait)
     good = bool(TOKEN_RE.match(token or ""))
     key = digest(token if good else "-" * 43)
-    doc = await _db()[COLL].find_one({"_id": key})
+    doc = await db[COLL].find_one({"_id": key})
     if not good or not doc or not hmac.compare_digest(doc["_id"], key):
-        MISSES.hit(who)
+        await MISSES.hit(db, who)
         raise _refuse(404, "there is no such link")
     st = state(doc)
     if st == "revoked":
@@ -650,12 +666,15 @@ async def public_unlock(token: str, body: UnlockIn, request: Request):
         return _public(public_view(doc, await _there(doc)))
     who = client(request)
     pair = f"{doc['_id']}:{who}"
-    if WRONG.full(pair) or WRONG_LINK.full(doc["_id"]):
-        raise _refuse(429, "too many wrong passwords - try again later")
+    db = _db()
+    for limit, key in ((WRONG, pair), (WRONG_LINK, doc["_id"])):
+        blocked, wait = await limit.full(db, key)
+        if blocked:
+            raise _refuse(429, "too many wrong passwords - try again later", wait)
     ok = await asyncio.to_thread(auth.check_password, body.password, doc["password"])
     if not ok:
-        WRONG.hit(pair)
-        WRONG_LINK.hit(doc["_id"])
+        await WRONG.hit(db, pair)
+        await WRONG_LINK.hit(db, doc["_id"])
         raise _refuse(403, "that is not the password")
     end = _when(doc.get("expires_at")) or now()
     res = _public(public_view(doc, await _there(doc)))

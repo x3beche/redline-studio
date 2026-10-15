@@ -53,8 +53,14 @@ if [ -n "${REDLINE_OWNER_EMAIL:-}" ]; then
   as_app python /opt/workbench/docker/deploy/bootstrap_owner.py || true
 fi
 
+# The visitor's address is the right-most X-Forwarded-For entry that is not
+# one of these proxies (the page's nginx, a proxy in front of it). Trusting
+# "*" would take the left-most entry instead, which the visitor writes - and
+# shared links and the public APK are rate-limited per address.
+TRUSTED="${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}"
+
 echo "> Workbench API on :${API_PORT:-8000} (code in $APP, scratch in $TMPDIR)"
 exec setpriv --reuid="$UID_" --regid="$GID_" --groups="$groups" -- \
   python -m uvicorn backend.main:app --host 0.0.0.0 --port "${API_PORT:-8000}" \
-    --proxy-headers --forwarded-allow-ips='*' --timeout-graceful-shutdown 10 \
+    --proxy-headers --forwarded-allow-ips="$TRUSTED" --timeout-graceful-shutdown 10 \
     --log-level "${REDLINE_LOG_LEVEL:-info}"

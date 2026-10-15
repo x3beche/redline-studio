@@ -214,7 +214,12 @@ class Coll:
         if sort:
             rows = Cursor(rows).sort(sort).rows
         if not rows:
-            return None
+            if not upsert:
+                return None
+            doc = self._upsert_doc(q)
+            apply(doc, update, inserting=True)
+            await self.insert_one(doc)
+            return copy.deepcopy(self.docs[doc["_id"]]) if return_document else None
         before = copy.deepcopy(rows[0])
         apply(self.docs[rows[0]["_id"]], update)
         return copy.deepcopy(self.docs[rows[0]["_id"]]) if return_document else before

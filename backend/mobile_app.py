@@ -46,7 +46,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import shares
+from . import ratelimit, shares
 
 ROOT = Path(__file__).resolve().parent.parent
 MIME = "application/vnd.android.package-archive"
@@ -60,8 +60,9 @@ NAME_RE = re.compile(r"^workbench-(.+)\.apk$")
 PUBLIC = {**shares.PUBLIC, "Cache-Control": "no-cache"}
 
 # Per address: the description is cheap; the APK is ~40 MB, so fewer.
-JSON_HITS = shares.Window(120, 60)
-APK_HITS = shares.Window(20, 600)
+# Counted in the database (backend/ratelimit.py), like shared links'.
+JSON_HITS = ratelimit.Window("apk-json", 120, 60)
+APK_HITS = ratelimit.Window("apk-file", 20, 600)
 
 # minSdkVersion -> the Android release it is.
 ANDROID = {21: "5.0", 22: "5.1", 23: "6.0", 24: "7.0", 25: "7.1", 26: "8.0", 27: "8.1", 28: "9",
@@ -259,9 +260,11 @@ def publish(src: Path, *, version: str | None = None, version_code: int | None =
 
 # ---------------------------------------------------------------- the public routes
 
-def _limit(window: shares.Window, request: Request) -> None:
-    if not window.hit(shares.client(request)):
-        raise HTTPException(429, "too many requests - wait a few minutes", headers={**PUBLIC, "Retry-After": "60"})
+async def _limit(window: ratelimit.Window, request: Request) -> None:
+    ok, wait = await window.hit(shares._db(), shares.client(request))
+    if not ok:
+        raise HTTPException(429, "too many requests - wait a few minutes",
+                            headers={**PUBLIC, "Retry-After": str(wait)})
 
 
 def _none() -> HTTPException:
@@ -277,7 +280,7 @@ def public_info(info: dict) -> dict:
 @router.get("/api/public/m/app.json")
 async def app_json(request: Request):
     """What the latest build is; 404 when none was published."""
-    _limit(JSON_HITS, request)
+    await _limit(JSON_HITS, request)
     info = latest()
     if not info:
         raise _none()
@@ -287,7 +290,7 @@ async def app_json(request: Request):
 @router.api_route("/api/public/m/app.apk", methods=["GET", "HEAD"])
 async def app_apk(request: Request):
     """The latest build, to install: an attachment named by its version."""
-    _limit(APK_HITS, request)
+    await _limit(APK_HITS, request)
     info = latest()
     if not info:
         raise _none()
