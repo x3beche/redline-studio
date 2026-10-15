@@ -30,7 +30,12 @@ Two themes (`Doc.theme`):
   labelled cells (Number | Page "1 of M", Date of writing | Revision,
   Applicability, Prepared), with Subject | Author in a row under it. Every
   later page has a one-row header instead (the logo, the title on one line,
-  Number, Revision, "Page N of M"); every page a thin footer rule. Fields
+  Number, Revision, "Page N of M"); every page a footer row of the same
+  cells (Prepared or the project, Number, Revision, Printed, Page N of M).
+  Header, side rules and footer are one frame, 5 mm from the paper's edges
+  (FRAME), the text 7 mm inside it; the side rules are drawn by the
+  templates beside their tables and by a fixed box in the page between
+  them (a fixed box repeats on every printed page). Fields
   left empty get defaults (`fields`): the number WB-<yyyymmdd>-<hhmm> of the
   date it was made, revision 0, the date it was made (dd.mm.yyyy in a
   Turkish document, yyyy-mm-dd otherwise), applicability "-", prepared
@@ -49,6 +54,8 @@ The headers are Chromium's print header templates, which are the same on
 every page, so the page is printed twice from one layout - page 1 with the
 big header, then pages 2- with the compact one (`pageRanges`; the page
 numbers stay the whole document's) - and the two are joined with PDFium.
+Chromium rounds the paper (A4 comes out 595.92 x 841.92 pt), so every
+page's box is then set to the exact size (`exact_paper`).
 """
 
 from __future__ import annotations
@@ -75,6 +82,11 @@ TIMEOUT = float(os.environ.get("REDLINE_PDF_TIMEOUT", "90"))
 TZ = os.environ.get("REDLINE_TZ", "Europe/Istanbul")
 FONTS = Path(__file__).resolve().parents[1] / "frontend" / "public" / "fonts"
 SIZES = ("A4", "Letter")
+# Paper as Chromium is given it, and as the PDF's pages are set after (POINTS): Chromium rounds a
+# page's size (an A4 comes out 595.92 x 841.92 pt), so each page's box is then set to the exact
+# size, centred on what was printed.
+PAPER = {"A4": ("210mm", "297mm"), "Letter": ("8.5in", "11in")}
+POINTS = {"A4": (595.276, 841.89), "Letter": (612.0, 792.0)}
 THEMES = ("document", "simple")
 LOGO = os.environ.get("REDLINE_PDF_LOGO", "")   # a picture file printed instead of the Workbench mark
 MAX_MD = 200_000                      # characters of Markdown a document may have
@@ -90,12 +102,14 @@ LABELS = {
     "en": {"date": "Date", "author": "Author", "project": "Project", "purpose": "Purpose", "page": "Page",
            "of": "of", "missing": "picture not available", "number": "Number", "written": "Date of Writing",
            "revision": "Revision", "applicability": "Applicability", "prepared": "Prepared", "subject": "Subject",
-           "rev": "Rev.", "no": "No."},
+           "rev": "Rev.", "no": "No.", "printed": "Printed"},
     "tr": {"date": "Tarih", "author": "Yazan", "project": "Proje", "purpose": "Amaç", "page": "Sayfa",
            "of": "/", "missing": "resim alınamadı", "number": "Numara", "written": "Yazım tarihi",
            "revision": "Revizyon", "applicability": "Uygulama alanı", "prepared": "Hazırlayan", "subject": "Konu",
-           "rev": "Rev.", "no": "No."},
+           "rev": "Rev.", "no": "No.", "printed": "Basım"},
 }
+# A callout's label in a Turkish document (English: the kind's own name).
+ALERTS = {"tr": {"note": "Not", "tip": "İpucu", "important": "Önemli", "warning": "Uyarı", "caution": "Dikkat"}}
 # The defaults of the document theme's header (`fields`).
 DEFAULTS = {"revision": "0", "applicability": "—", "prepared": "Workbench"}
 
@@ -298,7 +312,8 @@ def _render_rules(md: MarkdownIt) -> None:
         out = self.renderToken(tokens, idx, options, env)
         kind = (tokens[idx].meta or {}).get("alert")
         if kind:
-            out += f'<div class="alert-label">{kind.title()}</div>'
+            name = ALERTS.get(env.get("lang"), {}).get(kind) or kind.title()
+            out += f'<div class="alert-label">{name}</div>'
         return out
 
     def table_open(self, tokens, idx, options, env):
@@ -727,8 +742,14 @@ def _title_size(title: str) -> str:
 DOC_CSS = """
 :root { --ink: #000; --ink-dim: #333; --ink-faint: #666; --line: #000; --line-soft: #bbb; --wash: #f2f2f2;
   --accent: #000; }
-body { font-size: 10pt; line-height: 1.5; }
-@page :first { margin-top: 64mm; }
+body { font-size: 10pt; line-height: 1.5; padding: 0 7mm; }
+@page :first { margin-top: 59mm; }   /* FIRST_TOP */
+/* The frame's side rules, on every page (a fixed box repeats on each printed page): from inside the
+   header table down into the footer table, on the tables' outer edges - one box with them. */
+.frame { position: fixed; top: 0; height: 300mm; left: 1.5pt; right: .6pt; border-left: .8pt solid #000;
+  border-right: .8pt solid #000; pointer-events: none; }
+td, th { overflow-wrap: anywhere; }
+img { max-width: 100%; }
 h1 { margin: 18pt 0 7pt; font: 700 16pt/1.25 'IBM Plex Sans', sans-serif; letter-spacing: 0; }
 h2 { margin: 16pt 0 6pt; padding: 0; border: 0; font: 700 13pt/1.3 'IBM Plex Sans', sans-serif; }
 h3 { margin: 13pt 0 4pt; font-size: 11pt; font-weight: 700; }
@@ -740,9 +761,9 @@ a { color: #000; text-decoration: underline; text-decoration-thickness: .4pt; }
 .doc-meta b { font-weight: 600; color: #000; }
 code { background: var(--wash); }
 .code { border-color: #999; border-radius: 0; background: #f6f6f6; }
-blockquote { background: none; border-left: 1.5pt solid #000; border-radius: 0; padding: 2pt 10pt; }
+blockquote { background: none; border: .6pt solid #000; border-radius: 0; padding: 5pt 9pt; }
 blockquote.alert.note, blockquote.alert.tip, blockquote.alert.important, blockquote.alert.warning,
-blockquote.alert.caution { border-left-color: #000; }
+blockquote.alert.caution { border-color: #000; }
 th { color: #000; background: var(--wash); border: .6pt solid #000; font-size: 8pt; }
 td { border: .6pt solid #000; }
 tbody tr:last-child td { border-bottom: .6pt solid #000; }
@@ -760,6 +781,9 @@ _DOC_HEAD_CSS = ("<style>{faces}"
                  "td{{border:0;border-right:.8pt solid #000;border-bottom:.8pt solid #000;padding:0;"
                  "vertical-align:top;overflow:hidden}}"
                  ".f{{position:relative;height:9mm}}"
+                 ".box{{display:flex;flex-direction:column}}"
+                 ".box table{{flex:none}}"
+                 ".rail{{flex:1;border-left:.8pt solid #000;border-right:.8pt solid #000}}"
                  ".f .l{{position:absolute;left:4pt;top:2.6pt;font-size:6.6pt;color:#000}}"
                  ".f .v{{position:absolute;right:5pt;bottom:3pt;left:4pt;text-align:right;font-weight:700;"
                  "font-size:8.4pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}"
@@ -779,14 +803,13 @@ _DOC_HEAD_CSS = ("<style>{faces}"
                  ".c .logo{{padding:0}}"
                  ".c .t{{font-weight:700;text-transform:uppercase;font-size:8pt}}"
                  ".c b{{font-weight:700}}"
-                 ".ft{{width:100%;margin:0 {mx};display:flex;gap:12pt;padding-top:3.5pt;border-top:.6pt solid #000;"
-                 "font:400 6.8pt/1.3 'IBM Plex Sans',sans-serif;color:#333}}"
-                 ".ft span{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}"
-                 ".ft .r{{margin-left:auto;text-align:right}}"
                  "</style>")
 
-_FIRST_TOP = "64mm"        # page 1's top margin: the big header (@page :first in DOC_CSS)
-DOC_MARGIN = {"top": "27mm", "bottom": "18mm", "left": "19mm", "right": "19mm"}
+# The frame (header table, side rules, footer table) is FRAME from the paper's edges; the text 7 mm
+# inside it (the body's padding); page 1's top margin is in DOC_CSS (@page :first).
+FRAME = "5mm"
+FIRST_TOP = "59mm"
+DOC_MARGIN = {"top": "20mm", "bottom": "21mm", "left": FRAME, "right": FRAME}
 
 
 def _cell(label: str, value: str, cls: str = "f", span: int = 1, room: int = 0) -> str:
@@ -803,8 +826,8 @@ def first_header_html(doc: Doc) -> str:
     lab = LABELS.get(doc.lang, LABELS["en"])
     f = fields(doc)
     pages = (f'<span class="pageNumber"></span> {_e(lab["of"])} <span class="totalPages"></span>')
-    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=DOC_MARGIN["left"])
-            + f'<div class="h" lang="{_e(doc.lang)}" style="margin-top:9mm;width:calc(100% - 2 * {DOC_MARGIN["left"]})">'
+    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=FRAME)
+            + f'<div class="h box" lang="{_e(doc.lang)}" style="height:{FIRST_TOP};width:calc(100% - 2 * {FRAME})">'
             '<table><colgroup><col style="width:30mm"><col><col style="width:31mm"><col style="width:31mm">'
             '</colgroup>'
             f'<tr><td class="logo" rowspan="4">{logo_html("22mm")}</td>'
@@ -815,33 +838,40 @@ def first_header_html(doc: Doc) -> str:
             "<tr>" + _cell(lab["prepared"], _e(f["prepared"]), span=2, room=26) + "</tr>"
             "<tr>" + _cell(lab["subject"], _e(f["subject"]), "f sub subj", 2)
             + _cell(lab["author"], _e(f["author"]), "f sub", 2, room=30)
-            + "</tr></table></div>")
+            + "</tr></table><div class=\"rail\"></div></div>")
 
 
 def compact_header_html(doc: Doc) -> str:
     """Pages 2-: one row - the logo, the title on one line, Number, Revision, Page N of M."""
     lab = LABELS.get(doc.lang, LABELS["en"])
     f = fields(doc)
-    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=DOC_MARGIN["left"])
-            + f'<div class="h c" lang="{_e(doc.lang)}" style="margin-top:9mm;width:calc(100% - 2 * {DOC_MARGIN["left"]})">'
+    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=FRAME)
+            + f'<div class="h c box" lang="{_e(doc.lang)}" style="height:{DOC_MARGIN["top"]};width:calc(100% - 2 * {FRAME})">'
             '<table><colgroup><col style="width:11mm"><col><col style="width:40mm"><col style="width:17mm">'
             '<col style="width:26mm"></colgroup><tr>'
             f'<td class="logo">{logo_html("6mm")}</td><td class="t">{_e(f["title"])}</td>'
             f'<td>{_e(lab["no"])} <b>{_e(f["number"])}</b></td>'
             f'<td>{_e(lab["rev"])} <b>{_e(f["revision"])}</b></td>'
             f'<td>{_e(lab["page"])} <b><span class="pageNumber"></span> {_e(lab["of"])} '
-            '<span class="totalPages"></span></b></td></tr></table></div>')
+            '<span class="totalPages"></span></b></td></tr></table><div class="rail"></div></div>')
 
 
 def doc_footer_html(doc: Doc) -> str:
-    """Every page: a thin rule; the project (or who prepared it) left, when it was printed right."""
+    """Every page: the frame's bottom, a row of ruled cells - prepared (or the
+    project), number, revision, when it was printed, page N of M."""
+    lab = LABELS.get(doc.lang, LABELS["en"])
     f = fields(doc)
-    left = no_email(doc.project) or f["prepared"]
     w = _local(doc.created)
-    made = w.strftime("%d.%m.%Y %H:%M") if doc.lang == "tr" else stamp(doc.created)
-    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=DOC_MARGIN["left"])
-            + f'<div class="ft" style="width:calc(100% - 2 * {DOC_MARGIN["left"]})"><span>{_e(left)}</span>'
-            f'<span class="r">{_e(f["number"])} · {_e(made)}</span></div>')
+    made = w.strftime("%d.%m.%Y %H:%M") if doc.lang == "tr" else w.strftime("%Y-%m-%d %H:%M")
+    first = (lab["project"], no_email(doc.project)) if no_email(doc.project) else (lab["prepared"], f["prepared"])
+    pages = f'<span class="pageNumber"></span> {_e(lab["of"])} <span class="totalPages"></span>'
+    return (_DOC_HEAD_CSS.format(faces=font_faces(), mx=FRAME)
+            + f'<div class="h box" lang="{_e(doc.lang)}" style="height:{DOC_MARGIN["bottom"]};width:calc(100% - 2 * {FRAME})">'
+            '<div class="rail"></div><table><colgroup><col><col style="width:40mm"><col style="width:22mm"><col style="width:34mm">'
+            '<col style="width:28mm"></colgroup><tr>'
+            + _cell(first[0], _e(first[1]), room=40) + _cell(lab["number"], _e(f["number"]), room=20)
+            + _cell(lab["revision"], _e(f["revision"]), room=10) + _cell(lab["printed"], _e(made))
+            + _cell(lab["page"], pages) + "</tr></table></div>")
 
 
 def doc_page_html(doc: Doc, body_html: str) -> str:
@@ -854,7 +884,7 @@ def doc_page_html(doc: Doc, body_html: str) -> str:
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; "
             "font-src data:; style-src 'unsafe-inline'\">"
             f"<title>{_e(doc.title)}</title><style>{font_faces()}{CSS}{DOC_CSS}</style></head><body>"
-            f'<main>{head}{body_html}</main></body></html>')
+            f'<div class="frame"></div><main>{head}{body_html}</main></body></html>')
 
 
 def body_markdown(doc: Doc) -> str:
@@ -892,7 +922,7 @@ process.stdin.on('end', async () => {
     for (const p of j.passes) {
       let pdf = Buffer.alloc(0);
       try {
-        pdf = Buffer.from(await page.pdf({ format: j.format, printBackground: true, displayHeaderFooter: true,
+        pdf = Buffer.from(await page.pdf({ width: j.width, height: j.height, printBackground: true, displayHeaderFooter: true,
           headerTemplate: p.header, footerTemplate: p.footer, margin: j.margin, outline: true, tagged: true,
           pageRanges: p.ranges || '', timeout: 60000 }));
       } catch (e) {
@@ -934,8 +964,9 @@ async def print_pdf(page: str, header: str, footer: str, size: str = "A4", margi
     page 1 has `header` and pages 2- have `rest` (two prints of one layout, joined)."""
     passes = ([{"header": header, "footer": footer}] if rest is None else
               [{"header": header, "footer": footer, "ranges": "1"}, {"header": rest, "footer": footer, "ranges": "2-"}])
+    width, height = PAPER.get(size, PAPER["A4"])
     payload = json.dumps({"html": page, "passes": passes, "margin": margin or MARGIN,
-                          "format": size if size in SIZES else "A4"}).encode()
+                          "width": width, "height": height}).encode()
     name = "redline-pdf-" + secrets.token_hex(4)
     async with _RUNNING:
         try:
@@ -959,9 +990,32 @@ async def print_pdf(page: str, header: str, footer: str, size: str = "A4", margi
         if "Unable to find image" in (err or b"").decode("utf-8", "replace") or "No such image" in tail:
             tail = f"the image {IMAGE} is not on this machine (docker pull {IMAGE})"
         raise RenderError(f"the PDF could not be printed: {tail[:300]}")
-    if rest is None or len(parts) < 2 or not parts[1]:
-        return parts[0]                        # one page: no rest
-    return _first_then(parts[0], parts[1])
+    out = parts[0] if rest is None or len(parts) < 2 or not parts[1] else _first_then(parts[0], parts[1])
+    return exact_paper(out, size)
+
+
+def exact_paper(pdf: bytes, size: str = "A4") -> bytes:
+    """Every page's media and crop box at the paper's exact size, centred on
+    the page as Chromium printed it (which is up to a point larger)."""
+    import pypdfium2 as pdfium
+    from .pdftext import _LOCK
+    w, h = POINTS.get(size, POINTS["A4"])
+    with _LOCK:
+        doc = pdfium.PdfDocument(pdf)
+        try:
+            for i in range(len(doc)):
+                page = doc[i]
+                l, b, r, t = page.get_mediabox()
+                if abs((r - l) - w) < .01 and abs((t - b) - h) < .01:
+                    continue
+                x, y = l + ((r - l) - w) / 2, b + ((t - b) - h) / 2
+                page.set_mediabox(x, y, x + w, y + h)
+                page.set_cropbox(x, y, x + w, y + h)
+            buf = io.BytesIO()
+            doc.save(buf)
+            return buf.getvalue()
+        finally:
+            doc.close()
 
 
 def _first_then(first: bytes, rest: bytes) -> bytes:

@@ -125,7 +125,15 @@ def test_page_one_has_the_big_header_and_the_others_the_compact_one():
     # Chromium fills an element of class "title", "date" or "url" in a template with its own text.
     for t in (big, small, pdfdoc.doc_footer_html(doc)):
         assert not re.search(r'class="(title|date|url)"', t)
+    foot = pdfdoc.doc_footer_html(doc)
+    for label in ("Prepared", "Number", "Revision", "Printed", "Page"):
+        assert f'<span class="l">{label}</span>' in foot
+    assert "Firmware team" in foot and "FC-STM001" in foot and '<span class="totalPages"></span>' in foot
+    # the frame's side rules continue from the header's table and into the footer's
+    assert big.count('class="rail"') == small.count('class="rail"') == foot.count('class="rail"') == 1
+    assert '<span class="l">Project</span>' in pdfdoc.doc_footer_html(pdfdoc.Doc(title="T", project="fan-ctrl"))
     tr = pdfdoc.first_header_html(pdfdoc.Doc(title="Rapor", lang="tr"))
+    assert '<span class="l">Basım</span>' in pdfdoc.doc_footer_html(pdfdoc.Doc(title="Rapor", lang="tr"))
     for label in ("Numara", "Sayfa", "Yazım tarihi", "Revizyon", "Uygulama alanı", "Hazırlayan", "Konu"):
         assert f'<span class="l">{label}</span>' in tr
     assert '<span class="pageNumber"></span> / <span class="totalPages"></span>' in tr
@@ -134,7 +142,8 @@ def test_page_one_has_the_big_header_and_the_others_the_compact_one():
 def test_the_document_page_puts_the_extra_rows_on_one_line_and_floats_a_right_figure():
     page = pdfdoc.doc_page_html(pdfdoc.Doc(title="T", meta=[("Models", "m1"), ("Empty", "")]), "<p>x</p>")
     assert '<p class="doc-meta"><b>Models</b> m1</p>' in page and "Empty" not in page
-    assert "@page :first { margin-top: 64mm; }" in page
+    assert "@page :first { margin-top: 59mm; }" in page and '<div class="frame"></div><main>' in page
+    assert ".frame { position: fixed;" in page
     out = pdfdoc.md_html('![Clock path](files:abc123 "right")', {"files:abc123": "data:image/png;base64,AA=="})
     assert out.startswith('<figure class="right"><img') and "<figcaption>Clock path</figcaption>" in out
 
@@ -271,6 +280,27 @@ def test_a_document_prints_with_its_header_footer_and_page_count():
     assert "$3.31" in one and "Appendix" in two and "Prices as of 12 Oct 2026." in two
 
 
+def _frame_ok(pdf_bytes: bytes) -> list[bool]:
+    """Per page: A4 to the point, and a rule 5 mm in from the left and right
+    edges on every row from the header's top to the footer's bottom."""
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        out = []
+        for i in range(len(pdf)):
+            w, h = pdf[i].get_size()
+            im = pdf[i].render(scale=2).to_pil().convert("L")       # 144 dpi: 5 mm = 28 px
+            W, H = im.size
+            band = lambda xs, y: any(im.getpixel((x, y)) < 140 for x in xs)
+            rows = range(32, H - 32)
+            out.append(abs(w - 595.28) < .05 and abs(h - 841.89) < .05
+                       and all(band(range(24, 33), y) and band(range(W - 33, W - 24), y) for y in rows)
+                       and band(range(24, 33), 20) is False)
+        return out
+    finally:
+        pdf.close()
+
+
 def _texts(pdf_bytes: bytes) -> list[str]:
     import pypdfium2 as pdfium
     pdf = pdfium.PdfDocument(pdf_bytes)
@@ -293,8 +323,11 @@ def test_a_document_prints_its_big_header_on_page_one_and_the_compact_one_after(
                   "9.12.2021", "Revision", "Applicability", "STM32F4DISCOVERY", "Prepared", "Firmware team",
                   "Subject", "CLOCK TREE SETUP", "Author", "Ann Example", "$3.31"):
         assert words in one, words
+    assert one.count("1 of 3") == 2 and "Printed" in one                # header and footer
+    assert _frame_ok(made.pdf) == [True, True, True]
     for i, page in ((2, two), (3, three)):
         assert f"Page {i} of 3" in page and "No. FC-STM001" in page and "Rev. 0" in page
+        assert f"{i} of 3" in page.replace(f"Page {i} of 3", "", 1) and "Printed" in page
         assert "STM32F4 CLOCK SPEED WITH HAL" in page
         assert "Date of Writing" not in page and "Applicability" not in page
     assert "Appendix" in two and "The end." in three
@@ -309,7 +342,8 @@ def test_a_turkish_document_has_turkish_labels():
     for words in ("ÖLÇÜM RAPORU", "Numara", "WB-20261015-1200", "Sayfa", "1 / 2", "Yazım tarihi", "15.10.2026",
                   "Revizyon", "Uygulama alanı", "Hazırlayan", "Workbench", "Konu"):
         assert words in one, words
-    assert "Sayfa 2 / 2" in two and "Yazım tarihi" not in two
+    assert "Sayfa 2 / 2" in two and "Yazım tarihi" not in two and "Basım" in two
+    assert _frame_ok(made.pdf) == [True, True]
 
 
 @pytest.mark.skipif(not _engine(), reason="no docker or no Chromium image to print with")
