@@ -33,13 +33,22 @@ export interface Price { amount: number; currency: string }
  *  share of it (0.8) at which it warns. */
 export type BudgetKind = 'total' | 'llm' | 'electricity' | 'proxy';
 export interface Budget { amount: number; currency: string; warn: number }
+/** What a budget line of one's own counts (backend/budgets.py MEASURES). */
+export type BudgetMeasure = 'line' | 'category' | 'llm_provider' | 'llm_job' | 'llm' | 'electricity' | 'proxy';
+/** A budget line of one's own: a name, what it measures (`ref`: a cost line's
+ *  id, a category, a provider or a job), an amount a month and its warning share. */
+export interface BudgetLine {
+  id?: string; name: string; measure: BudgetMeasure; ref: string | null; amount: number; currency: string; warn: number;
+}
 export type BudgetState = 'ok' | 'warn' | 'over';
 /** One budget this month (backend/budgets.py): dollars, like every figure. */
 export interface BudgetItem {
-  kind: BudgetKind; name: string; amount: number; currency: string; warn: number;
+  /** `total`... for the built-in budgets, `line:<id>` for one's own (kind `line`). */
+  key?: string; kind: BudgetKind | 'line'; name: string; amount: number; currency: string; warn: number;
+  id?: string; measure?: BudgetMeasure; ref?: string | null; ref_name?: string;
   budget_usd: number; spent_usd: number; forecast_usd: number;
   ratio: number | null; forecast_ratio: number | null; state: BudgetState; forecast_state: BudgetState;
-  basis: 'month_avg' | 'last_7d'; basis_why: string;
+  basis: 'month_avg' | 'last_7d' | 'fixed'; basis_why: string;
   forecast_month_avg_usd: number; forecast_last_7d_usd: number;
   rate_month_per_day_usd: number; rate_7d_per_day_usd: number;
   fixed_month_usd?: number; llm_included?: boolean; missing?: string; error?: string;
@@ -61,6 +70,9 @@ export interface MonthSoFar {
 export interface Costs {
   display_currency: string;
   budgets: Partial<Record<BudgetKind, Budget>>;
+  budget_lines?: BudgetLine[];
+  /** What a budget line can measure besides the costs: the providers and jobs the call log has seen. */
+  budget_measures?: { providers: string[]; jobs: string[]; categories: Record<string, string> };
   budget_status?: BudgetStatus;
   subscriptions: CostLine[];
   electricity: Price | null;
@@ -71,7 +83,7 @@ export interface Costs {
   fx: { date: string | null; fetched_at: string | null };
 }
 export type CostsPatch = Partial<Pick<Costs, 'display_currency' | 'subscriptions' | 'electricity' | 'proxy' | 'other'>>
-  & { budgets?: Partial<Record<BudgetKind, Budget | null>> };
+  & { budgets?: Partial<Record<BudgetKind, Budget | null>>; budget_lines?: BudgetLine[] };
 
 const OVERRIDE_KEY = 'redline.currency';
 const FX_KEY = 'redline.fx';

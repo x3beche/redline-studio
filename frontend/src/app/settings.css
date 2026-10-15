@@ -372,6 +372,20 @@ select.st-in { cursor: pointer; }
   .st-line .st-l-note { grid-row: 2; grid-column: 2 / -1; }
   .st-lines-covers .st-line .st-l-note { grid-column: 4 / -1; }
 }
+/* Budgets (costs-settings.ts): the four built-in ones, then one's own lines. */
+.st-lines-budgets .st-line { grid-template-columns: minmax(110px, 1fr) minmax(170px, 1.4fr) 92px 78px 62px minmax(150px, 1fr) 22px; }
+.st-l-fixed { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+span.st-l-what { min-width: 0; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-l-warn { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
+.st-line .st-l-warn .st-in { width: 44px; }
+.st-l-month [data-state="warn"] { color: var(--warn); }
+.st-l-month [data-state="over"] { color: var(--danger); }
+.st-err-in { margin: 4px 10px 0; }
+@container (max-width: 860px) {
+  .st-lines-budgets .st-line { grid-template-columns: minmax(0, 1fr) 92px 78px 62px 22px; }
+  .st-lines-budgets .st-line .st-l-what { grid-row: 2; grid-column: 1; }
+  .st-lines-budgets .st-line .st-l-month { grid-row: 2; grid-column: 2 / -1; }
+}
 .st-x {
   width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none;
   font-size: 14px; line-height: 1; color: var(--ink-dim); cursor: pointer;

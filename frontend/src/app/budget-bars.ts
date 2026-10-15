@@ -42,7 +42,7 @@ import { BudgetItem, BudgetState, BudgetStatus, CURRENCY, money, moneyIn } from 
 @if (status(); as st) {
   @if (items().length) {
     <div class="bb">
-      @for (b of items(); track b.kind) {
+      @for (b of items(); track b.key ?? b.kind) {
         <div class="bb-row" [attr.data-state]="b.state" [title]="tip(b)">
           <div class="bb-top">
             <span class="bb-name">{{ b.name | t }}</span>
@@ -59,7 +59,7 @@ import { BudgetItem, BudgetState, BudgetStatus, CURRENCY, money, moneyIn } from 
           <div class="bb-foot">
             <span><b>{{ pct(b.ratio) }}</b> {{ 'used' | t }}</span>
             <span [attr.data-state]="b.forecast_state">{{ 'month end' | t }} <b>{{ money(b.forecast_usd) }}</b> ({{ pct(b.forecast_ratio) }})</span>
-            <span>{{ (b.basis === 'last_7d' ? 'at the last 7 days\\' rate' : 'at the month\\'s daily average') | t }}</span>
+            <span>{{ (b.basis === 'fixed' ? 'a fixed cost, its full month' : b.basis === 'last_7d' ? 'at the last 7 days\\' rate' : 'at the month\\'s daily average') | t }}</span>
             @if (b.missing) { <span>{{ b.missing | t }}</span> }
           </div>
         </div>

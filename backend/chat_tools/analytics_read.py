@@ -240,6 +240,16 @@ def s_api(d: dict, f: Fmt) -> list[str]:
     return out
 
 
+def measured(it: dict) -> str:
+    """What a person's own budget line counts, in brackets (budgets.py)."""
+    m, ref = it.get("measure"), it.get("ref_name") or it.get("ref")
+    if it.get("kind") != "line" or not m:
+        return ""
+    return " (" + {"line": f"the cost {ref}", "category": f"all {str(ref).lower()}",
+                   "llm_provider": f"LLM calls via {ref}", "llm_job": f"LLM job {ref}", "llm": "LLM work",
+                   "electricity": "electricity", "proxy": "proxy traffic"}.get(m, m) + ")"
+
+
 def s_budget(d: dict, f: Fmt) -> list[str]:
     b = d.get("budget_status") or {}
     m = b.get("month_so_far") or {}
@@ -256,7 +266,7 @@ def s_budget(d: dict, f: Fmt) -> list[str]:
         if it.get("error"):
             out.append(f"  {it.get('name')}: {it['error']}")
             continue
-        out.append(f"  {it.get('name')} budget {f.money(it.get('budget_usd'))}: spent {f.money(it.get('spent_usd'))} ({pct(it.get('ratio'))},"
+        out.append(f"  {it.get('name')}{measured(it)} budget {f.money(it.get('budget_usd'))}: spent {f.money(it.get('spent_usd'))} ({pct(it.get('ratio'))},"
                    f" {it.get('state')}), forecast {f.money(it.get('forecast_usd'))} ({pct(it.get('forecast_ratio'))}, {it.get('forecast_state')})"
                    + (f" - {it['missing']}" if it.get("missing") else ""))
     return out

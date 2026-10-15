@@ -62,6 +62,7 @@ async def get(db) -> dict:
     doc.setdefault("electricity", None)
     doc.setdefault("proxy", None)
     doc.setdefault("budgets", {})
+    doc.setdefault("budget_lines", [])                 # people's own budget lines (budgets.py)
     return doc
 
 
@@ -96,7 +97,7 @@ async def public(db) -> dict:
         st = await budgets.status(db, doc)
     except Exception as exc:                           # noqa: BLE001 - the costs page still opens
         st = {"items": [], "error": str(exc)[:200]}
-    return {**doc, "usd": derived(doc), "budget_status": st,
+    return {**doc, "usd": derived(doc), "budget_status": st, "budget_measures": await budgets.measures(db),
             "fx": {"date": fx.public()["date"], "fetched_at": fx.public()["fetched_at"]}}
 
 
@@ -148,6 +149,9 @@ async def put(db, patch: dict) -> dict:
     if "budgets" in patch:
         doc["budgets"] = budgets.clean(patch["budgets"])
         budgets._seen.clear()                          # ask the database again which alerts were written
+    if "budget_lines" in patch:
+        doc["budget_lines"] = budgets.clean_lines(patch["budget_lines"], doc)
+        budgets._seen.clear()
     await db.settings.replace_one({"_id": _id()}, {"_id": _id(), **doc}, upsert=True)
     from . import insights
     insights.forget()                                  # the figures change with the costs
@@ -256,6 +260,16 @@ class Budget(BaseModel):
     warn: float | None = Field(default=None, ge=0.05, le=1)
 
 
+class BudgetLine(BaseModel):
+    id: str | None = Field(default=None, max_length=40)
+    name: str = Field(default="", max_length=80)
+    measure: str = Field(pattern="^(line|category|llm_provider|llm_job|llm|electricity|proxy)$")
+    ref: str | None = Field(default=None, max_length=80)
+    amount: float | None = Field(default=None, ge=0, le=1e9)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    warn: float | None = Field(default=None, ge=0.05, le=1)
+
+
 class CostsIn(BaseModel):
     display_currency: str | None = Field(default=None, min_length=3, max_length=3)
     subscriptions: list[Row] | None = None
@@ -263,6 +277,7 @@ class CostsIn(BaseModel):
     electricity: Price | None = None
     proxy: Price | None = None
     budgets: dict[str, Budget | None] | None = None
+    budget_lines: list[BudgetLine] | None = Field(default=None, max_length=40)
 
 
 @router.put("")

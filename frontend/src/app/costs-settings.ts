@@ -4,10 +4,10 @@ import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { LANG, T, t } from './i18n';
-import { BudgetBars } from './budget-bars';
+import { BudgetBars, budgetTip } from './budget-bars';
 import { SelectOption, UiSelect } from './ui-select';
 import {
-  Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
+  Budget, BudgetItem, BudgetKind, BudgetLine, BudgetMeasure, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
   convert, currencies, currencyName, fmtMoney, fromUsd, money, moneyIn, moneyLocale, setOverride, toUsd,
 } from './money';
 import { Skeleton } from './skeleton';
@@ -28,8 +28,10 @@ interface Row {
   covers: 'llm' | 'other'; note: string;
 }
 interface PriceDraft { amount: number | null; currency: string }
-/** A budget being edited: the warning threshold in percent, as typed. */
-interface BudgetDraft { amount: number | null; currency: string; warn: number }
+/** A budget being edited: the warning threshold in percent, as typed (empty: 80). */
+interface BudgetDraft { amount: number | null; currency: string; warn: number | null }
+/** A budget line of one's own being edited: what it measures as one value, `measure:ref`. */
+interface LineDraft { id?: string; name: string; what: string; amount: number | null; currency: string; warn: number | null }
 type BudgetDrafts = Record<BudgetKind, BudgetDraft>;
 type FxSeries = Record<string, { points: [string, number][]; last: number; change: number | null; low: number; high: number }>;
 type Section = 'subscriptions' | 'other' | 'usage' | 'budgets';
@@ -44,6 +46,10 @@ function budgetsOf(b: Costs['budgets'] | undefined, fallback: string): BudgetDra
     : { amount: null, currency: fallback, warn: 80 };
   return { total: one(b?.total), llm: one(b?.llm), electricity: one(b?.electricity), proxy: one(b?.proxy) };
 }
+function linesOf(list: BudgetLine[] | undefined): LineDraft[] {
+  return (list ?? []).map(l => ({ id: l.id, name: l.name ?? '', what: `${l.measure}:${l.ref ?? ''}`, amount: l.amount ?? null,
+    currency: l.currency || 'USD', warn: Math.round((l.warn ?? 0.8) * 100) }));
+}
 
 function rowsOf(list: CostLine[] | undefined, covers: 'llm' | 'other'): Row[] {
   return (list ?? []).map(c => ({ id: c.id, name: c.name ?? '', amount: c.amount ?? null, currency: c.currency || 'USD',
@@ -54,6 +60,8 @@ function priceOf(p: Price | null | undefined, fallback: string): PriceDraft {
 }
 /** The rows worth keeping: a name or an amount. */
 function kept(rows: Row[]): Row[] { return rows.filter(r => r.name.trim() || r.amount != null); }
+/** The budget lines worth keeping: a name or an amount. */
+function keptLines(rows: LineDraft[]): LineDraft[] { return rows.filter(r => r.name.trim() || r.amount != null); }
 function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
 
 @Component({
@@ -266,42 +274,59 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
   <!-- Budgets: a month's limit for the total and for what is metered -->
   <div class="st-card">
     <div class="st-card-head"><h3>{{ 'Budgets' | t }}</h3>
-      <span class="st-sub">{{ 'a month, in any currency - the calendar month in UTC' | t }}</span>
+      <span class="st-sub">{{ 'a month, in any currency - the calendar month in UTC; add your own for one cost, a provider or a job' | t }}</span>
       <div class="st-right">
         @if (m.costs()?.budget_status?.state; as s) {
           @if (s !== 'ok') { <span class="st-badge" [attr.data-tone]="s === 'over' ? 'danger' : 'warn'">{{ (s === 'over' ? 'over budget' : 'near budget') | t }}</span> }
         }
         @if (dirty('budgets')) { <span class="st-badge" data-tone="warn">{{ 'unsaved' | t }}</span> }
         @if (canEdit()) {
+          <button class="tcv-btn tcv-files-btn" (click)="addLine()">+ {{ 'Add' | t }}</button>
           @if (dirty('budgets')) { <button class="tcv-btn tcv-files-btn" (click)="revert('budgets')">{{ 'Revert' | t }}</button> }
           <button class="tcv-btn tcv-files-btn" [disabled]="!dirty('budgets') || busy() === 'budgets'" (click)="save('budgets')">{{ busy() === 'budgets' ? '…' : ('Save' | t) }}</button>
         }
       </div>
     </div>
-    <div class="st-card-body">
-      <div class="st-prices st-budgets">
-        @for (k of budgetKinds; track k.id) {
-          <div class="st-key">
-            <div class="st-key-top"><b>{{ k.label | t }}</b><span class="st-sub">{{ k.about | t }}</span></div>
-            <div class="st-row">
-              <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" [placeholder]="k.optional ? ('none' | t) : k.hint"
-                     [value]="budget(k.id).amount ?? ''" (input)="editBudget(k.id, { amount: num($any($event.target).value) })">
-              <wb-select class="st-sel" label="Currency" [options]="curOptsWith(budget(k.id).currency)" [value]="budget(k.id).currency"
-                         [disabled]="!canEdit()" (pick)="editBudget(k.id, { currency: $event })" />
-              <span class="st-dim">/ {{ 'month' | t }}</span>
-              <label class="st-warn-at" [title]="'The bar and the top bar turn the warning colour from this share of the budget' | t">
-                <span class="st-dim">{{ 'warn at' | t }}</span>
-                <input class="st-in st-pct" type="number" min="5" max="100" step="1" [disabled]="!canEdit()"
-                       [value]="budget(k.id).warn" (input)="editBudget(k.id, { warn: num($any($event.target).value) ?? 80 })"><span class="st-dim">%</span>
-              </label>
-              <span class="st-right mono">
-                @if (budget(k.id).amount != null) { {{ fmtMoney(budget(k.id).amount, budget(k.id).currency, { convert: true }) }} }
-                @else { <span class="st-dim">{{ 'not set' | t }}</span> }
-              </span>
-            </div>
-          </div>
-        }
+    <div class="st-lines st-lines-budgets st-budgets">
+      <div class="st-line st-line-head">
+        <span>{{ 'Budget' | t }}</span><span>{{ 'Measures' | t }}</span><span class="r">{{ 'A month' | t }}</span><span>{{ 'Currency' | t }}</span>
+        <span>{{ 'Warn at' | t }}</span><span class="r">{{ 'So far' | t }}</span><span></span>
       </div>
+      @for (k of budgetKinds; track k.id) {
+        <div class="st-line">
+          <b class="st-l-name st-l-fixed">{{ k.label | t }}</b>
+          <span class="st-l-what st-dim">{{ k.about | t }}</span>
+          <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" [placeholder]="'none' | t"
+                 [value]="budget(k.id).amount ?? ''" (input)="editBudget(k.id, { amount: num($any($event.target).value) })">
+          <wb-select class="st-sel" label="Currency" [options]="curOptsWith(budget(k.id).currency)" [value]="budget(k.id).currency"
+                     [disabled]="!canEdit()" (pick)="editBudget(k.id, { currency: $event })" />
+          <label class="st-l-warn" [title]="'The bar and the top bar turn the warning colour from this share of the budget' | t">
+            <input class="st-in st-num" type="number" min="5" max="100" step="1" [disabled]="!canEdit()" placeholder="80"
+                   [value]="budget(k.id).warn ?? ''" (input)="editBudget(k.id, { warn: num($any($event.target).value) })"><span class="st-dim">%</span></label>
+          <ng-container *ngTemplateOutlet="sofar; context: { it: itemOf(k.id), set: budget(k.id).amount != null }" />
+          <span></span>
+        </div>
+      }
+      @for (l of lines(); track $index; let i = $index) {
+        <div class="st-line">
+          <input class="st-in st-l-name" [value]="l.name" [disabled]="!canEdit()" [placeholder]="whatName(l.what) || ('Name' | t)"
+                 (input)="editLine(i, { name: $any($event.target).value })">
+          <wb-select class="st-sel st-l-what" label="Measures" [options]="measureOpts()" [value]="l.what"
+                     [disabled]="!canEdit()" (pick)="editLine(i, { what: $event })" />
+          <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" placeholder="50"
+                 [value]="l.amount ?? ''" (input)="editLine(i, { amount: num($any($event.target).value) })">
+          <wb-select class="st-sel" label="Currency" [options]="curOptsWith(l.currency)" [value]="l.currency"
+                     [disabled]="!canEdit()" (pick)="editLine(i, { currency: $event })" />
+          <label class="st-l-warn" [title]="'The bar and the top bar turn the warning colour from this share of the budget' | t">
+            <input class="st-in st-num" type="number" min="5" max="100" step="1" [disabled]="!canEdit()" placeholder="80"
+                   [value]="l.warn ?? ''" (input)="editLine(i, { warn: num($any($event.target).value) })"><span class="st-dim">%</span></label>
+          <ng-container *ngTemplateOutlet="sofar; context: { it: l.id ? itemOf('line:' + l.id) : null, set: l.amount != null }" />
+          @if (canEdit()) { <button class="st-x" (click)="dropLine(i)" [title]="'Remove this row' | t">×</button> } @else { <span></span> }
+        </div>
+      }
+    </div>
+    @if (errAt() === 'budgets' && err(); as e) { <p class="st-err st-err-in">{{ e }}</p> }
+    <div class="st-card-body">
       <app-budget-bars [status]="m.costs()?.budget_status">
         <p class="st-hint">{{ 'No budgets yet. Set a monthly budget for the total spend - and, if you like, separate ones for the LLM work at list prices, the electricity and the proxy - to see the month so far against them, where the month is heading, and a warning in the top bar near the limit.' | t }}</p>
       </app-budget-bars>
@@ -386,9 +411,17 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
     }
   </div>
 
-  @if (err(); as e) { <p class="st-err">{{ e }}</p> }
+  @if (errAt() !== 'budgets' && err(); as e) { <p class="st-err">{{ e }}</p> }
 </div>
 }
+<!-- A budget's month so far, from the server's status: spent, and its share in the state's ink. -->
+<ng-template #sofar let-it="it" let-set="set">
+  <span class="st-l-month mono">
+    @if (it && !it.error) { <span [attr.data-state]="it.state" [title]="tip(it)">{{ money(it.spent_usd) }} <small>{{ pct(it.ratio ?? 0) }} · {{ 'month end' | t }} {{ money(it.forecast_usd) }}</small></span> }
+    @else if (it?.error) { <span class="st-dim">{{ it.error }}</span> }
+    @else { <span class="st-dim">{{ (set ? 'after saving' : 'not set') | t }}</span> }
+  </span>
+</ng-template>
 <!-- The rows of a list of costs: a grid that folds onto two lines when the stage is narrow. -->
 <ng-template #table let-s="s" let-rows="rows">
   <div class="st-lines" [class.st-lines-covers]="s === 'subscriptions'">
@@ -467,12 +500,16 @@ export class CostsSettingsPanel implements OnDestroy {
   elec = signal<PriceDraft>({ amount: null, currency: 'USD' });
   proxy = signal<PriceDraft>({ amount: null, currency: 'USD' });
   budgets = signal<BudgetDrafts>(budgetsOf(undefined, 'USD'));
-  private base = signal<{ subscriptions: Row[]; other: Row[]; usage: [PriceDraft, PriceDraft]; budgets: BudgetDrafts }>(
+  /** One's own budget lines, under the four built-in ones. */
+  lines = signal<LineDraft[]>([]);
+  private base = signal<{ subscriptions: Row[]; other: Row[]; usage: [PriceDraft, PriceDraft]; budgets: BudgetDrafts; lines: LineDraft[] }>(
     { subscriptions: [], other: [], usage: [{ amount: null, currency: 'USD' }, { amount: null, currency: 'USD' }],
-      budgets: budgetsOf(undefined, 'USD') });
+      budgets: budgetsOf(undefined, 'USD'), lines: [] });
 
   busy = signal<Section | 'currency' | 'fx' | null>(null);
   err = signal<string | null>(null);
+  /** The card the error belongs to: it is shown there, not at the page's foot. */
+  errAt = signal<Section | 'currency' | 'fx' | null>(null);
   convAmount = signal(100);
   convFrom = signal('USD');
   convTo = signal(CURRENCY() === 'USD' ? 'TRY' : CURRENCY());
@@ -513,8 +550,9 @@ export class CostsSettingsPanel implements OnDestroy {
       const r = rowsOf(c.other, 'other');
       this.others.set(r); this.base.update(b => ({ ...b, other: structuredClone(r) }));
     } else if (s === 'budgets') {
-      const b = budgetsOf(c.budgets, d);
-      this.budgets.set(b); this.base.update(x => ({ ...x, budgets: structuredClone(b) }));
+      const b = budgetsOf(c.budgets, d), l = linesOf(c.budget_lines);
+      this.budgets.set(b); this.lines.set(l);
+      this.base.update(x => ({ ...x, budgets: structuredClone(b), lines: structuredClone(l) }));
     } else {
       const e = priceOf(c.electricity, d), p = priceOf(c.proxy, d);
       this.elec.set(e); this.proxy.set(p);
@@ -526,7 +564,7 @@ export class CostsSettingsPanel implements OnDestroy {
     const b = this.base();
     if (s === 'subscriptions') return !same(kept(this.subs()), b.subscriptions);
     if (s === 'other') return !same(kept(this.others()), b.other);
-    if (s === 'budgets') return !same(this.budgets(), b.budgets);
+    if (s === 'budgets') return !same(this.budgets(), b.budgets) || !same(keptLines(this.lines()), b.lines);
     return !same([this.elec(), this.proxy()], b.usage);
   }
 
@@ -637,12 +675,55 @@ export class CostsSettingsPanel implements OnDestroy {
     (id === 'electricity' ? this.elec : this.proxy).update(p => ({ ...p, ...patch }));
   }
   budget(k: BudgetKind) { return this.budgets()[k]; }
+  /** This month's figures for a budget (`total`... or `line:<id>`), once saved. */
+  itemOf(key: string): BudgetItem | null {
+    return this.m.costs()?.budget_status?.items.find(i => (i.key ?? i.kind) === key) ?? null;
+  }
+  tip(b: BudgetItem) { return budgetTip(b); }
+  private split(what: string): [BudgetMeasure, string | null] {
+    const i = what.indexOf(':');
+    return [what.slice(0, i) as BudgetMeasure, what.slice(i + 1) || null];
+  }
+  /** What a budget line can measure, for its drop-down: the whole LLM work, a
+   *  provider or a job the call log has seen, the metered prices, a category
+   *  of costs, or one saved cost. */
+  measureOpts = computed<SelectOption[]>(() => {
+    LANG();
+    const c = this.m.costs(), ms = c?.budget_measures;
+    const o: SelectOption[] = [
+      { value: 'llm:', label: t('LLM work, all'), group: t('LLM work at API list prices') },
+      ...(ms?.providers ?? []).map(p => ({ value: `llm_provider:${p}`, label: `${t('provider')} ${p}`, group: t('LLM work at API list prices') })),
+      ...(ms?.jobs ?? []).map(j => ({ value: `llm_job:${j}`, label: `${t('job')} ${j}`, group: t('LLM work at API list prices') })),
+      { value: 'electricity:', label: t('Electricity'), group: t('Metered') },
+      { value: 'proxy:', label: t('Proxy traffic'), group: t('Metered') },
+      { value: 'category:subscriptions', label: t('All subscriptions'), group: t('Fixed costs') },
+      { value: 'category:other', label: t('All other recurring costs'), group: t('Fixed costs') },
+      ...[...(c?.subscriptions ?? []), ...(c?.other ?? [])].filter(r => r.id)
+        .map(r => ({ value: `line:${r.id}`, label: r.name, group: t('Fixed costs') })),
+    ];
+    // A line on something no longer listed keeps its choice, named as best we can.
+    for (const l of this.lines()) if (!o.some(x => x.value === l.what)) o.push({ value: l.what, label: this.whatName(l.what) || l.what });
+    return o;
+  });
+  /** A measure in words: the default name of a line left unnamed. */
+  whatName(what: string): string {
+    const [m, ref] = this.split(what), c = this.m.costs();
+    if (m === 'line') return [...(c?.subscriptions ?? []), ...(c?.other ?? [])].find(r => r.id === ref)?.name ?? t('a cost that is gone');
+    if (m === 'category') return t(ref === 'subscriptions' ? 'All subscriptions' : 'All other recurring costs');
+    if (m === 'llm_provider' || m === 'llm_job') return `LLM · ${ref}`;
+    return t(m === 'llm' ? 'LLM work' : m === 'electricity' ? 'Electricity' : 'Proxy traffic');
+  }
+  editLine(i: number, patch: Partial<LineDraft>) { this.lines.update(l => l.map((r, j) => j === i ? { ...r, ...patch } : r)); }
+  addLine() {
+    this.lines.update(l => [...l, { name: '', what: 'llm:', amount: null, currency: this.m.defaultCurrency(), warn: 80 }]);
+  }
+  dropLine(i: number) { this.lines.update(l => l.filter((_, j) => j !== i)); }
   editBudget(k: BudgetKind, patch: Partial<BudgetDraft>) {
     this.budgets.update(b => ({ ...b, [k]: { ...b[k], ...patch } }));
   }
   revert(s: Section) {
     const b = this.base();
-    if (s === 'budgets') this.budgets.set(structuredClone(b.budgets));
+    if (s === 'budgets') { this.budgets.set(structuredClone(b.budgets)); this.lines.set(structuredClone(b.lines)); }
     else if (s === 'subscriptions') this.subs.set(structuredClone(b.subscriptions));
     else if (s === 'other') this.others.set(structuredClone(b.other));
     else { this.elec.set({ ...b.usage[0] }); this.proxy.set({ ...b.usage[1] }); }
@@ -669,13 +750,25 @@ export class CostsSettingsPanel implements OnDestroy {
     else if (s === 'other') { const l = lines(this.others(), false); if (!l) return; patch = { other: l }; }
     else if (s === 'budgets') {
       const out: NonNullable<CostsPatch['budgets']> = {};
+      const fail = (m: string) => { this.err.set(t(m)); this.errAt.set('budgets'); };
+      const warnOk = (w: number | null) => w == null || (w >= 5 && w <= 100);
       for (const k of BUDGET_KINDS) {
         const b = this.budget(k);
-        if (b.amount != null && b.amount <= 0) { this.err.set(t('A budget has to be more than 0 - leave it empty for none.')); return; }
-        if (b.warn < 5 || b.warn > 100) { this.err.set(t('The warning threshold is between 5% and 100%.')); return; }
-        out[k] = b.amount == null ? null : { amount: b.amount, currency: b.currency, warn: b.warn / 100 };
+        if (b.amount != null && b.amount <= 0) { fail('A budget has to be more than 0 - leave it empty for none.'); return; }
+        if (!warnOk(b.warn)) { fail('The warning threshold is between 5% and 100%.'); return; }
+        out[k] = b.amount == null ? null : { amount: b.amount, currency: b.currency, warn: (b.warn ?? 80) / 100 };
       }
-      patch = { budgets: out };
+      const lines: BudgetLine[] = [];
+      for (const l of keptLines(this.lines())) {
+        if (l.amount == null || l.amount <= 0) { fail('Every budget line needs an amount more than 0.'); return; }
+        if (!warnOk(l.warn)) { fail('The warning threshold is between 5% and 100%.'); return; }
+        const [measure, ref] = this.split(l.what);
+        const line: BudgetLine = { name: l.name.trim() || this.whatName(l.what), measure, ref,
+          amount: l.amount, currency: l.currency, warn: (l.warn ?? 80) / 100 };
+        if (l.id) line.id = l.id;
+        lines.push(line);
+      }
+      patch = { budgets: out, budget_lines: lines };
     } else {
       if ([this.elec(), this.proxy()].some(p => p.amount != null && p.amount < 0)) { this.err.set(t('A price cannot be negative.')); return; }
       patch = { electricity: price(this.elec()), proxy: price(this.proxy()) };
@@ -694,10 +787,10 @@ export class CostsSettingsPanel implements OnDestroy {
   }
 
   private put(what: Section | 'currency', patch: CostsPatch, after?: (c: Costs) => void) {
-    this.busy.set(what); this.err.set(null);
+    this.busy.set(what); this.err.set(null); this.errAt.set(null);
     this.m.saveCosts(patch).subscribe({
       next: c => { this.busy.set(null); after?.(c); this.flash(t('Saved.')); },
-      error: e => { this.busy.set(null); this.err.set(this.text(e)); },
+      error: e => { this.busy.set(null); this.err.set(this.text(e)); this.errAt.set(what); },
     });
   }
   private flash(s: string) { Toast.show(s, { tone: 'ok' }); }
