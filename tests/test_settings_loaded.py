@@ -220,3 +220,14 @@ def test_a_manufacturer_run_without_the_route_orders_fails_on_its_record(proxy_u
     assert jd["_id"] not in mf._TASKS
     assert d["status"] == "failed" and "Route orders not loaded" in d["error"]
     assert mf.job_out(d)["route"] == ["local"]
+
+
+def test_the_chat_runner_reads_the_proxy_and_route_orders_too():
+    """A Chat answer is written by a process of its own (backend/ccgen.py);
+    it read the LLM and Jina settings but not the proxy's, so the catalog's
+    page reading (catalog_read_page) failed "Route orders not loaded"."""
+    import inspect
+    from backend import ccgen
+    src = inspect.getsource(ccgen._main)
+    assert '("proxy", netproxy.load)' in src
+    assert src.index("netproxy.load") < src.index("await run(gid")

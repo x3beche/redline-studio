@@ -667,7 +667,7 @@ async def run(gid: str, db=None) -> dict | None:
 
 
 async def _main(gid: str) -> int:
-    from . import access, actors, jina, llm, main, scope
+    from . import access, actors, jina, llm, main, netproxy, scope
 
     raw = main.db().raw
     gen = await raw[GENS].find_one({"_id": gid})
@@ -677,10 +677,12 @@ async def _main(gid: str) -> int:
     scope.WORKSPACE.set(gen.get("workspace") or scope.DEFAULT)
     actors.CURRENT.set(gen.get("actor"))
     access.ROLE.set(gen.get("role"))
-    # The keys, the summary model, and Jina's key for the web tools. One
-    # that cannot be read is not taken for the defaults: whatever asks for
-    # it later fails, saying so.
-    for what, read in (("LLM", llm.load), ("Jina", jina.load)):
+    # The keys, the summary model, Jina's key for the web tools, and the
+    # proxy with its route orders for the tools that read sites (the
+    # catalog's page reading went "Route orders not loaded" without it).
+    # One that cannot be read is not taken for the defaults: whatever asks
+    # for it later fails, saying so.
+    for what, read in (("LLM", llm.load), ("Jina", jina.load), ("proxy", netproxy.load)):
         try:
             await read(main.db())
         except Exception as exc:                                 # noqa: BLE001 - said when asked for
