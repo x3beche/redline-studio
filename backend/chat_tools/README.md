@@ -99,14 +99,19 @@ through the workspace, and the list of them when the name fits nothing).
   version, view and size in their context - the cache, and what the step's
   `shot0..3` vars point at so the Chat shows them inline. A model building
   or broken is refused with why.
-- `basic_tool`: the Tools tab's calculators, in two steps - `task` finds
-  them (tool_router.py, as the MCP server's find_tool) with their inputs,
-  `id` + `input` runs one (tools_api.py `run_kit`: its own tool.js, in a
-  throwaway offline container). Interactive-only tools are said to be so.
+- The Basic Tools tab's calculators (basic_tools.py, package `tools`): one
+  tool each, `calc_<id>`, off for everyone until turned on in the Tools
+  panel's Basic Tools card; running one is the tab's own tool.js in a
+  throwaway offline container (tools_api.py `run_kit`).
 - Workspace things: `board_read` (cc_context.py `board_parts` +
-  board_stats.py), `model_read` (cc_context.py `model_parts`), `bom_cost`
-  (bom_cost.py, offers on disk only), `firmware_build` (the firmware's
-  build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
+  board_stats.py), `model_read` (cc_context.py `model_parts`),
+  `firmware_build` (the firmware's build summary and fwbuild.py's jobs),
+  `file_read` (files.py, pdftext.py).
+- Parked, not registered (`PARKED` instead of `TOOL`, so the Chat is not
+  offered them; `TOOL = PARKED` brings one back): `basic_tool.py` (find a
+  calculator by words, then run it - basic_tools.py reuses its helpers)
+  and `bom_cost.py` (a board's parts priced at a number of boards from
+  the offers on disk). Their tests call `PARKED` directly.
 - `drawing_layout` (change, off; package `cad`): a 3D model's technical
   drawing layout read, set (the whole spec, checked by backend/drawlayout.py)
   or put back to automatic, as the layout editor's PUT does, and with

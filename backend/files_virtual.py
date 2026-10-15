@@ -25,9 +25,10 @@ PDF's text or a STEP's 3D view work the same as for an upload.
 When a file is deleted from Files, `mark_gone()` says so wherever it was
 used: on the Chat line that carried it (the chip says who deleted it and
 when, and the model's context for later answers says it is gone) and on
-the Parts product that held it. Files has no trash: the bytes are gone, so
-"gone" cannot be undone - the delete dialog says what used it first
-(`uses()`).
+the Parts product that held it. The file goes to Files' trash (files.py,
+TRASH_DAYS, then gone for good, or at once when deleted for ever); restored
+from there, `mark_back()` takes those marks back. The delete dialog says
+what used it first (`uses()`).
 """
 
 from __future__ import annotations

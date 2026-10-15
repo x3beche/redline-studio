@@ -5,8 +5,8 @@
    The library's stylesheet comes after ours, so every rule here is under
    .tcv_cad_tree to outweigh it.
 
-   Settings > Theme > Model tree sets the variables and attributes on the
-   root (viewer-panel-prefs.ts):
+   Settings > Appearance > Model tree sets the variables and attributes on
+   the root (tree-prefs.ts):
      --tcv-tv-row   a tree row's height        (density)
      --tcv-tv-fs    the tree's type size
      --tcv-tv-isz   its glyphs' size           (the toolbars' size, or its own)
