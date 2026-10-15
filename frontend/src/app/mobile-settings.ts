@@ -79,7 +79,8 @@ const ICON_DONE = 'M5 12l5 5L19 7';
     </ol>
     <div class="mb-notes">
       <p><b>{{ 'Updating' | t }}</b> · {{ 'download the new APK the same way and install it over the old one; you stay signed in.' | t }}</p>
-      <p><b>{{ 'Not from the Play Store' | t }}</b> · {{ 'the APK is signed with a debug key, so Android asks once whether to allow installing it. Play Protect may ask to scan it.' | t }}</p>
+      <p><b>{{ 'From 1.2.0 or older' | t }}</b> · {{ 'uninstall Workbench once, then install this one: versions up to 1.2.0 were signed with a test key, and Android installs an update only from the same key ("App not installed"). Type the server address and sign in again; conversations and files are on the server. Later updates install over it.' | t }}</p>
+      <p><b>{{ 'Not from the Play Store' | t }}</b> · {{ 'Android asks once whether to allow installing apps from the browser or Files. Play Protect may ask to scan it.' | t }}</p>
       <p><b>{{ 'Source' | t }}</b> · {{ 'open source, at' | t }} <code class="mono">github.com/x3beche/workbench-mobile</code></p>
     </div>
   </div>

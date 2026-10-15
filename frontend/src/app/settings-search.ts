@@ -13,7 +13,7 @@ export const SETTINGS_INDEX: Record<PrefsTab, string[]> = {
   profile: ['Display name', 'Email', 'Colour', 'Password', 'Change password', 'Current password', 'New password',
             'Sessions', 'Sign out other sessions', 'Role'],
   mobile: ['Workbench for Android', 'Download the APK', 'Server address to enter in the app', 'Install', 'Updating',
-           'Not from the Play Store', 'Upload a new build', 'Version', 'Scan with the phone\'s camera to download'],
+           'From 1.2.0 or older', 'Not from the Play Store', 'Upload a new build', 'Version', 'Scan with the phone\'s camera to download'],
   shares: ['Shared', 'Last opened', 'Times opened', 'Until', 'Turn off', 'Show ended links'],
   notifications: ['Notify me when', 'A toast when one comes', 'Telegram', 'An agent asks a question', 'An agent replies',
                   'A note is applied or fails', 'A run starts', 'A scheduled task reports', 'A build fails',
