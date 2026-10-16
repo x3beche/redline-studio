@@ -277,6 +277,20 @@ def budget_table(data: dict) -> str:
     return _cap("budget-table", data, body, note)
 
 
+def mermaid(data: dict) -> str:
+    """A diagram Mermaid draws in the page (zamanlama, akış, durum makinesi,
+    sınıf): the model writes Mermaid's own lines and Chromium draws them while
+    the page is printed (mermaid.min.js is vendored, so it works offline)."""
+    code = data.get("code")
+    if isinstance(code, list):
+        code = "\n".join(str(x) for x in code)
+    code = str(code or "").strip()
+    if not code:
+        raise PartError("a `mermaid` part needs `code`: the diagram's Mermaid lines")
+    # The source is the element's text, so a line of it can never become markup.
+    return _cap("mermaid", data, f'<div class="mermaid">{_e(code)}</div>')
+
+
 PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     "fields": ("A label / value block: a document's specification, key numbers, at a glance.",
                "rows: [{label, value}]  (or fields: {label: value})", fields),
@@ -298,6 +312,9 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     "budget-table": ("Contributors that must add up to a total (power, latency, flash). A total that "
                      "does not match is refused.",
                      "rows: [{what, value, share, note}], total, unit, over?", budget_table),
+    "mermaid": ("A diagram, drawn in the page by Mermaid: a sequence, a flow, a state machine, a class or a "
+                "timing sketch. Write Mermaid's own lines; the PDF prints the drawing, not the source.",
+                'code: "sequenceDiagram\\n  A->>B: ping"  (a string, or a list of lines)', mermaid),
 }
 
 

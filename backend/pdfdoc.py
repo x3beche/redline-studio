@@ -621,6 +621,9 @@ figure.p figcaption { font-size: 7.6pt; font-weight: 600; letter-spacing: .02em;
 .p-verdict[data-v="not checked"], .p-verdict[data-v="waived"] { color: var(--ink-faint); font-weight: 400; }
 .p-err { border-left: 2pt solid var(--danger); padding: 4pt 6pt; margin: 3pt 0 12pt; font-size: 8pt;
   color: var(--danger); }
+/* a diagram Mermaid draws while the page is printed (backend/assets) */
+.mermaid { text-align: center; margin: 0; }
+.mermaid svg { max-width: 100%; height: auto; }
 
 /* pictures */
 img { max-width: 100%; height: auto; }
@@ -983,8 +986,21 @@ process.stdin.on('end', async () => {
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on('request', r => { const u = r.url(); (u.startsWith('data:') || u === 'about:blank') ? r.continue() : r.abort(); });
+    // The diagrams a page draws itself (backend/pdfparts.py's `mermaid` part): the
+    // bundle is inlined, run once over .mermaid, and its promise is left where the
+    // print can wait for it - so the PDF holds the drawing, not its source.
+    if (j.mermaid) {
+      // `then(() => true)`: the resolved value must be serializable, or the wait
+      // below throws and the print goes on before the drawing is there.
+      const boot = '<script>' + j.mermaid + '<\/script>'
+        + '<script>window.__wbMermaid=(function(){try{mermaid.initialize({startOnLoad:false,theme:"base",'
+        + 'fontFamily:"inherit"});return mermaid.run({querySelector:".mermaid"}).then(function(){return true});}'
+        + 'catch(e){return Promise.resolve(true)}})()<\/script>';
+      j.html = j.html.includes('</body>') ? j.html.replace('</body>', boot + '</body>') : j.html + boot;
+    }
     await page.setContent(j.html, { waitUntil: 'load', timeout: 60000 });
     await page.evaluate(() => document.fonts.ready);
+    if (j.mermaid) { try { await page.evaluate(() => window.__wbMermaid || null); } catch (e) { /* it printed as text */ } }
     // One print per pass, each its header and its pages of the same layout; each
     // written as its length (10 digits) and its bytes. A range past the last page is 0 bytes.
     for (const p of j.passes) {
@@ -1032,6 +1048,23 @@ def _passes(out: bytes) -> list[bytes]:
     return got
 
 
+_MERMAID: list = []
+
+
+def _mermaid_js() -> str:
+    """The vendored Mermaid bundle, read once, for a page that draws a diagram
+    (backend/pdfparts.py's `mermaid` part): it is inlined into that page only and
+    the print waits for it. A machine without the file prints the source as text
+    rather than failing - the document is still worth reading."""
+    if not _MERMAID:
+        try:
+            _MERMAID.append((Path(__file__).resolve().parent / "assets" / "mermaid.min.js")
+                            .read_text(encoding="utf-8"))
+        except OSError:
+            _MERMAID.append("")
+    return _MERMAID[0]
+
+
 async def print_pdf(page: str, header: str, footer: str, size: str = "A4", margin: dict | None = None,
                     rest: str | None = None, measure: dict | None = None) -> bytes:
     """The page printed by headless Chromium in its container. With `rest`,
@@ -1046,7 +1079,10 @@ async def print_pdf(page: str, header: str, footer: str, size: str = "A4", margi
     if measure:
         measure = {**measure, "width_px": _px(width)}
     payload = json.dumps({"html": page, "passes": passes, "margin": margin or MARGIN,
-                          "width": width, "height": height, "measure": measure}).encode()
+                          "width": width, "height": height, "measure": measure,
+                          # A diagram the page draws itself: the vendored Mermaid
+                          # goes into that page, and the print waits for it.
+                          "mermaid": _mermaid_js() if '<div class="mermaid"' in page else None}).encode()
     name = "redline-pdf-" + secrets.token_hex(4)
     async with _RUNNING:
         try:
