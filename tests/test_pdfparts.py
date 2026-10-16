@@ -24,7 +24,7 @@ ROW = {"what": "a", "label": "a", "value": "1", "qty": 1, "role": "Prepared", "n
 
 def test_every_part_draws_itself_and_only_needs_its_rows():
     for name in pdfparts.PARTS:
-        out = html(name, {"title": "T", "rows": [dict(ROW)]})
+        out = html(name, {"title": "T", **ROW, "rows": [dict(ROW)]})
         assert f"p-{name}" in out and "<figure" in out and "p-err" not in out, name
         assert "<figcaption>T</figcaption>" in out, name
 
