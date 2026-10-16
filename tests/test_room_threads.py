@@ -74,3 +74,41 @@ def test_a_question_goes_in_the_thread_of_the_room_its_note_is_in():
             {"_id": "q3", "revision": None}, {"_id": "q4", "revision": "gone"}]
     out = run(questions.with_rooms(_Db({"r-board": "pcb", "r-model": "cad"}), rows))
     assert [q["room"] for q in out] == ["pcb", "cad", "cad", "cad"]
+
+
+def test_an_answer_marks_what_it_answered_as_read(monkeypatch):
+    """A line the agent answered is not left "waiting": answering is picking it
+    up, whether or not the agent read the thread first. One person was left
+    looking at "waiting" for an answer they already had."""
+    import argparse
+    from tools import revisions
+
+    db = FakeDb()
+    run(chat.post(db, "rename the bracket", room="cad"))
+    run(chat.post(db, "and the lid", room="cad"))
+    assert run(chat.rooms(db))[0]["waiting"] == 2
+    monkeypatch.setattr(revisions, "connect", lambda: db)
+    asyncio.run(revisions.cmd_say(argparse.Namespace(text="done, both", room="cad")))
+    cad = run(chat.rooms(db))[0]
+    assert cad["waiting"] == 0 and cad["count"] == 3
+
+
+def test_a_line_that_lands_while_the_agent_writes_is_left_for_the_next_turn(monkeypatch):
+    """Only what was there before the answer: the person can say something else
+    while the agent is writing, and that line has not been answered."""
+    import argparse
+    from tools import revisions
+
+    db = FakeDb()
+    run(chat.post(db, "rename the bracket", room="cad"))
+    real_post = chat.post
+
+    async def post_with_a_late_line(db_, text, **kw):
+        if kw.get("role") == chat.AGENT:
+            await real_post(db_, "wait, also this", room="cad")
+        return await real_post(db_, text, **kw)
+
+    monkeypatch.setattr(revisions, "connect", lambda: db)
+    monkeypatch.setattr(chat, "post", post_with_a_late_line)
+    asyncio.run(revisions.cmd_say(argparse.Namespace(text="done", room="cad")))
+    assert run(chat.rooms(db))[0]["waiting"] == 1

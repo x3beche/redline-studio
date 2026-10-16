@@ -405,14 +405,24 @@ async def cmd_chat(args):
 
 
 async def cmd_say(args):
-    """Answer in the thread. This is what the person sees on screen."""
-    from backend import chat
+    """Answer in the thread. This is what the person sees on screen.
+
+    What it answers is marked read as it is said. A line stays "waiting" for
+    the person until the agent has picked it up, and an agent that answers has
+    picked it up - so an agent that answered without reading the thread first
+    no longer leaves an answered line looking unanswered. Only the lines that
+    were there before the answer: one that lands while the agent writes is left
+    for the next turn, which still wakes the wait.
+    """
+    from backend import chat, runs
 
     db = connect()
     # Into the thread it was asked in: named, or where the person last spoke.
     room = args.room or await chat.last_room(db)
+    answering = [d["_id"] for d in await chat.unread(db, room)]
     await chat.post(db, args.text, role=chat.AGENT, room=room)
-    print(f"said, in {room}")
+    read = await chat.mark_seen(db, answering, runs.session_from_env())
+    print(f"said, in {room}" + (f" - {read} line(s) marked as read" if read else ""))
 
 
 async def cmd_part(args):
