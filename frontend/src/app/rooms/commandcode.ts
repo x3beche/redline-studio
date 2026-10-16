@@ -2686,6 +2686,9 @@ export class RoomCommandCode implements OnDestroy {
         now.forEach(w => this.showAsked(id, w));
         if (now.length) { this.stickThink(); this.scroll(true); }
         if (lost) this.reread(id);
+        // Nothing is being written here any more (it finished while the stream
+        // was away): what was held back is done now.
+        if (lost || !now.length) this.settle();
         if (ev.queue && !Array.isArray(ev.queue)) this.applyQueue(ev.queue);
         break;
       }
@@ -2730,6 +2733,9 @@ export class RoomCommandCode implements OnDestroy {
       case 'done': {
         if (!this.watch().some(w => w.gen === ev.gen)) return;
         this.watch.update(l => l.filter(w => w.gen !== ev.gen));
+        // Someone else's answer: it is finished, so what was held back while it
+        // was being written (the code blocks' buttons and colours) is done now.
+        this.settle();
         pingUsage();
         const m = ev.message;
         if (m) this.inChat(id, x => (x.messages ?? []).some(y => y.id === m.id) ? x : { ...x, messages: [...(x.messages ?? []), m] });
@@ -2739,6 +2745,7 @@ export class RoomCommandCode implements OnDestroy {
       }
       case 'end':
         this.watch.update(l => l.filter(w => w.gen !== ev.gen));
+        this.settle();
         break;
       case 'title':
         if (ev.title) {
