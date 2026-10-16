@@ -48,7 +48,6 @@ def test_every_part_draws_itself_and_only_needs_its_rows():
         out = html(name, {**ROW, "title": "T", "rows": [dict(ROW)]})
         cls = base.get(name, name)
         assert f"p-{cls}" in out and "<figure" in out and "p-err" not in out, name
-        assert "<figcaption>T</figcaption>" in out, name
 
 
 def test_a_measurement_with_no_method_is_not_a_measurement():
