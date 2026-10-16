@@ -1088,6 +1088,25 @@ export class RoomFiles implements OnDestroy {
     for (let at = this.byId().get(folder), n = 0; at && n < 40; at = this.byId().get(at.parent), n++) names.unshift(at.root ? t(at.name) : at.name);
     return names.join('/');
   }
+  /** The path of an entry as it is pasted somewhere else - a Chat line, an agent, an LLM:
+   *  "/My files/Documents/ldo.pdf", "/In the app/Projects/iot-fan/parts/arm.step". */
+  copyPath(keys: string[]) {
+    const paths = keys.map(k => this.pathLine(k)).filter(p => !!p);
+    if (!paths.length) return;
+    const done = () => this.say(t('Copied'));
+    try { navigator.clipboard.writeText(paths.join('\n')).then(done, done); } catch { done(); }
+  }
+  /** One entry's line: the side it is kept in first ("/My files", "/In the app"), then its folders. */
+  private pathLine(key: string): string {
+    const id = key.slice(2), isFile = key.startsWith('f:');
+    const x = isFile ? this.fileById(id) : this.byId().get(id);
+    if (!x) return '';
+    const folder = isFile ? (x as StoredFile).folder : (x as FileFolder).parent;
+    const inner = this.pathOf(folder);
+    const name = isFile || !(x as FileFolder).root ? x.name : t(x.name);
+    // The top of one's own folders reads as "My files" already: the side is said once, at the start.
+    return `/${x.ro || isV(x.id) ? t('In the app') : t('My files')}${inner === t('My files') ? '' : '/' + inner}/${name}`;
+  }
   crumbName(c: { id: string; name: string }) { return !c.id ? 'My files' : c.name; }
   /** Where a read-only entry is changed, as the lock's tooltip says it. */
   whereText(x: { where?: string } | null | undefined) { return WHERE_LABEL[x?.where ?? ''] ?? 'Read-only'; }
@@ -1400,7 +1419,8 @@ export class RoomFiles implements OnDestroy {
     if (keys.length === 1 && files.length === 1) {
       const f = files[0];
       if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.open(f) });
-      out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) });
+      out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
       if (draw) {
         out.push({ sep: true }, { label: 'Rename', icon: 'edit', kbd: 'F2', run: () => this.startRename('f:' + f.id) },
                  { label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) });
@@ -1420,7 +1440,8 @@ export class RoomFiles implements OnDestroy {
     } else if (keys.length === 1 && dirs.length === 1) {
       const d = dirs[0];
       out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.go(d.id) },
-               { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), d.name + '.zip') });
+               { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), d.name + '.zip') },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
       if (draw) {
         out.push({ sep: true }, { label: 'Rename', icon: 'edit', kbd: 'F2', run: () => this.startRename('d:' + d.id) },
                  { label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) },
@@ -1428,7 +1449,8 @@ export class RoomFiles implements OnDestroy {
       }
     } else {
       out.push({ label: 'Download as ZIP', icon: 'download',
-                 run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') });
+                 run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
       if (draw) {
         out.push({ label: 'Move to…', icon: 'move', run: () => this.moveDialog(keys) },
                  { sep: true }, { label: 'Delete', icon: 'trash', kbd: 'Del', danger: true, run: () => this.askDelete(keys) });
@@ -1442,7 +1464,8 @@ export class RoomFiles implements OnDestroy {
     if (keys.length === 1 && files.length === 1) {
       const f = files[0];
       if (this.preview() !== f.id) out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.open(f) });
-      out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) });
+      out.push({ label: 'Download', icon: 'download', run: () => this.download(downloadUrl(f.id), f.name) },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
       const there = this.openable(f.open);
       if (there) out.push({ label: there, icon: 'open', run: () => this.openThere(f.open) });
       if (this.auth.can('draw')) out.push({ label: 'Save to My files', icon: 'download', run: () => this.saveMine(f) });
@@ -1456,12 +1479,14 @@ export class RoomFiles implements OnDestroy {
     } else if (keys.length === 1 && dirs.length === 1) {
       const d = dirs[0];
       out.push({ label: 'Open', icon: 'open', kbd: 'Enter', run: () => this.go(d.id) },
-               { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), (d.root ? t(d.name) : d.name) + '.zip') });
+               { label: 'Download as ZIP', icon: 'download', run: () => this.download(zipUrl([], [d.id]), (d.root ? t(d.name) : d.name) + '.zip') },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
       const there = this.openable(d.open, d.chat);
       if (there) out.push({ label: there, icon: 'open', run: () => this.openThere(d.open, d.chat) });
     } else {
       out.push({ label: 'Download as ZIP', icon: 'download',
-                 run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') });
+                 run: () => this.download(zipUrl(files.map(f => f.id), dirs.map(d => d.id)), 'files.zip') },
+               { label: 'Copy path', icon: 'link', run: () => this.copyPath(keys) });
     }
     return out;
   }
