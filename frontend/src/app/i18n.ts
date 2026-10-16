@@ -648,7 +648,7 @@ const TR: Record<string, string> = {
   'Back to the default.': 'Varsayılana döndü.',
   'That provider has no models to choose from - is its key set?': 'Bu sağlayıcıda seçilecek model yok - anahtarı ayarlı mı?',
   'Card summaries': 'Kart özetleri',
-  'the one-line sentence on a revision card': 'revizyon kartındaki tek satırlık cümle',
+  'the one-line sentence on a revision card, and the name of a conversation': 'revizyon kartındaki tek satırlık cümle ve bir sohbetin adı',
   'English translation': 'İngilizce çeviri',
   'a note written in Turkish, turned into an English request': 'Türkçe yazılmış bir notun İngilizce isteğe çevrilmesi',
   'Tool pages': 'Araç sayfaları',

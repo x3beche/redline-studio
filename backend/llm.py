@@ -73,7 +73,7 @@ PROVIDERS = {
 CHEAP = ("commandcode", "Qwen/Qwen3.8-Flash")
 JOBS = {
     "summary": {"label": "Card summaries",
-                "about": "the one-line sentence on a revision card",
+                "about": "the one-line sentence on a revision card, and the name of a conversation",
                 "default": CHEAP},
     "translate": {"label": "English translation",
                   "about": "a note written in Turkish, turned into an English request",
