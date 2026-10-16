@@ -294,6 +294,19 @@ export function plain(src: string): string {
     .trim();
 }
 
+/** The same line with the emoji left out, for a name a list shows: the names
+ *  the models write for a conversation often carry a mark, and it reads better
+ *  without (the conversation itself shows the name as it is). Letters, digits
+ *  and signs stay - only the picture characters, and the joiners between them,
+ *  go. */
+export function withoutEmoji(src: string): string {
+  return (src ?? '')
+    .replace(/[\p{Extended_Pictographic}\uFE0E\uFE0F\u200D\u20E3]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+
 /** KaTeX for the maths spans toHtml leaves, wherever they land on the page.
  *
  *  Angular strips the inline styles KaTeX needs from anything going

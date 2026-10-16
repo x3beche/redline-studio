@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { navGo, navUrl } from '../nav';
 import { Observable } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
-import { Segment, TaskBlock, plain, splitTasks, toHtml } from '../markdown';
+import { Segment, TaskBlock, plain, splitTasks, toHtml, withoutEmoji } from '../markdown';
 import { TaskBlockView, TaskState } from './task-block';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
@@ -549,7 +549,7 @@ type Ask = { text: string; label: string; go: () => void };
                 @if (threads.unread(r.room); as n) { <span class="tcv-th-badge" [title]="'unread' | t">{{ n }}</span> }
                 @else if (r.last) { <span class="tcv-cc-itemwhen">{{ when(r.last.at) }}</span> }
               </div>
-              <div class="tcv-cc-itemsnip">{{ r.last ? (r.last.role === 'agent' ? ('agent' | t) : (r.last.by || ('you' | t))) + ': ' + snip(r.last.text)
+              <div class="tcv-cc-itemsnip">{{ r.last ? (r.last.role === 'agent' ? ('agent' | t) : (r.last.by || ('you' | t))) + ': ' + snipPlain(r.last.text)
                                                       : ('No messages yet' | t) }}</div>
             </div>
           </div>
@@ -602,7 +602,7 @@ type Ask = { text: string; label: string; go: () => void };
         @for (h of hs; track $index) {
           <button class="tcv-cc-hit" [attr.data-on]="!dms.open() && !sel.thread() && h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
             <span class="tcv-cc-itemtop">
-              <span class="tcv-cc-itemtitle">{{ h.title | t }}</span>
+              <span class="tcv-cc-itemtitle">{{ shownTitle(h.title) | t }}</span>
               @if (h.archived) { <span class="tcv-cc-tag">{{ 'Archived' | t }}</span> }
               @if (h.at) { <time class="tcv-cc-itemwhen" [title]="stamp(h.at)">{{ when(h.at) }}</time> }
             </span>
@@ -671,7 +671,7 @@ type Ask = { text: string; label: string; go: () => void };
             <div class="tcv-cc-itemtext">
               <div class="tcv-cc-itemtop">
                 @if (c.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24"><path [attr.d]="I.pin" /></svg> }
-                <span class="tcv-cc-itemtitle">{{ c.title | t }}</span>
+                <span class="tcv-cc-itemtitle">{{ shownTitle(c.title) | t }}</span>
                 @if (!c.deleted_at && running(c)) {
                   <span class="tcv-cc-itemrun tcv-cc-pulse" data-running="1" [title]="'An answer is being written' | t" aria-hidden="true"></span>
                 }
@@ -684,7 +684,7 @@ type Ask = { text: string; label: string; go: () => void };
                     · {{ purgeText(c) }}</span>
                 </div>
               } @else {
-                <div class="tcv-cc-itemsnip">{{ c.last ? (c.last.by ? c.last.by + ': ' : '') + snip(c.last.text) : ('No messages yet' | t) }}</div>
+                <div class="tcv-cc-itemsnip">{{ c.last ? (c.last.by ? c.last.by + ': ' : '') + snipPlain(c.last.text) : ('No messages yet' | t) }}</div>
               }
             </div>
             @if (c.deleted_at && mayDelete(c) && !selecting()) {
@@ -3362,6 +3362,15 @@ export class RoomCommandCode implements OnDestroy {
   }
   /** A line's start for the list, without the Markdown marks. */
   snip(s: string) { return plain(s); }
+  /** The list's one-line preview of a line: the marks off and the emoji too,
+   *  as the models write them into an answer (the conversation itself shows
+   *  the line as it was written). */
+  snipPlain(s: string) { return withoutEmoji(plain(s)); }
+  /** A conversation's name as the list shows it: a model writes the name and
+   *  often puts a mark in it, which the list leaves out; one that was nothing
+   *  but marks reads as "Untitled". The conversation itself shows the name it
+   *  has, marks and all. */
+  shownTitle(s: string) { return withoutEmoji(s) || 'Untitled'; }
   /** "local agents (x33)" → "LA": letters only, what is in brackets left out. */
   initials(name?: string) {
     const w = (name || '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(x => x && /\p{L}/u.test(x[0]));

@@ -23,12 +23,13 @@ import pytest
 
 SOURCE = (Path(__file__).resolve().parent.parent
           / "frontend" / "src" / "app" / "markdown.ts")
+APP = SOURCE.parent
 
 HARNESS = """
-import { toHtml, plain } from './markdown.mts';
+import { toHtml, plain, withoutEmoji } from './markdown.mts';
 const cases = JSON.parse(process.argv[2]);
 console.log(JSON.stringify(cases.map(
-  ([fn, text]) => (fn === 'plain' ? plain(text) : toHtml(text)))));
+  ([fn, text]) => (fn === 'plain' ? plain(text) : fn === 'withoutEmoji' ? withoutEmoji(text) : toHtml(text)))));
 """
 
 
@@ -183,6 +184,35 @@ def test_plain_drops_fenced_code():
     got = _render([("plain", "before\n```\nx = 1\n```\nafter")])[0]
     assert "x = 1" not in got
     assert got.startswith("before")
+
+
+# --- a name a list shows ---------------------------------------------------
+
+def _strip(text: str) -> str:
+    return _render([("withoutEmoji", text)])[0]
+
+
+def test_a_name_keeps_its_letters_its_numbers_and_its_signs():
+    # A conversation's name is written by a model, which likes a mark in it;
+    # the Chat's list shows the name without them (rooms/commandcode.ts).
+    assert _strip("⚡ Fan board BOM") == "Fan board BOM"
+    assert _strip("Pil 🔋 değişimi") == "Pil değişimi"
+    assert _strip("İç sıcaklık ölçümü ±2 °C · 5 V 2 A") == "İç sıcaklık ölçümü ±2 °C · 5 V 2 A"
+    assert _strip("M3 × 8 vida (paslanmaz)") == "M3 × 8 vida (paslanmaz)"
+    assert _strip("🎉") == ""                                  # nothing but marks: the list says "Untitled"
+
+
+def test_the_chat_list_shows_a_name_and_a_line_that_way():
+    cc = (APP / "rooms" / "commandcode.ts").read_text()
+    assert "shownTitle(c.title) | t" in cc and "shownTitle(h.title) | t" in cc
+    assert "withoutEmoji(s) || 'Untitled'" in cc
+    # The last line under it too: the models put their marks in an answer.
+    assert "snipPlain(c.last.text)" in cc and "snipPlain(r.last.text)" in cc
+    assert "withoutEmoji(plain(s))" in cc
+    # A person's own words in that list, and what a search matched, stay as they are.
+    assert "{{ snip(l.text) }}" in cc and "segments(h)" in cc
+    # The conversation itself, and the name in its header, keep what they have.
+    assert '[value]="c.title | t"' in cc
 
 
 # --- the real thing --------------------------------------------------------
