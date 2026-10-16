@@ -19,13 +19,35 @@ def html(name: str, data: dict) -> str:
 
 ROW = {"what": "a", "label": "a", "value": "1", "qty": 1, "role": "Prepared", "name": "Me",
        "pin": 1, "version": "0", "date": "2026-01-01", "actual": "ok", "expected": "ok",
-       "method": "DMM", "total": "1", "code": "graph TD; A-->B"}
+       "method": "DMM", "total": "1", "code": "graph TD; A-->B", "expression": "2 * 3",
+       "at": "0x40", "from": "0", "to": "1", "bits": "7:0", "register": "R", "field": "F", "size": "4 kB",
+       "kind": "flash", "load": "0x8000", "use": "code", "access": "rw", "reset": "0x0", "region": "flash",
+       "section": ".text", "task": "main", "stack": "2 kB", "used": "1 kB", "peak": "1.4 kB", "free": "0.6 kB",
+       "irq": "USART1", "priority": "5", "handler": "on_uart", "source": "USART1", "node": "PLL", "rate": "72 MHz",
+       "channel": "1", "direction": "mem2mem", "peripheral": "SPI1", "trigger": "SPI1_TX", "number": "37",
+       "vector": "USART1_IRQHandler", "partition": "app", "type": "app", "housing": "JST-PH",
+       "signal": "SWDIO", "wire": "30 AWG", "net": "SWD", "side": "top", "where": "U1", "spot": "U1",
+       "temperature": "48", "limit": "85", "time": "1.204", "level": "info", "line": "boot ok", "fault": "FPU",
+       "status": "hard", "cause": "unaligned", "instrument": "PPK2", "setting": "1 kHz", "why": "ripple",
+       "who": "me", "how": "checked twice", "id": "R1", "severity": "low", "state": "open",
+       "likelihood": "low", "impact": "low", "mitigation": "guard", "decision": "use the LDO", "alternatives": "BUCK",
+       "weight": "3", "criterion": "cost", "option": "LDO", "was": "1.1", "now": "1.2", "unit": "V",
+       "frame": "0x55", "bytes": "0", "values": "0x55", "hop": "1", "link": "eth0", "address": "10.0.0.1",
+       "call": "read()", "takes": "id", "returns": "row", "meaning": "no ack", "action": "retry", "title": "Ref",
+       "source_ref": "datasheet", "page": "4", "requirement": "R-1", "evidence": "test 3", "verdict": "pass",
+       "term": "seat", "severity_note": "x", "what_it_is": "x"}
 
 
 def test_every_part_draws_itself_and_only_needs_its_rows():
+    # A few parts are another part under the name of what is being drawn or
+    # budgeted: they draw that part's class.
+    base = {"sequence-diagram": "mermaid", "state-machine": "mermaid", "timing-diagram": "mermaid",
+            "block-diagram": "mermaid", "latency-budget": "budget-table", "throughput-budget": "budget-table",
+            "power-budget": "budget-table", "memory-budget": "budget-table"}
     for name in pdfparts.PARTS:
         out = html(name, {"title": "T", **ROW, "rows": [dict(ROW)]})
-        assert f"p-{name}" in out and "<figure" in out and "p-err" not in out, name
+        cls = base.get(name, name)
+        assert f"p-{cls}" in out and "<figure" in out and "p-err" not in out, name
         assert "<figcaption>T</figcaption>" in out, name
 
 
