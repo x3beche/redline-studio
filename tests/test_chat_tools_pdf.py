@@ -44,7 +44,7 @@ def _tool():
 
 def test_it_is_a_files_change_tool_on_by_default_with_its_writing_guide():
     t = _tool()
-    assert (t.package, t.level, t.default) == ("commandcode", "change", True)
+    assert (t.package, t.level, t.default) == ("pdf", "change", True)
     for words in ("summary", "'## '", "units", "datasheet p.", "Gather the facts first", "/api/files/<id>?inline=1"):
         assert words in t.description
     assert "pdf_make" in chat_tools.SYSTEM_NOTE

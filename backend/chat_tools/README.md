@@ -156,12 +156,22 @@ through the workspace, and the list of them when the name fits nothing).
     none yet is started as the card's box starts it.
   The Chat shows a row under each step (`frontend/src/app/rooms/cc-room-card.ts`),
   and board_render's picture in model_render's row.
-- `pdf_make` (change, on; package `files`): a document the model writes in
+- `pdf_make` (change, on; package `pdf`): a document the model writes in
   Markdown, printed as a PDF in Workbench's white theme (backend/pdfdoc.py:
   headless Chromium in its container, no network) and kept in Files >
   Documents; its description is the writing guide. The step carries the
   file; the Chat opens it, and any `/api/files/<id>` link, in its viewer
   (frontend/src/app/rooms/file-modal.ts).
+- Documents built from parts (package `pdf`, backend/pdfparts.py): the blocks
+  a printed document is made of - a fields block, a revision history, a
+  sign-off, a measurement table, a pass/fail matrix, a BOM, a pinout, a
+  budget - drawn from the values the model gives and never from a file, an
+  instrument or a guess: a part refuses to print a measurement with no
+  method, a budget that does not add up, a check with no measured value.
+  `pdf_parts` (read, on) is the catalogue the model reads first; `pdf_report`
+  (change, on) writes a document from sections of them. Inside pdf_make's
+  Markdown a part is a fenced block: ```part:<name> and the JSON of its
+  fields (pdfdoc.part_fence).
 - `file_ocr` (read, on; package `files`): the words on a file that has no
   text layer - a photograph of a document, a page off a scanner, a
   screenshot, a scan of a drawing - written out by a model that sees the

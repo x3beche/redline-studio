@@ -54,7 +54,7 @@ export const TOOL_ICON: Record<string, string> = {
   task_list: CLOCK, task_create: CLOCK, task_run: CLOCK,
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET, datasheet_search: SHEET,
   basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, manufacturer_search: FACTORY, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
-  pdf_make: PDFDOC,
+  pdf_make: PDFDOC, pdf_parts: PDFDOC, pdf_report: PDFDOC,
   room_note: NOTE, queue_list: QUEUE, queue_read: QUEUE, rename_chat: PEN,
   notes_search: SEARCH, note_read: NOTE, note_write: PEN, note_todo: CHECK, note_edit: PEN,
   chat_list: SEARCH, chat_read: CHAT, chat_archive: BOX,

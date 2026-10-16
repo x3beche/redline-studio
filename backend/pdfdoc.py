@@ -75,7 +75,7 @@ from zoneinfo import ZoneInfo
 
 from markdown_it import MarkdownIt
 
-from . import browser
+from . import browser, pdfparts
 
 IMAGE = os.environ.get("REDLINE_PDF_IMAGE", browser.IMAGE)
 TIMEOUT = float(os.environ.get("REDLINE_PDF_TIMEOUT", "90"))
@@ -248,6 +248,26 @@ def _figures(tokens) -> None:
                 kids[0].meta = {"figure": True}
 
 
+def part_fence(name: str, data: dict) -> str:
+    """A part as the fenced block the renderer draws - what a tool places in a
+    document it builds (backend/chat_tools/pdf_report.py). The body is JSON, one
+    line per field, so a document written this way reads as its own source."""
+    body = json.dumps(data, ensure_ascii=False, indent=2)
+    return f"```part:{name}\n{body}\n```"
+
+
+def _part_html(name: str, body: str) -> str:
+    """A ```part:<name> fence: the values the model gave, drawn by
+    backend/pdfparts.py. A part that cannot be drawn says so where it stands
+    rather than breaking the document - the rest of a report is still worth
+    reading, and the reader sees which block is missing and why."""
+    try:
+        return pdfparts.render(name, pdfparts.as_json(body)) + "\n"
+    except pdfparts.PartError as exc:
+        return (f'<div class="p-err">part {html.escape(name.strip())}: '
+                f'{html.escape(str(exc))}</div>\n')
+
+
 def _render_rules(md: MarkdownIt) -> None:
     def paragraph_open(self, tokens, idx, options, env):
         t = tokens[idx]
@@ -324,6 +344,9 @@ def _render_rules(md: MarkdownIt) -> None:
 
     def fence(self, tokens, idx, options, env):
         t = tokens[idx]
+        info = (t.info or "").strip()
+        if info[:5].lower() == "part:":
+            return _part_html(info[5:], t.content)
         lang = re.sub(r"[^\w+#.-]", "", (t.info or "").split(" ")[0])[:20]
         head = f'<div class="code-lang">{html.escape(lang)}</div>' if lang else ""
         return f'<div class="code">{head}<pre><code>{html.escape(t.content)}</code></pre></div>\n'
@@ -577,6 +600,27 @@ td { padding: 3.6pt 6pt; border-bottom: .5pt solid var(--line); vertical-align: 
 tbody tr:last-child td { border-bottom: .9pt solid var(--ink); }
 th.num, td.num { text-align: right; white-space: nowrap; }
 td code, th code { font-size: 7.8pt; padding: 0 2pt; }
+
+/* the parts (backend/pdfparts.py): a figure drawn from the values the model
+   gave, never from a file, an instrument or a guess */
+figure.p { margin: 3pt 0 12pt; text-align: left; }
+figure.p figcaption { font-size: 7.6pt; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink-dim); margin: 0 0 3pt; }
+.p-tbl { margin: 0; }
+.p-kv { width: auto; }
+.p-kv th { width: 34mm; background: transparent; border: 0; border-bottom: .5pt solid var(--line);
+  font-weight: 500; color: var(--ink-dim); }
+.p-kv td { border-bottom: .5pt solid var(--line); }
+.p-note { margin: 3pt 0 0; font-size: 7.6pt; color: var(--warn); }
+.p-dim, .p-none { color: var(--ink-faint); }
+.p-none { font-style: italic; }
+.p-total { font-weight: 600; background: var(--wash); }
+.p-verdict { font-weight: 600; text-transform: capitalize; }
+.p-verdict[data-v="pass"] { color: var(--ok); }
+.p-verdict[data-v="fail"] { color: var(--danger); }
+.p-verdict[data-v="not checked"], .p-verdict[data-v="waived"] { color: var(--ink-faint); font-weight: 400; }
+.p-err { border-left: 2pt solid var(--danger); padding: 4pt 6pt; margin: 3pt 0 12pt; font-size: 8pt;
+  color: var(--danger); }
 
 /* pictures */
 img { max-width: 100%; height: auto; }

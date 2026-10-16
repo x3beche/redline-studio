@@ -134,6 +134,12 @@ PACKAGES = (
     Package("mfr", "Parts", "Parts: the makers' catalogs, the LCSC drawer, McMaster-Carr, GrabCAD and My Items - "
                             "and how many of each are on hand."),
     Package("commandcode", "Chat", "The Chat's conversations and what it can do on its own: the clock, the web, PDFs."),
+    # Documents: not a tab of its own - the Chat writes them - but a pack of
+    # its own, because a printed document is one kind of work with its own
+    # parts, and a person may want it on while the rest of the Chat's tools
+    # are off.
+    Package("pdf", "Documents", "The printed documents: reports built from parts - measurements, BOMs, "
+                                "pinouts, pass/fail matrices - and the parts they are built from."),
     Package("files", "Files", "The Files room."),
     Package("wiki", "Wiki", "Each project's wiki: what was decided and why, dimensions and limits, sourcing, "
                             "open questions, production notes."),
@@ -251,7 +257,10 @@ SYSTEM_NOTE = (
     "the notes for the 3D, PCB and Firmware rooms - is read with queue_list and queue_read. Earlier conversations are "
     "found with chat_list and read with chat_read. Questions about the person's own usage and costs - what they spent, which model or room costs most, where the tokens went, what the cache saved, build times, the most expensive notes, API errors, the month's budget - are answered from analytics_read (the Analytics room's own figures; a range, a section, a project): quote its figures with their units and currency rather than estimating, and give its Analytics link. Rename this conversation (rename_chat) or archive it (chat_archive) "
     "only when asked to. When the person asks for a document - a report, a datasheet summary, a BOM, a comparison, a "
-    "spec - or for a PDF, gather the facts with the tools first, then write it with pdf_make: a few-word title, a "
+    "spec - or for a PDF, gather the facts with the tools first, then write it: pdf_make for a document you write "
+    "as Markdown, or pdf_report for one built from parts - read pdf_parts first, it lists every part (a "
+    "measurement table, a BOM, a pinout, a pass/fail matrix, a budget) and the fields each takes. Either way: a "
+    "few-word title, a " 
     "one-line purpose, a short summary first, '## ' sections, tables with units, the sources cited (datasheet pages, "
     "LCSC numbers), no filler; then link the file it returns in your answer. What you make (PDFs, renders, lists) is "
     "kept in the Chat's own area of Files, not in the person's My files: when they ask to save it to their files "
