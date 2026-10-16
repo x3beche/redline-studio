@@ -447,8 +447,8 @@ def measurement_chart(rows: list[dict]) -> str:
         out.append(f'<rect x="{x0:g}" y="{y:g}" width="{x1 - x0:g}" height="{bh:g}" fill="var(--wash)" '
                    f'stroke="var(--line)" stroke-width="0.6"/>')
         if lim is not None:
-            lo = max(0.0, abs(lim) - abs(tol or 0)) if tol else 0.0
-            hi = abs(lim) + abs(tol or 0) if tol else abs(lim)
+            lo = (abs(lim) - abs(tol)) if tol else 0.0
+            hi = (abs(lim) + abs(tol)) if tol else abs(lim)
             bx0, bx1 = x0 + (x1 - x0) * min(1.0, lo / scale), x0 + (x1 - x0) * min(1.0, hi / scale)
             out.append(f'<rect x="{bx0:g}" y="{y:g}" width="{max(1.0, bx1 - bx0):g}" height="{bh:g}" '
                        f'fill="{_OK}" opacity="0.16"/>')
@@ -461,7 +461,8 @@ def measurement_chart(rows: list[dict]) -> str:
             out.append(_text(1000, y + bh - 6, "no method", 10.5, "end", "var(--ink-faint)"))
         elif v is not None:
             vx = x0 + (x1 - x0) * min(1.0, abs(v) / scale)
-            inband = lim is None or (abs(lim - abs(tol or 0)) <= abs(v) <= abs(lim) + abs(tol or 0)) if lim else True
+            inband = True if lim is None else (abs(v) <= abs(lim) + abs(tol or 0) if not tol
+                                     else abs(lim) - abs(tol) <= abs(v) <= abs(lim) + abs(tol))
             colour = _OK if inband else _BAD
             out.append(f'<line x1="{vx:g}" y1="{y - 5:g}" x2="{vx:g}" y2="{y + bh + 5:g}" stroke="{colour}" '
                        f'stroke-width="1.6"/>')
