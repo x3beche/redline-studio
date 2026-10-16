@@ -32,8 +32,10 @@ does not exist yet.
 
 from __future__ import annotations
 
+import ast
 import html
 import json
+import operator
 from typing import Any, Callable
 
 # A value that is not known prints like this and is counted, rather than left
@@ -291,6 +293,109 @@ def mermaid(data: dict) -> str:
     return _cap("mermaid", data, f'<div class="mermaid">{_e(code)}</div>')
 
 
+def _table_part(name: str, columns: tuple, dim: bool = True) -> Callable[[dict], str]:
+    """A part that is a named table: `rows` of objects, one cell each. A value
+    the model did not give prints faint, so a gap shows as a gap - never as a
+    zero. (measurement-table and budget-table have rules of their own and their
+    own renderers; everything else that is a table is built from this.)"""
+
+    def draw(data: dict) -> str:
+        rows = _rows(data)
+        if not rows:
+            raise PartError(f"a `{name}` part needs `rows`")
+        out = []
+        for r in rows:
+            cells = []
+            for _label, key, cls in columns:
+                v = r.get(key)
+                if isinstance(v, list):
+                    v = ", ".join(str(x) for x in v)
+                elif isinstance(v, bool):
+                    v = "yes" if v else "no"
+                cells.append(_cell(_s(v, 500), dim=dim and v in (None, ""), cls=cls))
+            out.append(cells)
+        return _cap(name, data, _table([(l, c) for l, _, c in columns], out))
+
+    draw.__name__ = name.replace("-", "_")
+    return draw
+
+
+def _mermaid_part(name: str) -> Callable[[dict], str]:
+    """One of Mermaid's own diagram kinds under its own name, so the model asks
+    for the drawing it means (a state machine, a timing sketch) instead of
+    remembering which syntax the generic part takes."""
+
+    def draw(data: dict) -> str:
+        return mermaid(data)
+
+    draw.__name__ = name.replace("-", "_")
+    return draw
+
+
+def _budget_part(name: str, unit: str) -> Callable[[dict], str]:
+    """budget-table under the name of what is being budgeted: the unit is filled
+    in when the model leaves it out (and the total still has to add up)."""
+
+    def draw(data: dict) -> str:
+        return budget_table({**data, "unit": data.get("unit") or unit})
+
+    draw.__name__ = name.replace("-", "_")
+    return draw
+
+
+_CALC_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+             ast.Mod: operator.mod, ast.FloorDiv: operator.floordiv, ast.Pow: operator.pow}
+
+
+def _value(node) -> float:
+    """The expression's value: a walk over the parsed tree, never eval. Only
+    numbers, the arithmetic operators and parentheses are allowed."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.UnaryOp):
+        v = _value(node.operand)
+        return -v if isinstance(node.op, ast.USub) else +v
+    if isinstance(node, ast.BinOp):
+        fn = _CALC_OPS.get(type(node.op))
+        if fn is None:
+            raise ValueError("only + - * / % // and ** are allowed")
+        return fn(_value(node.left), _value(node.right))
+    raise ValueError(f"{type(node).__name__.lower()} is not arithmetic - write the numbers in")
+
+
+def _g(v: float) -> str:
+    return f"{v:g}"
+
+
+def calculation(data: dict) -> str:
+    """A calculation whose arithmetic is checked. The expression is evaluated
+    here and a stated result that disagrees stops it: the model wrote both
+    numbers and the reader cannot tell which one is wrong."""
+    expr = _s(data.get("expression"), 200)
+    if not expr:
+        raise PartError("a `calculation` part needs `expression`, e.g. \"2 * pi * 12e3 * 1e-9\"")
+    try:
+        got = _value(ast.parse(expr, mode="eval").body)
+    except (SyntaxError, ValueError, ZeroDivisionError, TypeError, OverflowError) as exc:
+        raise PartError(f"the expression {expr!r}: {exc}") from exc
+    stated = _num(data.get("result")) if str(data.get("result") or "").strip() else None
+    unit = _s(data.get("unit"), 12)
+    note, shown = "", got
+    if stated is not None and abs(stated - got) > max(1e-9, abs(got) * 1e-6):
+        note = f"Refused: {expr} is {_g(got)}, not the stated {_g(stated)}."
+        shown = stated
+    rows = [{"label": "Expression", "value": expr},
+            {"label": "Result", "value": (f"{_g(shown)} {unit}".strip())}]
+    for r in _rows(data, "inputs"):
+        rows.append({"label": _s(r.get("what") or r.get("label"), 80),
+                     "value": (f"{_s(r.get('value'), 40)} {_s(r.get('unit'), 10)}".strip()
+                               + (f"  ({_s(r.get('note'), 160)})" if r.get("note") else ""))})
+    body = fields({"rows": rows})
+    if note:
+        body += f'<p class="p-note">{_e(note)}</p>'
+    return _cap("calculation", data, body)
+
+
 PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     "fields": ("A label / value block: a document's specification, key numbers, at a glance.",
                "rows: [{label, value}]  (or fields: {label: value})", fields),
@@ -315,6 +420,183 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     "mermaid": ("A diagram, drawn in the page by Mermaid: a sequence, a flow, a state machine, a class or a "
                 "timing sketch. Write Mermaid's own lines; the PDF prints the drawing, not the source.",
                 'code: "sequenceDiagram\\n  A->>B: ping"  (a string, or a list of lines)', mermaid),
+    # --- registers and memory -------------------------------------------------
+    "register-map": ("A peripheral's registers: where each sits, how it is reached, what resets it.",
+                     "rows: [{at, name, access, reset, what}]",
+                     _table_part("register-map", (("Address", "at", "num"), ("Name", "name", ""),
+                                                  ("Access", "access", ""), ("Reset", "reset", "num"),
+                                                  ("What", "what", "")))),
+    "register-decode": ("One register, bit by bit: what each field is and how it is reached.",
+                        "rows: [{register, bits, field, access, what}]",
+                        _table_part("register-decode", (("Register", "register", ""), ("Bits", "bits", "num"),
+                                                        ("Field", "field", ""), ("Access", "access", ""),
+                                                        ("What", "what", "")))),
+    "register-diff": ("Two builds of one register set, field by field - what moved and why.",
+                      "rows: [{register, field, was, now, why}]",
+                      _table_part("register-diff", (("Register", "register", ""), ("Field", "field", ""),
+                                                    ("Was", "was", "num"), ("Now", "now", "num"),
+                                                    ("Why", "why", "")))),
+    "memory-map": ("The map of what lives where in a memory space.",
+                   "rows: [{region, from, to, size, use}]",
+                   _table_part("memory-map", (("Region", "region", ""), ("From", "from", "num"),
+                                              ("To", "to", "num"), ("Size", "size", "num"),
+                                              ("Use", "use", "")))),
+    "section-table": ("A built image's sections: how big, where they load, what they are.",
+                      "rows: [{section, size, kind, load, what}]",
+                      _table_part("section-table", (("Section", "section", ""), ("Size", "size", "num"),
+                                                    ("Kind", "kind", ""), ("Load", "load", "num"),
+                                                    ("What", "what", "")))),
+    "stack-usage": ("Stacks measured: how much was used, the peak, what is left - a block with no "
+                    "margin is the one that overflows.",
+                    "rows: [{task, stack, used, peak, free}]",
+                    _table_part("stack-usage", (("Task", "task", ""), ("Stack", "stack", "num"),
+                                                ("Used", "used", "num"), ("Peak", "peak", "num"),
+                                                ("Free", "free", "num")))),
+    "interrupt-timeline": ("The interrupts in the order they may preempt each other.",
+                           "rows: [{irq, priority, handler, source, what}]",
+                           _table_part("interrupt-timeline", (("IRQ", "irq", ""), ("Priority", "priority", "num"),
+                                                              ("Handler", "handler", ""), ("Source", "source", ""),
+                                                              ("What", "what", "")))),
+    "clock-tree": ("The clock tree: what comes from where, at what rate.",
+                   "rows: [{node, from, rate, what}]",
+                   _table_part("clock-tree", (("Clock", "node", ""), ("From", "from", ""),
+                                              ("Rate", "rate", "num"), ("What", "what", "")))),
+    "dma-map": ("Which channel moves what, and how it is triggered.",
+                "rows: [{channel, direction, peripheral, trigger, what}]",
+                _table_part("dma-map", (("Channel", "channel", ""), ("Direction", "direction", ""),
+                                        ("Peripheral", "peripheral", ""), ("Trigger", "trigger", ""),
+                                        ("What", "what", "")))),
+    "irq-table": ("The vector table: number, priority, handler, how often it fires.",
+                  "rows: [{number, vector, priority, handler, rate}]",
+                  _table_part("irq-table", (("Vector", "number", "num"), ("Name", "vector", ""),
+                                            ("Priority", "priority", "num"), ("Handler", "handler", ""),
+                                            ("Rate", "rate", "")))),
+    "partition-layout": ("The partitions of a device: where each starts, how big, what it holds.",
+                         "rows: [{partition, from, size, type, what}]",
+                         _table_part("partition-layout", (("Partition", "partition", ""), ("From", "from", "num"),
+                                                          ("Size", "size", "num"), ("Type", "type", ""),
+                                                          ("What", "what", "")))),
+    # --- hardware ------------------------------------------------------------
+    "connector-pinout": ("A connector as it is wired, pin by pin, with the housing it goes in.",
+                         "rows: [{pin, name, signal, wire, note}], housing?",
+                         _table_part("connector-pinout", (("Pin", "pin", "num"), ("Name", "name", ""),
+                                                          ("Signal", "signal", ""), ("Wire", "wire", ""),
+                                                          ("Note", "note", "")))),
+    "net-extract": ("Which net joins what - from a layout, a netlist or a schematic.",
+                    "rows: [{net, from, to, what}]",
+                    _table_part("net-extract", (("Net", "net", ""), ("From", "from", ""),
+                                                ("To", "to", ""), ("What", "what", "")))),
+    "board-layout": ("The board itself: side, what sits there, and where.",
+                     "rows: [{side, what, where, note}]",
+                     _table_part("board-layout", (("Side", "side", ""), ("What", "what", ""),
+                                                  ("Where", "where", ""), ("Note", "note", "")))),
+    "thermal-map": ("Heat by spot against its limit. A spot with no limit is the one nobody "
+                    "worked out yet.",
+                    "rows: [{spot, temperature, limit, note}]",
+                    _table_part("thermal-map", (("Spot", "spot", ""), ("Temperature", "temperature", "num"),
+                                                ("Limit", "limit", "num"), ("Note", "note", "")))),
+    # --- evidence and method --------------------------------------------------
+    "log-excerpt": ("The lines of a log that matter, in order.",
+                    "rows: [{time, level, line}]",
+                    _table_part("log-excerpt", (("Time", "time", "num"), ("Level", "level", ""),
+                                                ("Line", "line", "")))),
+    "fault-report": ("A fault as it presented itself, and what was found to be behind it.",
+                     "rows: [{fault, status, what, cause}]",
+                     _table_part("fault-report", (("Fault", "fault", ""), ("Status", "status", ""),
+                                                  ("What was seen", "what", ""), ("Cause", "cause", "")))),
+    "test-setup": ("The bench: what was set to what, and what it was set for.",
+                   "rows: [{instrument, setting, why}]",
+                   _table_part("test-setup", (("Instrument", "instrument", ""), ("Setting", "setting", ""),
+                                              ("Why", "why", "")))),
+    "procedure": ("The steps to run, in order, numbered as they are printed.",
+                  "rows: [{what, who, expected}]",
+                  _table_part("procedure", (("Step", "what", ""), ("Who", "who", ""),
+                                            ("Expected", "expected", "")))),
+    "defect-record": ("A defect, its state, and how the fix was checked - a fix with nothing "
+                      "saying how it was checked is a hypothesis.",
+                      "rows: [{id, severity, state, what, how}]",
+                      _table_part("defect-record", (("Id", "id", ""), ("Severity", "severity", ""),
+                                                    ("State", "state", ""), ("What", "what", ""),
+                                                    ("How checked", "how", "")))),
+    "risk-register": ("What could go wrong, how likely, how badly, and what is done about it.",
+                      "rows: [{risk, likelihood, impact, mitigation}], unit?",
+                      _table_part("risk-register", (("Risk", "risk", ""), ("Likelihood", "likelihood", ""),
+                                                    ("Impact", "impact", ""), ("Mitigation", "mitigation", "")))),
+    "requirement-trace": ("Every requirement against what shows it is met - evidence, a waiver, or "
+                          "nothing yet.",
+                          "rows: [{requirement, source, evidence, verdict}]",
+                          _table_part("requirement-trace", (("Requirement", "requirement", ""),
+                                                            ("Source", "source", ""),
+                                                            ("Evidence", "evidence", ""),
+                                                            ("Verdict", "verdict", "")))),
+    # --- decisions, comparisons, budgets --------------------------------------
+    "decision-record": ("A decision, why it was taken, and what was set aside.",
+                        "rows: [{id, decision, why, alternatives}]",
+                        _table_part("decision-record", (("Id", "id", ""), ("Decision", "decision", ""),
+                                                        ("Why", "why", ""), ("Alternatives", "alternatives", "")))),
+    "tradeoff-matrix": ("What was weighed, how much it counted, and which option it favours.",
+                        "rows: [{criterion, weight, option, note}]",
+                        _table_part("tradeoff-matrix", (("Criterion", "criterion", ""), ("Weight", "weight", "num"),
+                                                        ("Favours", "option", ""), ("Note", "note", "")))),
+    "version-compare": ("Two versions against each other, item by item, with the reason.",
+                        "rows: [{what, was, now, why}]",
+                        _table_part("version-compare", (("What", "what", ""), ("Was", "was", ""),
+                                                        ("Now", "now", ""), ("Why", "why", "")))),
+    "unit-matrix": ("One measurement kind across the things measured (units per option).",
+                    "rows: [{unit, option, value, note}]",
+                    _table_part("unit-matrix", (("Unit", "unit", ""), ("Option", "option", ""),
+                                                ("Value", "value", "num"), ("Note", "note", "")))),
+    "calculation": ("A calculation whose arithmetic is checked: the expression is evaluated and a "
+                    "stated result that disagrees is refused.",
+                    'expression: "2 * pi * 12e3 * 1e-9", result?, unit?, inputs?: [{what, value, unit, note}]',
+                    calculation),
+    "latency-budget": ("Where the time goes, against the time allowed.", 
+                       "rows: [{what, value, share, note}], total, unit? (ms), over?",
+                       _budget_part("latency-budget", "ms")),
+    "throughput-budget": ("Where the throughput goes, against what is needed.",
+                          "rows: [{what, value, share, note}], total, unit? (MB/s), over?",
+                          _budget_part("throughput-budget", "MB/s")),
+    "power-budget": ("Where the power goes, against what the supply gives.",
+                     "rows: [{what, value, share, note}], total, unit? (mW), over?",
+                     _budget_part("power-budget", "mW")),
+    "memory-budget": ("Where the memory goes (flash, RAM), against the part.",
+                      "rows: [{what, value, share, note}], total, unit? (kB), over?",
+                      _budget_part("memory-budget", "kB")),
+    # --- protocol and code ----------------------------------------------------
+    "frame-format": ("A frame, byte by byte: which bits are the field, and what they are.",
+                     "rows: [{bytes, bits, field, values}]",
+                     _table_part("frame-format", (("Bytes", "bytes", "num"), ("Bits", "bits", "num"),
+                                                  ("Field", "field", ""), ("Values", "values", "")))),
+    "network-path": ("The path a packet takes: hop by hop, link by link.",
+                     "rows: [{hop, link, address, what}]",
+                     _table_part("network-path", (("Hop", "hop", "num"), ("Link", "link", ""),
+                                                  ("Address", "address", ""), ("What", "what", "")))),
+    "api-table": ("Calls offered, what each takes and gives back.",
+                  "rows: [{call, takes, returns, what}]",
+                  _table_part("api-table", (("Call", "call", ""), ("Takes", "takes", ""),
+                                            ("Returns", "returns", ""), ("What", "what", "")))),
+    "error-catalog": ("Every error the thing can report, and what to do about it.",
+                      "rows: [{code, meaning, action}]",
+                      _table_part("error-catalog", (("Code", "code", ""), ("Meaning", "meaning", ""),
+                                                    ("What to do", "action", "")))),
+    "references": ("Where the figures and the claims in this document come from.",
+                   "rows: [{id, title, source, page}]",
+                   _table_part("references", (("Id", "id", ""), ("Title", "title", ""),
+                                              ("Source", "source", ""), ("Page", "page", "")))),
+    "glossary": ("The words this document uses, in its own sense.",
+                 "rows: [{term, what}]",
+                 _table_part("glossary", (("Term", "term", ""), ("What it means here", "what", "")))),
+    # --- diagrams, under the name of the drawing ------------------------------
+    "sequence-diagram": ("A sequence diagram, drawn by Mermaid (who says what, in order).",
+                         'code: "sequenceDiagram\\n  A->>B: ping"', _mermaid_part("sequence-diagram")),
+    "state-machine": ("A state machine, drawn by Mermaid (a state's lines).",
+                      'code: "stateDiagram-v2\\n  [*] --> Idle\\n  Idle --> Run: start"',
+                      _mermaid_part("state-machine")),
+    "timing-diagram": ("A timing sketch, drawn by Mermaid (signals over time).",
+                       'code: "sequenceDiagram\\n  Note over A,B: 0 ms ... 12 ms"',
+                       _mermaid_part("timing-diagram")),
+    "block-diagram": ("How the parts connect, drawn by Mermaid.",
+                      'code: "flowchart LR\\n  MCU --> Driver --> Motor"', _mermaid_part("block-diagram")),
 }
 
 
