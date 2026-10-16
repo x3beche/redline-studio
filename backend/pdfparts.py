@@ -323,7 +323,10 @@ def _r_stack(data: dict) -> str:
             free = max(0, stack - peak)
         out.append({"what": _s(r.get("task"), 24), "value": _s(r.get("peak") or r.get("used"), 10),
                     "share": f"of {_s(r.get('stack'), 10)}", "note": ("free " + _s(free, 10)) if free is not None else ""})
-    return _cap("stack-usage", data, pdfdraw.bars(out, "what", "value", "B"))
+    return _cap("stack-usage", data, pdfdraw.stack_chart(
+        [{"task": _s(r.get("task"), 22), "stack": _s(r.get("stack"), 12),
+          "used": _s(r.get("used"), 12), "peak": _s(r.get("peak"), 12), "free": _s(r.get("free"), 12)}
+         for r in _rows(data)]))
 
 
 def _r_lanes(data: dict) -> str:

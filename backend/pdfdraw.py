@@ -35,6 +35,16 @@ def _num(v) -> float | None:
         return None
 
 
+# A figure is drawn to be read on paper: it fills its page rather than sitting
+# at the top of it. `fill` spreads the rows over the height a printed page has.
+PAGE = 640.0
+
+
+def fill(rows: int, base: float, top: float = 60.0) -> float:
+    """The height a row gets so `rows` of them reach the page's height."""
+    return max(base, (PAGE - top) / max(1, rows))
+
+
 def svg(w: float, h: float, body: str, cls: str = "") -> str:
     """One drawing: a viewBox that scales to the page's width."""
     return (f'<svg class="p-svg {cls}" viewBox="0 0 {w:g} {h:g}" width="100%" height="{h:g}" '
@@ -69,7 +79,9 @@ def lanes(blocks: list[tuple[str, list[tuple[int, int, str, str]]]], width: int 
     """Bit lanes: one row per register, its fields as segments over a bit ruler,
     the field's name and how it is reached written in the segment - the drawing
     a bitfield tool shows, kept as SVG so it prints."""
-    w, lane_h, row_h = 1000.0, 54.0, 78.0
+    row_h = fill(len(blocks), 78.0, 20.0)
+    lane_h = row_h * 0.68
+    w = 1000.0
     h = 16 + len(blocks) * row_h
     out = []
     for i, (name, fields) in enumerate(blocks):
@@ -140,8 +152,9 @@ def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit
     """A memory, a flash, an address space: one bar, each row's share of it,
     with the shares under it as a legend and the total at the end."""
     total = sum((_num(r.get(key_size)) or 0) for r in rows) or 1
-    w, bar_h = 1000.0, 58.0
-    h = 10 + bar_h + 34 + len(rows) * 26
+    legend = fill(len(rows), 26.0, 110.0)
+    w, bar_h = 1000.0, max(58.0, legend * 1.6)
+    h = 10 + bar_h + 34 + len(rows) * legend
     out, x = [], 0.0
     for i, r in enumerate(rows):
         share = (_num(r.get(key_size)) or 0) / total
@@ -154,7 +167,7 @@ def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit
         x += share
     out.append(_text(0, 8 + bar_h + 14, _s(rows[0].get(key_from) or "", 24), 8.0, mono=True))
     out.append(_text(w, 8 + bar_h + 14, f"total {total:g} {unit}".strip(), 8.0, "end", "var(--ink-dim)", mono=True))
-    y = 8 + bar_h + 30
+    y = 8 + bar_h + 34
     for i, r in enumerate(rows):
         colour = SERIES[i % len(SERIES)]
         share = (_num(r.get(key_size)) or 0) / total
@@ -164,7 +177,7 @@ def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit
         out.append(_text(480, y, f"{share * 100:.1f} %", 11.0, "start", "var(--ink-dim)", mono=True))
         out.append(_text(580, y, _s(r.get("what") or r.get("use") or r.get("type") or r.get("note") or "", 70), 10.5,
                          "start", "var(--ink-dim)"))
-        y += 26
+        y += legend
     return svg(1000, y, "".join(out))
 
 
@@ -179,7 +192,8 @@ def bars(rows: list[dict], what_key: str, value_key: str, unit: str = "", limit_
         values += [abs(_num(r.get(limit_key)) or 0) for r in rows]
     scale = max(values + [abs(_num(total) or 0), abs(_num(ref) or 0), 1.0])
     x0, x1, name_w = 170.0, 850.0, 158.0          # the plot, and the name column
-    row_h, bar_h = 46.0, 24.0
+    row_h = fill(len(rows), 46.0, 60.0)
+    bar_h = row_h * 0.5
     h = 46 + len(rows) * row_h + 8
     out = []
     # the axis: four gridlines, their values, the unit at the left
@@ -243,7 +257,8 @@ def ladder(rows: list[dict], key_irq: str, key_pri: str, key_rate: str = "", key
     vals = [p for _, p in pris if p is not None] or [1]
     lo, hi = min(vals), max(vals)
     span = (hi - lo) or 1
-    w, row_h = 1000.0, 26.0
+    row_h = fill(len(rows), 34.0, 24.0)
+    w = 1000.0
     h = 16 + len(rows) * row_h
     out = []
     out.append(f'<line x1="44" y1="6" x2="44" y2="{h - 6:g}" stroke="var(--line)" stroke-width="0.8"/>')
@@ -294,10 +309,11 @@ def chain(rows: list[dict], key_label: str, key_sub: str = "", key_what: str = "
 
 def strip(rows: list[dict]) -> str:
     """Channels side by side: what each moves, which way, what triggers it."""
-    w, h = 1000.0, 20 + len(rows) * 30
+    step = fill(len(rows), 44.0, 24.0)
+    w, h = 1000.0, 20 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
-        y = 6 + i * 30
+        y = 6 + i * step
         colour = SERIES[i % len(SERIES)]
         dirn = "mem -> periph" if "mem->periph" in _s(r.get("direction")) else "periph -> mem"
         out.append(f'<rect x="0" y="{y:g}" width="150" height="20" rx="3" fill="{colour}" opacity="0.14" '
@@ -317,10 +333,11 @@ def strip(rows: list[dict]) -> str:
 
 def tree(rows: list[dict], key_node: str = "node", key_from: str = "from", key_rate: str = "rate") -> str:
     """A clock tree: what comes from where, indented by its place in the chain."""
-    h = 12 + len(rows) * 16
+    step = fill(len(rows), 26.0, 20.0)
+    h = 12 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
-        y = 6 + i * 16
+        y = 6 + i * step
         indent = 0 if i == 0 else (12 if "internal" in _s(r.get(key_from)) or "crystal" in _s(r.get(key_from)) else 30)
         colour = SERIES[0] if indent < 20 else SERIES[2]
         out.append(f'<line x1="{indent:g}" y1="{y:g}" x2="{indent:g}" y2="{y + 11:g}" stroke="{colour}" '
@@ -356,11 +373,12 @@ def scores(rows: list[dict], key_what: str, key_value: str, key_note: str = "") 
     the ink, so the row that decided it is visible at a glance."""
     vals = [abs(_num(r.get(key_value)) or 0) for r in rows] or [1]
     top = max(vals)
-    h = 10 + len(rows) * 18
+    step = fill(len(rows), 26.0, 20.0)
+    h = 10 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
         v = abs(_num(r.get(key_value)) or 0)
-        y = 4 + i * 18
+        y = 4 + i * step
         out.append(_text(0, y + 9, _s(r.get(key_what), 30), 7.0))
         out.append(f'<rect x="200" y="{y + 2:g}" width="{560:g}" height="9" fill="var(--wash)"/>')
         out.append(f'<rect x="200" y="{y + 2:g}" width="{560 * (v / top if top else 0):g}" height="9" '
@@ -368,4 +386,41 @@ def scores(rows: list[dict], key_what: str, key_value: str, key_note: str = "") 
         note = _s(r.get("option") or r.get("note") or r.get(key_note) or "", 40)
         out.append(_text(770, y + 10, note, 7.0, weight=600))
         out.append(_text(1000, y + 10, _s(r.get(key_value), 12), 6.8, "end", "var(--ink-dim)", mono=True))
+    return svg(1000, h, "".join(out))
+
+
+def stack_chart(rows: list[dict]) -> str:
+    """Stacks as they really are: one bar per task, the whole bar its size, the
+    used part filled, the peak marked on it and what is left of it named - a
+    bar with no room left is the one that overflows."""
+    step = fill(len(rows), 62.0, 40.0)
+    x0, x1 = 170.0, 900.0
+    h = 30 + len(rows) * step
+    out = [_text(x0, 14, "bytes", 9.5, "start", "var(--ink-dim)"),
+           _text(1000, 14, "free", 9.5, "end", "var(--ink-dim)")]
+    for i, r in enumerate(rows):
+        size = _num(r.get("stack")) or 0
+        used, peak = _num(r.get("used")) or 0, _num(r.get("peak")) or 0
+        free = _num(r.get("free"))
+        if free is None and size:
+            free = max(0.0, size - max(used, peak))
+        scale = max(1.0, size, peak, used)
+        y = 22 + i * step
+        bh = min(30.0, step * 0.42)
+        out.append(_text(x0 - 14, y + bh - 7, _s(r.get("task") or r.get("what"), 22), 11.5, "end", weight=700))
+        out.append(f'<rect x="{x0:g}" y="{y:g}" width="{x1 - x0:g}" height="{bh:g}" fill="var(--wash)" '
+                   f'stroke="var(--line)" stroke-width="0.6"/>')
+        for value, colour, opacity in ((used, SERIES[i % len(SERIES)], 0.55), (peak, SERIES[i % len(SERIES)], 0.25)):
+            if value:
+                out.append(f'<rect x="{x0:g}" y="{y:g}" width="{(x1 - x0) * min(1.0, value / scale):g}" '
+                           f'height="{bh:g}" fill="{colour}" opacity="{opacity}"/>')
+        if peak:
+            px = x0 + (x1 - x0) * min(1.0, peak / scale)
+            out.append(f'<line x1="{px:g}" y1="{y - 4:g}" x2="{px:g}" y2="{y + bh + 4:g}" stroke="var(--ink)" '
+                       f'stroke-width="1.1"/>')
+            out.append(_text(px + 5, y - 1, f"peak {peak:g}", 9.0, "start", "var(--ink)", 600, mono=True))
+        room = (size - max(used, peak)) if size else (free or 0)
+        colour = _BAD if room <= 0 else (_WARN if size and room < size * 0.15 else _OK)
+        out.append(_text(1000, y + bh - 7, f"{room:g} free of {size:g}".strip(), 10.5, "end", colour, 600, mono=True))
+        out.append(_text(x0, y + bh + 12, f"used {used:g}", 9.0, "start", "var(--ink-dim)", mono=True))
     return svg(1000, h, "".join(out))
