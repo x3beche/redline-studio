@@ -424,3 +424,49 @@ def stack_chart(rows: list[dict]) -> str:
         out.append(_text(1000, y + bh - 7, f"{room:g} free of {size:g}".strip(), 10.5, "end", colour, 600, mono=True))
         out.append(_text(x0, y + bh + 12, f"used {used:g}", 9.0, "start", "var(--ink-dim)", mono=True))
     return svg(1000, h, "".join(out))
+
+
+def measurement_chart(rows: list[dict]) -> str:
+    """Measurements as they are read: a track over the scale, the acceptable
+    band drawn in green, the value a mark on it - inside the band it is in,
+    outside it is red, and a row with no method has no mark at all, only the
+    words. A reader sees the margin, not just the number."""
+    step = fill(len(rows), 54.0, 40.0)
+    x0, x1 = 170.0, 880.0
+    h = 34 + len(rows) * step
+    out = [_text(x0, 14, "scale", 9.5, "start", "var(--ink-dim)"),
+           _text(1000, 14, "verdict", 9.5, "end", "var(--ink-dim)")]
+    for i, r in enumerate(rows):
+        v, lim = _num(r.get("value")), _num(r.get("limit"))
+        tol = _num(r.get("tol"))
+        method = _s(r.get("method"), 40)
+        scale = max(abs(v or 0), abs(lim or 0) * (1 + (abs(tol) / abs(lim) if lim and tol else 0.15)), 1.0)
+        y = 26 + i * step
+        bh = min(22.0, step * 0.3)
+        out.append(_text(x0 - 14, y + bh - 6, _s(r.get("what"), 24), 11.5, "end", weight=700))
+        out.append(f'<rect x="{x0:g}" y="{y:g}" width="{x1 - x0:g}" height="{bh:g}" fill="var(--wash)" '
+                   f'stroke="var(--line)" stroke-width="0.6"/>')
+        if lim is not None:
+            lo = max(0.0, abs(lim) - abs(tol or 0)) if tol else 0.0
+            hi = abs(lim) + abs(tol or 0) if tol else abs(lim)
+            bx0, bx1 = x0 + (x1 - x0) * min(1.0, lo / scale), x0 + (x1 - x0) * min(1.0, hi / scale)
+            out.append(f'<rect x="{bx0:g}" y="{y:g}" width="{max(1.0, bx1 - bx0):g}" height="{bh:g}" '
+                       f'fill="{_OK}" opacity="0.16"/>')
+            out.append(f'<line x1="{bx1:g}" y1="{y - 3:g}" x2="{bx1:g}" y2="{y + bh + 3:g}" stroke="{_OK}" '
+                       f'stroke-width="0.9"/>')
+            out.append(_text(bx1 + 4, y - 1, f"limit {_s(r.get('limit'), 10)}".strip(), 8.8, "start", _OK, mono=True))
+        if not method:
+            out.append(_text(x0 + (x1 - x0) / 2, y + bh - 6, "not recorded - no method", 10.5, "middle",
+                             "var(--ink-faint)"))
+            out.append(_text(1000, y + bh - 6, "no method", 10.5, "end", "var(--ink-faint)"))
+        elif v is not None:
+            vx = x0 + (x1 - x0) * min(1.0, abs(v) / scale)
+            inband = lim is None or (abs(lim - abs(tol or 0)) <= abs(v) <= abs(lim) + abs(tol or 0)) if lim else True
+            colour = _OK if inband else _BAD
+            out.append(f'<line x1="{vx:g}" y1="{y - 5:g}" x2="{vx:g}" y2="{y + bh + 5:g}" stroke="{colour}" '
+                       f'stroke-width="1.6"/>')
+            out.append(_text(vx, y + bh + 12, f"{_s(r.get('value'), 10)} {_s(r.get('unit'), 6)}".strip(), 9.6,
+                             "middle", colour, 700, mono=True))
+            out.append(_text(1000, y + bh - 6, "in" if inband else "out", 10.5, "end", colour, 700))
+        out.append(_text(x0, y + bh + 12, method or "", 9.0, "start", "var(--ink-dim)"))
+    return svg(1000, h, "".join(out))

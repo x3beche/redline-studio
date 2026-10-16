@@ -165,11 +165,9 @@ def measurement_table(data: dict) -> str:
                      _cell(_s(r.get("unit"), 20)), _cell(method),
                      _cell(_s(r.get("limit"), 60), dim=not r.get("limit"))]
         out.append(cells)
-    body = pdfdraw.bars([{"what": _s(r.get("what"), 26), "value": _s(r.get("value"), 12),
-                          "limit": _s(r.get("limit"), 12), "note": _s(r.get("method"), 30)} for r in rows],
-                        "what", "value", "", limit_key="limit")
-    body = body.replace("</svg>", "") + _table([("What", ""), ("Value", "num"), ("Unit", ""),
-                                                ("Method", ""), ("Limit", "")], out) + "</svg>"
+    body = pdfdraw.measurement_chart([{"what": _s(r.get("what"), 24), "value": _s(r.get("value"), 12),
+                                        "unit": _s(r.get("unit"), 8), "method": _s(r.get("method"), 40),
+                                        "limit": _s(r.get("limit"), 12), "tol": _s(r.get("tol"), 10)} for r in rows])
     note = (f"{unknown} of {len(rows)} rows have no method and are not measurements."
             if unknown else "")
     return _cap("measurement-table", data, body, note)
