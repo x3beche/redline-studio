@@ -273,13 +273,8 @@ def budget_table(data: dict) -> str:
                 _cell(f"{shown:g}", cls="num p-total"),
                 _cell(unit, cls="p-total"),
                 _cell("the stated total" if note.startswith("Refused") else "", dim=True)])
-    body = pdfdraw.bars([{"what": _s(r.get("what"), 30), "value": _s(r.get("value"), 14),
-                          "share": _s(r.get("share"), 10), "note": _s(r.get("note"), 60)} for r in rows],
-                        "what", "value", unit, total=shown)
-    if data.get("over") is not None:
-        body = pdfdraw.bars([{"what": _s(r.get("what"), 30), "value": _s(r.get("value"), 14),
-                              "share": _s(r.get("share"), 10), "note": _s(r.get("note"), 60)} for r in rows],
-                            "what", "value", unit, total=shown, ref=_num(data.get("over")))
+    body = pdfdraw.allocation([{"what": _s(r.get("what"), 20), "value": _s(r.get("value"), 14)} for r in rows],
+                              total=shown, unit=unit, over=data.get("over"))
     if missing:
         note = (note + " " if note else "") + f"{missing} row(s) have no value."
     if data.get("over") is not None and stated is not None and _num(data["over"]) is not None:
@@ -307,6 +302,38 @@ def mermaid(data: dict) -> str:
 # The parts that can draw, draw (backend/pdfdraw.py): a bit lane for a register,
 # a bar against a limit for a measurement or a budget, a ladder for priorities,
 # a chain for hops. The ones that are a list of text stay tables.
+
+def _r_diff(name: str) -> Callable[[dict], str]:
+    def draw(data: dict) -> str:
+        rows = _rows(data)
+        if not rows:
+            raise PartError(f"a `{name}` part needs `rows`")
+        label = "what" if name == "version-compare" else "field"
+        head = "register" if name == "register-diff" else ""
+        return _cap(name, data, pdfdraw.diff(
+            [{**r, "what": (_s(r.get(head), 18) + " " + _s(r.get(label), 20)).strip() or _s(r.get(label), 20)}
+             for r in rows], "what"))
+    return draw
+
+
+def _r_connector(data: dict) -> str:
+    rows = _rows(data)
+    if not rows:
+        return _empty("connector-pinout")
+    return _cap("connector-pinout", data, pdfdraw.connector(
+        [{"pin": _s(r.get("pin"), 8), "name": _s(r.get("name"), 22), "signal": _s(r.get("signal"), 22),
+          "wire": _s(r.get("wire"), 16), "note": _s(r.get("note"), 40)} for r in rows],
+        _s(data.get("housing"), 30)))
+
+
+def _r_nets(data: dict) -> str:
+    rows = _rows(data)
+    if not rows:
+        return _empty("net-extract")
+    return _cap("net-extract", data, pdfdraw.nets(
+        [{"net": _s(r.get("net"), 16), "from": _s(r.get("from"), 22), "to": _s(r.get("to"), 22),
+          "what": _s(r.get("what"), 30)} for r in rows]))
+
 
 def _r_log(data: dict) -> str:
     """The log lines on a time axis, coloured by level."""
@@ -388,6 +415,13 @@ def _r_ladder(name: str) -> Callable[[dict], str]:
         rows = _rows(data)
         if not rows:
             raise PartError(f"a `{name}` part needs `rows`")
+        if name == "interrupt-timeline" and any(_num(r.get(k)) is not None for r in rows
+                                                for k in ("at", "time", "us", "ms")):
+            return _cap(name, data, pdfdraw.timeline(
+                [{"at": _s(r.get("at") or r.get("time") or r.get("us") or r.get("ms"), 10),
+                  "handler": _s(r.get("handler") or r.get("irq"), 22),
+                  "what": _s(r.get("what") or r.get("irq"), 62), "src": _s(r.get("irq"), 22)} for r in rows],
+                "at", "what", group_key="src", level_key="handler", unit=""))
         return _cap(name, data, pdfdraw.ladder(rows, "irq" if name == "interrupt-timeline" else "number",
                                                "priority", "rate"))
     return draw
@@ -555,9 +589,7 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
                         _r_lanes),
     "register-diff": ("Two builds of one register set, field by field - what moved and why.",
                       "rows: [{register, field, was, now, why}]",
-                      _table_part("register-diff", (("Register", "register", ""), ("Field", "field", ""),
-                                                    ("Was", "was", "num"), ("Now", "now", "num"),
-                                                    ("Why", "why", "")))),
+                      _r_diff("register-diff")),
     "memory-map": ("The map of what lives where in a memory space.",
                    "rows: [{region, from, to, size, use}]",
                    _r_regions("memory-map", "from")),
@@ -586,13 +618,10 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     # --- hardware ------------------------------------------------------------
     "connector-pinout": ("A connector as it is wired, pin by pin, with the housing it goes in.",
                          "rows: [{pin, name, signal, wire, note}], housing?",
-                         _table_part("connector-pinout", (("Pin", "pin", "num"), ("Name", "name", ""),
-                                                          ("Signal", "signal", ""), ("Wire", "wire", ""),
-                                                          ("Note", "note", "")))),
+                         _r_connector),
     "net-extract": ("Which net joins what - from a layout, a netlist or a schematic.",
                     "rows: [{net, from, to, what}]",
-                    _table_part("net-extract", (("Net", "net", ""), ("From", "from", ""),
-                                                ("To", "to", ""), ("What", "what", "")))),
+                    _r_nets),
     "board-layout": ("The board itself: side, what sits there, and where.",
                      "rows: [{side, what, where, note}]",
                      _table_part("board-layout", (("Side", "side", ""), ("What", "what", ""),
@@ -644,8 +673,7 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
                         _r_scores("tradeoff-matrix")),
     "version-compare": ("Two versions against each other, item by item, with the reason.",
                         "rows: [{what, was, now, why}]",
-                        _table_part("version-compare", (("What", "what", ""), ("Was", "was", ""),
-                                                        ("Now", "now", ""), ("Why", "why", "")))),
+                        _r_diff("version-compare")),
     "unit-matrix": ("One measurement kind across the things measured (units per option).",
                     "rows: [{unit, option, value, note}]",
                     _r_scores("unit-matrix")),

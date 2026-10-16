@@ -11,6 +11,7 @@ body of a figure; `pdfparts` wraps it with the part's caption and note.
 """
 
 from __future__ import annotations
+import re
 
 import html
 
@@ -37,7 +38,7 @@ def _num(v) -> float | None:
 
 # A figure is drawn to be read on paper: it fills its page rather than sitting
 # at the top of it. `fill` spreads the rows over the height a printed page has.
-PAGE = 640.0
+PAGE = 1280.0
 
 
 def fill(rows: int, base: float, top: float = 60.0) -> float:
@@ -45,16 +46,29 @@ def fill(rows: int, base: float, top: float = 60.0) -> float:
     return max(base, (PAGE - top) / max(1, rows))
 
 
+# The drawings are authored in a space 1000 units wide and printed into a text
+# column of ~482pt, so everything lands at ~0.48x: a 10.6 unit label comes out
+# at 5pt and a hairline at a third of a point. TYPE pays that back - the type,
+# and the strokes with it - and PAGE is the height a figure reaches when it is
+# given the page, which is what a printed drawing is for.
+TYPE = 2.05
+_STROKE = re.compile(r'stroke-width="([0-9.]+)"')
+
+
+def _thicker(body: str) -> str:
+    return _STROKE.sub(lambda m: f'stroke-width="{float(m.group(1)) * TYPE:g}"', body)
+
+
 def svg(w: float, h: float, body: str, cls: str = "") -> str:
     """One drawing: a viewBox that scales to the page's width."""
     return (f'<svg class="p-svg {cls}" viewBox="0 0 {w:g} {h:g}" width="100%" height="{h:g}" '
-            f'preserveAspectRatio="xMinYMin meet" role="img">{body}</svg>')
+            f'preserveAspectRatio="xMidYMin meet" role="img">{_thicker(body)}</svg>')
 
 
 def _text(x: float, y: float, s: str, size: float = 7.4, anchor: str = "start", fill: str = "var(--ink)",
           weight: int = 400, mono: bool = False) -> str:
     extra = ' class="mono"' if mono else ""
-    return (f'<text{extra} x="{x:g}" y="{y:g}" font-size="{size:g}" text-anchor="{anchor}" '
+    return (f'<text{extra} x="{x:g}" y="{y:g}" font-size="{size * TYPE:g}" text-anchor="{anchor}" '
             f'font-weight="{weight}" fill="{fill}">{_e(s)}</text>')
 
 
@@ -309,7 +323,7 @@ def chain(rows: list[dict], key_label: str, key_sub: str = "", key_what: str = "
 
 def strip(rows: list[dict]) -> str:
     """Channels side by side: what each moves, which way, what triggers it."""
-    step = fill(len(rows), 44.0, 24.0)
+    step = min(fill(len(rows), 44.0, 24.0), 112.0)
     w, h = 1000.0, 20 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
@@ -333,7 +347,7 @@ def strip(rows: list[dict]) -> str:
 
 def tree(rows: list[dict], key_node: str = "node", key_from: str = "from", key_rate: str = "rate") -> str:
     """A clock tree: what comes from where, indented by its place in the chain."""
-    step = fill(len(rows), 26.0, 20.0)
+    step = min(fill(len(rows), 26.0, 20.0), 112.0)
     h = 12 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
@@ -373,7 +387,7 @@ def scores(rows: list[dict], key_what: str, key_value: str, key_note: str = "") 
     the ink, so the row that decided it is visible at a glance."""
     vals = [abs(_num(r.get(key_value)) or 0) for r in rows] or [1]
     top = max(vals)
-    step = fill(len(rows), 26.0, 20.0)
+    step = min(fill(len(rows), 26.0, 20.0), 112.0)
     h = 10 + len(rows) * step
     out = []
     for i, r in enumerate(rows):
@@ -393,7 +407,7 @@ def stack_chart(rows: list[dict]) -> str:
     """Stacks as they really are: one bar per task, the whole bar its size, the
     used part filled, the peak marked on it and what is left of it named - a
     bar with no room left is the one that overflows."""
-    step = fill(len(rows), 62.0, 40.0)
+    step = min(fill(len(rows), 62.0, 40.0), 112.0)
     x0, x1 = 170.0, 900.0
     h = 30 + len(rows) * step
     out = [_text(x0, 14, "bytes", 9.5, "start", "var(--ink-dim)"),
@@ -431,7 +445,7 @@ def measurement_chart(rows: list[dict]) -> str:
     band drawn in green, the value a mark on it - inside the band it is in,
     outside it is red, and a row with no method has no mark at all, only the
     words. A reader sees the margin, not just the number."""
-    step = fill(len(rows), 54.0, 40.0)
+    step = min(fill(len(rows), 54.0, 40.0), 112.0)
     x0, x1 = 170.0, 880.0
     h = 34 + len(rows) * step
     out = [_text(x0, 14, "scale", 9.5, "start", "var(--ink-dim)"),
@@ -478,7 +492,7 @@ def thermal_chart(rows: list[dict], ambient: float | None = None) -> str:
     temperature a mark on it, the limit a tick, and the headroom at the end -
     green while there is room, amber under a fifth of it, red past the limit.
     A reader sees how close the design runs, not just what it read."""
-    step = fill(len(rows), 52.0, 46.0)
+    step = min(fill(len(rows), 52.0, 46.0), 112.0)
     x0, x1 = 170.0, 880.0
     lims = [abs(_num(r.get("limit")) or 0) for r in rows if r.get("limit")]
     vals = [abs(_num(r.get("temperature")) or 0) for r in rows]
@@ -533,7 +547,7 @@ def timeline(rows: list[dict], at_key: str, label_key: str, group_key: str | Non
         if g not in groups:
             groups.append(g)
     x0, x1 = 170.0, 980.0
-    lane_h = fill(len(groups) + 1, 34.0, 40.0)
+    lane_h = min(fill(len(groups) + 1, 34.0, 40.0), 150.0)
     h = 20 + len(groups) * lane_h + 34
     out = []
     for i, g in enumerate(groups):
@@ -562,4 +576,128 @@ def timeline(rows: list[dict], at_key: str, label_key: str, group_key: str | Non
                    f'y2="{20 + len(groups) * lane_h + 12:g}" stroke="var(--line)" stroke-width="0.7"/>')
         out.append(_text(x, 20 + len(groups) * lane_h + 24, f"{lo + span * i / 4:g}{unit}", 8.6, "middle",
                          "var(--ink-faint)", mono=True))
+    return svg(1000, h, "".join(out))
+
+
+def _g(v) -> str:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return _s(v, 12)
+    return f"{f:,.1f}".rstrip("0").rstrip(".") if abs(f) < 1e6 else f"{f:g}"
+
+
+def allocation(rows: list[dict], total=None, unit: str = "", over=None) -> str:
+    """One bar made of its contributors, against the budget: the dashed line is
+    the total, an over budget runs past it in red, and each segment carries what
+    it is and how much - the way a power or flash budget is read."""
+    vals = [abs(_num(r.get("value")) or 0) for r in rows]
+    summed = sum(vals)
+    top = max(abs(_num(total) or 0), summed, abs(_num(over) or 0), 1.0)
+    x0, x1 = 40.0, 960.0
+    w = x1 - x0
+    h = 132
+    out = []
+    x = x0
+    for i, r in enumerate(rows):
+        v = abs(_num(r.get("value")) or 0)
+        seg = w * v / top
+        colour = SERIES[i % len(SERIES)]
+        out.append(f'<rect x="{x:g}" y="30" width="{max(1.0, seg):g}" height="40" fill="{colour}" opacity="0.42"/>')
+        out.append(f'<rect x="{x:g}" y="30" width="{max(1.0, seg):g}" height="40" fill="none" '
+                   f'stroke="{colour}" stroke-width="0.8"/>')
+        if seg > 66:
+            out.append(_text(x + seg / 2, 48, _s(r.get("what"), 16), 9.6, "middle", "var(--ink)", 600))
+            out.append(_text(x + seg / 2, 62, _g(v), 9.2, "middle", "var(--ink-dim)", 400, mono=True))
+        else:
+            out.append(_text(x + seg / 2, 84, _s(r.get("what"), 16), 8.4, "middle", "var(--ink-dim)"))
+        x += seg
+    if total is not None:
+        tx = x0 + w * min(1.0, abs(_num(total) or 0) / top)
+        out.append(f'<line x1="{tx:g}" y1="18" x2="{tx:g}" y2="78" stroke="var(--ink)" stroke-width="1.3" '
+                   f'stroke-dasharray="5 2"/>')
+        out.append(_text(min(tx + 6, x1), 14, f"total {_g(total)}{unit and ' ' + unit}".strip(), 9.6,
+                         "start" if tx + 6 < x1 else "end", "var(--ink)", 700, mono=True))
+    if over is not None:
+        ox = x0 + w * min(1.0, abs(_num(over) or 0) / top)
+        out.append(f'<line x1="{ox:g}" y1="18" x2="{ox:g}" y2="78" stroke="{_BAD}" stroke-width="1.1"/>')
+        out.append(_text(min(ox + 6, x1), 98, f"limit {_g(over)}{unit and ' ' + unit}".strip(), 9.2, "start",
+                         _BAD, 600, mono=True))
+    if summed > top * 1.0001:
+        out.append(_text(x1, 118, f"the contributors add up to {_g(summed)} - past the bar", 9.6, "end", _BAD, 700))
+    else:
+        out.append(_text(x1, 118, f"{_g(summed)} of {_g(top)}{unit and ' ' + unit} used - "
+                                  f"{_g(top - summed)} left", 9.6, "end", "var(--ink-dim)"))
+    return svg(1000, h, "".join(out))
+
+
+def diff(rows: list[dict], label_key: str = "what", was_key: str = "was", now_key: str = "now") -> str:
+    """Was, an arrow, now, and the size of the move: a change you cannot see the
+    amount of is not a change. Non-numeric ends are still written, without a
+    delta."""
+    step = min(fill(len(rows), 36.0, 20.0), 112.0)
+    h = 26 + len(rows) * step
+    out = [_text(300, 14, "was", 8.8, "end", "var(--ink-faint)"), _text(356, 14, "now", 8.8, "start",
+           "var(--ink-faint)"), _text(1000, 14, "change", 8.8, "end", "var(--ink-faint)")]
+    for i, r in enumerate(rows):
+        y = 22 + i * step
+        was, now = _num(r.get(was_key)), _num(r.get(now_key))
+        out.append(_text(0, y + 13, _s(r.get(label_key), 30), 11.0, weight=700))
+        out.append(_text(300, y + 13, _s(r.get(was_key), 16), 10.6, "end", "var(--ink-faint)", 400, mono=True))
+        out.append(f'<path d="M312 {y + 9:g} L344 {y + 9:g} M338 {y + 5:g} L344 {y + 9:g} L338 {y + 13:g}" '
+                   f'stroke="var(--ink-dim)" stroke-width="1" fill="none"/>')
+        out.append(_text(356, y + 13, _s(r.get(now_key), 16), 10.6, "start", "var(--ink)", 600, mono=True))
+        if was is not None and now is not None:
+            d = now - was
+            colour = _OK if d > 0 else (_BAD if d < 0 else "var(--ink-dim)")
+            out.append(_text(1000, y + 13, f"{d:+g}", 11.0, "end", colour, 700, mono=True))
+        else:
+            out.append(_text(1000, y + 13, "-", 10.0, "end", "var(--ink-faint)"))
+        out.append(_text(560, y + 13, _s(r.get("why") or r.get("note") or r.get("register") or "", 54),
+                         9.6, "start", "var(--ink-dim)"))
+        out.append(f'<line x1="0" y1="{y + step - 9:g}" x2="1000" y2="{y + step - 9:g}" stroke="var(--line)" '
+                   f'stroke-width="0.4"/>')
+    return svg(1000, h, "".join(out))
+
+
+def connector(rows: list[dict], housing: str = "") -> str:
+    """The housing as a body with its pins down the near side, the wire out to
+    its name, and what it carries written against it."""
+    step = min(fill(len(rows), 28.0, 42.0), 112.0)
+    h = 46 + len(rows) * step
+    out = [f'<rect x="118" y="30" width="84" height="{max(10.0, len(rows) * step - 8):g}" rx="5" '
+           f'fill="var(--wash)" stroke="var(--ink)" stroke-width="1.1"/>']
+    if housing:
+        out.append(_text(160, 22, _s(housing, 30), 10.0, "middle", "var(--ink-dim)", 600))
+    for i, r in enumerate(rows):
+        y = 30 + i * step + step / 2
+        out.append(f'<circle cx="118" cy="{y:g}" r="3.6" fill="var(--surface)" stroke="var(--ink)" '
+                   f'stroke-width="0.9"/>')
+        out.append(_text(106, y + 3.6, _s(r.get("pin"), 8), 9.6, "end", "var(--ink)", 600, mono=True))
+        out.append(f'<line x1="202" y1="{y:g}" x2="318" y2="{y:g}" stroke="var(--ink-dim)" stroke-width="0.9"/>')
+        out.append(_text(324, y + 3.6, _s(r.get("name"), 22), 10.6, weight=600))
+        out.append(_text(520, y + 3.6, _s(r.get("signal"), 22), 10.0, "start", "var(--ink-dim)", 400, mono=True))
+        out.append(_text(700, y + 3.6, _s(r.get("wire"), 16), 9.6, "start", "var(--ink-dim)"))
+        out.append(_text(1000, y + 3.6, _s(r.get("note"), 40), 9.4, "end", "var(--ink-faint)"))
+    return svg(1000, h, "".join(out))
+
+
+def nets(rows: list[dict]) -> str:
+    """The net in the middle with its endpoints drawn to it: what a netlist
+    actually says, without reading every row."""
+    step = min(fill(len(rows), 36.0, 30.0), 112.0)
+    h = 24 + len(rows) * step
+    out = [_text(250, 14, "from", 8.8, "end", "var(--ink-faint)"), _text(500, 14, "net", 8.8, "middle",
+           "var(--ink-faint)"), _text(750, 14, "to", 8.8, "start", "var(--ink-faint)")]
+    for i, r in enumerate(rows):
+        y = 24 + i * step + step / 2
+        colour = SERIES[i % len(SERIES)]
+        out.append(f'<line x1="250" y1="{y:g}" x2="432" y2="{y:g}" stroke="{colour}" stroke-width="1.1"/>')
+        out.append(f'<line x1="568" y1="{y:g}" x2="750" y2="{y:g}" stroke="{colour}" stroke-width="1.1"/>')
+        out.append(f'<rect x="432" y="{y - 11:g}" width="136" height="22" rx="3" fill="{colour}" '
+                   f'opacity="0.2" stroke="{colour}" stroke-width="0.8"/>')
+        out.append(_text(500, y + 4, _s(r.get("net"), 16), 10.0, "middle", "var(--ink)", 700, mono=True))
+        out.append(_text(244, y + 4, _s(r.get("from"), 22), 9.8, "end", "var(--ink-dim)", 400, mono=True))
+        out.append(_text(756, y + 4, _s(r.get("to"), 22), 9.8, "start", "var(--ink-dim)", 400, mono=True))
+        out.append(_text(1000, y + 4, _s(r.get("what"), 30), 9.2, "end", "var(--ink-faint)"))
     return svg(1000, h, "".join(out))
