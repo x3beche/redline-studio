@@ -986,21 +986,31 @@ process.stdin.on('end', async () => {
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on('request', r => { const u = r.url(); (u.startsWith('data:') || u === 'about:blank') ? r.continue() : r.abort(); });
-    // The diagrams a page draws itself (backend/pdfparts.py's `mermaid` part): the
-    // bundle is inlined, run once over .mermaid, and its promise is left where the
-    // print can wait for it - so the PDF holds the drawing, not its source.
-    if (j.mermaid) {
-      // `then(() => true)`: the resolved value must be serializable, or the wait
-      // below throws and the print goes on before the drawing is there.
-      const boot = '<script>' + j.mermaid + '<\/script>'
-        + '<script>window.__wbMermaid=(function(){try{mermaid.initialize({startOnLoad:false,theme:"base",'
-        + 'fontFamily:"inherit"});return mermaid.run({querySelector:".mermaid"}).then(function(){return true});}'
-        + 'catch(e){return Promise.resolve(true)}})()<\/script>';
-      j.html = j.html.includes('</body>') ? j.html.replace('</body>', boot + '</body>') : j.html + boot;
-    }
     await page.setContent(j.html, { waitUntil: 'load', timeout: 60000 });
     await page.evaluate(() => document.fonts.ready);
-    if (j.mermaid) { try { await page.evaluate(() => window.__wbMermaid || null); } catch (e) { /* it printed as text */ } }
+    // The diagrams a page draws itself (backend/pdfparts.py's `mermaid` part),
+    // once the page is there. The bundle is run through the driver rather than
+    // inlined as a <script>: the document's own page is under a
+    // content-security-policy, which drops an inline script silently, while a
+    // script the driver runs is not subject to it. The print waits for it, so
+    // the PDF holds the drawing and not its source.
+    if (j.mermaid) {
+      const drawn = await page.evaluate(async src => {
+        try {
+          // The bundle's own last line reads its namespace off globalThis, which
+          // a strict eval does not put there (its `var` stays in the eval's own
+          // scope): that line is pointed at the local binding instead, and the
+          // bundle's one global (`mermaid`) is what it sets either way.
+          (0, eval)(src.replace(
+            'globalThis["mermaid"] = globalThis.__esbuild_esm_mermaid_nm["mermaid"].default;',
+            'globalThis["mermaid"] = __esbuild_esm_mermaid_nm["mermaid"].default;'));
+          mermaid.initialize({ startOnLoad: false, theme: 'base', fontFamily: 'inherit' });
+          await mermaid.run({ querySelector: '.mermaid' });
+          return 'ok';
+        } catch (e) { return 'failed: ' + String(e).slice(0, 200); }
+      }, j.mermaid);
+      if (drawn !== 'ok') process.stderr.write('mermaid: ' + drawn + '\n');
+    }
     // One print per pass, each its header and its pages of the same layout; each
     // written as its length (10 digits) and its bytes. A range past the last page is 0 bytes.
     for (const p of j.passes) {
