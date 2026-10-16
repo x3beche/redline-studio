@@ -923,7 +923,7 @@ type Ask = { text: string; label: string; go: () => void };
                 }
                 @for (ch of chunks(l.text, l.steps); track $index) {
                   @if (ch.steps) { <ng-container *ngTemplateOutlet="stepsT; context: { $implicit: ch.steps, cid: c.id }" /> }
-                  @else if (ch.text) { <div class="tcv-cc-answer md" [innerHTML]="html(ch.text)"></div> }
+                  @else if (ch.text) { <div class="tcv-cc-answer md" data-live="1" [innerHTML]="html(ch.text)"></div> }
                 }
                 <div class="tcv-cc-livefoot">
                   @if (!l.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
@@ -945,7 +945,7 @@ type Ask = { text: string; label: string; go: () => void };
                 }
                 @for (ch of chunks(w.text, w.steps); track $index) {
                   @if (ch.steps) { <ng-container *ngTemplateOutlet="stepsT; context: { $implicit: ch.steps, cid: c.id }" /> }
-                  @else if (ch.text) { <div class="tcv-cc-answer md" [innerHTML]="html(ch.text)"></div> }
+                  @else if (ch.text) { <div class="tcv-cc-answer md" data-live="1" [innerHTML]="html(ch.text)"></div> }
                 }
                 <div class="tcv-cc-livefoot">
                   @if (!w.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
@@ -1357,6 +1357,13 @@ export class RoomCommandCode implements OnDestroy {
   private loadedProvider = '';
   private htmlCache = new Map<string, string>();
   private observer: MutationObserver | null = null;
+  /** An answer is being written: its block is replaced again and again, so the
+   *  code copy buttons and the colours wait until it is done (decorate). */
+  private streaming = false;
+  /** Something was drawn while streaming: decorate once more when it stops. */
+  private decorateLeft = false;
+  /** A scroll to the end is already waiting for the next frame. */
+  private scrolling = false;
   private editDraft = '';
   /** The reader scrolled up from the end of the conversation; where this page last scrolled it to. */
   private logFree = false;
@@ -2389,9 +2396,11 @@ export class RoomCommandCode implements OnDestroy {
                                                    ...(ev.message ? [ev.message] : [])] }));
           if (here()) this.scroll();
         } else if (ev.type === 'thinking') {
+          this.streaming = true;
           this.setRun(id, r => r && this.sped({ ...r, thinking: put(r.thinking, ev), t1: r.t1 ?? Date.now() }));
           if (here()) { this.stickThink(); this.scroll(true); }
         } else if (ev.type === 'text') {
+          this.streaming = true;
           this.setRun(id, r => r && this.sped({ ...r, text: put(r.text, ev), t1: r.t1 ?? Date.now() }));
           if (here()) this.scroll(true);
         } else if (ev.type === 'steps') {
@@ -2425,6 +2434,9 @@ export class RoomCommandCode implements OnDestroy {
       clearInterval(dog);
       if (this.runWatch.get(id) === watch) this.runWatch.delete(id);
       this.setRun(id, () => null);
+      // Whatever arrived while it was being written is finished now: its code
+      // blocks get their buttons and their colours, once.
+      this.settle();
       if (this.aborts.get(id) === abort) this.aborts.delete(id);
       this.refresh();
       this.api.get(id).subscribe({
@@ -2703,6 +2715,7 @@ export class RoomCommandCode implements OnDestroy {
         if (!w0) return;
         const next = fit(w0[k], ev.text ?? '', ev.at);
         if (next === null) { this.relisten(id); return; }      // pieces missed: from the hello again
+        this.streaming = true;
         this.watch.update(l => l.map(w => w.gen === ev.gen ? this.sped({ ...w, [k]: next, t1: w.t1 ?? Date.now() }) : w));
         if (k === 'thinking') this.stickThink();
         this.scroll(true);
@@ -3186,8 +3199,15 @@ export class RoomCommandCode implements OnDestroy {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  /** Each <pre> gets a copy button (the log's click handler does the copying) and its colours (code-highlight.ts). */
+  /** Each <pre> gets a copy button (the log's click handler does the copying) and its colours (code-highlight.ts).
+   *
+   *  While an answer is being written the block is put down again on every
+   *  piece that arrives, so everything here would be redone on each of them -
+   *  every closed code block in the answer highlighted again, five times a
+   *  second. It waits instead: the buttons and the colours are put on once
+   *  the answer is done (settle). */
   private decorate(root: HTMLElement) {
+    if (this.streaming) { this.decorateLeft = true; return; }
     root.querySelectorAll('.tcv-cc-answer pre:not([data-cc])').forEach(pre => {
       pre.setAttribute('data-cc', '1');
       const b = document.createElement('button');
@@ -3198,6 +3218,18 @@ export class RoomCommandCode implements OnDestroy {
       pre.appendChild(b);
     });
     highlightIn(root);
+  }
+
+  /** Nothing is being written in the log any more: what was left undone while
+   *  it was (the code blocks' buttons and colours) is done now, once. */
+  private settle() {
+    if (!this.streaming) return;
+    this.streaming = false;
+    const el = this.logEl()?.nativeElement;
+    if (el && this.decorateLeft) {
+      this.decorateLeft = false;
+      this.decorate(el);
+    }
   }
 
   logClick(e: MouseEvent) {
@@ -3344,12 +3376,18 @@ export class RoomCommandCode implements OnDestroy {
       : { ...m, tasks: { ...(m.tasks ?? {}), [index]: st } }) } : c);
   }
 
-  /** Escaped by toHtml, sanitised again by Angular on the way into [innerHTML]. */
+  /** Escaped by toHtml, sanitised again by Angular on the way into [innerHTML].
+   *
+   *  Nothing is kept while an answer is being written: every piece makes a
+   *  longer string and a cache of every half-written answer is only memory to
+   *  collect (the same finished answer is asked for again and again once it is
+   *  done, and that is what the cache is for). */
   html(src: string): string {
     src = src || '';
-    let out = this.htmlCache.get(src);
-    if (out === undefined) {
-      out = toHtml(src);
+    const kept = this.htmlCache.get(src);
+    if (kept !== undefined) return kept;
+    const out = toHtml(src);
+    if (!this.streaming) {
       if (this.htmlCache.size > 400) this.htmlCache.clear();
       this.htmlCache.set(src, out);
     }
@@ -3397,22 +3435,34 @@ export class RoomCommandCode implements OnDestroy {
 
   /** To the end of the conversation - or, with `follow`, only while the
    *  reader has not scrolled up to read (then it waits until they scroll
-   *  back to the end). */
+   *  back to the end).
+   *
+   *  A piece of an answer arrives a few times a second, and each of them used
+   *  to cost a layout of its own (a read of scrollHeight, a write of
+   *  scrollTop, twice: on a timeout and on a frame). One frame is enough for
+   *  whatever arrived in it. */
   private scroll(follow = false) {
     if (!follow) this.logFree = false;
-    const go = () => {
-      const el = this.logEl()?.nativeElement;
-      if (!el || (follow && this.logFree)) return;
-      el.scrollTop = el.scrollHeight;
-      this.logAuto = el.scrollTop;
-    };
-    setTimeout(() => { go(); requestAnimationFrame(go); });
+    if (!this.scrolling) {
+      this.scrolling = true;
+      requestAnimationFrame(() => { this.scrolling = false; this.toEnd(follow); });
+    }
     // Opening a conversation: what renders after the first frame - maths
     // typeset by KaTeX, pictures, code - makes it taller, so it is taken to
     // the end again as it settles, unless the reader has scrolled up.
     if (!follow) {
-      for (const ms of [120, 350, 800, 1600]) setTimeout(() => { if (!this.logFree) go(); }, ms);
+      for (const ms of [120, 350, 800, 1600]) setTimeout(() => { if (!this.logFree) this.toEnd(false); }, ms);
     }
+  }
+
+  /** At the log's end, unless the reader has scrolled up (`follow`) - and
+   *  without writing when it is already there. */
+  private toEnd(follow: boolean) {
+    const el = this.logEl()?.nativeElement;
+    if (!el || (follow && this.logFree)) return;
+    if (el.scrollTop === el.scrollHeight - el.clientHeight) return;
+    el.scrollTop = el.scrollHeight;
+    this.logAuto = el.scrollTop;
   }
 
   /** The reader scrolled the conversation: away from its end, it stops

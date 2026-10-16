@@ -344,10 +344,25 @@ function render(root: ParentNode) {
 
 if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
   let queued = false;
-  new MutationObserver(() => {
+  let where: ParentNode | null = null;
+  new MutationObserver(records => {
+    // Only what was just put down is looked through. A page-wide sweep for
+    // untagged formulas, once a frame, while an answer is being written, is
+    // what made a streaming block feel heavy.
+    for (const r of records) {
+      const el = r.target as Node & ParentNode;
+      if (el?.nodeType === 1 && el.querySelector?.('.md-math')) { where = el; break; }
+    }
+    // Nothing that could carry a formula went in: nothing to typeset.
+    if (!where) return;
     if (queued) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; render(document); });
+    requestAnimationFrame(() => {
+      queued = false;
+      const root = where ?? document;
+      where = null;
+      render(root);
+    });
   }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
