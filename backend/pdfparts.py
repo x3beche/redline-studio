@@ -336,10 +336,11 @@ def _r_lanes(data: dict) -> str:
             continue
         if reg not in blocks:
             blocks[reg], _ = [], order.append(reg)
-        blocks[reg].append((rng[0], rng[1], _s(r.get("field"), 24)))
+        blocks[reg].append((rng[0], rng[1], _s(r.get("field"), 22),
+                            _s(r.get("access") or "", 6) + ((" · " + _s(r.get("what"), 26)) if r.get("what") else "")))
     if not order:
         raise PartError("a `register-decode` part needs rows with `bits`, e.g. \"7:4\"")
-    width = max(16, max(hi for reg in blocks for _, hi, _ in blocks[reg]) + 1)
+    width = max(16, max(f[1] for reg in blocks for f in blocks[reg]) + 1)
     body = pdfdraw.lanes([(reg, sorted(blocks[reg])) for reg in order], min(32, width))
     return _cap("register-decode", data, body)
 
