@@ -46,16 +46,17 @@ log = logging.getLogger("redline.llm")
 COLL = "llm_settings"          # machine-wide, like the keys: not per workspace
 DOC_ID = "llm"
 
-# "priced": whether the provider says what a call cost. OpenRouter puts it
-# in every answer's usage; Command Code sends tokens only - no cost in the
-# answer, no prices on /models - so its calls are kept as unpriced, never
+# "priced": whether a call's cost is known. OpenRouter puts it in every
+# answer's usage; the Claude API and Command Code send tokens only, so their
+# calls are priced here from the published lists (CLAUDE_PRICES,
+# COMMANDCODE_PRICES) - a model that is not listed stays unpriced, never
 # guessed. (Its account's own figures - plan, usage windows, credits - come
 # from undocumented "alpha" endpoints: cc_account() below.)
 PROVIDERS = {
     "openrouter": {"name": "OpenRouter", "base": "https://openrouter.ai/api/v1",
                    "site": "https://openrouter.ai/keys", "priced": True},
     "commandcode": {"name": "Command Code", "base": "https://api.commandcode.ai/provider/v1",
-                    "site": "https://commandcode.ai", "priced": False},
+                    "site": "https://commandcode.ai", "priced": True},
     # Anthropic sends tokens, not money: a call is priced here at the list
     # rates (CLAUDE_PRICES), and a model not in them stays unpriced.
     "claude": {"name": "Claude API", "base": "https://api.anthropic.com/v1",
@@ -860,6 +861,69 @@ def claude_cost(model: str, used: dict) -> float | None:
     return round((fresh * rate[0] + read * reads + write * rate[0] * CACHE_WRITE + out * rate[1]) / 1e6, 8)
 
 
+# USD per million tokens: input, output and the cache read, from the provider's
+# own price list (October 2026, https://commandcode.ai/docs). Its answers carry
+# tokens and no money and its /models names no prices, so a call through the
+# gateway is priced here - without this every Command Code model, the Claude
+# ones it serves included, was kept unpriced and the costs read 0. A model that
+# is not listed stays unpriced rather than being guessed at.
+COMMANDCODE_PRICES: dict[str, tuple[float, float, float]] = {
+    "deepseek/deepseek-v4.1-flash": (0.15, 0.60, 0.003),
+    "deepseek/deepseek-v4-pro": (0.66, 1.98, 0.022),
+    "deepseek/deepseek-v4-flash": (0.15, 0.60, 0.003),
+    "deepseek/deepseek-v4-flash-fast": (0.28, 0.56, 0.07),
+    "Qwen/Qwen3.8-Flash": (0.16, 0.47, 0.016),
+    "Qwen/Qwen3.8-Max": (2.00, 6.00, 0.25),
+    "Qwen/Qwen3.8-Max-0902": (2.00, 6.00, 0.25),
+    "Qwen/Qwen3.8-27B": (0.40, 3.00, 0.04),
+    "Qwen/Qwen3.7-Flash": (0.03, 0.13, 0.006),
+    "Qwen/Qwen3.7-Plus": (0.40, 1.60, 0.08),
+    "z-ai/glm-5.3-flash": (0.15, 0.50, 0.03),
+    "zai-org/GLM-5.3": (1.40, 4.40, 0.26),
+    "zai-org/GLM-5.2": (1.40, 4.40, 0.26),
+    "moonshotai/Kimi-K3": (3.00, 15.00, 0.30),
+    "moonshotai/Kimi-K2.7-Code": (0.95, 4.00, 0.19),
+    "MiniMaxAI/MiniMax-M3": (0.30, 1.20, 0.06),
+    "xiaomi/mimo-v2.5-pro": (0.435, 0.87, 0.0036),
+    "xiaomi/mimo-v2.5": (0.14, 0.28, 0.0028),
+    "google/gemini-3.5-flash-lite": (0.30, 2.50, 0.03),
+    "google/gemini-3.1-flash-lite": (0.25, 1.50, 0.03),
+    "claude-sonnet-5": (2.00, 10.00, 0.20),
+    "claude-haiku-5-5": (0.10, 0.50, 0.01),
+    "claude-opus-5": (5.00, 25.00, 0.50),
+    "gpt-5.6-luna": (0.20, 1.20, 0.02),
+    "tencent/hy3-paid": (0.14, 0.58, 0.035),
+}
+
+
+def commandcode_cost(model: str, used: dict) -> float | None:
+    """A call through Command Code priced at its list rate, or None for a model
+    the list does not name (then the call stays unpriced, as before)."""
+    rate = None
+    for name in sorted(COMMANDCODE_PRICES, key=len, reverse=True):
+        if model == name or model.startswith(name + "-"):
+            rate = COMMANDCODE_PRICES[name]
+            break
+    if rate is None:
+        return None
+    read = used.get("cache_read_tokens") or 0
+    prompt = used.get("prompt_tokens") or 0
+    fresh = max(0, prompt - read)
+    out = used.get("completion_tokens") or 0
+    return round((fresh * rate[0] + read * rate[2] + out * rate[1]) / 1e6, 8)
+
+
+def cost_of(provider: str, model: str, used: dict) -> float | None:
+    """What one call cost, when its provider does not say: the Claude API's list
+    rates, or Command Code's. OpenRouter answers with its own figure; anything
+    else is left unpriced rather than guessed at."""
+    if provider == "claude":
+        return claude_cost(model, used)
+    if provider == "commandcode":
+        return commandcode_cost(model, used)
+    return None
+
+
 def _headers(provider: str, endpoint: str = "chat", model: str | None = None) -> dict:
     k = key(provider)
     if not k:
@@ -1116,8 +1180,9 @@ async def complete(messages: list[dict], *, job: str | None = None, provider: st
         read, write = _cached(d["usage"])
         if read or write:
             d["usage"].update(cache_read_tokens=read, cache_write_tokens=write)
-    if provider == "claude":
-        d.setdefault("usage", {})["cost"] = claude_cost(model, d["usage"])
+    cost = cost_of(provider, model, d.get("usage") or {})
+    if cost is not None:
+        d.setdefault("usage", {})["cost"] = cost
     d["provider"], d["model"] = provider, model
     return d
 
@@ -1273,8 +1338,9 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
             # thinking in the turn: it goes back as it came (_to_anthropic)
             yield {"blocks": _turn_blocks(blocks, calls)}
         yield {"calls": out}
-    if provider == "claude":
-        usage["cost"] = claude_cost(model, usage)
+    cost = cost_of(provider, model, usage)
+    if cost is not None:
+        usage["cost"] = cost
     yield {"usage": usage}
 
 
