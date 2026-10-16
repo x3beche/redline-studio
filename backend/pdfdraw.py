@@ -166,7 +166,7 @@ def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit
     """A memory, a flash, an address space: one bar, each row's share of it,
     with the shares under it as a legend and the total at the end."""
     total = sum((_num(r.get(key_size)) or 0) for r in rows) or 1
-    legend = fill(len(rows), 26.0, 110.0)
+    legend = min(fill(len(rows), 26.0, 110.0), 44.0)
     w, bar_h = 1000.0, max(58.0, legend * 1.6)
     h = 10 + bar_h + 34 + len(rows) * legend
     out, x = [], 0.0
