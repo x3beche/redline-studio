@@ -45,7 +45,7 @@ def test_every_part_draws_itself_and_only_needs_its_rows():
             "block-diagram": "mermaid", "latency-budget": "budget-table", "throughput-budget": "budget-table",
             "power-budget": "budget-table", "memory-budget": "budget-table"}
     for name in pdfparts.PARTS:
-        out = html(name, {"title": "T", **ROW, "rows": [dict(ROW)]})
+        out = html(name, {**ROW, "title": "T", "rows": [dict(ROW)]})
         cls = base.get(name, name)
         assert f"p-{cls}" in out and "<figure" in out and "p-err" not in out, name
         assert "<figcaption>T</figcaption>" in out, name
