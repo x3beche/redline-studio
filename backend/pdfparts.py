@@ -38,6 +38,8 @@ import json
 import operator
 from typing import Any, Callable
 
+from . import pdfdraw
+
 # A value that is not known prints like this and is counted, rather than left
 # as an empty cell the reader would read as zero.
 NOT_RECORDED = "not recorded"
@@ -163,7 +165,11 @@ def measurement_table(data: dict) -> str:
                      _cell(_s(r.get("unit"), 20)), _cell(method),
                      _cell(_s(r.get("limit"), 60), dim=not r.get("limit"))]
         out.append(cells)
-    body = _table([("What", ""), ("Value", "num"), ("Unit", ""), ("Method", ""), ("Limit", "")], out)
+    body = pdfdraw.bars([{"what": _s(r.get("what"), 26), "value": _s(r.get("value"), 12),
+                          "limit": _s(r.get("limit"), 12), "note": _s(r.get("method"), 30)} for r in rows],
+                        "what", "value", "", limit_key="limit")
+    body = body.replace("</svg>", "") + _table([("What", ""), ("Value", "num"), ("Unit", ""),
+                                                ("Method", ""), ("Limit", "")], out) + "</svg>"
     note = (f"{unknown} of {len(rows)} rows have no method and are not measurements."
             if unknown else "")
     return _cap("measurement-table", data, body, note)
@@ -269,7 +275,13 @@ def budget_table(data: dict) -> str:
                 _cell(f"{shown:g}", cls="num p-total"),
                 _cell(unit, cls="p-total"),
                 _cell("the stated total" if note.startswith("Refused") else "", dim=True)])
-    body = _table([("Contributor", ""), ("Value", "num"), ("Share", "num"), ("Note", "")], out)
+    body = pdfdraw.bars([{"what": _s(r.get("what"), 30), "value": _s(r.get("value"), 14),
+                          "share": _s(r.get("share"), 10), "note": _s(r.get("note"), 60)} for r in rows],
+                        "what", "value", unit, total=shown)
+    if data.get("over") is not None:
+        body = pdfdraw.bars([{"what": _s(r.get("what"), 30), "value": _s(r.get("value"), 14),
+                              "share": _s(r.get("share"), 10), "note": _s(r.get("note"), 60)} for r in rows],
+                            "what", "value", unit, total=shown, ref=_num(data.get("over")))
     if missing:
         note = (note + " " if note else "") + f"{missing} row(s) have no value."
     if data.get("over") is not None and stated is not None and _num(data["over"]) is not None:
@@ -291,6 +303,94 @@ def mermaid(data: dict) -> str:
         raise PartError("a `mermaid` part needs `code`: the diagram's Mermaid lines")
     # The source is the element's text, so a line of it can never become markup.
     return _cap("mermaid", data, f'<div class="mermaid">{_e(code)}</div>')
+
+
+# ---------------------------------------------------------------- the drawings
+# The parts that can draw, draw (backend/pdfdraw.py): a bit lane for a register,
+# a bar against a limit for a measurement or a budget, a ladder for priorities,
+# a chain for hops. The ones that are a list of text stay tables.
+
+def _r_stack(data: dict) -> str:
+    """stack-usage: each stack as a bar of what was used, with the peak marked and what is left."""
+    rows = _rows(data)
+    if not rows:
+        raise PartError("a `stack-usage` part needs `rows`")
+    out = []
+    for r in rows:
+        stack, used, peak = _num(r.get("stack")), _num(r.get("used")), _num(r.get("peak"))
+        free = _num(r.get("free"))
+        if free is None and stack is not None and peak is not None:
+            free = max(0, stack - peak)
+        out.append({"what": _s(r.get("task"), 24), "value": _s(r.get("peak") or r.get("used"), 10),
+                    "share": f"of {_s(r.get('stack'), 10)}", "note": ("free " + _s(free, 10)) if free is not None else ""})
+    return _cap("stack-usage", data, pdfdraw.bars(out, "what", "value", "B"))
+
+
+def _r_lanes(data: dict) -> str:
+    """register-decode: one bit lane per register, its fields as segments."""
+    rows, blocks, order = _rows(data), {}, []
+    for r in rows:
+        reg = _s(r.get("register") or "register", 40)
+        rng = pdfdraw.bits(r.get("bits"))
+        if rng is None:
+            continue
+        if reg not in blocks:
+            blocks[reg], _ = [], order.append(reg)
+        blocks[reg].append((rng[0], rng[1], _s(r.get("field"), 24)))
+    if not order:
+        raise PartError("a `register-decode` part needs rows with `bits`, e.g. \"7:4\"")
+    width = max(16, max(hi for reg in blocks for _, hi, _ in blocks[reg]) + 1)
+    body = pdfdraw.lanes([(reg, sorted(blocks[reg])) for reg in order], min(32, width))
+    return _cap("register-decode", data, body)
+
+
+def _r_bytes(data: dict) -> str:
+    """frame-format: the frame byte by byte."""
+    return _cap("frame-format", data, pdfdraw.bytelanes(_rows(data)))
+
+
+def _r_regions(name: str, at: str) -> Callable[[dict], str]:
+    def draw(data: dict) -> str:
+        rows = _rows(data)
+        if not rows:
+            raise PartError(f"a `{name}` part needs `rows`")
+        label = "region" if name == "memory-map" else ("partition" if name == "partition-layout" else "section")
+        unit = _s(data.get("unit"), 8)
+        return _cap(name, data, pdfdraw.regions(rows, at, "size", label, unit))
+    return draw
+
+
+def _r_ladder(name: str) -> Callable[[dict], str]:
+    def draw(data: dict) -> str:
+        rows = _rows(data)
+        if not rows:
+            raise PartError(f"a `{name}` part needs `rows`")
+        return _cap(name, data, pdfdraw.ladder(rows, "irq" if name == "interrupt-timeline" else "number",
+                                               "priority", "rate"))
+    return draw
+
+
+def _r_chain(data: dict) -> str:
+    return _cap("network-path", data, pdfdraw.chain(_rows(data), "address", "link", "what"))
+
+
+def _r_strip(data: dict) -> str:
+    return _cap("dma-map", data, pdfdraw.strip(_rows(data)))
+
+
+def _r_tree(data: dict) -> str:
+    return _cap("clock-tree", data, pdfdraw.tree(_rows(data)))
+
+
+def _r_scores(name: str) -> Callable[[dict], str]:
+    def draw(data: dict) -> str:
+        rows = _rows(data)
+        if not rows:
+            raise PartError(f"a `{name}` part needs `rows`")
+        key = "weight" if name == "tradeoff-matrix" else "value"
+        what = "criterion" if name == "tradeoff-matrix" else "unit"
+        return _cap(name, data, pdfdraw.scores(rows, what, key))
+    return draw
 
 
 def _table_part(name: str, columns: tuple, dim: bool = True) -> Callable[[dict], str]:
@@ -390,9 +490,10 @@ def calculation(data: dict) -> str:
         rows.append({"label": _s(r.get("what") or r.get("label"), 80),
                      "value": (f"{_s(r.get('value'), 40)} {_s(r.get('unit'), 10)}".strip()
                                + (f"  ({_s(r.get('note'), 160)})" if r.get("note") else ""))})
-    body = fields({"rows": rows})
-    if note:
-        body += f'<p class="p-note">{_e(note)}</p>'
+    shown_inputs = [{"what": _s(r.get("what") or r.get("label"), 30), "value": _s(r.get("value"), 14),
+                     "unit": _s(r.get("unit"), 8), "note": _s(r.get("note"), 80)}
+                    for r in _rows(data, "inputs")]
+    body = pdfdraw.formula(expr, _g(shown), unit, shown_inputs, note)
     return _cap("calculation", data, body)
 
 
@@ -428,9 +529,7 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
                                                   ("What", "what", "")))),
     "register-decode": ("One register, bit by bit: what each field is and how it is reached.",
                         "rows: [{register, bits, field, access, what}]",
-                        _table_part("register-decode", (("Register", "register", ""), ("Bits", "bits", "num"),
-                                                        ("Field", "field", ""), ("Access", "access", ""),
-                                                        ("What", "what", "")))),
+                        _r_lanes),
     "register-diff": ("Two builds of one register set, field by field - what moved and why.",
                       "rows: [{register, field, was, now, why}]",
                       _table_part("register-diff", (("Register", "register", ""), ("Field", "field", ""),
@@ -438,44 +537,29 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
                                                     ("Why", "why", "")))),
     "memory-map": ("The map of what lives where in a memory space.",
                    "rows: [{region, from, to, size, use}]",
-                   _table_part("memory-map", (("Region", "region", ""), ("From", "from", "num"),
-                                              ("To", "to", "num"), ("Size", "size", "num"),
-                                              ("Use", "use", "")))),
+                   _r_regions("memory-map", "from")),
     "section-table": ("A built image's sections: how big, where they load, what they are.",
                       "rows: [{section, size, kind, load, what}]",
-                      _table_part("section-table", (("Section", "section", ""), ("Size", "size", "num"),
-                                                    ("Kind", "kind", ""), ("Load", "load", "num"),
-                                                    ("What", "what", "")))),
+                      _r_regions("section-table", "load")),
     "stack-usage": ("Stacks measured: how much was used, the peak, what is left - a block with no "
                     "margin is the one that overflows.",
                     "rows: [{task, stack, used, peak, free}]",
-                    _table_part("stack-usage", (("Task", "task", ""), ("Stack", "stack", "num"),
-                                                ("Used", "used", "num"), ("Peak", "peak", "num"),
-                                                ("Free", "free", "num")))),
+                    _r_stack),
     "interrupt-timeline": ("The interrupts in the order they may preempt each other.",
                            "rows: [{irq, priority, handler, source, what}]",
-                           _table_part("interrupt-timeline", (("IRQ", "irq", ""), ("Priority", "priority", "num"),
-                                                              ("Handler", "handler", ""), ("Source", "source", ""),
-                                                              ("What", "what", "")))),
+                           _r_ladder("interrupt-timeline")),
     "clock-tree": ("The clock tree: what comes from where, at what rate.",
                    "rows: [{node, from, rate, what}]",
-                   _table_part("clock-tree", (("Clock", "node", ""), ("From", "from", ""),
-                                              ("Rate", "rate", "num"), ("What", "what", "")))),
+                   _r_tree),
     "dma-map": ("Which channel moves what, and how it is triggered.",
                 "rows: [{channel, direction, peripheral, trigger, what}]",
-                _table_part("dma-map", (("Channel", "channel", ""), ("Direction", "direction", ""),
-                                        ("Peripheral", "peripheral", ""), ("Trigger", "trigger", ""),
-                                        ("What", "what", "")))),
+                _r_strip),
     "irq-table": ("The vector table: number, priority, handler, how often it fires.",
                   "rows: [{number, vector, priority, handler, rate}]",
-                  _table_part("irq-table", (("Vector", "number", "num"), ("Name", "vector", ""),
-                                            ("Priority", "priority", "num"), ("Handler", "handler", ""),
-                                            ("Rate", "rate", "")))),
+                  _r_ladder("irq-table")),
     "partition-layout": ("The partitions of a device: where each starts, how big, what it holds.",
                          "rows: [{partition, from, size, type, what}]",
-                         _table_part("partition-layout", (("Partition", "partition", ""), ("From", "from", "num"),
-                                                          ("Size", "size", "num"), ("Type", "type", ""),
-                                                          ("What", "what", "")))),
+                         _r_regions("partition-layout", "from")),
     # --- hardware ------------------------------------------------------------
     "connector-pinout": ("A connector as it is wired, pin by pin, with the housing it goes in.",
                          "rows: [{pin, name, signal, wire, note}], housing?",
@@ -536,16 +620,14 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
                                                         ("Why", "why", ""), ("Alternatives", "alternatives", "")))),
     "tradeoff-matrix": ("What was weighed, how much it counted, and which option it favours.",
                         "rows: [{criterion, weight, option, note}]",
-                        _table_part("tradeoff-matrix", (("Criterion", "criterion", ""), ("Weight", "weight", "num"),
-                                                        ("Favours", "option", ""), ("Note", "note", "")))),
+                        _r_scores("tradeoff-matrix")),
     "version-compare": ("Two versions against each other, item by item, with the reason.",
                         "rows: [{what, was, now, why}]",
                         _table_part("version-compare", (("What", "what", ""), ("Was", "was", ""),
                                                         ("Now", "now", ""), ("Why", "why", "")))),
     "unit-matrix": ("One measurement kind across the things measured (units per option).",
                     "rows: [{unit, option, value, note}]",
-                    _table_part("unit-matrix", (("Unit", "unit", ""), ("Option", "option", ""),
-                                                ("Value", "value", "num"), ("Note", "note", "")))),
+                    _r_scores("unit-matrix")),
     "calculation": ("A calculation whose arithmetic is checked: the expression is evaluated and a "
                     "stated result that disagrees is refused.",
                     'expression: "2 * pi * 12e3 * 1e-9", result?, unit?, inputs?: [{what, value, unit, note}]',
@@ -565,12 +647,10 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     # --- protocol and code ----------------------------------------------------
     "frame-format": ("A frame, byte by byte: which bits are the field, and what they are.",
                      "rows: [{bytes, bits, field, values}]",
-                     _table_part("frame-format", (("Bytes", "bytes", "num"), ("Bits", "bits", "num"),
-                                                  ("Field", "field", ""), ("Values", "values", "")))),
+                     _r_bytes),
     "network-path": ("The path a packet takes: hop by hop, link by link.",
                      "rows: [{hop, link, address, what}]",
-                     _table_part("network-path", (("Hop", "hop", "num"), ("Link", "link", ""),
-                                                  ("Address", "address", ""), ("What", "what", "")))),
+                     _r_chain),
     "api-table": ("Calls offered, what each takes and gives back.",
                   "rows: [{call, takes, returns, what}]",
                   _table_part("api-table", (("Call", "call", ""), ("Takes", "takes", ""),

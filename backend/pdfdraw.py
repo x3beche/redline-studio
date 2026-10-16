@@ -1,0 +1,345 @@
+"""The drawings a part makes (backend/pdfparts.py).
+
+A part that can draw, draws: a bit lane for a register, a proportional bar for a
+memory map or a budget, a ladder for interrupt priorities, a chain for the
+network's hops, a card for a calculation. Inline SVG, no dependency and nothing
+fetched - Chromium in the PDF's own container prints it, and the theme's
+colours come through as CSS variables, so a drawing is the document's own.
+
+Everything here is given rows (the values the model supplied) and returns the
+body of a figure; `pdfparts` wraps it with the part's caption and note.
+"""
+
+from __future__ import annotations
+
+import html
+
+# A small, fixed palette: the first is the part's own, the rest mark the
+# others. Nothing here is a literal document colour - the theme's variables are.
+SERIES = ("var(--accent)", "#7a5cc4", "#0f8a7a", "#c07a12", "#3f6ea8", "#8a4f7d", "#5d7a2f", "var(--ink-faint)")
+_OK, _WARN, _BAD = "var(--ok)", "var(--warn)", "var(--danger)"
+
+
+def _e(v) -> str:
+    return html.escape("" if v is None else str(v), quote=True)
+
+
+def _s(v, n: int = 200) -> str:
+    return " ".join(str(v if v is not None else "").split())[:n]
+
+
+def _num(v) -> float | None:
+    try:
+        return float("".join(c for c in _s(v, 40).replace(",", ".") if c in "0123456789.-+eE"))
+    except ValueError:
+        return None
+
+
+def svg(w: float, h: float, body: str, cls: str = "") -> str:
+    """One drawing: a viewBox that scales to the page's width."""
+    return (f'<svg class="p-svg {cls}" viewBox="0 0 {w:g} {h:g}" width="100%" height="{h:g}" '
+            f'preserveAspectRatio="xMinYMin meet" role="img">{body}</svg>')
+
+
+def _text(x: float, y: float, s: str, size: float = 7.4, anchor: str = "start", fill: str = "var(--ink)",
+          weight: int = 400, mono: bool = False) -> str:
+    extra = ' class="mono"' if mono else ""
+    return (f'<text{extra} x="{x:g}" y="{y:g}" font-size="{size:g}" text-anchor="{anchor}" '
+            f'font-weight="{weight}" fill="{fill}">{_e(s)}</text>')
+
+
+# ---------------------------------------------------------------- bit lanes
+
+def bits(value_range: str, width: int = 16) -> tuple[int, int] | None:
+    """A field's bit range as (low, high): "7:4", "3", "15:0"."""
+    t = _s(value_range, 20).replace(" ", "")
+    if not t:
+        return None
+    if ":" in t:
+        a, _, b = t.partition(":")
+        hi, lo = _num(a), _num(b)
+        if hi is None or lo is None:
+            return None
+        return (int(min(hi, lo)), int(max(hi, lo)))
+    n = _num(t)
+    return (int(n), int(n)) if n is not None else None
+
+
+def lanes(blocks: list[tuple[str, list[tuple[int, int, str]]]], width: int = 16, per_row: int = 32) -> str:
+    """Bit lanes: one row per register, its fields as segments over a bit ruler.
+
+    `blocks` is [(register, [(low, high, label)])]. A field wider than one bit
+    shows its span; the ruler under the first row numbers the bits, so a
+    reader can hold a field against the register beside it."""
+    w, lane_h, gap = 1000.0, 26.0, 46.0
+    rows = max(1, len(blocks))
+    h = 12 + rows * (per_row + 12)
+    out = [f'<rect x="0" y="0" width="{w:g}" height="{h:g}" fill="none"/>']
+    for i, (name, fields) in enumerate(blocks):
+        y = 10 + i * (per_row + 12)
+        out.append(_text(0, y + 4, _s(name, 40), 7.8, weight=600))
+        ly = y + 12
+        out.append(f'<rect x="0" y="{ly:g}" width="{w:g}" height="{lane_h:g}" fill="var(--wash)" '
+                   f'stroke="var(--line)" stroke-width="0.6"/>')
+        for j, (low, high, label) in enumerate(fields):
+            x0 = w * low / width
+            x1 = w * (high + 1) / width
+            colour = SERIES[j % len(SERIES)]
+            out.append(f'<rect x="{x0:g}" y="{ly:g}" width="{max(0.4, x1 - x0):g}" height="{lane_h:g}" '
+                       f'fill="{colour}" opacity="0.22"/>')
+            out.append(f'<line x1="{x0:g}" y1="{ly:g}" x2="{x0:g}" y2="{ly + lane_h:g}" stroke="{colour}" '
+                       f'stroke-width="0.7"/>')
+            mid = (x0 + x1) / 2
+            bits_txt = str(low) if low == high else f"{high}:{low}"
+            out.append(_text(mid, ly + 11, bits_txt, 6.8, "middle", colour, 600, mono=True))
+            out.append(_text(mid, ly + 21, _s(label, 26), 6.6, "middle", "var(--ink-dim)"))
+        for b in range(width + 1):
+            x = w * b / width
+            tall = b % 4 == 0
+            out.append(f'<line x1="{x:g}" y1="{ly + lane_h:g}" x2="{x:g}" y2="{ly + lane_h + (4 if tall else 2):g}" '
+                       f'stroke="var(--line)" stroke-width="0.6"/>')
+            if tall and i == 0:
+                out.append(_text(x, ly + lane_h + 13, str(b), 6.2, "middle", "var(--ink-faint)", mono=True))
+    return svg(1000, h, "".join(out))
+
+
+def bytelanes(rows: list[dict]) -> str:
+    """A frame, byte by byte: each field a box over a byte ruler."""
+    total = max(8, len(rows) + 2)
+    w, box_h, gap = 1000.0, 34.0, 30.0
+    h = 40 + box_h + 24
+    out, x = [], 0.0
+    step = w / total
+    out.append(_text(0, 10, "byte", 7.0, weight=600))
+    for r in rows:
+        span = _s(r.get("bytes"), 12)
+        parts = span.split("-") if "-" in span else [span, span]
+        try:
+            a, b = int(float(parts[0])), int(float(parts[-1]))
+        except ValueError:
+            a = b = 0
+        n = max(1, b - a + 1)
+        x0, x1 = a * step, (a + n) * step
+        out.append(f'<rect x="{x0:g}" y="18" width="{max(6, x1 - x0 - 2):g}" height="{box_h:g}" rx="2" '
+                   f'fill="{SERIES[0]}" opacity="0.12" stroke="{SERIES[0]}" stroke-width="0.6"/>')
+        out.append(_text((x0 + x1) / 2, 32, _s(r.get("field"), 22), 6.8, "middle", "var(--ink)", 600))
+        out.append(_text((x0 + x1) / 2, 42, _s(r.get("bits") or "", 12), 6.2, "middle", "var(--ink-dim)", mono=True))
+        out.append(_text((x0 + x1) / 2, 56, _s(r.get("values"), 30), 6.0, "middle", "var(--ink-faint)"))
+    for b in range(total + 1):
+        xb = b * step
+        out.append(f'<line x1="{xb:g}" y1="18" x2="{xb:g}" y2="{18 + box_h + 14:g}" stroke="var(--line)" stroke-width="0.5"/>')
+        if b % 4 == 0:
+            out.append(_text(xb, 18 + box_h + 24, str(b), 6.2, "middle", "var(--ink-faint)", mono=True))
+    return svg(1000, h, "".join(out))
+
+
+# ---------------------------------------------------------------- bars
+
+def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit: str = "") -> str:
+    """A memory, a flash, an address space: one bar, each row's share of it."""
+    total = sum((_num(r.get(key_size)) or 0) for r in rows) or 1
+    w, bar_h = 1000.0, 22.0
+    out, x = [], 0.0
+    for i, r in enumerate(rows):
+        share = (_num(r.get(key_size)) or 0) / total
+        colour = SERIES[i % len(SERIES)]
+        out.append(f'<rect x="{x * w:g}" y="6" width="{max(0.6, share * w):g}" height="{bar_h:g}" '
+                   f'fill="{colour}" opacity="0.20" stroke="{colour}" stroke-width="0.6"/>')
+        x += share
+    out.append(_text(0, 6 + bar_h + 12, _s(rows[0].get(key_from) or "", 20), 6.4, mono=True))
+    out.append(_text(w, 6 + bar_h + 12, f"total {total:g} {unit}".strip(), 6.4, "end", "var(--ink-dim)", mono=True))
+    y = 6 + bar_h + 24
+    for i, r in enumerate(rows):
+        colour = SERIES[i % len(SERIES)]
+        share = (_num(r.get(key_size)) or 0) / total
+        out.append(f'<rect x="0" y="{y:g}" width="7" height="7" fill="{colour}" opacity="0.65"/>')
+        out.append(_text(12, y + 6.5, _s(r.get(key_label), 34), 7.0, weight=500))
+        out.append(_text(430, y + 6.5, f"{_s(r.get(key_size), 12)} {unit}".strip(), 6.8, mono=True))
+        out.append(_text(560, y + 6.5, f"{share * 100:.0f} %", 6.8, "start", "var(--ink-dim)", mono=True))
+        out.append(_text(640, y + 6.5, _s(r.get("what") or r.get("use") or r.get("type") or r.get("note") or "", 90),
+                         6.6, "start", "var(--ink-dim)"))
+        y += 15
+    return svg(1000, y + 2, "".join(out))
+
+
+def bars(rows: list[dict], what_key: str, value_key: str, unit: str = "", limit_key: str | None = None,
+         total: float | None = None, ref: float | None = None) -> str:
+    """Bars against a limit or a total: a budget, a stack, a temperature, a
+    measurement with its limit. The marker is the line that must not be
+    crossed, and what is left of it is written beside."""
+    values = [abs(_num(r.get(value_key)) or 0) for r in rows]
+    if limit_key:
+        values += [abs(_num(r.get(limit_key)) or 0) for r in rows]
+    scale = max(values + [abs(_num(total) or 0), abs(_num(ref) or 0), 1.0])
+    w, row_h = 1000.0, 17.0
+    h = 10 + len(rows) * row_h + (16 if limit_key or total is not None else 4)
+    out = []
+    for i, r in enumerate(rows):
+        v = _num(r.get(value_key))
+        y = 4 + i * row_h
+        out.append(_text(0, y + 9, _s(r.get(what_key), 30), 7.0))
+        out.append(f'<rect x="180" y="{y + 2:g}" width="{w - 330:g}" height="8" fill="var(--wash)"/>')
+        if v is not None:
+            frac = min(1.0, abs(v) / scale) if scale else 0
+            colour = SERIES[i % len(SERIES)]
+            if limit_key:
+                lim = _num(r.get(limit_key))
+                if lim is not None and abs(v) > abs(lim):
+                    colour = _BAD
+            out.append(f'<rect x="180" y="{y + 2:g}" width="{(w - 330) * frac:g}" height="8" fill="{colour}" '
+                       f'opacity="0.55"/>')
+        out.append(_text(700, y + 9, f"{_s(r.get(value_key), 12)} {unit}".strip(), 6.8, mono=True))
+        if limit_key:
+            lim = _num(r.get(limit_key))
+            out.append(_text(830, y + 9, f"limit {_s(r.get(limit_key), 10)}".strip(), 6.6, "start", "var(--ink-dim)", mono=True))
+            if v is not None and lim is not None:
+                margin = abs(lim) - abs(v)
+                out.append(_text(1000, y + 9, f"{margin:+.3g}".rstrip("0").rstrip("."), 6.6, "end",
+                                 _OK if margin >= 0 else _BAD, mono=True))
+        else:
+            out.append(_text(830, y + 9, _s(r.get("share") or r.get("note") or "", 40), 6.6, "start",
+                             "var(--ink-dim)"))
+    if limit_key or total is not None:
+        y = 4 + len(rows) * row_h + 4
+        for frac, colour, label, at in ((abs(_num(total) or 0) / scale if total is not None else 0, "var(--ink)",
+                                         f"total {_s(total, 12)} {unit}".strip(), 180),):
+            if frac:
+                out.append(f'<line x1="{at + (w - 330) * frac:g}" y1="0" x2="{at + (w - 330) * frac:g}" y2="{y + 12:g}" '
+                           f'stroke="{colour}" stroke-width="0.8" stroke-dasharray="3 2"/>')
+                out.append(_text(at + (w - 330) * frac + 4, y + 10, label, 6.6, "start", colour, 600, mono=True))
+    return svg(1000, h, "".join(out))
+
+
+def ladder(rows: list[dict], key_irq: str, key_pri: str, key_rate: str = "", key_what: str = "") -> str:
+    """Interrupts as a ladder: the number on the left, the priority as how high
+    the rung sits, the handler on the line."""
+    pris = [(i, _num(r.get(key_pri))) for i, r in enumerate(rows)]
+    vals = [p for _, p in pris if p is not None] or [1]
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1
+    w, row_h = 1000.0, 26.0
+    h = 16 + len(rows) * row_h
+    out = []
+    out.append(f'<line x1="44" y1="6" x2="44" y2="{h - 6:g}" stroke="var(--line)" stroke-width="0.8"/>')
+    out.append(_text(38, 8, "soon", 6.2, "end", "var(--ink-faint)"))
+    out.append(_text(38, h - 4, "later", 6.2, "end", "var(--ink-faint)"))
+    for i, r in enumerate(rows):
+        p = _num(r.get(key_pri)) or 0
+        y = 12 + i * row_h
+        frac = 1 - (p - lo) / span if hi != lo else 0.5
+        colour = SERIES[int(p) % len(SERIES)] if p else SERIES[0]
+        out.append(f'<rect x="34" y="{y - 7:g}" width="20" height="{row_h - 8:g}" rx="2" fill="{colour}" opacity="0.18" '
+                   f'stroke="{colour}" stroke-width="0.6"/>')
+        out.append(_text(44, y + 3, _s(r.get(key_pri), 6), 7.0, "middle", "var(--ink)", 600, mono=True))
+        out.append(f'<line x1="58" y1="{y - 1:g}" x2="{58 - 0:g}" y2="{y - 1:g}" stroke="{colour}" stroke-width="0.6"/>')
+        out.append(f'<line x1="46" y1="{4 + frac * (h - 30):g}" x2="58" y2="{y - 1:g}" stroke="{colour}" '
+                   f'stroke-width="0.5" opacity="0.6"/>')
+        out.append(_text(64, y + 3, _s(r.get(key_irq), 34), 7.0, weight=600))
+        out.append(_text(360, y + 3, _s(r.get("handler") or r.get("vector") or "", 40), 6.8, mono=True))
+        out.append(_text(560, y + 3, _s(r.get("source") or "", 30), 6.6, "start", "var(--ink-dim)"))
+        out.append(_text(680, y + 3, _s(r.get(key_rate) if key_rate else r.get("rate") or "", 30), 6.6, "start",
+                         "var(--ink-dim)"))
+        out.append(_text(820, y + 3, _s(r.get(key_what) if key_what else r.get("what") or "", 44), 6.6, "start",
+                         "var(--ink-dim)"))
+    return svg(1000, h, "".join(out))
+
+
+def chain(rows: list[dict], key_label: str, key_sub: str = "", key_what: str = "") -> str:
+    """Hops, links, drives: a row of boxes with arrows between them."""
+    w, box_w, h = 1000.0, 0.0, 62.0
+    n = max(1, len(rows))
+    gap = 26.0
+    box_w = (w - gap * (n - 1)) / n
+    out = []
+    for i, r in enumerate(rows):
+        x = i * (box_w + gap)
+        colour = SERIES[i % len(SERIES)]
+        out.append(f'<rect x="{x:g}" y="8" width="{box_w:g}" height="30" rx="3" fill="{colour}" opacity="0.12" '
+                   f'stroke="{colour}" stroke-width="0.6"/>')
+        out.append(_text(x + box_w / 2, 22, _s(r.get(key_label), 30), 7.2, "middle", "var(--ink)", 600))
+        out.append(_text(x + box_w / 2, 32, _s(r.get(key_sub), 34), 6.4, "middle", "var(--ink-dim)", mono=True))
+        out.append(_text(x + box_w / 2, 48, _s(r.get(key_what), 34), 6.2, "middle", "var(--ink-faint)"))
+        if i:
+            out.append(f'<line x1="{x - gap + 2:g}" y1="23" x2="{x - 2:g}" y2="23" stroke="var(--ink-faint)" '
+                       f'stroke-width="0.8"/>')
+            out.append(f'<path d="M{x - 6:g} 20 L{x - 1:g} 23 L{x - 6:g} 26" fill="var(--ink-faint)"/>')
+    return svg(1000, h, "".join(out))
+
+
+def strip(rows: list[dict]) -> str:
+    """Channels side by side: what each moves, which way, what triggers it."""
+    w, h = 1000.0, 20 + len(rows) * 30
+    out = []
+    for i, r in enumerate(rows):
+        y = 6 + i * 30
+        colour = SERIES[i % len(SERIES)]
+        dirn = "mem -> periph" if "mem->periph" in _s(r.get("direction")) else "periph -> mem"
+        out.append(f'<rect x="0" y="{y:g}" width="150" height="20" rx="3" fill="{colour}" opacity="0.14" '
+                   f'stroke="{colour}" stroke-width="0.6"/>')
+        out.append(_text(8, y + 13, _s(r.get("channel"), 20), 7.2, weight=600))
+        out.append(_text(160, y + 13, _s(r.get("peripheral"), 20), 7.0, mono=True))
+        fwd = "mem->periph" in _s(r.get("direction"))
+        x0, x1 = (300.0, 560.0) if fwd else (560.0, 300.0)
+        out.append(f'<line x1="{x0:g}" y1="{y + 10:g}" x2="{x1:g}" y2="{y + 10:g}" stroke="{colour}" stroke-width="1"/>')
+        tip = x1 + (7 if fwd else -7)
+        out.append(f'<path d="M{tip:g} {y + 6:g} L{x1:g} {y + 10:g} L{tip:g} {y + 14:g} Z" fill="{colour}"/>')
+        out.append(_text(580, y + 13, dirn, 6.6, "start", "var(--ink-dim)"))
+        out.append(_text(760, y + 13, _s(r.get("trigger"), 34), 6.6, "start", "var(--ink-dim)", mono=True))
+        out.append(_text(880, y + 13, _s(r.get("what"), 24), 6.4, "start", "var(--ink-faint)"))
+    return svg(1000, h, "".join(out))
+
+
+def tree(rows: list[dict], key_node: str = "node", key_from: str = "from", key_rate: str = "rate") -> str:
+    """A clock tree: what comes from where, indented by its place in the chain."""
+    h = 12 + len(rows) * 16
+    out = []
+    for i, r in enumerate(rows):
+        y = 6 + i * 16
+        indent = 0 if i == 0 else (12 if "internal" in _s(r.get(key_from)) or "crystal" in _s(r.get(key_from)) else 30)
+        colour = SERIES[0] if indent < 20 else SERIES[2]
+        out.append(f'<line x1="{indent:g}" y1="{y:g}" x2="{indent:g}" y2="{y + 11:g}" stroke="{colour}" '
+                   f'stroke-width="{1.4 if indent < 20 else 0.7}"/>' if i else "")
+        out.append(_text(indent + 6, y + 9, _s(r.get(key_node), 22), 7.2, weight=600))
+        out.append(_text(220, y + 9, _s(r.get(key_from), 40), 6.8, "start", "var(--ink-dim)", mono=True))
+        out.append(_text(430, y + 9, _s(r.get(key_rate), 14), 7.0, "start", "var(--ink)", 600, mono=True))
+        out.append(_text(540, y + 9, _s(r.get("what"), 60), 6.6, "start", "var(--ink-dim)"))
+    return svg(1000, h, "".join(out))
+
+
+def formula(expr: str, result: str, unit: str, inputs: list[dict], refused: str = "") -> str:
+    """A calculation: the expression, what went into it, and the result - with
+    the arithmetic checked, so a refusal says which number is wrong."""
+    h = 34 + len(inputs) * 15
+    out = [f'<rect x="0" y="0" width="1000" height="{h:g}" rx="3" fill="var(--wash)" stroke="var(--line)" stroke-width="0.6"/>']
+    out.append(_text(12, 16, expr, 9.0, weight=600, mono=True))
+    out.append(_text(988, 16, f"{result} {unit}".strip(), 11.0, "end",
+                     _BAD if refused else _OK, 700, mono=True))
+    if refused:
+        out.append(_text(12, 28, refused, 6.8, "start", _BAD))
+    y = 42
+    for r in inputs:
+        out.append(_text(16, y, _s(r.get("what") or r.get("label"), 30), 6.8))
+        out.append(_text(300, y, f"{_s(r.get('value'), 12)} {_s(r.get('unit'), 8)}".strip(), 6.8, mono=True))
+        out.append(_text(460, y, _s(r.get("note"), 70), 6.4, "start", "var(--ink-dim)"))
+        y += 15
+    return svg(1000, y, "".join(out))
+
+
+def scores(rows: list[dict], key_what: str, key_value: str, key_note: str = "") -> str:
+    """A weighted or scored list: the weight as the bar, the favoured option as
+    the ink, so the row that decided it is visible at a glance."""
+    vals = [abs(_num(r.get(key_value)) or 0) for r in rows] or [1]
+    top = max(vals)
+    h = 10 + len(rows) * 18
+    out = []
+    for i, r in enumerate(rows):
+        v = abs(_num(r.get(key_value)) or 0)
+        y = 4 + i * 18
+        out.append(_text(0, y + 9, _s(r.get(key_what), 30), 7.0))
+        out.append(f'<rect x="200" y="{y + 2:g}" width="{560:g}" height="9" fill="var(--wash)"/>')
+        out.append(f'<rect x="200" y="{y + 2:g}" width="{560 * (v / top if top else 0):g}" height="9" '
+                   f'fill="{SERIES[i % len(SERIES)]}" opacity="0.5"/>')
+        note = _s(r.get("option") or r.get("note") or r.get(key_note) or "", 40)
+        out.append(_text(770, y + 10, note, 7.0, weight=600))
+        out.append(_text(1000, y + 10, _s(r.get(key_value), 12), 6.8, "end", "var(--ink-dim)", mono=True))
+    return svg(1000, h, "".join(out))

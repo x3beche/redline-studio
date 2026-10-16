@@ -621,6 +621,10 @@ figure.p figcaption { font-size: 7.6pt; font-weight: 600; letter-spacing: .02em;
 .p-verdict[data-v="not checked"], .p-verdict[data-v="waived"] { color: var(--ink-faint); font-weight: 400; }
 .p-err { border-left: 2pt solid var(--danger); padding: 4pt 6pt; margin: 3pt 0 12pt; font-size: 8pt;
   color: var(--danger); }
+/* the drawings a part makes (backend/pdfdraw.py): inline SVG, scaled to the text column */
+svg.p-svg { display: block; width: 100%; height: auto; }
+svg.p-svg text { font-family: inherit; }
+svg.p-svg text.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 /* a diagram Mermaid draws while the page is printed (backend/assets) */
 .mermaid { text-align: center; margin: 0; }
 .mermaid svg { max-width: 100%; height: auto; }
