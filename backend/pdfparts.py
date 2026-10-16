@@ -308,6 +308,16 @@ def mermaid(data: dict) -> str:
 # a bar against a limit for a measurement or a budget, a ladder for priorities,
 # a chain for hops. The ones that are a list of text stay tables.
 
+def _r_thermal(data: dict) -> str:
+    """Heat on a scale: the ramp, the mark, the limit, the headroom."""
+    rows = _rows(data)
+    if not rows:
+        return _empty("thermal-map")
+    return _cap("thermal-map", data, pdfdraw.thermal_chart(
+        [{"spot": _s(r.get("spot"), 22), "temperature": _s(r.get("temperature"), 10),
+          "limit": _s(r.get("limit"), 10), "note": _s(r.get("note"), 60)} for r in rows]))
+
+
 def _r_stack(data: dict) -> str:
     """stack-usage: each stack as a bar of what was used, with the peak marked and what is left."""
     rows = _rows(data)
@@ -579,8 +589,7 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     "thermal-map": ("Heat by spot against its limit. A spot with no limit is the one nobody "
                     "worked out yet.",
                     "rows: [{spot, temperature, limit, note}]",
-                    _table_part("thermal-map", (("Spot", "spot", ""), ("Temperature", "temperature", "num"),
-                                                ("Limit", "limit", "num"), ("Note", "note", "")))),
+                    _r_thermal),
     # --- evidence and method --------------------------------------------------
     "log-excerpt": ("The lines of a log that matter, in order.",
                     "rows: [{time, level, line}]",

@@ -471,3 +471,48 @@ def measurement_chart(rows: list[dict]) -> str:
             out.append(_text(1000, y + bh - 6, "in" if inband else "out", 10.5, "end", colour, 700))
         out.append(_text(x0, y + bh + 12, method or "", 9.0, "start", "var(--ink-dim)"))
     return svg(1000, h, "".join(out))
+
+
+def thermal_chart(rows: list[dict], ambient: float | None = None) -> str:
+    """Heat on a scale: each spot a bar over a colour ramp (cool to hot), the
+    temperature a mark on it, the limit a tick, and the headroom at the end -
+    green while there is room, amber under a fifth of it, red past the limit.
+    A reader sees how close the design runs, not just what it read."""
+    step = fill(len(rows), 52.0, 46.0)
+    x0, x1 = 170.0, 880.0
+    lims = [abs(_num(r.get("limit")) or 0) for r in rows if r.get("limit")]
+    vals = [abs(_num(r.get("temperature")) or 0) for r in rows]
+    scale = max(lims + vals + [60.0]) * 1.12
+    h = 40 + len(rows) * step
+    out = [f'<defs><linearGradient id="pheat" x1="0" x2="1" y1="0" y2="0">'
+           f'<stop offset="0" stop-color="#2f6fb8" stop-opacity="0.35"/>'
+           f'<stop offset="0.55" stop-color="#0f8a7a" stop-opacity="0.35"/>'
+           f'<stop offset="0.8" stop-color="#c07a12" stop-opacity="0.45"/>'
+           f'<stop offset="1" stop-color="#b52a2a" stop-opacity="0.5"/></linearGradient></defs>']
+    out.append(_text(x0, 14, f"0", 9.0, "start", "var(--ink-dim)", mono=True))
+    out.append(_text(x1, 14, f"{scale:g} C", 9.0, "end", "var(--ink-dim)", mono=True))
+    out.append(_text(1000, 14, "headroom", 9.5, "end", "var(--ink-dim)"))
+    for i, r in enumerate(rows):
+        t, lim = _num(r.get("temperature")), _num(r.get("limit"))
+        y = 28 + i * step
+        bh = min(20.0, step * 0.3)
+        out.append(_text(x0 - 14, y + bh - 5, _s(r.get("spot") or r.get("what"), 22), 11.5, "end", weight=700))
+        out.append(f'<rect x="{x0:g}" y="{y:g}" width="{x1 - x0:g}" height="{bh:g}" fill="url(#pheat)" '
+                   f'stroke="var(--line)" stroke-width="0.6"/>')
+        if lim is not None:
+            lx = x0 + (x1 - x0) * min(1.0, abs(lim) / scale)
+            out.append(f'<line x1="{lx:g}" y1="{y - 5:g}" x2="{lx:g}" y2="{y + bh + 5:g}" stroke="var(--ink)" '
+                       f'stroke-width="1.2"/>')
+            out.append(_text(lx, y - 2, f"{lim:g}", 8.6, "middle", "var(--ink)", mono=True))
+        if t is not None:
+            tx = x0 + (x1 - x0) * min(1.0, abs(t) / scale)
+            frac = (abs(lim) - abs(t)) / abs(lim) if lim else 1.0
+            colour = _OK if frac > 0.2 else (_WARN if frac > 0 else _BAD)
+            out.append(f'<circle cx="{tx:g}" cy="{y + bh / 2:g}" r="{bh / 2 + 1:g}" fill="var(--surface)" '
+                       f'stroke="{colour}" stroke-width="1.6"/>')
+            out.append(_text(tx, y + bh + 12, f"{_s(r.get('temperature'), 8)} C".strip(), 9.6, "middle", colour, 700,
+                             mono=True))
+            if lim is not None:
+                out.append(_text(1000, y + bh - 5, f"{lim - t:+g} C", 10.5, "end", colour, 600, mono=True))
+        out.append(_text(x0, y + bh + 12, _s(r.get("note"), 60), 8.8, "start", "var(--ink-dim)"))
+    return svg(1000, h, "".join(out))
