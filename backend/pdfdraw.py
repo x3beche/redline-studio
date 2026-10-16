@@ -516,3 +516,50 @@ def thermal_chart(rows: list[dict], ambient: float | None = None) -> str:
                 out.append(_text(1000, y + bh - 5, f"{lim - t:+g} C", 10.5, "end", colour, 600, mono=True))
         out.append(_text(x0, y + bh + 12, _s(r.get("note"), 60), 8.8, "start", "var(--ink-dim)"))
     return svg(1000, h, "".join(out))
+
+
+def timeline(rows: list[dict], at_key: str, label_key: str, group_key: str | None = None,
+             level_key: str | None = None, unit: str = "") -> str:
+    """Events on a time axis. One lane per group (a source, a task, an IRQ) or a
+    single lane, a mark where each event falls, coloured by level, with the line
+    beside it - the way a boot log or an interrupt trace is actually read."""
+    times = [_num(r.get(at_key)) for r in rows]
+    known = [t for t in times if t is not None]
+    lo, hi = (min(known), max(known)) if known else (0.0, 1.0)
+    span = (hi - lo) or 1.0
+    groups: list[str] = []
+    for r in rows:
+        g = _s(r.get(group_key) if group_key else "", 22) or "events"
+        if g not in groups:
+            groups.append(g)
+    x0, x1 = 170.0, 980.0
+    lane_h = fill(len(groups) + 1, 34.0, 40.0)
+    h = 20 + len(groups) * lane_h + 34
+    out = []
+    for i, g in enumerate(groups):
+        y = 20 + i * lane_h
+        out.append(_text(x0 - 12, y + 9, g, 10.5, "end", weight=700))
+        out.append(f'<line x1="{x0:g}" y1="{y + 5:g}" x2="{x1:g}" y2="{y + 5:g}" stroke="var(--line)" '
+                   f'stroke-width="0.7"/>')
+    for r, t in zip(rows, times):
+        g = _s(r.get(group_key) if group_key else "", 22) or "events"
+        y = 20 + groups.index(g) * lane_h + 5
+        level = _s(r.get(level_key) if level_key else "", 10).lower()
+        colour = _BAD if any(k in level for k in ("err", "fail", "panic", "overflow")) else (
+            _WARN if any(k in level for k in ("warn", "crit")) else SERIES[len(out) % len(SERIES)])
+        if t is None:
+            out.append(_text(x0 + 4, y - 4, f"no time - {_s(r.get(label_key), 60)}", 9.4, "start",
+                             "var(--ink-faint)"))
+            continue
+        x = x0 + (x1 - x0) * ((t - lo) / span)
+        out.append(f'<line x1="{x:g}" y1="{y - 7:g}" x2="{x:g}" y2="{y + 7:g}" stroke="{colour}" stroke-width="1.3"/>')
+        out.append(f'<circle cx="{x:g}" cy="{y:g}" r="2.6" fill="{colour}"/>')
+        out.append(_text(x + 5, y - 9, f"{_s(r.get(at_key), 10)}{unit}".strip(), 8.6, "start", colour, mono=True))
+        out.append(_text(x + 5, y + 14, _s(r.get(label_key), 62), 9.0, "start", "var(--ink-dim)"))
+    for i in range(5):
+        x = x0 + (x1 - x0) * i / 4
+        out.append(f'<line x1="{x:g}" y1="{20 + len(groups) * lane_h + 6:g}" x2="{x:g}" '
+                   f'y2="{20 + len(groups) * lane_h + 12:g}" stroke="var(--line)" stroke-width="0.7"/>')
+        out.append(_text(x, 20 + len(groups) * lane_h + 24, f"{lo + span * i / 4:g}{unit}", 8.6, "middle",
+                         "var(--ink-faint)", mono=True))
+    return svg(1000, h, "".join(out))

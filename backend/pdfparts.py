@@ -308,6 +308,17 @@ def mermaid(data: dict) -> str:
 # a bar against a limit for a measurement or a budget, a ladder for priorities,
 # a chain for hops. The ones that are a list of text stay tables.
 
+def _r_log(data: dict) -> str:
+    """The log lines on a time axis, coloured by level."""
+    rows = _rows(data)
+    if not rows:
+        return _empty("log-excerpt")
+    return _cap("log-excerpt", data, pdfdraw.timeline(
+        [{"time": _s(r.get("time"), 10), "level": _s(r.get("level"), 10), "line": _s(r.get("line"), 70),
+          "src": _s(r.get("source") or "log", 22)} for r in rows],
+        "time", "line", group_key="src", level_key="level"))
+
+
 def _r_thermal(data: dict) -> str:
     """Heat on a scale: the ramp, the mark, the limit, the headroom."""
     rows = _rows(data)
@@ -593,8 +604,7 @@ PARTS: dict[str, tuple[str, str, Callable[[dict], str]]] = {
     # --- evidence and method --------------------------------------------------
     "log-excerpt": ("The lines of a log that matter, in order.",
                     "rows: [{time, level, line}]",
-                    _table_part("log-excerpt", (("Time", "time", "num"), ("Level", "level", ""),
-                                                ("Line", "line", "")))),
+                    _r_log),
     "fault-report": ("A fault as it presented itself, and what was found to be behind it.",
                      "rows: [{fault, status, what, cause}]",
                      _table_part("fault-report", (("Fault", "fault", ""), ("Status", "status", ""),
