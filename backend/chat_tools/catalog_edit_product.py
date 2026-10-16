@@ -22,7 +22,10 @@ async def run(ctx: Ctx, args: dict) -> Result:
     try:
         f = fields(sets, patch=True)
         if "specs" in f and isinstance(f["specs"], dict) and not args.get("replace_specs"):
-            f["specs"] = {**(p.get("specs") or {}), **f["specs"]}
+            # The specs as they are kept where the product lives: a saved McMaster-Carr / GrabCAD part is shown
+            # with the catalog's own list of specs beside its own (its title, its licence, what its CAD measured).
+            was = (p.get("linked") or {}).get("specs") or p.get("specs") or {}
+            f["specs"] = {**was, **f["specs"]}
         got = await edit_product(ctx.db, doc["_id"], p["id"], f, ctx.actor or None)
     except (mf.Clash, ValueError, LookupError) as exc:
         raise ToolError(str(exc).strip("'\"")) from exc
@@ -43,7 +46,11 @@ TOOL = Tool(
                 "change (name, category, sku, description, specs, url, image, price, currency, vat, list_price, "
                 "stock, stock_qty - a new price is remembered in the product's price history; price \"\" takes it "
                 "away). `specs` given are added to the "
-                "product's specs (a spec of the same name replaced) unless `replace_specs` is true. Use it only "
+                "product's specs (a spec of the same name replaced) unless `replace_specs` is true. A part saved "
+                "from GrabCAD or McMaster-Carr is changed the same way, by its maker's id and the id product_find "
+                "gives it (\"grabcad:<model>\"): its name and its specs are that part's own title and specs, and a "
+                "field it has not - a code, a price, a stock - is refused. An LCSC drawer part is not changed here; "
+                "a copy of it kept as My Items (product_to_my_items) is. Use it only "
                 "when the person asks to correct or change a product.",
     schema={"type": "object", "properties": {
         "manufacturer": {"type": "string", "description": "The maker's id or name"},

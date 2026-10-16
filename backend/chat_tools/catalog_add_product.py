@@ -133,7 +133,9 @@ TOOL = Tool(
                 "(`price` with `currency` and `vat`: incl or excl - \"+ KDV\" is excl), the seller's stock, its page "
                 "and picture when known. A "
                 "product with the same code (or, without one, the same name) as one already in the catalog is not "
-                "added again - the answer says so; change that one with catalog_edit_product. To read a product "
+                "added again - the answer says so; change that one with catalog_edit_product. A part saved from "
+                "McMaster-Carr or GrabCAD, and an LCSC drawer part, are not added here: each comes in by its own "
+                "tools (mcmaster_save / grabcad_save, drawer_add). To read a product "
                 "page from the web instead, use catalog_read_page.",
     schema={"type": "object", "properties": {
         "manufacturer": {"type": "string", "description": "The maker's id or name"},

@@ -23,6 +23,7 @@ import pytest
 from backend import access, actors, cc_chat, ccgen, chat_tools, llm, netproxy, scope
 from backend import manufacturers as mf
 from backend.chat_tools import Ctx, ToolError
+from backend.chat_tools import _catalog
 from backend.chat_tools import catalog_read_page as crp
 from test_manufacturers import PUBLIC, web  # noqa: F401 - web is a fixture
 from test_telegram import FakeDb
@@ -139,6 +140,87 @@ def test_their_sentences_are_in_turkish_too():
               "{name} is already in the catalog", "Added {name} to Parts",
               "Added {name} and started exploring its site"):
         assert has(s), s
+
+
+# ---- a part saved from GrabCAD or McMaster-Carr (backend/linked.py) ------------------
+#
+# product_find names a product of any source "maker:product", a saved GrabCAD model as
+# "grabcad:<model>"; the catalog's own lookups only know makers in `manufacturers`, so
+# the Chat asked for "grabcad" and was told there was no such manufacturer. A saved part
+# is now reached by its maker's id, and changed where the Parts page's editor changes it.
+
+KEY = "threaded-insert-m3-short-for-3d-printing-1"
+SAVED = "Threaded Insert M3 Short"
+
+
+def _saved(db, key=KEY, title=SAVED, **kw):
+    """A part saved from GrabCAD, as grabcad_save keeps one."""
+    from backend import grabcad, linked
+    doc, new = run(linked.save(db, grabcad.KIND, {"key": key, "title": title,
+                                                  "specs": {"Ölçü": "4,6 x 3 mm"}, **kw}, ME))
+    assert new
+    return doc
+
+
+def _item(db, key=KEY):
+    from backend import grabcad, linked
+    return run(linked.get(db, grabcad.KIND, key))
+
+
+def test_a_saved_part_is_reached_by_its_makers_id(ws):
+    db, _, _ = ws
+    _saved(db)
+    doc = run(_catalog.maker(db, "grabcad"))
+    assert doc["_id"] == "grabcad" and doc["name"] == "GrabCAD" and doc["builtin"]
+    assert [p["id"] for p in doc["products"]] == [KEY]
+    assert (run(_catalog.maker(db, "GrabCAD")))["_id"] == "grabcad"
+    assert (run(_catalog.maker(db, "McMaster-Carr")))["_id"] == "mcmaster"
+    assert (run(_catalog.maker(db, "My Items")))["_id"] == "own"
+    assert (run(_catalog.maker(db, "own")))["_id"] == "own"
+
+
+def test_a_maker_nobody_has_says_what_there_is(ws):
+    db, _, _ = ws
+    with pytest.raises(ToolError, match=r"built-in sources are: lcsc \(LCSC\)"):
+        run(_catalog.maker(db, "hirose"))
+
+
+def test_a_saved_part_is_renamed_from_the_chat(ws):
+    db, _, _ = ws
+    _saved(db)
+    got = call(db, "catalog_edit_product", {"manufacturer": "grabcad", "product": KEY,
+                                            "set": {"name": "M3 Isıl Insert, kısa - 4,6 x 3 mm"}})
+    assert got.say == "Changed {fields} of {product} in the catalog"
+    assert got.vars["product"] == "M3 Isıl Insert, kısa - 4,6 x 3 mm" and got.vars["m"] == "grabcad"
+    assert "M3 Isıl Insert" in got.text and "M3 Isıl Insert, kısa - 4,6 x 3 mm" in got.summary
+    assert _item(db)["title"] == "M3 Isıl Insert, kısa - 4,6 x 3 mm"
+    assert _item(db)["specs"] == {"Ölçü": "4,6 x 3 mm"}
+
+
+def test_its_own_specs_are_the_ones_added_to(ws):
+    db, _, _ = ws
+    _saved(db)
+    call(db, "catalog_edit_product", {"manufacturer": "grabcad", "product": KEY, "set": {"specs": {"Diş": "M3"}}})
+    # the catalog shows its own list of specs beside the part's (its title, its licence, what its CAD measured)
+    assert _item(db)["specs"] == {"Ölçü": "4,6 x 3 mm", "Diş": "M3"}
+
+
+def test_a_saved_part_refuses_a_field_it_has_not(ws):
+    db, _, _ = ws
+    _saved(db)
+    with pytest.raises(ToolError, match="has no price"):
+        call(db, "catalog_edit_product", {"manufacturer": "grabcad", "product": KEY, "set": {"price": "1,20 $"}})
+    assert _item(db)["title"] == SAVED and _item(db)["specs"] == {"Ölçü": "4,6 x 3 mm"}
+
+
+def test_a_source_that_takes_no_writes_says_how_its_products_come_in(ws):
+    db, _, _ = ws
+    with pytest.raises(ValueError, match="LCSC"):
+        run(_catalog.edit_product(db, "lcsc", "C9864", {"name": "x"}))
+    with pytest.raises(ValueError, match=r"nothing is added to LCSC by hand: an LCSC part joins the drawer"):
+        run(_catalog.add_product(db, "lcsc", {"name": "x"}))
+    with pytest.raises(ValueError, match="grabcad_find"):
+        run(_catalog.add_product(db, "grabcad", {"name": "x"}))
 
 
 # ---- a page read into the catalog ---------------------------------------------------
