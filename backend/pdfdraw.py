@@ -136,77 +136,102 @@ def bytelanes(rows: list[dict]) -> str:
 # ---------------------------------------------------------------- bars
 
 def regions(rows: list[dict], key_from: str, key_size: str, key_label: str, unit: str = "") -> str:
-    """A memory, a flash, an address space: one bar, each row's share of it."""
+    """A memory, a flash, an address space: one bar, each row's share of it,
+    with the shares under it as a legend and the total at the end."""
     total = sum((_num(r.get(key_size)) or 0) for r in rows) or 1
-    w, bar_h = 1000.0, 22.0
+    w, bar_h = 1000.0, 34.0
+    h = 8 + bar_h + 26 + len(rows) * 19
     out, x = [], 0.0
     for i, r in enumerate(rows):
         share = (_num(r.get(key_size)) or 0) / total
         colour = SERIES[i % len(SERIES)]
-        out.append(f'<rect x="{x * w:g}" y="6" width="{max(0.6, share * w):g}" height="{bar_h:g}" '
-                   f'fill="{colour}" opacity="0.20" stroke="{colour}" stroke-width="0.6"/>')
+        out.append(f'<rect x="{x * w:g}" y="8" width="{max(0.8, share * w):g}" height="{bar_h:g}" '
+                   f'fill="{colour}" opacity="0.28" stroke="{colour}" stroke-width="0.7"/>')
+        if share > 0.08:
+            out.append(_text(x * w + share * w / 2, 8 + bar_h / 2 + 3, f"{share * 100:.0f}%", 9.0, "middle",
+                             "var(--ink)", 600, mono=True))
         x += share
-    out.append(_text(0, 6 + bar_h + 12, _s(rows[0].get(key_from) or "", 20), 6.4, mono=True))
-    out.append(_text(w, 6 + bar_h + 12, f"total {total:g} {unit}".strip(), 6.4, "end", "var(--ink-dim)", mono=True))
-    y = 6 + bar_h + 24
+    out.append(_text(0, 8 + bar_h + 14, _s(rows[0].get(key_from) or "", 24), 8.0, mono=True))
+    out.append(_text(w, 8 + bar_h + 14, f"total {total:g} {unit}".strip(), 8.0, "end", "var(--ink-dim)", mono=True))
+    y = 8 + bar_h + 30
     for i, r in enumerate(rows):
         colour = SERIES[i % len(SERIES)]
         share = (_num(r.get(key_size)) or 0) / total
-        out.append(f'<rect x="0" y="{y:g}" width="7" height="7" fill="{colour}" opacity="0.65"/>')
-        out.append(_text(12, y + 6.5, _s(r.get(key_label), 34), 7.0, weight=500))
-        out.append(_text(430, y + 6.5, f"{_s(r.get(key_size), 12)} {unit}".strip(), 6.8, mono=True))
-        out.append(_text(560, y + 6.5, f"{share * 100:.0f} %", 6.8, "start", "var(--ink-dim)", mono=True))
-        out.append(_text(640, y + 6.5, _s(r.get("what") or r.get("use") or r.get("type") or r.get("note") or "", 90),
-                         6.6, "start", "var(--ink-dim)"))
-        y += 15
-    return svg(1000, y + 2, "".join(out))
+        out.append(f'<rect x="0" y="{y - 8:g}" width="9" height="9" fill="{colour}" opacity="0.7"/>')
+        out.append(_text(16, y, _s(r.get(key_label), 34), 9.0, weight=600))
+        out.append(_text(360, y, f"{_s(r.get(key_size), 12)} {unit}".strip(), 8.6, mono=True))
+        out.append(_text(470, y, f"{share * 100:.1f} %", 8.6, "start", "var(--ink-dim)", mono=True))
+        out.append(_text(560, y, _s(r.get("what") or r.get("use") or r.get("type") or r.get("note") or "", 70), 8.2,
+                         "start", "var(--ink-dim)"))
+        y += 19
+    return svg(1000, y, "".join(out))
 
 
 def bars(rows: list[dict], what_key: str, value_key: str, unit: str = "", limit_key: str | None = None,
          total: float | None = None, ref: float | None = None) -> str:
-    """Bars against a limit or a total: a budget, a stack, a temperature, a
-    measurement with its limit. The marker is the line that must not be
-    crossed, and what is left of it is written beside."""
+    """Bars against a scale, with the scale drawn: a budget, a stack, a
+    measurement with its limit. The bar is the value, the dashed line the limit
+    or what was allocated, and what is left of it is written beside - the
+    reader can hold the number against the axis rather than trust a length."""
     values = [abs(_num(r.get(value_key)) or 0) for r in rows]
     if limit_key:
         values += [abs(_num(r.get(limit_key)) or 0) for r in rows]
     scale = max(values + [abs(_num(total) or 0), abs(_num(ref) or 0), 1.0])
-    w, row_h = 1000.0, 17.0
-    h = 10 + len(rows) * row_h + (16 if limit_key or total is not None else 4)
+    x0, x1, name_w = 150.0, 850.0, 140.0          # the plot, and the name column
+    row_h, bar_h = 30.0, 15.0
+    h = 40 + len(rows) * row_h + 6
     out = []
+    # the axis: four gridlines, their values, the unit at the left
+    for i in range(5):
+        x = x0 + (x1 - x0) * i / 4
+        out.append(f'<line x1="{x:g}" y1="24" x2="{x:g}" y2="{24 + len(rows) * row_h:g}" '
+                   f'stroke="var(--line)" stroke-width="0.4" stroke-dasharray="{2 if i else 0} {2 if i else 0}"/>')
+        out.append(_text(x, 17, f"{scale * i / 4:g}", 8.0, "middle", "var(--ink-faint)", mono=True))
+    out.append(_text(x1, 17, _s(unit, 10), 8.0, "start", "var(--ink-dim)"))
     for i, r in enumerate(rows):
         v = _num(r.get(value_key))
-        y = 4 + i * row_h
-        out.append(_text(0, y + 9, _s(r.get(what_key), 30), 7.0))
-        out.append(f'<rect x="180" y="{y + 2:g}" width="{w - 330:g}" height="8" fill="var(--wash)"/>')
+        y = 26 + i * row_h
+        out.append(_text(name_w, y + bar_h - 2, _s(r.get(what_key), 26), 9.0))
+        out.append(f'<rect x="{x0:g}" y="{y:g}" width="{x1 - x0:g}" height="{bar_h:g}" fill="var(--wash)"/>')
         if v is not None:
             frac = min(1.0, abs(v) / scale) if scale else 0
             colour = SERIES[i % len(SERIES)]
-            if limit_key:
-                lim = _num(r.get(limit_key))
-                if lim is not None and abs(v) > abs(lim):
-                    colour = _BAD
-            out.append(f'<rect x="180" y="{y + 2:g}" width="{(w - 330) * frac:g}" height="8" fill="{colour}" '
-                       f'opacity="0.55"/>')
-        out.append(_text(700, y + 9, f"{_s(r.get(value_key), 12)} {unit}".strip(), 6.8, mono=True))
+            lim = _num(r.get(limit_key)) if limit_key else None
+            if lim is not None and abs(v) > abs(lim):
+                colour = _BAD
+            bar_w = (x1 - x0) * frac
+            out.append(f'<rect x="{x0:g}" y="{y:g}" width="{bar_w:g}" height="{bar_h:g}" fill="{colour}" opacity="0.45"/>')
+            # the value at the bar's end, inside it when it fits
+            label = f"{_s(r.get(value_key), 12)} {unit}".strip()
+            if bar_w > 90:
+                out.append(_text(x0 + bar_w - 6, y + bar_h - 4, label, 8.6, "end", "var(--ink)", 600, mono=True))
+            else:
+                out.append(_text(x0 + bar_w + 6, y + bar_h - 4, label, 8.6, "start", "var(--ink)", 600, mono=True))
         if limit_key:
             lim = _num(r.get(limit_key))
-            out.append(_text(830, y + 9, f"limit {_s(r.get(limit_key), 10)}".strip(), 6.6, "start", "var(--ink-dim)", mono=True))
-            if v is not None and lim is not None:
-                margin = abs(lim) - abs(v)
-                out.append(_text(1000, y + 9, f"{margin:+.3g}".rstrip("0").rstrip("."), 6.6, "end",
-                                 _OK if margin >= 0 else _BAD, mono=True))
+            if lim is not None:
+                lx = x0 + (x1 - x0) * min(1.0, abs(lim) / scale)
+                out.append(f'<line x1="{lx:g}" y1="{y - 3:g}" x2="{lx:g}" y2="{y + bar_h + 3:g}" '
+                           f'stroke="var(--ink-faint)" stroke-width="0.8" stroke-dasharray="3 2"/>')
+                out.append(_text(lx, y + bar_h + 10, f"limit {_s(r.get(limit_key), 10)}", 7.2, "middle",
+                                 "var(--ink-faint)", mono=True))
+                if v is not None:
+                    margin = abs(lim) - abs(v)
+                    out.append(_text(1000, y + bar_h - 4, f"{margin:+.3g}".rstrip("0").rstrip("."), 8.6, "end",
+                                     _OK if margin >= 0 else _BAD, 600, mono=True))
         else:
-            out.append(_text(830, y + 9, _s(r.get("share") or r.get("note") or "", 40), 6.6, "start",
-                             "var(--ink-dim)"))
-    if limit_key or total is not None:
-        y = 4 + len(rows) * row_h + 4
-        for frac, colour, label, at in ((abs(_num(total) or 0) / scale if total is not None else 0, "var(--ink)",
-                                         f"total {_s(total, 12)} {unit}".strip(), 180),):
-            if frac:
-                out.append(f'<line x1="{at + (w - 330) * frac:g}" y1="0" x2="{at + (w - 330) * frac:g}" y2="{y + 12:g}" '
-                           f'stroke="{colour}" stroke-width="0.8" stroke-dasharray="3 2"/>')
-                out.append(_text(at + (w - 330) * frac + 4, y + 10, label, 6.6, "start", colour, 600, mono=True))
+            out.append(_text(880, y + bar_h - 4, _s(r.get("share") or "", 8), 8.2, "start", "var(--ink-dim)", mono=True))
+            out.append(_text(1000, y + bar_h - 4, _s(r.get("note") or "", 26), 7.4, "end", "var(--ink-faint)"))
+    if total is not None:
+        x = x0 + (x1 - x0) * min(1.0, abs(_num(total) or 0) / scale)
+        out.append(f'<line x1="{x:g}" y1="24" x2="{x:g}" y2="{24 + len(rows) * row_h:g}" stroke="var(--ink)" '
+                   f'stroke-width="1" stroke-dasharray="4 2"/>')
+        out.append(_text(x + 4, 36, f"total {_s(total, 12)} {unit}".strip(), 8.0, "start", "var(--ink)", 600, mono=True))
+    if ref is not None:
+        x = x0 + (x1 - x0) * min(1.0, abs(_num(ref) or 0) / scale)
+        out.append(f'<line x1="{x:g}" y1="24" x2="{x:g}" y2="{24 + len(rows) * row_h:g}" stroke="{_WARN}" '
+                   f'stroke-width="1"/>')
+        out.append(_text(x + 4, 48, f"over {_s(ref, 8)}", 8.0, "start", _WARN, 600, mono=True))
     return svg(1000, h, "".join(out))
 
 
