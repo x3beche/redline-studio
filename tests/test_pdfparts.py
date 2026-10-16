@@ -19,7 +19,7 @@ def html(name: str, data: dict) -> str:
 
 ROW = {"what": "a", "label": "a", "value": "1", "qty": 1, "role": "Prepared", "name": "Me",
        "pin": 1, "version": "0", "date": "2026-01-01", "actual": "ok", "expected": "ok",
-       "method": "DMM", "total": "1"}
+       "method": "DMM", "total": "1", "code": "graph TD; A-->B"}
 
 
 def test_every_part_draws_itself_and_only_needs_its_rows():
