@@ -868,32 +868,83 @@ def claude_cost(model: str, used: dict) -> float | None:
 # ones it serves included, was kept unpriced and the costs read 0. A model that
 # is not listed stays unpriced rather than being guessed at.
 COMMANDCODE_PRICES: dict[str, tuple[float, float, float]] = {
-    "deepseek/deepseek-v4.1-flash": (0.15, 0.60, 0.003),
+    # Open source
     "deepseek/deepseek-v4-pro": (0.66, 1.98, 0.022),
     "deepseek/deepseek-v4-flash": (0.15, 0.60, 0.003),
+    "deepseek/deepseek-v4-flash-vision-exp": (0.15, 0.60, 0.003),
     "deepseek/deepseek-v4-flash-fast": (0.28, 0.56, 0.07),
-    "Qwen/Qwen3.8-Flash": (0.16, 0.47, 0.016),
-    "Qwen/Qwen3.8-Max": (2.00, 6.00, 0.25),
-    "Qwen/Qwen3.8-Max-0902": (2.00, 6.00, 0.25),
-    "Qwen/Qwen3.8-27B": (0.40, 3.00, 0.04),
-    "Qwen/Qwen3.7-Flash": (0.03, 0.13, 0.006),
-    "Qwen/Qwen3.7-Plus": (0.40, 1.60, 0.08),
+    "deepseek/deepseek-v4.1-flash": (0.15, 0.60, 0.003),
+    "moonshotai/Kimi-K3": (3.00, 15.00, 0.30),
+    "moonshotai/Kimi-K2.7-Code": (0.95, 4.00, 0.19),
+    "moonshotai/Kimi-K2.7-Code-Highspeed": (1.90, 8.00, 0.38),
+    "moonshotai/Kimi-K2.6": (0.95, 4.00, 0.16),
+    "moonshotai/Kimi-K2.5": (0.60, 3.00, 0.10),
     "z-ai/glm-5.3-flash": (0.15, 0.50, 0.03),
     "zai-org/GLM-5.3": (1.40, 4.40, 0.26),
     "zai-org/GLM-5.2": (1.40, 4.40, 0.26),
-    "moonshotai/Kimi-K3": (3.00, 15.00, 0.30),
-    "moonshotai/Kimi-K2.7-Code": (0.95, 4.00, 0.19),
+    "zai-org/GLM-5.2-Fast": (3.00, 10.25, 0.50),
+    "zai-org/GLM-5.1": (1.40, 4.40, 0.26),
+    "zai-org/GLM-5": (1.00, 3.20, 0.20),
     "MiniMaxAI/MiniMax-M3": (0.30, 1.20, 0.06),
+    "MiniMaxAI/MiniMax-M2.7": (0.30, 1.20, 0.06),
+    "MiniMaxAI/MiniMax-M2.5": (0.30, 1.20, 0.03),
     "xiaomi/mimo-v2.5-pro": (0.435, 0.87, 0.0036),
     "xiaomi/mimo-v2.5": (0.14, 0.28, 0.0028),
+    "Qwen/Qwen3.8-Max-0902": (2.00, 6.00, 0.25),
+    "Qwen/Qwen3.8-Max": (2.00, 6.00, 0.25),
+    "Qwen/Qwen3.8-27B": (0.40, 3.00, 0.04),
+    "Qwen/Qwen3.8-Flash": (0.16, 0.47, 0.016),
+    "Qwen/Qwen3.7-Max": (2.50, 7.50, 0.50),
+    "Qwen/Qwen3.7-Plus": (0.40, 1.60, 0.08),
+    "Qwen/Qwen3.7-Flash": (0.03, 0.13, 0.006),
+    "Qwen/Qwen3.6-Max-Preview": (1.30, 7.80, 0.26),
+    "Qwen/Qwen3.6-Plus": (0.50, 3.00, 0.10),
+    "meituan/LongCat-2.0:free": (0.0, 0.0, 0.0),
+    "stepfun/Step-3.7-Flash": (0.20, 1.15, 0.04),
+    "stepfun/Step-3.5-Flash": (0.10, 0.30, 0.02),
+    "tencent/hy3-paid": (0.14, 0.58, 0.035),
+    "tencent/hy4-preview": (0.834, 2.501, 0.042),
+    "nvidia/nemotron-3-ultra-550b-a55b": (0.60, 2.40, 0.12),
+    "thinkingmachines/inkling": (1.00, 4.05, 0.17),
+    "thinkingmachines/inkling-small": (0.50, 1.20, 0.10),
+    "poolside/laguna-s-2.1-free": (0.0, 0.0, 0.0),
+    "inclusionai/ling-3.0-flash-sante:free": (0.0, 0.0, 0.0),
+    # Anthropic, through the gateway
+    "claude-fable-5-1": (10.00, 50.00, 0.25),
+    "claude-fable-5": (10.00, 50.00, 1.00),
+    "claude-opus-5": (5.00, 25.00, 0.50),
+    "claude-opus-4-8": (5.00, 25.00, 0.50),
+    "claude-opus-4-7": (5.00, 25.00, 0.50),
+    "claude-sonnet-5": (2.00, 10.00, 0.20),
+    "claude-sonnet-4-6": (3.00, 15.00, 0.30),
+    "claude-haiku-5-5": (0.10, 0.50, 0.01),
+    "claude-haiku-4-5-20251001": (1.00, 5.00, 0.10),
+    # OpenAI, through the gateway
+    "gpt-6-astra": (10.00, 50.00, 1.00),
+    "gpt-5.6-sol": (5.00, 30.00, 0.50),
+    "gpt-5.6-terra": (2.00, 12.00, 0.20),
+    "gpt-5.6-luna": (0.20, 1.20, 0.02),
+    "gpt-5.5": (5.00, 30.00, 0.50),
+    "gpt-5.4": (2.50, 15.00, 0.25),
+    "gpt-5.3-codex": (2.00, 8.00, 0.50),
+    "gpt-5.4-mini": (0.75, 4.50, 0.075),
+    # Google, Sakana, Meta, xAI
+    "google/gemini-3.8-flash": (1.50, 7.50, 0.15),
+    "google/gemini-3.7-flash": (1.50, 7.50, 0.15),
+    "google/gemini-3.6-flash": (1.50, 7.50, 0.15),
+    "google/gemini-3.5-flash": (1.50, 9.00, 0.15),
     "google/gemini-3.5-flash-lite": (0.30, 2.50, 0.03),
     "google/gemini-3.1-flash-lite": (0.25, 1.50, 0.03),
-    "claude-sonnet-5": (2.00, 10.00, 0.20),
-    "claude-haiku-5-5": (0.10, 0.50, 0.01),
-    "claude-opus-5": (5.00, 25.00, 0.50),
-    "gpt-5.6-luna": (0.20, 1.20, 0.02),
-    "tencent/hy3-paid": (0.14, 0.58, 0.035),
+    "sakana/fugu-ultra": (5.00, 30.00, 0.50),
+    "meta/muse-spark-1.1": (1.25, 4.25, 0.15),
+    "meta/muse-spark-1.2": (1.25, 4.25, 0.15),
+    "meta/muse-spark-1.2-contributor": (0.10, 0.20, 0.002),
+    "meta/muse-spark-1.3": (1.25, 4.25, 0.15),
+    "meta/muse-spark-1.3-contributor": (0.10, 0.20, 0.002),
+    "xai/grok-4.5": (2.00, 6.00, 0.50),
+    "xai/grok-4.6": (2.00, 6.00, 0.50),
 }
+
 
 
 def commandcode_cost(model: str, used: dict) -> float | None:
@@ -913,14 +964,83 @@ def commandcode_cost(model: str, used: dict) -> float | None:
     return round((fresh * rate[0] + read * rate[2] + out * rate[1]) / 1e6, 8)
 
 
+# models.dev (https://models.dev/api.json) is the catalog the providers' own
+# tools read: Anthropic's list is there and OpenCode Go's models come from
+# nowhere else. It is read at most once a day and kept in the temporary folder;
+# the built-in lists answer in the meantime, and when there is no network.
+REGISTRY_IDS = {"claude": "anthropic", "opencode-go": "opencode-go"}
+REGISTRY_URL = "https://models.dev/api.json"
+_REGISTRY: dict = {"at": 0.0, "data": None, "fetching": False}
+
+
+def _registry() -> dict | None:
+    """The registry, from the day-old copy if there is one; otherwise a thread
+    fetches it for the calls after this one (never blocking an answer)."""
+    import json, os, tempfile, threading, time, urllib.request
+    path = os.path.join(tempfile.gettempdir(), "redline-models-dev.json")
+    if _REGISTRY["data"] and time.time() - _REGISTRY["at"] < 86400:
+        return _REGISTRY["data"]
+    try:
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) < 86400:
+            with open(path) as f:
+                _REGISTRY.update(data=json.load(f), at=os.path.getmtime(path))
+            return _REGISTRY["data"]
+    except (OSError, ValueError):
+        pass
+    if not _REGISTRY["fetching"]:
+        _REGISTRY["fetching"] = True
+
+        def get():
+            try:
+                with urllib.request.urlopen(REGISTRY_URL, timeout=30) as r:
+                    raw = r.read()
+                with open(path, "wb") as f:
+                    f.write(raw)
+                _REGISTRY.update(data=json.loads(raw), at=time.time())
+            except Exception:
+                pass
+            finally:
+                _REGISTRY["fetching"] = False
+
+        threading.Thread(target=get, daemon=True).start()
+    return None
+
+
+def registry_cost(provider: str, model: str, used: dict) -> float | None:
+    """A call priced from the registry, for a provider whose answer carries no
+    money (Claude's API, OpenCode Go). None when the registry is not here yet,
+    does not know the model, or names no price for it."""
+    rid = REGISTRY_IDS.get(provider)
+    data = _registry() if rid else None
+    rows = ((data or {}).get(rid) or {}).get("models") or {}
+    row = None
+    for name in sorted(rows, key=len, reverse=True):
+        if model == name or model.startswith(name + "-"):
+            row = rows[name]
+            break
+    cost = (row or {}).get("cost") or {}
+    if not cost:
+        return None
+    read, write = used.get("cache_read_tokens") or 0, used.get("cache_write_tokens") or 0
+    prompt, out = used.get("prompt_tokens") or 0, used.get("completion_tokens") or 0
+    fresh = max(0, prompt - read - write)
+    rate = cost.get("input") or 0
+    return round((fresh * rate + read * (cost.get("cache_read") or rate * CACHE_READ)
+                  + write * (cost.get("cache_write") or rate * CACHE_WRITE)
+                  + out * (cost.get("output") or 0)) / 1e6, 8)
+
+
 def cost_of(provider: str, model: str, used: dict) -> float | None:
     """What one call cost, when its provider does not say: the Claude API's list
-    rates, or Command Code's. OpenRouter answers with its own figure; anything
-    else is left unpriced rather than guessed at."""
+    rates (the built-in table, then the registry), Command Code's published
+    list, or the registry for OpenCode Go. OpenRouter answers with its own
+    figure; a model none of them names stays unpriced rather than guessed at."""
     if provider == "claude":
-        return claude_cost(model, used)
+        return claude_cost(model, used) or registry_cost("claude", model, used)
     if provider == "commandcode":
         return commandcode_cost(model, used)
+    if provider == "opencode-go":
+        return registry_cost("opencode-go", model, used)
     return None
 
 
